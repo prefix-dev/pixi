@@ -1,21 +1,55 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+};
 
 use fancy_display::FancyDisplay;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_core::{
     Workspace,
     workspace::{
-        Environment, WorkspaceMut,
+        Environment, EnvironmentFromNameError, WorkspaceMut,
         virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
     },
 };
 use pixi_manifest::{
-    EnvironmentName, FeatureName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task,
-    TaskName,
+    EnvironmentName, FeatureName, GetFeatureError, HasWorkspaceManifest, LoadManifestsError,
+    PixiPlatform, PixiPlatformName, PlatformEditError, Task, TaskEditError, TaskName,
 };
+use thiserror::Error;
 
 use crate::interface::Interface;
-use crate::workspace::platforms::resolve_platforms;
+use crate::workspace::{
+    platforms::resolve_platforms,
+    workspace::{SaveManifestError, save},
+};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum TaskError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadWorkspace(#[from] LoadManifestsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    EnvironmentFromName(#[from] EnvironmentFromNameError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Platform(#[from] PlatformEditError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] TaskEditError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Feature(#[from] GetFeatureError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
+}
 
 /// Resolve `name` the same way the dependency CLI does: look it up in the
 /// workspace; if it's not declared, accept it as a bare conda subdir and
@@ -27,7 +61,7 @@ use crate::workspace::platforms::resolve_platforms;
 fn resolve_task_platform(
     workspace: &Workspace,
     name: Option<&PixiPlatformName>,
-) -> miette::Result<Option<PixiPlatform>> {
+) -> Result<Option<PixiPlatform>, PlatformEditError> {
     let Some(name) = name else { return Ok(None) };
     let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
     Ok(
@@ -47,7 +81,7 @@ fn declare_platform_and_add_task(
     task: &Task,
     feature: &FeatureName,
     platform: Option<&PixiPlatformName>,
-) -> miette::Result<()> {
+) -> Result<(), TaskError> {
     let pixi_platform = resolve_task_platform(workspace.workspace(), platform)?;
     // The auto-declare is idempotent on already-declared entries.
     if let Some(p) = &pixi_platform {
@@ -61,23 +95,35 @@ fn declare_platform_and_add_task(
     Ok(())
 }
 
-pub async fn list_tasks(
+pub async fn list_tasks<I: Interface>(
+    interface: &I,
     workspace: &Workspace,
     environment: Option<EnvironmentName>,
-) -> miette::Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>> {
+) -> Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>, TaskError>
+{
     let explicit_environment = environment
         .map(|n| {
             workspace
                 .environment(&n)
-                .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
+                .ok_or(EnvironmentFromNameError::Unknown(n))
         })
         .transpose()?;
 
-    let lock_file = workspace
-        .load_lock_file()
-        .await
-        .ok()
-        .map(|r| r.into_lock_file_or_empty_with_warning());
+    // The lock file only refines the runnability of environments the machine
+    // doesn't declare, so a broken one shouldn't stop the listing.
+    let lock_file = match workspace.load_lock_file().await {
+        Ok(result) => Some(result.into_lock_file_or_empty_with_warning()),
+        Err(err) => {
+            let mut message = err.to_string();
+            let mut source = err.source();
+            while let Some(cause) = source {
+                message.push_str(&format!(": {cause}"));
+                source = cause.source();
+            }
+            interface.warning(&message).await;
+            None
+        }
+    };
 
     let env_task_map: HashMap<Environment, (EnvironmentRunnability, HashSet<TaskName>)> =
         if let Some(explicit_environment) = explicit_environment {
@@ -123,9 +169,9 @@ pub async fn add_task<I: Interface>(
     task: Task,
     feature: FeatureName,
     platform: Option<PixiPlatformName>,
-) -> miette::Result<()> {
+) -> Result<(), TaskError> {
     declare_platform_and_add_task(&mut workspace, &name, &task, &feature, platform.as_ref())?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     interface
         .success(&format!(
@@ -145,9 +191,9 @@ pub async fn alias_task<I: Interface>(
     task: Task,
     feature: FeatureName,
     platform: Option<PixiPlatformName>,
-) -> miette::Result<()> {
+) -> Result<(), TaskError> {
     declare_platform_and_add_task(&mut workspace, &name, &task, &feature, platform.as_ref())?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     interface
         .success(&format!(
@@ -166,53 +212,40 @@ pub async fn remove_tasks<I: Interface>(
     names: Vec<TaskName>,
     platform: Option<PixiPlatformName>,
     feature: FeatureName,
-) -> miette::Result<()> {
+) -> Result<(), TaskError> {
     let mut to_remove = Vec::new();
 
     // No auto-declare on removal: if the name doesn't match a declared
     // platform we still try the subdir fallback so users can target a
     // dep that lives under an as-yet-undeclared subdir, but we don't
-    // mutate `[workspace].platforms` here. A miss surfaces as "Task '...'
-    // does not exist on <name>" below.
+    // mutate `[workspace].platforms` here. A miss surfaces as "task '...'
+    // does not exist on '<name>'" below.
     let pixi_platform = resolve_task_platform(workspace.workspace(), platform.as_ref())?;
 
     for name in names.iter() {
-        if let Some(pixi_platform) = pixi_platform.as_ref() {
-            if !workspace
-                .workspace()
-                .workspace
-                .value
-                .tasks(Some(pixi_platform), &feature)?
-                .contains_key(name)
-            {
-                interface
-                    .error(&format!(
-                        "Task '{}' does not exist on {}",
-                        name.fancy_display().bold(),
-                        console::style(pixi_platform.name().as_str()).bold(),
-                    ))
-                    .await;
-                continue;
-            }
-        } else if !workspace
-            .workspace()
-            .workspace
-            .value
-            .tasks(None, &feature)?
-            .contains_key(name)
-        {
-            interface
-                .error(&format!(
-                    "Task `{}` does not exist for {}",
-                    name.fancy_display().bold(),
-                    console::style(feature.user_facing()).bold(),
-                ))
-                .await;
+        let declared = workspace.workspace().workspace.value.declares_task(
+            name,
+            pixi_platform.as_ref(),
+            &feature,
+        )?;
+        if !declared {
+            let message = match pixi_platform.as_ref() {
+                Some(pixi_platform) => {
+                    format!("task '{name}' does not exist on '{}'", pixi_platform.name())
+                }
+                None => format!("task '{name}' does not exist for {}", feature.user_facing()),
+            };
+            interface.error(&message).await;
             continue;
         }
 
         // Safe to remove
         to_remove.push(name);
+    }
+
+    // Nothing to remove, so leave the manifest alone.
+    if to_remove.is_empty() {
+        return Ok(());
     }
 
     let mut removed = Vec::with_capacity(to_remove.len());
@@ -223,7 +256,7 @@ pub async fn remove_tasks<I: Interface>(
         removed.push(name);
     }
 
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     for name in removed {
         interface

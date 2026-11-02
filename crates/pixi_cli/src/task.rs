@@ -21,12 +21,12 @@ use serde_with::serde_as;
 
 use pixi_core::{
     Workspace, WorkspaceLocator,
-    workspace::{Environment, virtual_packages::EnvironmentRunnability},
+    workspace::{Environment, EnvironmentFromNameError, virtual_packages::EnvironmentRunnability},
 };
 
 use crate::{
     cli_config::WorkspaceConfig,
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 #[derive(Parser, Debug)]
@@ -400,7 +400,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()
         .await?;
 
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     match args.operation {
         Operation::Add(args) => add_task(workspace_ctx, args).await,
@@ -414,16 +414,17 @@ async fn list_tasks(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: ListArgs,
 ) -> miette::Result<()> {
+    let environment = args
+        .environment
+        .as_deref()
+        .map(EnvironmentName::from_str)
+        .transpose()?;
+
     if args.json {
-        return print_tasks_json(workspace_ctx.workspace());
+        return print_tasks_json(workspace_ctx.workspace(), environment);
     }
 
-    let tasks_per_env = workspace_ctx
-        .list_tasks(
-            args.environment
-                .and_then(|e| EnvironmentName::from_str(&e.to_string()).ok()),
-        )
-        .await?;
+    let tasks_per_env = workspace_ctx.list_tasks(environment).await?;
 
     if tasks_per_env.is_empty() {
         eprintln!("No tasks found",);
@@ -494,11 +495,24 @@ async fn remove_tasks(
 
     workspace_ctx
         .remove_task(args.names, args.platform, feature)
-        .await
+        .await?;
+
+    Ok(())
 }
 
-fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
-    let env_feature_task_map: Vec<EnvTasks> = build_env_feature_task_map(project);
+fn print_tasks_json(
+    project: &Workspace,
+    environment: Option<EnvironmentName>,
+) -> miette::Result<()> {
+    let env_feature_task_map: Vec<EnvTasks> = match environment {
+        Some(name) => {
+            let env = project
+                .environment(&name)
+                .ok_or(EnvironmentFromNameError::Unknown(name))?;
+            vec![EnvTasks::from(&env)]
+        }
+        None => build_env_feature_task_map(project),
+    };
 
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");

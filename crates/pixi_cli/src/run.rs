@@ -27,7 +27,7 @@ use rattler_conda_types::Subdir;
 use crate::cli_config::{
     LockAndInstallConfig, ScriptWorkspaceConfig, validate_transient_script_lock_file_usage,
 };
-use crate::cli_interface::cli_context;
+use crate::cli_interface::cli_workspace_context;
 use crate::process_exit;
 use crate::run_script::{
     RemoteScriptManifest, RunScriptInput, STDIN_SCRIPT_COMMAND, prepare_remote_script,
@@ -383,7 +383,9 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
             }
         }),
     };
-    let code = cli_context(workspace.clone()).run(options).await?;
+    let code = cli_workspace_context(workspace.clone())
+        .run(options)
+        .await?;
 
     if code == 127 {
         command_not_found(&workspace, explicit_environment);

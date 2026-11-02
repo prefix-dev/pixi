@@ -12,7 +12,7 @@ use strum::VariantNames;
 
 use crate::{
     cli_config::WorkspaceConfig,
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 /// Commands to manage workspace preview flags.
@@ -90,21 +90,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await;
 
     match args.command {
-        Command::Add(add) => {
-            WorkspaceContext::add_preview_flags(CliInterface {}, manifest_path(located)?, add.flags)
-                .await
-        }
-        Command::Remove(remove) => {
-            WorkspaceContext::remove_preview_flags(
-                CliInterface {},
-                manifest_path(located)?,
-                remove.args.flags,
-                remove.force,
-            )
-            .await
-        }
+        Command::Add(add) => Ok(WorkspaceContext::add_preview_flags(
+            CliInterface {},
+            manifest_path(located)?,
+            add.flags,
+        )
+        .await?),
+        Command::Remove(remove) => Ok(WorkspaceContext::remove_preview_flags(
+            CliInterface {},
+            manifest_path(located)?,
+            remove.args.flags,
+            remove.force,
+        )
+        .await?),
         Command::List => {
-            let workspace_ctx = cli_context(located?);
+            let workspace_ctx = cli_workspace_context(located?);
             let mut stdout = std::io::stdout();
             for flag in workspace_ctx.preview_flags().await {
                 pixi_utils::io::ignore_broken_pipe(writeln!(stdout, "{flag}")).into_diagnostic()?;

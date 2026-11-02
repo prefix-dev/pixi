@@ -11,7 +11,7 @@ use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
     cli_config::{LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::cli_context,
+    cli_interface::cli_workspace_context,
 };
 
 /// Commands to manage workspace channels.
@@ -139,7 +139,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let is_script = args.workspace_config.script.is_some();
     let lock_file_exists = workspace.lock_file_path().is_file();
     let channel_config = workspace.channel_config();
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
 
     match args.command {
         Command::Add(add_args) => {
@@ -148,7 +148,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let mut options: ChannelOptions = (&add_args).try_into()?;
             options.lock_file_usage =
                 channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
-            workspace_ctx.add_channel(options, priority, prepend).await
+            Ok(workspace_ctx
+                .add_channel(options, priority, prepend)
+                .await?)
         }
         Command::List(args) => {
             let environments = workspace_ctx.list_channel().await;
@@ -183,7 +185,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let mut options: ChannelOptions = (&remove_args).try_into()?;
             options.lock_file_usage =
                 channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
-            workspace_ctx.remove_channel(options, priority).await
+            Ok(workspace_ctx.remove_channel(options, priority).await?)
         }
     }
 }

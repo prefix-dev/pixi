@@ -3,7 +3,7 @@
 pub mod platforms;
 
 pub(crate) mod add;
-pub use add::{DependencyOptions, GitOptions};
+pub use add::{AddError, DependencyOptions, GitOptions};
 
 pub(crate) mod remove;
 pub use remove::RemoveError;
@@ -26,8 +26,16 @@ pub(crate) mod shell;
 pub use shell::{ShellError, ShellOptions};
 
 pub(crate) mod task;
+pub use task::TaskError;
 
 #[allow(clippy::module_inception)]
 pub(crate) mod workspace;
-pub use workspace::activation::ActivationEntry;
-pub use workspace::channel::ChannelOptions;
+pub use workspace::SaveManifestError;
+pub use workspace::activation::{ActivationEntry, EditActivationError};
+pub use workspace::channel::{ChannelError, ChannelOptions};
+pub use workspace::description::SetDescriptionError;
+pub use workspace::environment::EnvironmentError;
+pub use workspace::feature::RemoveFeatureError;
+pub use workspace::name::SetNameError;
+pub use workspace::platform::PlatformError;
+pub use workspace::preview::PreviewFlagsError;
