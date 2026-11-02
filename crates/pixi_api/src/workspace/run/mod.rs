@@ -86,7 +86,15 @@ pub async fn run<I: Interface>(
         miette::bail!("no task or command provided");
     }
 
-    let explicit_environment = explicit_environment(workspace, options.environment.as_ref())?;
+    let explicit_environment = options
+        .environment
+        .as_ref()
+        .map(|name| {
+            workspace
+                .environment(name)
+                .ok_or_else(|| EnvironmentFromNameError::Unknown(name.clone()))
+        })
+        .transpose()?;
     let environment = explicit_environment
         .clone()
         .unwrap_or_else(|| workspace.default_environment());
@@ -405,19 +413,6 @@ pub async fn run<I: Interface>(
     }
 
     Ok(0)
-}
-
-/// Looks up the environment the caller asked for.
-fn explicit_environment<'p>(
-    workspace: &'p Workspace,
-    name: Option<&EnvironmentName>,
-) -> miette::Result<Option<Environment<'p>>> {
-    name.map(|name| {
-        workspace
-            .environment(name)
-            .ok_or_else(|| EnvironmentFromNameError::Unknown(name.clone()).into())
-    })
-    .transpose()
 }
 
 async fn build_task_graph<'p, I: Interface>(
