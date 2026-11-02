@@ -494,7 +494,9 @@ async fn remove_tasks(
 
     workspace_ctx
         .remove_task(args.names, args.platform, feature)
-        .await
+        .await?;
+
+    Ok(())
 }
 
 fn print_tasks_json(project: &Workspace) -> miette::Result<()> {

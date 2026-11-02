@@ -1,21 +1,52 @@
 use std::collections::{HashMap, HashSet};
 
 use fancy_display::FancyDisplay;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_core::{
     Workspace,
     workspace::{
-        Environment, WorkspaceMut,
+        Environment, EnvironmentFromNameError, WorkspaceMut,
         virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
     },
 };
 use pixi_manifest::{
-    EnvironmentName, FeatureName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task,
-    TaskName,
+    EnvironmentName, FeatureName, GetFeatureError, HasWorkspaceManifest, LoadManifestsError,
+    PixiPlatform, PixiPlatformName, PlatformEditError, Task, TaskEditError, TaskName,
 };
+use thiserror::Error;
 
 use crate::interface::Interface;
-use crate::workspace::platforms::resolve_platforms;
+use crate::workspace::{
+    platforms::resolve_platforms,
+    workspace::{SaveManifestError, save},
+};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum TaskError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadWorkspace(#[from] LoadManifestsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    EnvironmentFromName(#[from] EnvironmentFromNameError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Platform(#[from] PlatformEditError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] TaskEditError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Feature(#[from] GetFeatureError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
+}
 
 /// Resolve `name` the same way the dependency CLI does: look it up in the
 /// workspace; if it's not declared, accept it as a bare conda subdir and
@@ -27,7 +58,7 @@ use crate::workspace::platforms::resolve_platforms;
 fn resolve_task_platform(
     workspace: &Workspace,
     name: Option<&PixiPlatformName>,
-) -> miette::Result<Option<PixiPlatform>> {
+) -> Result<Option<PixiPlatform>, PlatformEditError> {
     let Some(name) = name else { return Ok(None) };
     let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
     Ok(
@@ -47,7 +78,7 @@ fn declare_platform_and_add_task(
     task: &Task,
     feature: &FeatureName,
     platform: Option<&PixiPlatformName>,
-) -> miette::Result<()> {
+) -> Result<(), TaskError> {
     let pixi_platform = resolve_task_platform(workspace.workspace(), platform)?;
     // The auto-declare is idempotent on already-declared entries.
     if let Some(p) = &pixi_platform {
@@ -64,12 +95,13 @@ fn declare_platform_and_add_task(
 pub async fn list_tasks(
     workspace: &Workspace,
     environment: Option<EnvironmentName>,
-) -> miette::Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>> {
+) -> Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>, TaskError>
+{
     let explicit_environment = environment
         .map(|n| {
             workspace
                 .environment(&n)
-                .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
+                .ok_or(EnvironmentFromNameError::Unknown(n))
         })
         .transpose()?;
 
@@ -123,9 +155,9 @@ pub async fn add_task<I: Interface>(
     task: Task,
     feature: FeatureName,
     platform: Option<PixiPlatformName>,
-) -> miette::Result<()> {
+) -> Result<(), TaskError> {
     declare_platform_and_add_task(&mut workspace, &name, &task, &feature, platform.as_ref())?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     interface
         .success(&format!(
@@ -145,9 +177,9 @@ pub async fn alias_task<I: Interface>(
     task: Task,
     feature: FeatureName,
     platform: Option<PixiPlatformName>,
-) -> miette::Result<()> {
+) -> Result<(), TaskError> {
     declare_platform_and_add_task(&mut workspace, &name, &task, &feature, platform.as_ref())?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     interface
         .success(&format!(
@@ -166,7 +198,7 @@ pub async fn remove_tasks<I: Interface>(
     names: Vec<TaskName>,
     platform: Option<PixiPlatformName>,
     feature: FeatureName,
-) -> miette::Result<()> {
+) -> Result<(), TaskError> {
     let mut to_remove = Vec::new();
 
     // No auto-declare on removal: if the name doesn't match a declared
@@ -223,7 +255,7 @@ pub async fn remove_tasks<I: Interface>(
         removed.push(name);
     }
 
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     for name in removed {
         interface

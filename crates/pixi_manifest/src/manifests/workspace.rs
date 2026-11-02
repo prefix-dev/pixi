@@ -2187,10 +2187,10 @@ pub struct FeatureNotFoundError(pub FeatureName);
 /// [`WorkspaceManifestMut::remove_task`].
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum TaskEditError {
-    #[error("task {0} already exists")]
+    #[error("task '{0}' already exists")]
     AlreadyExists(TaskName),
 
-    #[error("task {0} does not exist")]
+    #[error("task '{0}' does not exist")]
     NotFound(TaskName),
 
     #[error("the environment '{0}' does not exist")]
@@ -7321,7 +7321,7 @@ platforms = [
             )
             .unwrap_err();
         assert_matches::assert_matches!(&err, TaskEditError::AlreadyExists(name) if *name == hello);
-        assert_eq!(err.to_string(), "task hello already exists");
+        assert_eq!(err.to_string(), "task 'hello' already exists");
         let err = manifest
             .remove_task(TaskName::from("nope"), None, &FeatureName::Default)
             .unwrap_err();
