@@ -20,7 +20,7 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use itertools::Either;
+use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
 use pixi_record::PixiRecord;
@@ -281,8 +281,17 @@ impl Key for EphemeralEnvKey {
         .await
         .map_err(|err| Arc::new(EphemeralEnvError::CacheIndex(Arc::new(err))))?;
 
+        // Every ephemeral environment is currently a build backend
+        // (`InstantiateBackendKey` and
+        // `CommandDispatcher::instantiate_tool_environment`), so label the
+        // solve as one for the progress reporter.
+        let name = spec
+            .dependencies
+            .names()
+            .map(PackageName::as_source)
+            .join(", ");
         let solve_spec = SolveCondaEnvironmentSpec {
-            name: None,
+            name: Some(format!("build backend: {name}")),
             source_specs: DependencyMap::default(),
             binary_specs,
             constraints: spec.constraints.clone(),
