@@ -1403,12 +1403,12 @@ def test_task_minijinja_title_filter(pixi: Path, tmp_pixi_workspace: Path) -> No
     )
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"hElLo wOrLd"'],
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", "hElLo wOrLd"],
         stdout_contains="Hello World",
     )
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"HELLO WORLD"'],
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", "HELLO WORLD"],
         stdout_contains="Hello World",
     )
 
