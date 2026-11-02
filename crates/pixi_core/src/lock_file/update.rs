@@ -1594,6 +1594,12 @@ impl<'p> LockFileDerivedData<'p> {
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
                     let index_strategy = environment.pypi_options().index_strategy.clone();
+                    // The locked indexes are those of the solve group, so the
+                    // overrides have to be too.
+                    let extra_index_urls = GroupedEnvironment::from(environment.clone())
+                        .pypi_options()
+                        .extra_index_urls
+                        .unwrap_or_default();
                     let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
@@ -1611,6 +1617,7 @@ impl<'p> LockFileDerivedData<'p> {
                         no_build: &no_build,
                         no_binary: &no_binary,
                         index_strategy: index_strategy.as_ref(),
+                        extra_index_urls: &extra_index_urls,
                         exclude_newer: &pypi_exclude_newer,
                         skip_wheel_filename_check,
                         link_mode: Some(derive_link_mode(

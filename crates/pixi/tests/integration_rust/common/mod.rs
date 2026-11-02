@@ -723,6 +723,7 @@ impl PixiControl {
             },
             args.templated,
         )
+        .await
         .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.

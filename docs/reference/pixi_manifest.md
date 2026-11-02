@@ -437,19 +437,34 @@ polars = "==1.43.1"
 py-rattler = "*"
 # a release of a specific build string from a specific channel
 pytorch-cpu = { version = "==2.10.0", build = "cpu_*", channel = "pytorch" }
+# only the builds of this release that were published when it was reviewed
+openssl = { version = "==3.2.1", cutoff = "2026-10-12T08:00:00Z" }
 ```
 
 A channel can override the cutoff with its own `exclude-newer` value, as shown above.
 Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.
 
+An exemption without a `cutoff` also lets through matching releases that are published later, e.g. a new build of `polars ==1.43.1`.
+Give an exemption a `cutoff` to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
+The cutoff of an exemption is an RFC 3339 timestamp or a date, durations are not supported.
+Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.
+
+Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.
+[`pixi workspace exclude-newer prune`](cli/pixi/workspace/exclude-newer/prune.md) removes these stale exemptions.
+
 [`pixi workspace exclude-newer exempt`](cli/pixi/workspace/exclude-newer/exempt.md) adds exemptions without editing the manifest by hand.
 It takes the same specs as `pixi add`, so a bare package name exempts every release.
+An exemption with a version gets the current time as its `cutoff`, use `--cutoff` to pick a different one or `--no-cutoff` to exempt future releases as well.
 Exempting a package again replaces its exemption, and [`pixi workspace exclude-newer unexempt`](cli/pixi/workspace/exclude-newer/unexempt.md) removes it.
 
 ```shell
+# exempts the releases of polars 1.43.1 published until now, and every release of py-rattler
 pixi workspace exclude-newer exempt polars==1.43.1 py-rattler
-pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]'
+pixi workspace exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12
+pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]' --no-cutoff
 pixi workspace exclude-newer unexempt py-rattler
+# remove the exemptions whose cutoff all channels have passed
+pixi workspace exclude-newer prune
 ```
 
 #### PyPI packages
@@ -488,7 +503,11 @@ torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124"
 
 !!! note
     Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
-    If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+    If the field is not present for a given distribution, the distribution will be treated as unavailable, unless its package is exempted. PyPI provides `upload-time` for all packages.
+
+    If an extra index does not expose `upload-time`, such as a private mirror, you can lift the cutoff for that index with a
+    per-index override on [`extra-index-urls`](#alternative-registries):
+    `{ url = "https://internal/simple", exclude-newer = "0d" }`.
 
 ### `build-variants` (optional)
 
@@ -668,6 +687,13 @@ Often you might want to use an alternative or extra index for your workspace. Th
    **Only one** `index-url` can be defined per environment.
 - `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And
    are preferred over the `index-url`. These are merged across features into an environment.
+   Each entry may be a plain URL string, or an inline table `{ url = "...", exclude-newer = ... }`
+   that overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) for packages served
+   from that index only. Use `exclude-newer = "0d"` to lift the cutoff for an index, for example
+   a private mirror that does not expose `upload-time` metadata. Unlike other cutoffs, this also keeps
+   releases without an upload time. Exemptions in
+   [`pypi-exclude-newer`](#exclude-newer-optional) take precedence over the cutoff of an index.
+   Listing the same index with different cutoffs in one environment is an error.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
    This is similar to the `--find-links` option in `pip`. These are merged across features into an
    environment.
@@ -677,9 +703,20 @@ An example:
 ```toml
 [pypi-options]
 index-url = "https://pypi.org/simple"
-extra-index-urls = ["https://example.com/simple"]
+extra-index-urls = [
+    "https://example.com/simple",
+    # No exclude-newer cutoff for this index (it does not expose `upload-time`):
+    { url = "https://internal.example.com/simple", exclude-newer = "0d" },
+    # A custom cutoff for this index only:
+    { url = "https://other.example.com/simple", exclude-newer = "2025-01-01" },
+]
 find-links = [{path = './links'}]
 ```
+
+!!! note
+    Changing a per-index `exclude-newer` does not invalidate already locked PyPI packages (see the
+    satisfiability note under [`exclude-newer`](#exclude-newer-optional)). Run `pixi update` to
+    re-resolve PyPI packages after changing it.
 
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
 

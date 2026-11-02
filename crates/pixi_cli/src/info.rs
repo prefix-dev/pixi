@@ -12,7 +12,7 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_config::{DetectorDecision, consent_origin};
+use pixi_config::{ConfigCliTls, DetectorDecision, consent_origin};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::environment::{PlatformData, RequiredPlatform};
@@ -28,7 +28,10 @@ use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest};
 use pixi_progress::await_in_progress;
 use pixi_task::TaskName;
-use pixi_utils::reqwest::tls_backend;
+use pixi_utils::{
+    reqwest::{EffectiveTlsRootCerts, effective_tls_root_certs, tls_backend},
+    tls::Certificates,
+};
 use rattler_conda_types::GenericVirtualPackage;
 use rattler_networking::authentication_storage;
 use rattler_virtual_package_detectors::merge_results;
@@ -45,6 +48,9 @@ static WIDTH: usize = 19;
 pub struct Args {
     #[clap(flatten)]
     pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
+    pub tls: ConfigCliTls,
 
     /// Show cache and environment size
     #[arg(long)]
@@ -65,6 +71,7 @@ pub struct WorkspaceInfo {
     last_updated: Option<String>,
     pixi_folder_size: Option<String>,
     version: Option<String>,
+    tls_root_certs: EffectiveTlsRootCerts,
 }
 
 #[derive(Serialize)]
@@ -290,6 +297,7 @@ struct GlobalInfo {
     bin_dir: PathBuf,
     env_dir: PathBuf,
     manifest: PathBuf,
+    tls_root_certs: EffectiveTlsRootCerts,
 }
 impl Display for GlobalInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -311,6 +319,12 @@ impl Display for GlobalInfo {
             "{:>WIDTH$}: {}",
             bold.apply_to("Manifest dir"),
             self.manifest.to_string_lossy()
+        )?;
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("TLS root certs"),
+            self.tls_root_certs
         )?;
         Ok(())
     }
@@ -558,6 +572,12 @@ impl Display for Info {
                     update_time
                 )?;
             }
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("TLS root certs"),
+                pi.tls_root_certs
+            )?;
         }
 
         if !self.environments_info.is_empty() {
@@ -638,13 +658,16 @@ async fn detect_host(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let source = args.config_source.source();
+    let tls_config = pixi_config::Config::from(args.tls);
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(source.clone())
         .with_search_start(args.project_config.workspace_locator_start())
+        .with_cli_config(tls_config.clone())
         .with_detector_consent(Arc::new(DenyAll))
         .locate()
         .await
         .ok();
+    let tls_env_sources = Certificates::env_sources();
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = workspace.as_ref().map(|p| p.pixi_dir());
@@ -674,12 +697,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .version
             .clone()
             .map(|v| v.to_string()),
+        tls_root_certs: effective_tls_root_certs(
+            p.config().tls_root_certs(),
+            tls_env_sources.clone(),
+        ),
     });
 
     let config = workspace
         .as_ref()
         .map(|p| p.config().clone())
-        .unwrap_or_else(|| pixi_config::Config::load_global_with(&source));
+        .unwrap_or_else(|| {
+            pixi_config::Config::load_global_with(&source).merge_config(tls_config.clone())
+        });
 
     let (host, mut virtual_package_detection_error) =
         match detect_host(workspace.as_ref(), &config).await {
@@ -798,10 +827,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
+    // `pixi global` always reads the default config locations: it ignores a
+    // workspace's `.pixi/config.toml` as well as `--config-file` and
+    // `--no-config`. Load that config quietly, problems in it are reported by
+    // the commands that use it.
+    let global_config =
+        tracing::subscriber::with_default(tracing::subscriber::NoSubscriber::default(), || {
+            pixi_config::Config::load_global()
+        })
+        .merge_config(tls_config);
     let global_info = Some(GlobalInfo {
         bin_dir: BinDir::from_env().await?.path().to_path_buf(),
         env_dir: EnvRoot::from_env().await?.path().to_path_buf(),
         manifest: pixi_global::Project::manifest_dir()?.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
+        tls_root_certs: effective_tls_root_certs(global_config.tls_root_certs(), tls_env_sources),
     });
 
     let auth_file: PathBuf = if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {

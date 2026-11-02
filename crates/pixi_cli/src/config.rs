@@ -280,6 +280,7 @@ async fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Opti
         .with_consider_environment(true)
         .with_search_start(common_args.workspace_config.workspace_locator_start())
         .with_ignore_pixi_version_check(true)
+        .with_lenient_config(true)
         .locate()
         .await;
     match workspace {
@@ -471,6 +472,8 @@ async fn alter_config(
     let mut config = match loaded {
         Ok(config) => config,
         Err(ConfigError::FileNotFound(_)) => Config::default(),
+        // `unset` only edits the document, so it can remove an invalid value
+        Err(_) if matches!(mode, AlterMode::Unset) => Config::default(),
         Err(e) => return Err(e.into()),
     };
 

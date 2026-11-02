@@ -1,0 +1,9 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × the cutoff of an exclude-newer exemption must be a date like `2026-10-12` or an RFC 3339 timestamp, not `now`
+   ╭─[pixi.toml:1:92]
+ 1 │ exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "now" } } }
+   ·                                                                                            ───
+   ╰────

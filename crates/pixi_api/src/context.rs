@@ -2,25 +2,28 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use indexmap::{IndexMap, IndexSet};
-use miette::IntoDiagnostic;
 use pixi_core::workspace::{
     Environment, PypiDeps, SkippedPackage, UpdateDeps, WorkspaceMut,
     virtual_packages::EnvironmentRunnability,
 };
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, KnownPreviewFlag, PixiPlatform, PixiPlatformName,
-    PlatformEdit, PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
+    EnvironmentName, Feature, FeatureName, KnownPreviewFlag, LoadManifestsError, PixiPlatform,
+    PixiPlatformName, PlatformEdit, PlatformMove, PrioritizedChannel, SpecType, TargetSelector,
+    Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Subdir};
 
-use crate::global::GlobalEnvironment;
+use crate::global::{GlobalEnvironment, ListError};
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
-    ChannelOptions, DependencyOptions, InitOptions, Package, ReinstallOptions, RemoveError,
+    ChannelError, ChannelOptions, DependencyOptions, EditActivationError, EnvironmentError,
+    InitError, InitOptions, Package, PlatformError, PreviewFlagsError, ReinstallOptions,
+    RemoveError, RemoveFeatureError, RunOptions, SetDescriptionError, SetNameError, ShellError,
+    ShellOptions,
 };
 
 pub struct DefaultContext<I: Interface> {
@@ -68,14 +71,14 @@ impl<I: Interface> GlobalContext<I> {
     pub async fn list_environments(
         &self,
         regex: Option<String>,
-    ) -> miette::Result<Vec<GlobalEnvironment>> {
+    ) -> Result<Vec<GlobalEnvironment>, ListError> {
         crate::global::list::list(&self.project, regex).await
     }
 
     pub async fn get_environment(
         &self,
         name: &pixi_global::EnvironmentName,
-    ) -> miette::Result<GlobalEnvironment> {
+    ) -> Result<GlobalEnvironment, ListError> {
         crate::global::list::get(&self.project, name).await
     }
 }
@@ -107,8 +110,8 @@ impl<I: Interface> WorkspaceContext<I> {
         &self.workspace
     }
 
-    pub fn workspace_mut(&self) -> miette::Result<WorkspaceMut> {
-        Ok(self.attach_progress(self.workspace.clone().modify().into_diagnostic()?))
+    pub fn workspace_mut(&self) -> Result<WorkspaceMut, LoadManifestsError> {
+        Ok(self.attach_progress(self.workspace.clone().modify()?))
     }
 
     /// Hands this context's reporter to `workspace` so the solves, downloads
@@ -121,7 +124,7 @@ impl<I: Interface> WorkspaceContext<I> {
         }
     }
 
-    pub async fn init(interface: I, options: InitOptions) -> miette::Result<Workspace> {
+    pub async fn init(interface: I, options: InitOptions) -> Result<Workspace, InitError> {
         crate::workspace::init::init(&interface, options).await
     }
 
@@ -129,7 +132,7 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::name::get(&self.workspace).await
     }
 
-    pub async fn set_name(&self, name: &str) -> miette::Result<()> {
+    pub async fn set_name(&self, name: &str) -> Result<(), SetNameError> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
     }
 
@@ -137,7 +140,7 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::description::get(&self.workspace).await
     }
 
-    pub async fn set_description(&self, description: &str) -> miette::Result<()> {
+    pub async fn set_description(&self, description: &str) -> Result<(), SetDescriptionError> {
         crate::workspace::workspace::description::set(
             &self.interface,
             self.workspace_mut()?,
@@ -157,7 +160,7 @@ impl<I: Interface> WorkspaceContext<I> {
         interface: I,
         manifest_path: std::path::PathBuf,
         flags: Vec<KnownPreviewFlag>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PreviewFlagsError> {
         crate::workspace::workspace::preview::add(&interface, manifest_path, flags).await
     }
 
@@ -169,7 +172,7 @@ impl<I: Interface> WorkspaceContext<I> {
         manifest_path: std::path::PathBuf,
         flags: Vec<KnownPreviewFlag>,
         force: bool,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PreviewFlagsError> {
         crate::workspace::workspace::preview::remove(&interface, manifest_path, flags, force).await
     }
 
@@ -183,7 +186,7 @@ impl<I: Interface> WorkspaceContext<I> {
         prepend: bool,
         target: Option<TargetSelector>,
         feature: FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), EditActivationError> {
         crate::workspace::workspace::activation::add_scripts(
             &self.interface,
             self.workspace_mut()?,
@@ -200,7 +203,7 @@ impl<I: Interface> WorkspaceContext<I> {
         scripts: Vec<String>,
         target: Option<TargetSelector>,
         feature: FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), EditActivationError> {
         crate::workspace::workspace::activation::remove_scripts(
             &self.interface,
             self.workspace_mut()?,
@@ -216,7 +219,7 @@ impl<I: Interface> WorkspaceContext<I> {
         variables: Vec<(String, String)>,
         target: Option<TargetSelector>,
         feature: FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), EditActivationError> {
         crate::workspace::workspace::activation::set_env(
             &self.interface,
             self.workspace_mut()?,
@@ -232,7 +235,7 @@ impl<I: Interface> WorkspaceContext<I> {
         keys: Vec<String>,
         target: Option<TargetSelector>,
         feature: FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), EditActivationError> {
         crate::workspace::workspace::activation::remove_env(
             &self.interface,
             self.workspace_mut()?,
@@ -252,7 +255,7 @@ impl<I: Interface> WorkspaceContext<I> {
         options: ChannelOptions,
         priority: Option<i32>,
         prepend: bool,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ChannelError> {
         crate::workspace::workspace::channel::add(
             &self.interface,
             self.workspace_mut()?,
@@ -267,7 +270,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         options: ChannelOptions,
         priority: Option<i32>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ChannelError> {
         crate::workspace::workspace::channel::remove(
             &self.interface,
             self.workspace_mut()?,
@@ -277,7 +280,7 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn set_channels(&self, options: ChannelOptions) -> miette::Result<()> {
+    pub async fn set_channels(&self, options: ChannelOptions) -> Result<(), ChannelError> {
         crate::workspace::workspace::channel::set(&self.interface, self.workspace_mut()?, options)
             .await
     }
@@ -292,7 +295,7 @@ impl<I: Interface> WorkspaceContext<I> {
         no_install: bool,
         feature: FeatureName,
         lock_file_usage: LockFileUsage,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformError> {
         crate::workspace::workspace::platform::add(
             &self.interface,
             self.workspace_mut()?,
@@ -310,7 +313,7 @@ impl<I: Interface> WorkspaceContext<I> {
         no_install: bool,
         feature: FeatureName,
         lock_file_usage: LockFileUsage,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformError> {
         crate::workspace::workspace::platform::remove(
             &self.interface,
             self.workspace_mut()?,
@@ -328,7 +331,7 @@ impl<I: Interface> WorkspaceContext<I> {
         edit: PlatformEdit,
         no_install: bool,
         lock_file_usage: LockFileUsage,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformError> {
         crate::workspace::workspace::platform::edit(
             &self.interface,
             self.workspace_mut()?,
@@ -346,7 +349,7 @@ impl<I: Interface> WorkspaceContext<I> {
         target: PlatformMove,
         no_install: bool,
         lock_file_usage: LockFileUsage,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformError> {
         crate::workspace::workspace::platform::move_platform(
             &self.interface,
             self.workspace_mut()?,
@@ -365,7 +368,7 @@ impl<I: Interface> WorkspaceContext<I> {
         no_install: bool,
         feature: FeatureName,
         lock_file_usage: LockFileUsage,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformError> {
         crate::workspace::workspace::platform::add_auto_detected(
             &self.interface,
             self.workspace_mut()?,
@@ -394,7 +397,7 @@ impl<I: Interface> WorkspaceContext<I> {
         solve_group: Option<String>,
         no_default_feature: bool,
         force: bool,
-    ) -> miette::Result<()> {
+    ) -> Result<(), EnvironmentError> {
         crate::workspace::workspace::environment::add(
             &self.interface,
             self.workspace_mut()?,
@@ -407,7 +410,7 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn remove_environment(&self, name: &str) -> miette::Result<()> {
+    pub async fn remove_environment(&self, name: &str) -> Result<(), EnvironmentError> {
         crate::workspace::workspace::environment::remove(
             &self.interface,
             self.workspace_mut()?,
@@ -496,7 +499,7 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn remove_feature(
         &self,
         feature: &FeatureName,
-    ) -> miette::Result<Vec<EnvironmentName>> {
+    ) -> Result<Vec<EnvironmentName>, RemoveFeatureError> {
         crate::workspace::workspace::feature::remove_feature(
             &self.interface,
             self.workspace_mut()?,
@@ -543,7 +546,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
     ) -> Result<(), RemoveError> {
-        let workspace_mut = self.attach_progress(self.workspace.clone().modify()?);
+        let workspace_mut = self.workspace_mut()?;
         Box::pin(crate::workspace::remove::remove_conda_deps(
             workspace_mut,
             specs,
@@ -558,7 +561,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         options: DependencyOptions,
     ) -> Result<(), RemoveError> {
-        let workspace_mut = self.attach_progress(self.workspace.clone().modify()?);
+        let workspace_mut = self.workspace_mut()?;
         Box::pin(crate::workspace::remove::remove_pypi_deps(
             workspace_mut,
             pypi_deps,
@@ -580,6 +583,20 @@ impl<I: Interface> WorkspaceContext<I> {
             self.progress.as_ref(),
         )
         .await
+    }
+
+    pub async fn run(&self, options: RunOptions) -> miette::Result<i32> {
+        crate::workspace::run::run(
+            &self.interface,
+            &self.workspace,
+            options,
+            self.progress.as_ref(),
+        )
+        .await
+    }
+
+    pub async fn shell(&self, options: ShellOptions) -> Result<i32, ShellError> {
+        crate::workspace::shell::shell(&self.workspace, options, self.progress.as_ref()).await
     }
 
     pub async fn list_tasks(

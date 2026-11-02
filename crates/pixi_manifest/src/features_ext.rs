@@ -368,7 +368,9 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
         // Overlay features on top of the workspace base: features win on
         // single-assignment fields, lists and union-like fields are merged.
+        // Conflicting cutoffs of an extra index are caught at parse time.
         base.overlay(&feature_opts)
+            .expect("merging of pypi-options should already have been checked")
     }
 }
 

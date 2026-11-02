@@ -222,7 +222,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
             ScriptCommand::Prepend(args) => {
                 workspace_ctx
@@ -232,7 +232,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
             ScriptCommand::Remove(args) => {
                 workspace_ctx
@@ -241,9 +241,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
-            ScriptCommand::List(args) => list(&workspace_ctx, args, ListMode::Scripts).await,
+            ScriptCommand::List(args) => list(&workspace_ctx, args, ListMode::Scripts).await?,
         },
         Command::Env(env_args) => match env_args.command {
             EnvCommand::Set(args) => {
@@ -253,7 +253,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
             EnvCommand::Remove(args) => {
                 for key in &args.key {
@@ -269,12 +269,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
-            EnvCommand::List(args) => list(&workspace_ctx, args, ListMode::Env).await,
+            EnvCommand::List(args) => list(&workspace_ctx, args, ListMode::Env).await?,
         },
-        Command::List(args) => list(&workspace_ctx, args, ListMode::All).await,
+        Command::List(args) => list(&workspace_ctx, args, ListMode::All).await?,
     }
+    Ok(())
 }
 
 async fn list(

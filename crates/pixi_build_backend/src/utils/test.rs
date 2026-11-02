@@ -81,7 +81,7 @@ where
     .await
     .unwrap();
 
-    let current_dir = std::env::current_dir().unwrap();
+    let work_directory = tempfile::tempdir().unwrap();
     protocol
         .conda_outputs(CondaOutputsParams {
             channels: vec![],
@@ -89,7 +89,7 @@ where
             build_platform: host_platform,
             variant_configuration,
             variant_files,
-            work_directory: current_dir,
+            work_directory: work_directory.path().to_path_buf(),
         })
         .await
         .unwrap()

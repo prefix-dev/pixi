@@ -17,7 +17,7 @@ use pixi_build_backend::{
 };
 use pyproject_toml::PyProjectToml;
 use rattler_build_recipe::stage0::{
-    ConditionalList, Item, PythonBuild, Script, SerializableMatchSpec, Value,
+    ConditionalList, Item, PythonBuild, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
 };
 use rattler_conda_types::{
     ChannelUrl, NoArchType, PackageName, Subdir, Version, package::EntryPoint,
@@ -209,6 +209,7 @@ fn uv_cache_dir(from_env: Option<OsString>, cache_dir: Option<&Path>) -> Option<
 #[async_trait::async_trait]
 impl GenerateRecipe for PythonGenerator {
     type Config = PythonBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,

@@ -175,7 +175,7 @@ pub async fn execute_impl<W: Write>(
         })
         .await?
     } else {
-        let config = pixi_config::Config::load_global_with(&args.config_source.source())
+        let config = pixi_config::Config::try_load_global_with(&args.config_source.source())?
             .merge_config(args.config.clone().into());
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})

@@ -108,6 +108,7 @@ exposed = { my-tool = "my-tool" }
 
 Exemptions work the same way as in the [workspace manifest](../reference/pixi_manifest.md#exemptions): `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
 To narrow an exemption further, use a table with the same fields as a dependency, such as `{ version = "==1.43.1", build = "py312*" }`.
+Add a `cutoff` to the table, such as `{ version = "==1.43.1", cutoff = "2026-10-12T08:00:00Z" }`, to only exempt the matching releases that were published up to that point in time.
 An exemption applies in every environment, including when the package is a transitive dependency.
 Approving one version does not pin the dependency to that version.
 
@@ -125,7 +126,11 @@ If no allowed version satisfies the dependencies, the sync fails.
 pixi global exclude-newer set 7d
 pixi global exclude-newer exempt polars==1.43.1 my-tool
 pixi global exclude-newer unexempt my-tool
+pixi global exclude-newer prune
 ```
+
+Like `pixi workspace exclude-newer exempt`, an exemption with a version gets the current time as its `cutoff` unless you pass `--cutoff` or `--no-cutoff`.
+`pixi global exclude-newer prune` removes the exemptions whose cutoff the cutoffs of all channels have passed.
 
 An exemption doesn't update the environments to the newer releases on its own, run `pixi global update` to pick them up.
 

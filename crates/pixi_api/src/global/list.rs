@@ -1,14 +1,28 @@
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
-use miette::{IntoDiagnostic, miette};
 use pixi_consts::consts;
 use pixi_global::{
     EnvironmentName, Project,
-    common::{self, find_package_records},
-    project::ParsedEnvironment,
+    common::{self, CondaMetaError, find_package_records},
+    project::{ManifestError, ParsedEnvironment},
 };
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, PrefixRecord, Subdir};
 use serde::Serialize;
+
+/// An error from listing the global environments.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ListError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error("invalid regex")]
+    Regex(#[source] regex::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaMeta(#[from] CondaMetaError),
+}
 
 /// An executable of a global environment exposed under a name.
 #[derive(Debug, Clone, Serialize)]
@@ -42,7 +56,7 @@ async fn environment(
     project: &Project,
     env_name: &EnvironmentName,
     env: &ParsedEnvironment,
-) -> miette::Result<GlobalEnvironment> {
+) -> Result<GlobalEnvironment, ListError> {
     let conda_meta = project
         .env_root_path()
         .join(env_name.as_str())
@@ -102,11 +116,11 @@ async fn environment(
 pub async fn get(
     project: &Project,
     environment_name: &EnvironmentName,
-) -> miette::Result<GlobalEnvironment> {
+) -> Result<GlobalEnvironment, ListError> {
     let env = project
         .environments()
         .get(environment_name)
-        .ok_or_else(|| miette!("Environment {} not found", environment_name.fancy_display()))?;
+        .ok_or_else(|| ManifestError::EnvironmentNotFound(environment_name.clone()))?;
 
     environment(project, environment_name, env).await
 }
@@ -115,7 +129,7 @@ pub async fn get(
 pub async fn list(
     project: &Project,
     regex: Option<String>,
-) -> miette::Result<Vec<GlobalEnvironment>> {
+) -> Result<Vec<GlobalEnvironment>, ListError> {
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
 
@@ -132,7 +146,7 @@ pub async fn list(
     });
 
     if let Some(regex) = regex {
-        let regex = regex::Regex::new(&regex).into_diagnostic()?;
+        let regex = regex::Regex::new(&regex).map_err(ListError::Regex)?;
         project_envs.retain(|env_name, _| regex.is_match(env_name.as_str()));
     }
 

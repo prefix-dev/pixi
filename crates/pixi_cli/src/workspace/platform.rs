@@ -627,7 +627,8 @@ async fn execute_add(
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -690,7 +691,8 @@ async fn execute_add_auto_detected(
         .map_err(AutoDetectPlatformError::Platform)?;
     workspace_ctx
         .add_auto_detected_platform(candidate, explicit, no_install, feature, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Merge user-supplied virtual packages over detected ones: a user spec
@@ -764,7 +766,8 @@ async fn execute_edit(
 
     workspace_ctx
         .edit_platform(args.name, edit, args.no_install, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 async fn execute_move(
@@ -782,7 +785,8 @@ async fn execute_move(
 
     workspace_ctx
         .move_platform(args.name, target, args.no_install, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Print every workspace platform in full detail, preceded by the
@@ -912,7 +916,8 @@ async fn execute_remove(
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather

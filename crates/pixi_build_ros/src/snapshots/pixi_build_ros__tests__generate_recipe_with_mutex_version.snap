@@ -56,6 +56,8 @@ requirements:
     - coreutils
     - "${{ compiler('c') }}"
     - "${{ compiler('cxx') }}"
+    - if: build_platform != target_platform
+      then: "cross-python_${{ target_platform }}"
   host:
     - ros-distro-mutex 0.5.*
     - ros-noetic-catkin

@@ -7,7 +7,7 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::global::{
-    EnvironmentName, GlobalDependency, GlobalEnvironment, GlobalExposedMapping, Project,
+    EnvironmentName, GlobalDependency, GlobalEnvironment, GlobalExposedMapping, ListError, Project,
     report::{self, EnvReport, Item, Label, Marker, Row},
 };
 use pixi_config::{Config, ConfigCli};
@@ -63,7 +63,7 @@ pub enum GlobalSortBy {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -82,7 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 match &args.regex {
                     Some(regex)
                         if !regex::Regex::new(regex)
-                            .into_diagnostic()?
+                            .map_err(ListError::Regex)?
                             .is_match(env_name.as_str()) =>
                     {
                         Vec::new()
@@ -277,7 +277,7 @@ fn print_specific_global_environment(
 
     // Filter according to the regex
     if let Some(ref regex) = regex {
-        let regex = regex::Regex::new(regex).into_diagnostic()?;
+        let regex = regex::Regex::new(regex).map_err(ListError::Regex)?;
         packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
     }
 
@@ -288,7 +288,8 @@ fn print_specific_global_environment(
         packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
     }
 
-    print_package_table(packages_to_output).into_diagnostic()?;
+    pixi_utils::io::ignore_broken_pipe(print_package_table(packages_to_output))
+        .into_diagnostic()?;
 
     Ok(())
 }

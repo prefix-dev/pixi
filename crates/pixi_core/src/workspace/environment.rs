@@ -1466,7 +1466,7 @@ mod tests {
                 .extra_index_urls
                 .unwrap()
                 .iter()
-                .map(|i| i.to_string())
+                .map(|i| i.url.to_string())
                 .collect_vec(),
             vec!["https://1.com/"]
         );
@@ -1477,7 +1477,7 @@ mod tests {
                 .extra_index_urls
                 .unwrap()
                 .iter()
-                .map(|i| i.to_string())
+                .map(|i| i.url.to_string())
                 .collect_vec(),
             vec!["https://2.com/"]
         );
@@ -1494,7 +1494,7 @@ mod tests {
                 .extra_index_urls
                 .unwrap()
                 .iter()
-                .map(|i| i.to_string())
+                .map(|i| i.url.to_string())
                 .collect_vec(),
             vec!["https://1.com/", "https://2.com/"]
         )

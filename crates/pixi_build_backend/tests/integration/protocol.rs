@@ -22,10 +22,15 @@ use url::Url;
 mod imp {
     use miette::IntoDiagnostic;
     use pixi_build_backend::generated_recipe::{
-        BackendConfig, DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams,
+        BackendConfig, DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, IntoRecipe,
+        PythonParams,
     };
-    use rattler_build_recipe::stage0::Value;
-    use rattler_conda_types::ChannelUrl;
+    use pixi_build_backend::specs_conversion::pin_subpackage_exact;
+    use rattler_build_recipe::stage0::{
+        About, Build, ConditionalList, Inherit, MultiOutputRecipe, Output, PackageMetadata,
+        PackageOutput, Recipe, RecipeMetadata, Requirements, SingleOutputRecipe, Value,
+    };
+    use rattler_conda_types::{ChannelUrl, PackageName};
     use serde::{Deserialize, Serialize};
     use std::{
         collections::HashSet,
@@ -56,8 +61,64 @@ mod imp {
         }
     }
 
+    /// Turns `recipe` into a multi-output recipe with an additional
+    /// `<name>-meta` output that pins it exactly.
+    fn with_metapackage(recipe: SingleOutputRecipe) -> Recipe {
+        let name = recipe
+            .package
+            .name
+            .as_concrete()
+            .unwrap()
+            .as_str()
+            .to_string();
+        let output = |name, requirements, build| {
+            Output::Package(Box::new(PackageOutput {
+                package: PackageMetadata {
+                    name,
+                    version: None,
+                },
+                inherit: Inherit::TopLevel,
+                source: ConditionalList::default(),
+                requirements,
+                build,
+                about: About::default(),
+                tests: ConditionalList::default(),
+            }))
+        };
+        let meta = output(
+            Value::new_concrete(
+                PackageName::new_unchecked(format!("{name}-meta")).into(),
+                None,
+            ),
+            Requirements {
+                run: ConditionalList::new(vec![pin_subpackage_exact(&name).unwrap()]),
+                ..Requirements::default()
+            },
+            Build::default(),
+        );
+
+        Recipe::MultiOutput(Box::new(MultiOutputRecipe {
+            schema_version: recipe.schema_version,
+            context: recipe.context,
+            recipe: RecipeMetadata {
+                name: None,
+                version: Some(recipe.package.version),
+            },
+            source: recipe.source,
+            build: Build::default(),
+            about: recipe.about,
+            extra: recipe.extra,
+            tests: ConditionalList::default(),
+            outputs: vec![
+                output(recipe.package.name, recipe.requirements, recipe.build),
+                meta,
+            ],
+        }))
+    }
+
     #[async_trait::async_trait]
     impl GenerateRecipe for TestGenerateRecipe {
+        type Recipe = Recipe;
         type Config = TestBackendConfig;
 
         async fn generate_recipe(
@@ -73,7 +134,7 @@ mod imp {
             _workspace_scratch_directory: Option<PathBuf>,
             _workspace_directory: Option<PathBuf>,
             _checkout_root: Option<PathBuf>,
-        ) -> miette::Result<GeneratedRecipe> {
+        ) -> miette::Result<GeneratedRecipe<Recipe>> {
             let mut generated =
                 GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
                     .into_diagnostic()?;
@@ -81,7 +142,10 @@ mod imp {
                 generated.recipe.build.variant.down_prioritize_variant =
                     Some(Value::new_concrete(2, None));
             }
-            Ok(generated)
+            if model.name.as_deref() == Some("multi-output") {
+                return Ok(generated.map_recipe(with_metapackage));
+            }
+            Ok(generated.map_recipe(IntoRecipe::into_recipe))
         }
     }
 }
@@ -184,6 +248,38 @@ async fn test_conda_outputs_exposes_downprioritize_track_features() {
     assert_eq!(
         result.outputs[0].metadata.track_features,
         ["downprioritized-p-0", "downprioritized-p-1"]
+    );
+}
+
+#[tokio::test]
+async fn test_conda_outputs_of_multi_output_recipe() {
+    let original_model = load_project_model_from_json("minimal_project_model_for_build.json");
+    let mut model = convert_test_model_to_project_model_v1(original_model);
+    model.name = Some("multi-output".to_string());
+
+    let result = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model),
+        None,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        None,
+        None,
+    )
+    .await;
+
+    let names: Vec<&str> = result
+        .outputs
+        .iter()
+        .map(|output| output.metadata.name.as_normalized())
+        .collect();
+    assert_eq!(names, ["multi-output", "multi-output-meta"]);
+
+    let meta_run = &result.outputs[1].run_dependencies.depends;
+    assert_eq!(meta_run.len(), 1);
+    assert_eq!(meta_run[0].name.as_str(), "multi-output");
+    assert!(
+        matches!(&meta_run[0].spec, PackageSpec::Source(_)),
+        "a pinned sibling output is built from the same source: {:?}",
+        meta_run[0].spec
     );
 }
 

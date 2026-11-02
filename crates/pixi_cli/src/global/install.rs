@@ -82,7 +82,7 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
 
     // Load the global config and ensure
     // that the root_dir is relative to the manifest directory

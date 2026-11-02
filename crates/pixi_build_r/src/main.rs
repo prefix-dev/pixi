@@ -13,7 +13,9 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
     variants::NormalizedKey,
 };
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_build_recipe::stage0::{
+    Item, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
+};
 use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
@@ -61,6 +63,7 @@ impl RGenerator {
 #[async_trait::async_trait]
 impl GenerateRecipe for RGenerator {
     type Config = RBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,
