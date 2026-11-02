@@ -9908,10 +9908,10 @@ This can be useful if you want to run commands inside of the pixi environment, b
 <ol>
 <li>everything here will be run inside of the pixi environment</li>
 </ol>
-<p>If you want to use PowerShell, you need to specify <code>-Command</code> as well.</p>
+<p>If you want to use PowerShell, you need to read the script file and evaluate its content:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span><span class="w"> </span><span class="c1"># (1)!</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">    </span><span class="no">python --version | Select-String &quot;3.11&quot;</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">shell</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi run pwsh -Command {0}</span><span class="w"> </span><span class="c1"># pwsh works on all platforms</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="nt">shell</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi run pwsh -NoProfile -Command &quot;Invoke-Expression (Get-Content -Raw &#39;{0}&#39;)&quot;</span><span class="w"> </span><span class="c1"># pwsh works on all platforms</span>
 </span></code></pre></div>
 <ol>
 <li>everything here will be run inside of the pixi environment</li>

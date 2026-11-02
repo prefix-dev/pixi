@@ -11016,12 +11016,12 @@ You can even run Python scripts like this:
 
 1. everything here will be run inside of the pixi environment
 
-If you want to use PowerShell, you need to specify `-Command` as well.
+If you want to use PowerShell, you need to read the script file and evaluate its content:
 
 ```yaml
 - run: | # (1)!
     python --version | Select-String "3.11"
-  shell: pixi run pwsh -Command {0} # pwsh works on all platforms
+  shell: pixi run pwsh -NoProfile -Command "Invoke-Expression (Get-Content -Raw '{0}')" # pwsh works on all platforms
 ```
 
 1. everything here will be run inside of the pixi environment
