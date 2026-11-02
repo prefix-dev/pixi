@@ -21,7 +21,7 @@ pixi config list [OPTIONS] [KEY]
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output in JSON format
 - <a id="arg---describe" href="#arg---describe">`--describe`</a>
-:  Describe every configuration option with its type, default, and a short explanation
+:  Describe configuration options with their type, default, and a short explanation
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>

@@ -98,7 +98,7 @@ struct ListArgs {
     #[arg(long)]
     json: bool,
 
-    /// Describe every configuration option with its type, default, and a short explanation
+    /// Describe configuration options with their type, default, and a short explanation
     #[arg(long)]
     describe: bool,
 
