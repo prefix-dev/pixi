@@ -2152,7 +2152,7 @@ impl Config {
     ) -> Result<Config, ConfigError> {
         let config = Self::try_load_global_with(source)?;
         match Self::from_path(&local_config_path(project_root)) {
-            Ok(local) => Ok(config.merge_config(local)),
+            Ok(local) => Ok(config.merge_project_layer(local)),
             Err(ConfigError::FileNotFound(_)) => Ok(config),
             Err(e) => Err(e),
         }
@@ -2163,13 +2163,37 @@ impl Config {
     pub fn load_with(project_root: &Path, source: &GlobalConfigSource) -> Config {
         let config = Self::load_global_with(source);
         match Self::from_path(&local_config_path(project_root)) {
-            Ok(local) => config.merge_config(local),
+            Ok(local) => config.merge_project_layer(local),
             Err(ConfigError::FileNotFound(_)) => config,
             Err(e) => {
                 log_skipped(e);
                 config
             }
         }
+    }
+
+    /// Merges the repository's `.pixi/config.toml` on top of the operator's
+    /// configuration.
+    ///
+    /// The repository controls that file, so it has no say in which code may
+    /// run or which packages are trusted: its `[security]` table is dropped
+    /// with a warning before the usual merge.
+    #[must_use]
+    pub fn merge_project_layer(self, mut project: Config) -> Config {
+        if !project.security.is_default() {
+            let project_file = project
+                .loaded_from
+                .last()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| format!("{}/{}", consts::PIXI_DIR, consts::CONFIG_FILE));
+            tracing::warn!(
+                "Ignoring `[security]` in {}: a repository's config does not decide which code may run or which packages are trusted",
+                console::style(&project_file).bold()
+            );
+            project.security = SecurityConfig::default();
+        }
+
+        self.merge_config(project)
     }
 
     /// Load the config from the given path (project root) using the default
@@ -5530,5 +5554,106 @@ packages = [{ name = "foo", version = "*", build = "py*" }]
             assert!(matches!(err, SetConfigError::InvalidValue { .. }), "{err}");
             assert_eq!(config.security.trusted_packages, None);
         }
+    }
+
+    fn project_layer(global: &str, project: &str) -> Config {
+        let (global, _) = Config::from_toml(global, None).unwrap();
+        let (project, _) = Config::from_toml(project, None).unwrap();
+        global.merge_project_layer(project)
+    }
+
+    /// Whatever the repository's file says under `[security]` is dropped:
+    /// it can neither disable nor enable untrusted code execution, and it
+    /// cannot touch the trust list.
+    #[tracing_test::traced_test]
+    #[rstest]
+    #[case::disable("", "security.untrusted-code-exec = false", None)]
+    #[case::enable(
+        "security.untrusted-code-exec = false",
+        "security.untrusted-code-exec = true",
+        Some(false)
+    )]
+    #[case::empty_list(SECURITY_TOML, "security.trusted-packages = []", Some(false))]
+    #[case::new_list(
+        "",
+        r#"security.trusted-packages = [{ channel = "https://evil.example/c", packages = [] }]"#,
+        None
+    )]
+    fn test_project_layer_security_is_ignored(
+        #[case] global: &str,
+        #[case] project: &str,
+        #[case] untrusted_code_exec: Option<bool>,
+    ) {
+        let expected = Config::from_toml(global, None).unwrap().0.security;
+        let merged = project_layer(global, project);
+        assert_eq!(merged.security, expected);
+        assert_eq!(merged.security.untrusted_code_exec, untrusted_code_exec);
+        assert!(logs_contain("Ignoring `[security]` in .pixi/config.toml"));
+    }
+
+    #[test]
+    #[tracing_test::traced_test]
+    fn test_project_layer_without_security_is_silent() {
+        let merged = project_layer(
+            "security.untrusted-code-exec = false",
+            "tls-no-verify = true",
+        );
+        assert!(!merged.untrusted_code_exec());
+        assert!(!logs_contain("Ignoring"));
+    }
+
+    /// The other keys of the project layer still win like before.
+    #[test]
+    fn test_project_layer_keeps_merging_other_keys() {
+        let merged = project_layer(
+            "tls-no-verify = false\nsecurity.untrusted-code-exec = false",
+            "tls-no-verify = true\ndefault-channels = [\"bioconda\"]",
+        );
+        assert_eq!(merged.tls_no_verify, Some(true));
+        assert_eq!(
+            merged.default_channels,
+            vec![NamedChannelOrUrl::from_str("bioconda").unwrap()]
+        );
+        assert!(!merged.untrusted_code_exec());
+    }
+
+    #[test]
+    #[tracing_test::traced_test]
+    fn test_load_with_restricts_the_project_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let global = dir.path().join("global.toml");
+        fs_err::write(
+            &global,
+            "security.untrusted-code-exec = false\nsecurity.trusted-packages = []",
+        )
+        .unwrap();
+        let root = dir.path().join("workspace");
+        let project = local_config_path(&root);
+        fs_err::create_dir_all(project.parent().unwrap()).unwrap();
+        fs_err::write(
+            &project,
+            r#"
+security.untrusted-code-exec = true
+tls-no-verify = true
+[[security.trusted-packages]]
+channel = "https://evil.example/c"
+packages = [{ name = "anything", version = "*" }]
+"#,
+        )
+        .unwrap();
+
+        let config = Config::load_with(&root, &GlobalConfigSource::File(global.clone()));
+        assert!(!config.untrusted_code_exec());
+        assert_eq!(config.security.trusted_packages, Some(vec![]));
+        assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(config.loaded_from, vec![project.clone(), global.clone()]);
+        assert!(logs_contain(&format!(
+            "Ignoring `[security]` in {}",
+            project.display()
+        )));
+
+        let config = Config::try_load_with(&root, &GlobalConfigSource::File(global)).unwrap();
+        assert!(!config.untrusted_code_exec());
+        assert_eq!(config.security.trusted_packages, Some(vec![]));
     }
 }
