@@ -5,7 +5,6 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_core::WorkspaceLocator;
 use pixi_manifest::{Feature, FeatureName};
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::cli_workspace_context};
@@ -49,7 +48,7 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()

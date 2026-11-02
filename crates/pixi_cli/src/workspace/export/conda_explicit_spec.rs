@@ -6,7 +6,7 @@ use std::{
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
-use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
+use pixi_core::lock_file::UpdateLockFileOptions;
 use pixi_manifest::PixiPlatformName;
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, RepoDataRecord, Subdir,
@@ -211,7 +211,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())

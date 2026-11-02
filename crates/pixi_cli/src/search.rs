@@ -10,7 +10,7 @@ use miette::{IntoDiagnostic, Report};
 use pixi_api::DefaultContext;
 use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_config::default_channel_config;
-use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
+use pixi_core::workspace::WorkspaceLocatorError;
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{
@@ -87,7 +87,7 @@ pub async fn execute_impl<W: Write>(
     args: Args,
     out: &mut W,
 ) -> miette::Result<Vec<RepoDataRecord>> {
-    let workspace = match WorkspaceLocator::for_cli()
+    let workspace = match crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .with_cli_config(args.config.clone())

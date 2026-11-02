@@ -6,7 +6,6 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
-use pixi_core::WorkspaceLocator;
 use pixi_core::{
     Workspace,
     lock_file::{LockedPackageKind, UpdateContext, filter_lock_file},
@@ -131,7 +130,7 @@ impl UpdateSpecs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .with_cli_config(args.config)

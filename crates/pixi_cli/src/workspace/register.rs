@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceRegistry;
 
 /// Commands to manage the registry of workspaces. Default command will add a new workspace
@@ -100,7 +99,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             );
         }
         None => {
-            let workspace = WorkspaceLocator::for_cli()
+            let workspace = crate::workspace_locator()
                 .with_global_config_source(args.config_source.source())
                 .with_closest_package(false)
                 .with_search_start(args.workspace_config.workspace_locator_start())
