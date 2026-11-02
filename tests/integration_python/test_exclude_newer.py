@@ -376,6 +376,19 @@ def test_config_exclude_newer_url_exemption(pixi: Path, tmp_path: Path, channels
         stderr_contains="uploaded after the cutoff date",
     )
 
+    # A `url` names a single archive, so no other field may select releases,
+    # which a manifest couldn't hold either.
+    (tmp_path / "config.toml").write_text(
+        'exclude-newer = { cutoff = "2020-01-01", exemptions = '
+        f'{{ dummy-a = {{ url = "{archive.as_uri()}", version = "*" }} }} }}\n'
+    )
+    verify_cli_command(
+        [pixi, "exec", "--channel", channel.as_uri(), "--spec", "dummy-a", "--", *noop],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="must not specify other match spec fields than `md5` and `sha256`",
+    )
+
 
 def test_config_exclude_newer_duration_exemption_cutoff(
     pixi: Path, tmp_path: Path, dummy_channel_1: str
