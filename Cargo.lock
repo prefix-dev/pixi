@@ -6688,6 +6688,7 @@ dependencies = [
  "toml 1.2.1+spec-1.1.0",
  "toml_edit",
  "tracing",
+ "tracing-test",
  "url",
 ]
 
