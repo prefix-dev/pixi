@@ -114,6 +114,10 @@ impl<I: Interface> WorkspaceContext<I> {
         &self.workspace
     }
 
+    pub fn manifest_path(&self) -> std::path::PathBuf {
+        self.workspace.workspace.provenance.absolute_path()
+    }
+
     pub fn workspace_mut(&self) -> Result<WorkspaceMut, LoadManifestsError> {
         Ok(self.attach_progress(self.workspace.clone().modify()?))
     }
