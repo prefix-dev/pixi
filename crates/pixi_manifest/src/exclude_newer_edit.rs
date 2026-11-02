@@ -452,8 +452,10 @@ fn find_key(table: &dyn TableLike, matches: impl Fn(&str) -> bool) -> Option<Str
 }
 
 /// Tidies up the `key` table of `parent` after an edit: drops empty
-/// `exemptions`, collapses a lone cutoff back into a bare string and removes
-/// the key entirely when nothing is left.
+/// `exemptions`, collapses an inline table with a lone cutoff back into a
+/// bare string and removes the key entirely when nothing is left. A standard
+/// table keeps its header, as replacing it would drop the comments in and
+/// above it, like `rattler_config` does when editing `exclude-newer`.
 fn collapse(parent: &mut Table, key: &str) {
     let Some(item) = parent.get_mut(key) else {
         return;
@@ -472,7 +474,8 @@ fn collapse(parent: &mut Table, key: &str) {
     };
     if table.is_empty() {
         remove_table_entry(parent, key);
-    } else if table.len() == 1
+    } else if item.is_inline_table()
+        && table.len() == 1
         && let Some(cutoff) = table.get("cutoff").and_then(Item::as_value)
         && cutoff.is_str()
     {
@@ -637,19 +640,24 @@ python = "*"
     }
 
     #[test]
-    fn unexempt_collapses_to_cutoff() {
+    fn unexempt_collapses_an_inline_table_to_cutoff() {
         assert_snapshot!(unexempt("exclude-newer = { cutoff = \"7d\", exemptions = { python = \"*\", numpy = \"*\" } }\n", "python"), @r#"exclude-newer = { cutoff = "7d", exemptions = { numpy = "*" } }"#);
         assert_snapshot!(unexempt("exclude-newer = { cutoff = \"7d\", exemptions = { python = \"*\" } } # keep\n", "python"), @r#"exclude-newer = "7d" # keep"#);
+        // A standard table keeps its header and comments.
         assert_snapshot!(unexempt(r#"name = "x"
 
+# a week back
 [exclude-newer]
-cutoff = "7d"
+cutoff = "7d" # a week
 
 [exclude-newer.exemptions]
 Python = "*"
 "#, "python"), @r#"
         name = "x"
-        exclude-newer = "7d"
+
+        # a week back
+        [exclude-newer]
+        cutoff = "7d" # a week
         "#);
     }
 
