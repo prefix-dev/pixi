@@ -1,3 +1,4 @@
+mod accelerator;
 mod build_script;
 mod config;
 
@@ -12,7 +13,7 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
 };
 use rattler_build_jinja::Variable;
-use rattler_build_recipe::stage0::{Script, SingleOutputRecipe, Value};
+use rattler_build_recipe::stage0::{ConditionalList, Item, Script, SingleOutputRecipe, Value};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
@@ -32,7 +33,7 @@ impl GenerateRecipe for MojoGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Subdir,
+        host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -75,10 +76,28 @@ impl GenerateRecipe for MojoGenerator {
         let (mut bins, mut pkg) = config.auto_derive(&manifest_root, &cleaned_project_name)?;
         Self::make_paths_absolute(&manifest_root, &mut bins, &mut pkg)?;
 
+        let accelerator_variants_enabled =
+            variants.contains(&NormalizedKey::from(accelerator::VARIANT_KEY));
+        if accelerator_variants_enabled {
+            accelerator::configure_recipe(
+                &mut generated_recipe.recipe,
+                host_platform,
+                bins.as_deref(),
+                pkg.as_ref(),
+            )?;
+        }
+
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        let compilers = config.compilers.clone().unwrap_or_default();
+        let mut compilers = config.compilers.clone().unwrap_or_default();
+        if accelerator_variants_enabled {
+            for language in ["c", "cxx"] {
+                if !compilers.iter().any(|compiler| compiler == language) {
+                    compilers.push(language.to_string());
+                }
+            }
+        }
 
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
@@ -90,14 +109,28 @@ impl GenerateRecipe for MojoGenerator {
             variants,
         );
 
-        let build_script = BuildScriptContext { bins, pkg }.render();
-
+        let build_script = BuildScriptContext {
+            bins,
+            pkg,
+            accelerator_variants_enabled,
+        }
+        .render();
+        let script = if accelerator_variants_enabled {
+            Script {
+                content: Some(ConditionalList::new(vec![Item::Value(
+                    accelerator::template(build_script)?,
+                )])),
+                ..Default::default()
+            }
+        } else {
+            Script::from_content(build_script)
+        };
         *generated_recipe
             .recipe
             .build
             .plan
             .script_mut()
-            .expect("generated recipes use script mode") = Script::from_content(build_script)
+            .expect("generated recipes use script mode") = script
             .with_env(
                 config
                     .env

@@ -2,7 +2,7 @@
 pixi_api = 7
 pixi_build_backend = 40
 pixi_build_cmake = 1
-pixi_build_mojo = 2
+pixi_build_mojo = 3
 pixi_build_python = 9
 pixi_build_r = 16
 pixi_build_rattler_build = 4
