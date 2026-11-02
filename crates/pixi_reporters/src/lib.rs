@@ -205,14 +205,15 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
 
 impl pixi_command_dispatcher::CondaSolveReporter for TopLevelProgress {
     fn on_queued(&self, env: &SolveCondaEnvironmentSpec) -> OperationId {
-        // Reuse the parent pixi-solve's bar slot when one is active so
-        // a conda solve nested inside a pixi solve renders as the same
-        // entry rather than a fresh row.
+        // A pixi solve's own conda solve renders as the pixi solve's entry
+        // rather than a fresh row. Only a direct child qualifies: solves
+        // further down, such as a build-backend environment, are separate
+        // work, and sharing the bar would finish it twice.
         let id = self.alloc();
         let parent_bar = self
             .registry
-            .ancestors(id)
-            .find_map(|ancestor| self.solve_bar(ancestor));
+            .parent_of(id)
+            .and_then(|parent| self.solve_bar(parent));
         let bar = match parent_bar {
             Some(bar) => bar,
             None => self
@@ -290,5 +291,72 @@ impl Drop for ClearWhenDone {
         if let Some(progress) = &self.0 {
             progress.on_clear();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::executor::block_on;
+    use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget};
+    use pixi_command_dispatcher::{
+        CondaSolveReporter, PixiSolveEnvironmentSpec, PixiSolveReporter, SolveCondaEnvironmentSpec,
+    };
+    use pixi_compute_reporters::{OperationId, OperationRegistry};
+
+    use super::TopLevelProgress;
+
+    fn progress() -> TopLevelProgress {
+        let multi_progress = MultiProgress::with_draw_target(ProgressDrawTarget::hidden());
+        let anchor_pb = multi_progress.add(ProgressBar::hidden());
+        TopLevelProgress::new(OperationRegistry::new(), multi_progress, anchor_pb)
+    }
+
+    fn queue_pixi_solve(progress: &TopLevelProgress) -> OperationId {
+        let id = PixiSolveReporter::on_queued(
+            progress,
+            &PixiSolveEnvironmentSpec {
+                name: "default".to_owned(),
+                platform: "linux-64".to_owned(),
+                has_direct_conda_dependency: false,
+            },
+        );
+        PixiSolveReporter::on_started(progress, id);
+        id
+    }
+
+    fn queue_conda_solve(progress: &TopLevelProgress) -> OperationId {
+        CondaSolveReporter::on_queued(progress, &SolveCondaEnvironmentSpec::default())
+    }
+
+    fn run_conda_solve(progress: &TopLevelProgress, id: OperationId) {
+        CondaSolveReporter::on_started(progress, id);
+        CondaSolveReporter::on_finished(progress, id);
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/7369>.
+    #[test]
+    fn nested_conda_solve_gets_its_own_bar() {
+        let progress = progress();
+        let pixi = queue_pixi_solve(&progress);
+        let pixi_bar = progress.solve_bar(pixi);
+        block_on(pixi.scope_active(async {
+            // A build-backend environment solved on behalf of the pixi
+            // solve, one operation further down.
+            let backend = progress.registry().allocate();
+            let nested = backend
+                .scope_active(async { queue_conda_solve(&progress) })
+                .await;
+            assert_ne!(progress.solve_bar(nested), pixi_bar);
+            run_conda_solve(&progress, nested);
+
+            // A failure elsewhere clears the finished bars before the pixi
+            // solve's own conda solve runs.
+            progress.on_clear();
+
+            let own = queue_conda_solve(&progress);
+            assert_eq!(progress.solve_bar(own), pixi_bar);
+            run_conda_solve(&progress, own);
+        }));
+        PixiSolveReporter::on_finished(&progress, pixi);
     }
 }
