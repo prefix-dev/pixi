@@ -266,67 +266,6 @@ dummy-b = "*"
     }
 
 
-def test_exclude_newer_exempt_several_specs_of_one_package(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
-    """Several specs of the same package in one call are combined into one exemption.
-
-    Regression test: previously only the last spec of a package was kept.
-    """
-    manifest = tmp_pixi_workspace / "pixi.toml"
-    manifest.write_text(f"""
-[workspace]
-name = "test"
-channels = []
-platforms = ["{CURRENT_PLATFORM}"]
-exclude-newer = "7d"
-""")
-    flags: list[str | Path] = ["--manifest-path", manifest, "--no-install"]
-
-    verify_cli_command(
-        [
-            pixi,
-            "workspace",
-            "exclude-newer",
-            "exempt",
-            "python==3.11.18",
-            "python==3.12.16",
-            "python>=3.13.18,<3.14|==3.12.16",
-            "--cutoff",
-            "2026-01-01",
-            *flags,
-        ],
-        stderr_contains="Exempted python==3.11.18, python==3.12.16, python>=3.13.18,<3.14|==3.12.16",
-    )
-    exemptions = cast(dict[str, Any], exclude_newer(manifest))["exemptions"]
-    assert exemptions == {
-        "python": {"version": "==3.11.18|==3.12.16|>=3.13.18,<3.14", "cutoff": "2026-01-01"}
-    }
-
-    # A bare name exempts every release, so it absorbs the versions
-    verify_cli_command(
-        [pixi, "workspace", "exclude-newer", "exempt", "openssl==3.5.4", "openssl", *flags],
-    )
-    exemptions = cast(dict[str, Any], exclude_newer(manifest))["exemptions"]
-    assert exemptions["openssl"] == "*"
-
-    # Specs that differ in more than their version cannot be combined
-    verify_cli_command(
-        [
-            pixi,
-            "workspace",
-            "exclude-newer",
-            "exempt",
-            "conda-forge::ruff==0.1",
-            "ruff==0.2",
-            *flags,
-        ],
-        ExitCode.FAILURE,
-        stderr_contains="cannot combine the exemptions of ruff",
-    )
-    assert "ruff" not in cast(dict[str, Any], exclude_newer(manifest))["exemptions"]
-
-
 def test_pypi_exclude_newer_cli(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """PyPI exemptions only take package names and work without a cutoff."""
     manifest = tmp_pixi_workspace / "pixi.toml"

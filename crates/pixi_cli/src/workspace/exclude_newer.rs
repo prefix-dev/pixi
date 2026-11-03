@@ -2,7 +2,6 @@ use std::{path::Path, str::FromStr};
 
 use chrono::{DateTime, SubsecRound, TimeDelta, Utc};
 use clap::Parser;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
@@ -15,8 +14,8 @@ use pixi_manifest::{
     ExcludeNewerExemption, FeaturesExt, ManifestDocument, ManifestKind, entry_as_written,
 };
 use pixi_pypi_spec::PypiPackageName;
-use pixi_spec::{BinarySpec, DetailedSpec, ExcludeNewer};
-use rattler_conda_types::{ChannelConfig, PackageName, VersionSpec, version_spec::LogicalOperator};
+use pixi_spec::{BinarySpec, ExcludeNewer};
+use rattler_conda_types::{ChannelConfig, PackageName, VersionSpec};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
@@ -56,10 +55,8 @@ pub enum Command {
     /// Exempt package releases from the cutoff.
     ///
     /// Exemptions are match specs, a bare package name exempts every release.
-    /// Several specs of the same package are combined into one exemption,
-    /// e.g. `python==3.11.18 python==3.12.16`. An existing exemption of the
-    /// same package is replaced, with a warning if that moves its cutoff
-    /// later.
+    /// An existing exemption of the same package is replaced, with a warning
+    /// if that moves its cutoff later.
     ///
     /// An exemption with a version only exempts the releases that are already
     /// published, so e.g. a later build of an exempt version is not exempt.
@@ -114,11 +111,6 @@ pub(crate) enum ExcludeNewerError {
     #[error("PyPI exemptions do not support a cutoff")]
     #[diagnostic(help("remove `--cutoff` and `--no-cutoff`"))]
     PypiExemptionCutoff,
-    #[error("cannot combine the exemptions of {0} because they differ in more than their version")]
-    #[diagnostic(help(
-        "pass a single spec for {0} and combine the versions with `|`, e.g. `{0}==1.0|==2.0`"
-    ))]
-    IncompatibleExemptions(String),
 }
 
 /// The cutoff of new exemptions.
@@ -204,34 +196,18 @@ fn describe_exemption(spec: &str, cutoff: Option<ExcludeNewer>) -> String {
 
 /// Exempts the conda `specs` with `add`, with the cutoff of `cutoff`.
 /// Returns the success message.
-///
-/// A package has a single exemption, so the specs of the same package are
-/// combined into one exemption that exempts the releases of all of them.
 pub(crate) fn add_exemptions(
     specs: &[String],
     cutoff: &ExemptionCutoffArgs,
     channel_config: &ChannelConfig,
     mut add: impl FnMut(PackageName, ExcludeNewerExemption) -> miette::Result<()>,
 ) -> miette::Result<String> {
-    let mut combined: IndexMap<PackageName, (Vec<&str>, BinarySpec)> = IndexMap::new();
+    let now = now();
+    let mut names = Vec::with_capacity(specs.len());
     for spec in specs {
         let (name, binary) = pixi_manifest::parse_conda_exemption(spec, channel_config)?;
-        match combined.get_mut(&name) {
-            Some((written, existing)) => {
-                written.push(spec);
-                *existing = combine_exemption_specs(&name, existing.clone(), binary)?;
-            }
-            None => {
-                combined.insert(name, (vec![spec], binary));
-            }
-        }
-    }
-
-    let now = now();
-    let mut names = Vec::with_capacity(combined.len());
-    for (name, (written, binary)) in combined {
         let cutoff = cutoff.cutoff_for(&binary, now)?;
-        names.push(describe_exemption(&written.join(", "), cutoff));
+        names.push(describe_exemption(spec, cutoff));
         add(
             name,
             ExcludeNewerExemption {
@@ -241,67 +217,6 @@ pub(crate) fn add_exemptions(
         )?;
     }
     Ok(format!("Exempted {} from exclude-newer.", names.join(", ")))
-}
-
-/// Combines two exemption specs of the same package into one that matches
-/// the releases of either, e.g. `==3.11.18` and `==3.12.16` become
-/// `==3.11.18|==3.12.16`. Only specs that differ in their version can be
-/// combined.
-fn combine_exemption_specs(
-    name: &PackageName,
-    a: BinarySpec,
-    b: BinarySpec,
-) -> Result<BinarySpec, ExcludeNewerError> {
-    let incompatible = || ExcludeNewerError::IncompatibleExemptions(name.as_source().to_string());
-    let (version_a, rest_a) = split_version(a).ok_or_else(incompatible)?;
-    let (version_b, rest_b) = split_version(b).ok_or_else(incompatible)?;
-    if rest_a != rest_b {
-        return Err(incompatible());
-    }
-
-    let version = if version_a == VersionSpec::Any || version_b == VersionSpec::Any {
-        VersionSpec::Any
-    } else {
-        let mut alternatives = Vec::new();
-        for version in [version_a, version_b] {
-            let members = match version {
-                VersionSpec::Group(LogicalOperator::Or, members) => members,
-                version => vec![version],
-            };
-            for member in members {
-                if !alternatives.contains(&member) {
-                    alternatives.push(member);
-                }
-            }
-        }
-        if alternatives.len() == 1 {
-            alternatives.remove(0)
-        } else {
-            VersionSpec::Group(LogicalOperator::Or, alternatives)
-        }
-    };
-
-    Ok(if rest_a == DetailedSpec::default() {
-        BinarySpec::Version(version)
-    } else {
-        BinarySpec::DetailedVersion(Box::new(DetailedSpec {
-            version: (version != VersionSpec::Any).then_some(version),
-            ..rest_a
-        }))
-    })
-}
-
-/// Splits a spec from a channel into its version, `*` if it has none, and
-/// the remaining fields. Returns `None` for URL and path specs.
-fn split_version(spec: BinarySpec) -> Option<(VersionSpec, DetailedSpec)> {
-    match spec {
-        BinarySpec::Version(version) => Some((version, DetailedSpec::default())),
-        BinarySpec::DetailedVersion(mut detailed) => {
-            let version = detailed.version.take().unwrap_or(VersionSpec::Any);
-            Some((version, *detailed))
-        }
-        BinarySpec::Url(_) | BinarySpec::Path(_) => None,
-    }
 }
 
 /// Removes the `stale` exemptions with `remove`, or only reports them on a

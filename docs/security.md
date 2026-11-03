@@ -151,14 +151,13 @@ If you want the constraint to keep applying to future solves, add it to the [`[c
 !!! tip "Fixes released on several branches"
     Some fixes are published for several release branches at once.
     For example, the [eMudhra emSign CA certificate security incident](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576) required updating Python to `3.11.18`, `3.12.16`, `3.13.18`, `3.14.10` or `3.15.2`.
-    Exempt all fixed releases, and combine the branches with `|` in the constraint:
+    Combine the fixed releases with `|`, both in the exemption and in the constraint:
 
     ```shell
-    pixi workspace exclude-newer exempt python==3.11.18 python==3.12.16 python==3.13.18 python==3.14.10 python==3.15.2
+    pixi workspace exclude-newer exempt 'python==3.11.18|==3.12.16|==3.13.18|==3.14.10|==3.15.2'
     pixi lock --with-constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
     ```
 
-    The specs of one package are combined into a single exemption, `python = "==3.11.18|==3.12.16|..."`.
     In the constraint, `,` binds tighter than `|`, so each `>=fix,<next-branch` pair allows the fixed releases of one branch.
 
     An environment stays on its branch only if something keeps it there, typically a requirement like `python = "3.12.*"`.
