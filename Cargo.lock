@@ -4810,6 +4810,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lzma-rust2"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490750560fa7851fbbf5d3ab1a8750f09350ed361ed8aed85b1e1e40587812ee"
+dependencies = [
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "marked-yaml"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7402,7 +7411,7 @@ dependencies = [
  "futures",
  "hex",
  "indicatif",
- "lzma-rust2",
+ "lzma-rust2 0.24.0",
  "pixi_record",
  "pixi_spec",
  "pixi_utils",
@@ -8370,7 +8379,7 @@ dependencies = [
  "hex",
  "indicatif",
  "jiff",
- "lzma-rust2",
+ "lzma-rust2 0.23.0",
  "md-5",
  "rattler_build_networking",
  "rattler_git",
@@ -10283,7 +10292,7 @@ dependencies = [
  "crc32fast",
  "getrandom 0.4.2",
  "js-sys",
- "lzma-rust2",
+ "lzma-rust2 0.23.0",
  "ppmd-rust",
  "sha2 0.11.0",
  "wasm-bindgen",
