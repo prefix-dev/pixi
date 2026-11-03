@@ -989,6 +989,13 @@ They also support the same inline MatchSpec fields, including `channel`.
 openssl = { channel = "conda-forge", version = ">=3.0" }
 ```
 
+!!! tip "One-off constraints"
+    To apply a constraint for a single lock operation without editing the manifest, use
+    [`pixi lock --constraint`](cli/pixi/lock.md#arg---constraint), e.g.
+    `pixi lock --constraint 'openssl>=3.5.4'`.
+    Only environments whose locked packages violate the constraint are re-solved, and the other
+    locked packages are kept as preferences.
+
 !!! note
     Constraints do **not** cause a package to be installed. They only restrict which version is
     acceptable *if* the package is already being installed. Use `[dependencies]` when you actually

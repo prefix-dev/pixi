@@ -676,6 +676,10 @@ impl LockBuilder {
         self.args.check = check;
         self
     }
+    pub fn with_constraint(mut self, constraint: impl Into<String>) -> Self {
+        self.args.constraints.push(constraint.into());
+        self
+    }
 }
 
 impl IntoFuture for LockBuilder {

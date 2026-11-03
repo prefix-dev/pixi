@@ -6,6 +6,11 @@ use pixi_core::{
     lock_file::{LockFileDerivedData, UpdateLockFileOptions},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
+use pixi_manifest::CondaConstraints;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{
+    ChannelConfig, MatchSpec, ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
+};
 
 use crate::cli_config::NoInstallConfig;
 use crate::cli_config::ScriptWorkspaceConfig;
@@ -41,6 +46,58 @@ pub struct Args {
     /// Implies `--no-install`.
     #[clap(long)]
     pub dry_run: bool,
+
+    /// Temporarily constrain a conda package to the given match spec while
+    /// locking, e.g. `--constraint 'openssl>=3.5.4'`.
+    ///
+    /// Behaves like an additional entry in the `[constraints]` table that
+    /// applies to all environments: it restricts the allowed versions of a
+    /// package without adding it as a dependency. Environments whose locked
+    /// packages violate the constraint are re-solved, keeping the other
+    /// locked packages as preferences. The constraint is not written to the
+    /// manifest. Can be specified multiple times.
+    #[clap(long = "constraint", value_name = "MATCHSPEC")]
+    pub constraints: Vec<String>,
+}
+
+/// An error that occurs when parsing a `--constraint` argument.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ConstraintParseError {
+    #[error("failed to parse constraint '{constraint}'")]
+    InvalidMatchSpec {
+        constraint: String,
+        #[source]
+        source: ParseMatchSpecError,
+    },
+    #[error("constraint '{0}' must specify an exact package name")]
+    MissingPackageName(String),
+}
+
+/// Parses the `--constraint` arguments into conda constraints.
+fn parse_constraints(
+    constraints: &[String],
+    channel_config: &ChannelConfig,
+) -> Result<CondaConstraints, ConstraintParseError> {
+    let mut result = CondaConstraints::default();
+    for constraint in constraints {
+        let spec = MatchSpec::from_str(
+            constraint,
+            ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+        )
+        .map_err(|source| ConstraintParseError::InvalidMatchSpec {
+            constraint: constraint.clone(),
+            source,
+        })?;
+        let Some(name) = spec.name.as_exact().cloned() else {
+            return Err(ConstraintParseError::MissingPackageName(constraint.clone()));
+        };
+        let (_, nameless) = spec.into_nameless();
+        result.insert(
+            name,
+            PixiSpec::from_nameless_matchspec(nameless, channel_config),
+        );
+    }
+    Ok(result)
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -83,6 +140,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .clone()
     {
         workspace = workspace.with_backend_override(backend_override);
+    }
+
+    // Inject the temporary constraints. They only live in memory and take part
+    // in both the satisfiability check and the solve.
+    if !args.constraints.is_empty() {
+        let constraints = parse_constraints(&args.constraints, &workspace.channel_config())?;
+        workspace.workspace.value.extra_constraints = constraints;
     }
 
     // Update the lock file, and extract it from the derived data to drop additional resources

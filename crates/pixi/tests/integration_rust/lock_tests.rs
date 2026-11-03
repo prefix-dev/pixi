@@ -200,3 +200,139 @@ async fn test_lock_check_does_not_create_missing_lock_file() {
         "pixi.lock must not be created by the second --check"
     );
 }
+
+/// `pixi lock --constraint` re-solves only the environments whose locked
+/// packages violate the constraint, keeps the other locked packages as
+/// preferences, and never writes the constraint to the manifest.
+#[tokio::test]
+async fn test_lock_constraint_minimal_update() {
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+    package_database.add_package(Package::build("baz", "1").finish());
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = url::Url::from_file_path(channel_dir.path()).unwrap();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+    let manifest = format!(
+        r#"
+    [workspace]
+    name = "test-lock-constraint"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    [feature.a.dependencies]
+    foo = "*"
+    bar = "*"
+    baz = "*"
+
+    [feature.b.dependencies]
+    bar = "*"
+
+    [environments]
+    a = {{ features = ["a"], no-default-feature = true }}
+    b = {{ features = ["b"], no-default-feature = true }}
+    "#
+    );
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+    pixi.lock().await.unwrap();
+
+    // Publish newer versions. The fixed `foo` needs a newer `baz`.
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_dependency("baz >=2")
+            .finish(),
+    );
+    package_database.add_package(Package::build("foo", "3").finish());
+    package_database.add_package(Package::build("bar", "2").finish());
+    package_database.add_package(Package::build("baz", "2").finish());
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Without the constraint the lock file is up to date.
+    pixi.lock().with_check(true).await.unwrap();
+
+    // With the constraint the lock file is out of date, but `--check` must not
+    // write anything.
+    let err = pixi
+        .lock()
+        .with_check(true)
+        .with_constraint("foo>=2,<3")
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("lock file not up-to-date"),
+        "unexpected error: {err:?}"
+    );
+    pixi.lock()
+        .with_dry_run(true)
+        .with_constraint("foo>=2,<3")
+        .await
+        .unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec("a", platform, "foo ==1"));
+
+    pixi.lock().with_constraint("foo>=2,<3").await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    // The constrained package moved to the newest allowed version.
+    assert!(lock.contains_match_spec("a", platform, "foo ==2"));
+    // Its dependency was allowed to move, because locked packages are only
+    // preferences.
+    assert!(lock.contains_match_spec("a", platform, "baz ==2"));
+    // Unrelated packages keep their locked version.
+    assert!(lock.contains_match_spec("a", platform, "bar ==1"));
+    // Environments without the package are untouched.
+    assert!(lock.contains_match_spec("b", platform, "bar ==1"));
+    assert!(!lock.contains_conda_package("b", platform, "foo"));
+
+    // The constraint is not persisted in the manifest.
+    assert_eq!(pixi.manifest_contents().unwrap(), manifest);
+
+    // The updated lock file still satisfies the manifest and the constraint.
+    pixi.lock().with_check(true).await.unwrap();
+    pixi.lock()
+        .with_check(true)
+        .with_constraint("foo>=2")
+        .await
+        .unwrap();
+}
+
+/// A constraint that cannot be satisfied results in a solve error.
+#[tokio::test]
+async fn test_lock_constraint_unsatisfiable() {
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .with_local_channel(channel_dir.path())
+        .await
+        .unwrap();
+    pixi.add("foo").await.unwrap();
+
+    pixi.lock()
+        .with_constraint("foo>=2")
+        .await
+        .expect_err("solving with an unsatisfiable constraint should fail");
+
+    // Invalid match specs are rejected.
+    let err = pixi.lock().with_constraint("foo >=>2").await.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("failed to parse constraint"),
+        "unexpected error: {err:?}"
+    );
+}

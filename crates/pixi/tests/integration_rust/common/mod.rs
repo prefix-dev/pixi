@@ -877,6 +877,7 @@ impl PixiControl {
                 check: false,
                 json: false,
                 dry_run: false,
+                constraints: Vec::new(),
             },
         }
     }
