@@ -99,10 +99,7 @@ pub async fn install_environment(
             Ok(state_changes)
         }
         Err(err) => {
-            if let Err(revert_err) = revert_environment_after_error(env_name, project).await {
-                tracing::warn!("Reverting of the operation failed");
-                tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
-            }
+            revert_environment_after_error(env_name, project).await;
             Err(err)
         }
     }

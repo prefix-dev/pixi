@@ -158,10 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             }
             Err(err) => {
-                if let Err(revert_err) = revert_environment_after_error(env_name, &project).await {
-                    tracing::warn!("Reverting of the operation failed");
-                    tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
-                }
+                revert_environment_after_error(env_name, &project).await;
                 report_failed_environment(env_name);
                 errors.push((env_name.clone(), err));
             }

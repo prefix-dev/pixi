@@ -6,7 +6,7 @@ use pixi_global::{EnvironmentName, project::SyncEnvironmentError};
 
 /// An error from reverting an environment after a failed operation.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
-pub enum RevertEnvironmentError {
+enum RevertEnvironmentError {
     #[error("couldn't revert environment {env_name}")]
     Sync {
         env_name: EnvironmentName,
@@ -49,6 +49,16 @@ pub fn eventual_environment_channels(
 
 /// Reverts the changes made to the project for a specific environment after an error occurred.
 pub async fn revert_environment_after_error(
+    env_name: &EnvironmentName,
+    project_to_revert_to: &pixi_global::Project,
+) {
+    if let Err(err) = try_revert_environment(env_name, project_to_revert_to).await {
+        tracing::warn!("Reverting of the operation failed");
+        tracing::info!("Reversion error: {:?}", miette::Report::new(err));
+    }
+}
+
+async fn try_revert_environment(
     env_name: &EnvironmentName,
     project_to_revert_to: &pixi_global::Project,
 ) -> Result<(), RevertEnvironmentError> {

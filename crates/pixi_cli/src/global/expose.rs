@@ -98,12 +98,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
-            if let Err(revert_err) =
-                revert_environment_after_error(&args.environment, &project_original).await
-            {
-                tracing::warn!("Reverting of the operation failed");
-                tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
-            }
+            revert_environment_after_error(&args.environment, &project_original).await;
             Err(err)
         }
     }
@@ -157,12 +152,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                 all_changes |= state_changes;
             }
             Err(err) => {
-                if let Err(revert_err) =
-                    revert_environment_after_error(&env_name, &last_updated_project).await
-                {
-                    tracing::warn!("Reverting of the operation failed");
-                    tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
-                }
+                revert_environment_after_error(&env_name, &last_updated_project).await;
                 // The names before this one are already removed and saved, so
                 // they are still reported even though the command fails.
                 all_changes.report(&last_updated_project).await;
