@@ -118,6 +118,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             self.prioritized_channels().into_values(),
             channel_config,
             &workspace.exclude_newer_package_overrides,
+            self.workspace_manifest().loaded_at,
         )
     }
 
@@ -128,6 +129,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             &workspace.pypi_exclude_newer,
             workspace.exclude_newer.cutoff,
             &workspace.pypi_exclude_newer_package_overrides,
+            self.workspace_manifest().loaded_at,
         )
     }
 

@@ -9,7 +9,7 @@ use pixi_core::WorkspaceLocator;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::HasFeaturesIter;
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::cli_context};
+use crate::{cli_config::WorkspaceConfig, cli_interface::cli_workspace_context};
 
 /// Commands to manage workspace environments.
 #[derive(Parser, Debug)]
@@ -84,7 +84,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()
         .await?;
 
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
 
     match args.command {
         Command::List(list_args) => {

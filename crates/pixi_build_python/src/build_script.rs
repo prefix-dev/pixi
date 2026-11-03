@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use minijinja::{Environment, value::Serde};
+use minijinja::Environment;
 use pixi_build_types::SourcePackageName;
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +44,10 @@ impl BuildScriptContext {
         let template = env
             .template_from_str(include_str!("build_script.j2"))
             .unwrap();
-        template.render(Serde(self)).unwrap().trim().to_string()
+        template
+            .render(minijinja::value::Serde(self))
+            .unwrap()
+            .trim()
+            .to_string()
     }
 }

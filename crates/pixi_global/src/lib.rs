@@ -2,7 +2,6 @@ pub mod common;
 #[cfg(unix)] // Completions are only supported on unix-like systems
 pub mod completions;
 pub mod install;
-pub mod list;
 pub mod project;
 pub mod report;
 pub mod trampoline;

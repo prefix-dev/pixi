@@ -16,13 +16,14 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Subdir};
 
+use crate::global::{GlobalEnvironment, ListError};
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
-    ChannelError, ChannelOptions, DependencyOptions, EditActivationError, EnvironmentError,
-    InitError, InitOptions, Package, PlatformError, PreviewFlagsError, ReinstallOptions,
-    RemoveError, RemoveFeatureError, RunOptions, SetDescriptionError, SetNameError, ShellError,
-    ShellOptions,
+    AddError, ChannelError, ChannelOptions, DependencyOptions, EditActivationError,
+    EnvironmentError, InitError, InitOptions, Package, PlatformError, PreviewFlagsError,
+    ReinstallOptions, RemoveError, RemoveFeatureError, RunOptions, SetDescriptionError,
+    SetNameError, ShellError, ShellOptions, TaskError,
 };
 
 pub struct DefaultContext<I: Interface> {
@@ -47,6 +48,42 @@ impl<I: Interface> DefaultContext<I> {
     ) -> miette::Result<crate::workspace::search::SearchResult> {
         crate::workspace::search::search(None, config, matchspec, channels, platforms, fuzzy_limit)
             .await
+    }
+}
+
+pub struct GlobalContext<I: Interface> {
+    _interface: I,
+    project: pixi_global::Project,
+}
+
+impl<I: Interface> GlobalContext<I> {
+    pub fn new(interface: I, project: pixi_global::Project) -> Self {
+        Self {
+            _interface: interface,
+            project,
+        }
+    }
+
+    pub fn project(&self) -> &pixi_global::Project {
+        &self.project
+    }
+
+    pub fn manifest_path(&self) -> std::path::PathBuf {
+        self.project.manifest.path.clone()
+    }
+
+    pub async fn list_environments(
+        &self,
+        regex: Option<String>,
+    ) -> Result<Vec<GlobalEnvironment>, ListError> {
+        crate::global::list::list(&self.project, regex).await
+    }
+
+    pub async fn get_environment(
+        &self,
+        name: &pixi_global::EnvironmentName,
+    ) -> Result<GlobalEnvironment, ListError> {
+        crate::global::list::get(&self.project, name).await
     }
 }
 
@@ -75,6 +112,10 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub fn workspace(&self) -> &Workspace {
         &self.workspace
+    }
+
+    pub fn manifest_path(&self) -> std::path::PathBuf {
+        self.workspace.workspace.provenance.absolute_path()
     }
 
     pub fn workspace_mut(&self) -> Result<WorkspaceMut, LoadManifestsError> {
@@ -481,7 +522,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), AddError> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
             specs,
@@ -497,7 +538,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         editable: bool,
         options: DependencyOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), AddError> {
         Box::pin(crate::workspace::add::add_pypi_dep(
             self.workspace_mut()?,
             pypi_deps,
@@ -569,9 +610,11 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn list_tasks(
         &self,
         environment: Option<EnvironmentName>,
-    ) -> miette::Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>>
-    {
-        crate::workspace::task::list_tasks(&self.workspace, environment).await
+    ) -> Result<
+        HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>,
+        TaskError,
+    > {
+        crate::workspace::task::list_tasks(&self.interface, &self.workspace, environment).await
     }
 
     pub async fn add_task(
@@ -580,7 +623,7 @@ impl<I: Interface> WorkspaceContext<I> {
         task: Task,
         feature: FeatureName,
         platform: Option<PixiPlatformName>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskError> {
         crate::workspace::task::add_task(
             &self.interface,
             self.workspace_mut()?,
@@ -598,7 +641,7 @@ impl<I: Interface> WorkspaceContext<I> {
         task: Task,
         feature: FeatureName,
         platform: Option<PixiPlatformName>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskError> {
         crate::workspace::task::alias_task(
             &self.interface,
             self.workspace_mut()?,
@@ -615,7 +658,7 @@ impl<I: Interface> WorkspaceContext<I> {
         names: Vec<TaskName>,
         platform: Option<PixiPlatformName>,
         feature: FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskError> {
         crate::workspace::task::remove_tasks(
             &self.interface,
             self.workspace_mut()?,

@@ -671,7 +671,9 @@ impl TomlSpec {
 
         // Matchspec fields are rejected when the location resolves to a
         // binary archive: a `.conda` archive is already a fully-specified
-        // package, so `version` etc. would be meaningless.
+        // package, so `version` etc. would be meaningless. Empty `flags` and
+        // `track-features` select nothing and are accepted, like
+        // `rattler_config` does for an exemption.
         let binary_location_key = match location_kind {
             LocationKind::UrlBinary => Some("`url`"),
             LocationKind::PathBinary => Some("`path`"),
@@ -683,11 +685,19 @@ impl TomlSpec {
                 ("`build`", self.build.is_some()),
                 ("`build-number`", self.build_number.is_some()),
                 ("`extras`", self.extras.is_some()),
-                ("`flags`", self.flags.is_some()),
+                (
+                    "`flags`",
+                    self.flags.as_ref().is_some_and(|flags| !flags.is_empty()),
+                ),
                 ("`subdir`", self.subdir.is_some()),
                 ("`license`", self.license.is_some()),
                 ("`when`", self.when.is_some()),
-                ("`track-features`", self.track_features.is_some()),
+                (
+                    "`track-features`",
+                    self.track_features
+                        .as_ref()
+                        .is_some_and(|features| !features.is_empty()),
+                ),
             ] {
                 if is_some {
                     return Err(SpecError::InvalidCombination(field_name.into(), key.into()));

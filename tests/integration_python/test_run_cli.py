@@ -1392,7 +1392,8 @@ def test_task_minijinja_title_filter(pixi: Path, tmp_pixi_workspace: Path) -> No
     manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
 
     manifest_content["tasks"] = {
-        "title-filter": {"cmd": "echo {{ name|title }}", "args": [{"arg": "name"}]},
+        # Quoted in the command, so that the filter sees the words only.
+        "title-filter": {"cmd": "echo '{{ name|title }}'", "args": [{"arg": "name"}]},
     }
 
     manifest_path.write_text(tomli_w.dumps(manifest_content))

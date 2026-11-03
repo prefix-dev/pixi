@@ -782,7 +782,8 @@ async fn read_local_package_metadata(
         &cache.lazy_build_dispatch_deps,
         None,
         deployment_target,
-        false,
+        // Static metadata only, so no installation of the conda prefix.
+        true,
         Arc::clone(&last_error),
     );
 

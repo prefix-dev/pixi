@@ -5,7 +5,6 @@ use xxhash_rust::xxh3::Xxh3;
 
 /// Hash identifying a cached `pixi exec` environment by its specs, channels
 /// and platform. The executed command is intentionally not part of the hash.
-#[derive(Hash)]
 pub struct EnvironmentHash {
     pub specs: Vec<MatchSpec>,
     pub channels: Vec<String>,
@@ -15,6 +14,32 @@ pub struct EnvironmentHash {
     /// can pick older versions, and the prefix is reused across runs: without
     /// it a restricted environment would be served to later online ones.
     pub offline: bool,
+    /// The `exclude-newer` configuration the environment was solved with, as
+    /// configured rather than as resolved. A relative cutoff such as `7d`
+    /// hashes the same on every run, so the environment is reused: its
+    /// packages only get older.
+    pub exclude_newer: Option<String>,
+}
+
+impl Hash for EnvironmentHash {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let Self {
+            specs,
+            channels,
+            platform,
+            offline,
+            exclude_newer,
+        } = self;
+        specs.hash(state);
+        channels.hash(state);
+        platform.hash(state);
+        offline.hash(state);
+        // Only hashed when set, so the environments solved without a cutoff
+        // keep their names.
+        if let Some(exclude_newer) = exclude_newer {
+            exclude_newer.hash(state);
+        }
+    }
 }
 
 impl EnvironmentHash {
@@ -32,7 +57,15 @@ impl EnvironmentHash {
             channels,
             platform,
             offline,
+            exclude_newer: None,
         }
+    }
+
+    /// Sets the `exclude-newer` configuration the environment is solved with,
+    /// see [`Self::exclude_newer`].
+    pub fn with_exclude_newer(mut self, exclude_newer: Option<String>) -> Self {
+        self.exclude_newer = exclude_newer;
+        self
     }
 
     /// Directory name for the cached environment: `{prefix}-{hash}` when a
@@ -91,6 +124,18 @@ mod tests {
         let h = EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false);
         let name = h.name(None);
         assert!(name.chars().all(|c| c.is_ascii_hexdigit()), "got {name}");
+    }
+
+    #[test]
+    fn name_depends_on_exclude_newer() {
+        let without = EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false);
+        let with = |exclude_newer: &str| {
+            EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false)
+                .with_exclude_newer(Some(exclude_newer.to_string()))
+        };
+        assert_ne!(without.name(None), with("7d").name(None));
+        assert_ne!(with("7d").name(None), with("14d").name(None));
+        assert_eq!(with("7d").name(None), with("7d").name(None));
     }
 
     #[test]

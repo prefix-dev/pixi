@@ -1,12 +1,14 @@
 use std::{collections::HashMap, str::FromStr};
 
-use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
-use pixi_spec::{BinarySpec, DetailedSpec, ExcludeNewer, SpecError, TomlSpec};
+use pixi_spec::{BinarySpec, DetailedSpec, ExcludeNewer, SpecConversionError, SpecError, TomlSpec};
 use pixi_toml::TomlFromStr;
-use rattler_conda_types::PackageName;
+use rattler_conda_types::{ChannelConfig, PackageName};
+use rattler_config::config::exclude_newer::{
+    InvalidExemptionSpecError, validate_exemption_spec as validate_rattler_exemption_spec,
+};
 use toml_span::{
     DeserError, Deserialize, ErrorKind, Span, Value,
     de_helpers::{TableHelper, expected},
@@ -163,18 +165,9 @@ fn parse_conda_exemptions(
             }
         };
 
-        match binary_exemption_spec(spec) {
+        match binary_exemption_spec(&name, spec) {
             Ok(spec) => {
                 exemptions.insert(name, ExcludeNewerExemption { spec, cutoff });
-            }
-            Err(InvalidExemptionSpec::Empty) if cutoff.is_some() => {
-                errors.errors.push(toml_span::Error {
-                    kind: ErrorKind::Custom(
-                        "an exclude-newer exemption table must specify at least one match spec field besides `cutoff`, use `version = \"*\"` to exempt every release up to the cutoff".into(),
-                    ),
-                    span,
-                    line_info: None,
-                })
             }
             Err(err) => errors.errors.push(toml_span::Error {
                 kind: ErrorKind::Custom(err.to_string().into()),
@@ -193,7 +186,7 @@ fn parse_conda_exemptions(
 
 /// Removes the `cutoff` of an exemption table from `entry` and parses it,
 /// leaving the match spec fields behind.
-fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<DateTime<Utc>>, toml_span::Error> {
+fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<ExcludeNewer>, toml_span::Error> {
     let mut table = match entry.take() {
         ValueInner::Table(table) => table,
         other => {
@@ -207,72 +200,69 @@ fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<DateTime<Utc>>,
         return Ok(None);
     };
     let span = value.span;
-    let error = |message: String| toml_span::Error {
-        kind: ErrorKind::Custom(message.into()),
-        span,
-        line_info: None,
-    };
     let cutoff = value.take_string(None)?;
-    // The generic error of `ExcludeNewer` suggests durations, which are not
-    // allowed here, and e.g. `now` is only accepted by the CLI.
-    match ExcludeNewer::from_str(&cutoff) {
-        Ok(ExcludeNewer::Timestamp(cutoff)) => Ok(Some(cutoff)),
-        Ok(ExcludeNewer::Duration(_)) => Err(error(format!(
-            "the cutoff of an exclude-newer exemption must be a date or a timestamp, not a duration like `{cutoff}`"
-        ))),
-        Err(_) => Err(error(format!(
-            "the cutoff of an exclude-newer exemption must be a date like `2026-10-12` or an RFC 3339 timestamp, not `{cutoff}`"
-        ))),
-    }
+    ExcludeNewer::from_str(&cutoff)
+        .map(Some)
+        .map_err(|message| toml_span::Error {
+            kind: ErrorKind::Custom(message.into()),
+            span,
+            line_info: None,
+        })
 }
 
 /// An exemption of `[workspace.exclude-newer]` that cannot select repodata
 /// records.
 #[derive(Debug, thiserror::Error)]
 pub enum InvalidExemptionSpec {
-    #[error("an exclude-newer exemption cannot have `extras`, they do not select packages")]
-    Extras,
-
-    #[error("an exclude-newer exemption cannot have `when`, it does not select packages")]
-    Condition,
-
     #[error(
-        "an exclude-newer exemption must be a version or a table with match spec fields such as `version`, `build` or `channel`"
+        "an exclude-newer exemption must be a version, a table with match spec fields such as `version`, `build` or `channel`, or a package archive"
     )]
     NotBinary,
 
-    #[error(
-        "an exclude-newer exemption table must specify at least one match spec field, use `\"*\"` to exempt every release"
-    )]
-    Empty,
+    /// `rattler_config` only exempts a package archive by its `url`.
+    #[error("an exclude-newer exemption must use a `url` instead of a `path`")]
+    Path,
+
+    /// The exemption breaks one of the rules of `rattler_config`, e.g. it is
+    /// an empty table or has `extras`, which don't select packages.
+    #[error(transparent)]
+    Rattler(#[from] InvalidExemptionSpecError),
 
     #[error(transparent)]
     Spec(#[from] SpecError),
+
+    #[error(transparent)]
+    Conversion(#[from] SpecConversionError),
 }
 
-/// Converts the TOML spec of an exemption into a binary spec, rejecting the
-/// fields that cannot select repodata records.
-fn binary_exemption_spec(spec: TomlSpec) -> Result<BinarySpec, InvalidExemptionSpec> {
-    validate_exemption_spec(spec.into_binary_spec()?)
+/// Converts the TOML spec of an exemption of `name` into a binary spec,
+/// rejecting the fields that cannot select repodata records.
+fn binary_exemption_spec(
+    name: &PackageName,
+    spec: TomlSpec,
+) -> Result<BinarySpec, InvalidExemptionSpec> {
+    validate_exemption_spec(name, spec.into_binary_spec()?)
 }
 
-/// Checks that a binary spec can be used as an exemption, rejecting the fields
-/// that cannot select repodata records.
-pub fn validate_exemption_spec(spec: BinarySpec) -> Result<BinarySpec, InvalidExemptionSpec> {
+/// Checks that a binary spec can be used as an exemption of `name`, rejecting
+/// the fields that cannot select repodata records. The rules are those of
+/// `rattler_config`, this only applies them to pixi's spec, so the manifest
+/// reports them with a span.
+pub fn validate_exemption_spec(
+    name: &PackageName,
+    spec: BinarySpec,
+) -> Result<BinarySpec, InvalidExemptionSpec> {
     match spec {
         BinarySpec::Version(_) => Ok(spec),
         BinarySpec::DetailedVersion(detailed) => {
-            if detailed.extras.is_some() {
-                return Err(InvalidExemptionSpec::Extras);
-            }
-            if detailed.condition.is_some() {
-                return Err(InvalidExemptionSpec::Condition);
-            }
-            // An empty table would match every release, so a typo would
-            // silently exempt the package entirely.
-            if *detailed == DetailedSpec::default() {
-                return Err(InvalidExemptionSpec::Empty);
-            }
+            // The channel doesn't affect the rules, so it is resolved with the
+            // default configuration.
+            let channel_config =
+                ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap_or_default());
+            let nameless = (*detailed)
+                .clone()
+                .try_into_nameless_match_spec(&channel_config)?;
+            validate_rattler_exemption_spec(name, &nameless)?;
             // A bare version string parses into a detailed spec that only
             // carries a version. Keep it as the plain version it was written
             // as.
@@ -285,7 +275,10 @@ pub fn validate_exemption_spec(spec: BinarySpec) -> Result<BinarySpec, InvalidEx
                 _ => Ok(BinarySpec::DetailedVersion(detailed)),
             }
         }
-        BinarySpec::Url(_) | BinarySpec::Path(_) => Err(InvalidExemptionSpec::NotBinary),
+        // An exemption of a package archive, like the `url` of an exemption
+        // in `rattler_config`.
+        BinarySpec::Url(_) => Ok(spec),
+        BinarySpec::Path(_) => Err(InvalidExemptionSpec::Path),
     }
 }
 
@@ -443,6 +436,27 @@ exclude-newer = { cutoff = "2025-01-01", exemptions = { polars = "1.43.1", py-ra
     }
 
     #[test]
+    fn test_url_exemption() {
+        let config = parse_conda(
+            r#"
+exclude-newer = { cutoff = "7d", exemptions = { ruff = { url = "https://conda.anaconda.org/conda-forge/noarch/ruff-0.1-0.conda", cutoff = "2026-10-12" } } }
+"#,
+        )
+        .unwrap();
+        assert_snapshot!(
+            serde_json::to_string_pretty(&config.exemptions).unwrap(),
+            @r#"
+        {
+          "ruff": {
+            "url": "https://conda.anaconda.org/conda-forge/noarch/ruff-0.1-0.conda",
+            "cutoff": "2026-10-13T00:00:00Z"
+          }
+        }
+        "#
+        );
+    }
+
+    #[test]
     fn test_exemption_with_cutoff() {
         let config = parse_conda(
             r#"
@@ -470,9 +484,16 @@ exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1",
 
     #[test]
     fn test_exemption_with_relative_cutoff() {
-        let input = r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "1d" } } }"#;
-        let err = parse_conda(input).unwrap_err();
-        assert_snapshot!(render_error(input, err));
+        let config = parse_conda(
+            r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "1d" } } }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.exemptions[&PackageName::new_unchecked("openssl")].cutoff,
+            Some(ExcludeNewer::Duration(std::time::Duration::from_secs(
+                24 * 60 * 60
+            )))
+        );
     }
 
     #[test]
@@ -547,8 +568,7 @@ scikit_learn = "*"
 
     #[test]
     fn test_exemption_with_path() {
-        let input =
-            r#"exclude-newer = { cutoff = "7d", exemptions = { polars = { path = "./polars" } } }"#;
+        let input = r#"exclude-newer = { cutoff = "7d", exemptions = { polars = { path = "./polars-1.0-0.conda" } } }"#;
         let err = parse_conda(input).unwrap_err();
         assert_snapshot!(render_error(input, err));
     }

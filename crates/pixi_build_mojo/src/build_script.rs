@@ -1,5 +1,5 @@
 use super::config::{MojoBinConfig, MojoPkgConfig};
-use minijinja::{Environment, value::Serde};
+use minijinja::Environment;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -18,7 +18,7 @@ impl BuildScriptContext {
             .unwrap();
         // Normalize line endings to Unix-style for consistent output across platforms
         template
-            .render(Serde(self))
+            .render(minijinja::value::Serde(self))
             .unwrap()
             .trim()
             .replace("\r\n", "\n")
