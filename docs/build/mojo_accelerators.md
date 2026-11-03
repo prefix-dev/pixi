@@ -57,7 +57,7 @@ The backend supplies C/C++ compiler requirements, derives the glibc sysroot from
 
 Publish from `package/`:
 
-```nu
+```shell
 cd package
 pixi publish --path ./pixi.toml --target-channel ../channel
 cd ..
@@ -82,7 +82,7 @@ Within a solve where both packages are compatible, the CPU package's `track_feat
 
 Run from the consumer directory:
 
-```nu
+```shell
 pixi run matmul
 ```
 
@@ -94,7 +94,7 @@ path=gfx1103 side=1024 validation=ok
 
 Select each platform explicitly and inspect the installed package:
 
-```nu
+```shell
 pixi run --platform cpu matmul
 pixi list --platform cpu '^mojo-matmul$' --fields name,version,build,track-features
 pixi run --platform amd matmul
@@ -115,23 +115,16 @@ The first row is CPU and the second is AMD. Build hashes can change with build i
 
 ## Optional: measure whole-program time
 
-On a compatible AMD machine with an external `time` command, use Nushell to warm up both installed binaries and repeat under the same conditions:
+On a compatible AMD machine, install Hyperfine and measure each implementation:
 
-```nu
-let timer = (which time | first).path
-for platform in [cpu amd] {
-    pixi run --platform $platform matmul
-}
-for sample in 1..5 {
-    for platform in [cpu amd] {
-        print $"sample=($sample) platform=($platform)"
-        pixi run --platform $platform $timer -p matmul
-    }
-}
+```shell
+pixi global install hyperfine
+pixi run --platform cpu hyperfine --warmup 1 --runs 5 matmul
+pixi run --platform amd hyperfine --warmup 1 --runs 5 matmul
 ```
 
-Pixi prepares each platform's environment and resolves its installed executable on `PATH`.
-`time` runs inside that environment and measures only `matmul`, not Pixi's installation or task-runner overhead.
-Use `real` for whole-program elapsed time, including process startup, input initialization, allocation, computation, device transfers, synchronization, and validation. This is not kernel time.
+Pixi prepares each platform's environment before Hyperfine measures the installed `matmul` executable, excluding Pixi's installation and task-runner overhead.
+Each command performs one warmup and five measured runs, reporting the mean, standard deviation, and range.
+These are whole-program timings, including process startup, input initialization, allocation, computation, device transfers, synchronization, and validation, not kernel timings.
 Keep power profile, AC/battery state, and background load fixed; record hardware, toolchain, matrix size, and sample variability.
 Any CPU/GPU ratio compares the GPU against this single-threaded CPU implementation, not an optimized full-CPU implementation.
