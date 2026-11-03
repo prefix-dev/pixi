@@ -1,9 +1,26 @@
-use miette::{IntoDiagnostic, WrapErr};
 use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::NamedChannelOrUrl;
 use tokio::fs as tokio_fs;
 
-use pixi_global::EnvironmentName;
+use pixi_global::{EnvironmentName, project::SyncEnvironmentError};
+
+/// An error from reverting an environment after a failed operation.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RevertEnvironmentError {
+    #[error("couldn't revert environment {env_name}")]
+    Sync {
+        env_name: EnvironmentName,
+        #[source]
+        source: Box<SyncEnvironmentError>,
+    },
+
+    #[error("failed to remove {}", .path.display())]
+    RemoveDir {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
 
 /// The channels an environment ends up with once it is set up: an
 /// environment that already exists in the manifest keeps its channels
@@ -34,20 +51,26 @@ pub fn eventual_environment_channels(
 pub async fn revert_environment_after_error(
     env_name: &EnvironmentName,
     project_to_revert_to: &pixi_global::Project,
-) -> miette::Result<()> {
+) -> Result<(), RevertEnvironmentError> {
     if project_to_revert_to.environment(env_name).is_some() {
         // We don't want to report on changes done by the reversion
         let _ = project_to_revert_to
             .sync_environment(env_name, None)
             .await
-            .wrap_err_with(|| format!("Couldn't revert environment {env_name}"))?;
+            .map_err(|source| RevertEnvironmentError::Sync {
+                env_name: env_name.clone(),
+                source: Box::new(source),
+            })?;
     } else {
         // clean up if directory exists for the failed new environment
         let env_dir_path = project_to_revert_to.env_root_path().join(env_name.as_str());
         if env_dir_path.exists() {
             tokio_fs::remove_dir_all(&env_dir_path)
                 .await
-                .into_diagnostic()?;
+                .map_err(|source| RevertEnvironmentError::RemoveDir {
+                    path: env_dir_path.clone(),
+                    source,
+                })?;
             tracing::debug!(
                 "Cleaned up failed environment directory: {}",
                 env_dir_path.display()

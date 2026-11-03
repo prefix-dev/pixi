@@ -113,7 +113,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 revert_environment_after_error(&args.environment, &project_original).await
             {
                 tracing::warn!("Reverting of the operation failed");
-                tracing::info!("Reversion error: {:?}", revert_err);
+                tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
             }
             Err(err.wrap_err(format!(
                 "Couldn't add packages to environment {}",

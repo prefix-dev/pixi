@@ -86,7 +86,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
                 revert_environment_after_error(&args.environment, &project_original).await
             {
                 tracing::warn!("Reverting of the operation failed");
-                tracing::info!("Reversion error: {:?}", revert_err);
+                tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
             }
             Err(err)
         }
@@ -175,7 +175,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                     revert_environment_after_error(&env_name, &last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
-                    tracing::info!("Reversion error: {:?}", revert_err);
+                    tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
                 }
                 // The environments before this one are already changed and
                 // saved, so they are still reported even though the command

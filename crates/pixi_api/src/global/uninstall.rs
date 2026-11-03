@@ -1,13 +1,28 @@
-use pixi_global::{EnvironmentName, Project, StateChanges};
+use pixi_global::{
+    EnvironmentName, Project, StateChanges,
+    project::{ManifestError, RemoveEnvironmentError},
+};
 
 use crate::global::utils::revert_environment_after_error;
+
+/// An error from uninstalling a global environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum UninstallError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RemoveEnvironment(#[from] Box<RemoveEnvironmentError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+}
 
 /// Uninstall the environment `env_name`. On failure the environment is
 /// reverted and `project` is left untouched.
 pub async fn uninstall_environment(
     project: &mut Project,
     env_name: &EnvironmentName,
-) -> miette::Result<StateChanges> {
+) -> Result<StateChanges, UninstallError> {
     let mut modified_project = project.clone();
     match apply_changes(env_name, &mut modified_project).await {
         Ok(state_changes) => {
@@ -19,7 +34,7 @@ pub async fn uninstall_environment(
             // Revert any partial change for this environment
             if let Err(revert_err) = revert_environment_after_error(env_name, project).await {
                 tracing::warn!("Reverting of the operation failed");
-                tracing::info!("Reversion error: {:?}", revert_err);
+                tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
             }
             Err(err)
         }
@@ -29,9 +44,12 @@ pub async fn uninstall_environment(
 async fn apply_changes(
     env_name: &EnvironmentName,
     project_modified: &mut Project,
-) -> miette::Result<StateChanges> {
+) -> Result<StateChanges, UninstallError> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
-    state_changes |= project_modified.remove_environment(env_name).await?;
+    state_changes |= project_modified
+        .remove_environment(env_name)
+        .await
+        .map_err(Box::new)?;
 
     project_modified.manifest.save().await?;
     Ok(state_changes)

@@ -5,11 +5,58 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Subdir};
 
 use pixi_global::{
     EnvironmentName, Mapping, Project, StateChange, StateChanges,
-    common::contains_menuinst_document,
-    project::{ExposedType, GlobalSpec},
+    common::{GlobalDirError, contains_menuinst_document},
+    project::{
+        EnvironmentInSyncError, ExposeError, ExposedType, FromMatchSpecError, GlobalSpec,
+        InstallEnvironmentError, ManifestError, RemoveEnvironmentError, ShortcutsError,
+    },
 };
+use pixi_utils::prefix::PrefixError;
 
 use crate::global::utils::{eventual_environment_channels, revert_environment_after_error};
+
+/// An error from installing packages into a global environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum InstallError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RemoveEnvironment(#[from] Box<RemoveEnvironmentError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    FromMatchSpec(#[from] FromMatchSpecError),
+
+    #[error("could not find exact package name in MatchSpec {0}")]
+    MissingPackageName(String),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InSync(#[from] EnvironmentInSyncError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InstallEnvironment(#[from] InstallEnvironmentError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Expose(#[from] ExposeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Shortcuts(#[from] ShortcutsError),
+}
 
 /// Options for installing packages into a global environment.
 #[derive(Debug, Clone, Default)]
@@ -42,7 +89,7 @@ pub async fn install_environment(
     env_name: &EnvironmentName,
     specs: &[GlobalSpec],
     options: &InstallOptions,
-) -> miette::Result<StateChanges> {
+) -> Result<StateChanges, InstallError> {
     let mut modified_project = project.clone();
     match setup_environment(env_name, options, specs, &mut modified_project).await {
         Ok(state_changes) => {
@@ -53,7 +100,7 @@ pub async fn install_environment(
         Err(err) => {
             if let Err(revert_err) = revert_environment_after_error(env_name, project).await {
                 tracing::warn!("Reverting of the operation failed");
-                tracing::info!("Reversion error: {:?}", revert_err);
+                tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
             }
             Err(err)
         }
@@ -65,7 +112,7 @@ async fn setup_environment(
     options: &InstallOptions,
     specs: &[GlobalSpec],
     project: &mut Project,
-) -> miette::Result<StateChanges> {
+) -> Result<StateChanges, InstallError> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
     // The manifest as it was before this environment was touched, so the
@@ -73,7 +120,10 @@ async fn setup_environment(
     let manifest_before = project.manifest.document.to_string();
 
     if options.force_reinstall && project.environment(env_name).is_some() {
-        state_changes |= project.remove_environment(env_name).await?;
+        state_changes |= project
+            .remove_environment(env_name)
+            .await
+            .map_err(Box::new)?;
     }
 
     let channels = eventual_environment_channels(
@@ -179,16 +229,17 @@ async fn sync_exposed_names(
     env_name: &EnvironmentName,
     project: &mut Project,
     options: &InstallOptions,
-) -> Result<(), miette::Error> {
+) -> Result<(), InstallError> {
     let with_package_names = options
         .with
         .iter()
         .map(|spec| {
-            spec.name.as_exact().cloned().ok_or_else(|| {
-                miette::miette!("could not find exact package name in MatchSpec {}", spec)
-            })
+            spec.name
+                .as_exact()
+                .cloned()
+                .ok_or_else(|| InstallError::MissingPackageName(spec.to_string()))
         })
-        .collect::<miette::Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>, _>>()?;
     let expose_type = if options.expose.is_empty().not() {
         ExposedType::Mappings(options.expose.clone())
     } else if with_package_names.is_empty() {

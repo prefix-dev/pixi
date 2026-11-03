@@ -101,7 +101,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 revert_environment_after_error(env_name, &project_original).await
             {
                 tracing::warn!("Reverting of the operation failed");
-                tracing::info!("Reversion error: {:?}", revert_err);
+                tracing::info!("Reversion error: {:?}", miette::Report::new(revert_err));
             }
             return Err(err);
         }

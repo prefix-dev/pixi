@@ -16,7 +16,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Subdir};
 
-use crate::global::{GlobalEnvironment, InstallOptions, ListError};
+use crate::global::{GlobalEnvironment, InstallError, InstallOptions, ListError, UninstallError};
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
@@ -91,7 +91,7 @@ impl<I: Interface> GlobalContext<I> {
         env_name: &pixi_global::EnvironmentName,
         specs: &[pixi_global::project::GlobalSpec],
         options: &InstallOptions,
-    ) -> miette::Result<pixi_global::StateChanges> {
+    ) -> Result<pixi_global::StateChanges, InstallError> {
         crate::global::install::install_environment(&mut self.project, env_name, specs, options)
             .await
     }
@@ -99,7 +99,7 @@ impl<I: Interface> GlobalContext<I> {
     pub async fn uninstall_environment(
         &mut self,
         env_name: &pixi_global::EnvironmentName,
-    ) -> miette::Result<pixi_global::StateChanges> {
+    ) -> Result<pixi_global::StateChanges, UninstallError> {
         crate::global::uninstall::uninstall_environment(&mut self.project, env_name).await
     }
 }
