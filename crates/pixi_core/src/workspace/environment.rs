@@ -88,9 +88,9 @@ impl<'p> Environment<'p> {
     /// Host capabilities detected with this environment's effective solve channels.
     pub fn host(&self) -> &'p HostDetection {
         self.workspace
-            .environment_hosts
-            .get()
-            .and_then(|hosts| hosts.get(self.name()))
+            .environment_hosts()
+            .get(self.name())
+            .and_then(|host| host.get())
             .map(Arc::as_ref)
             .unwrap_or(&self.workspace.host)
     }
