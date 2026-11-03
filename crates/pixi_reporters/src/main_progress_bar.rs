@@ -109,6 +109,12 @@ impl<T: Tracker> MainProgressBar<T> {
         let mut state = self.inner.write();
         state.clear();
     }
+
+    /// Whether the item is still tracked, i.e. not yet cleared.
+    #[cfg(test)]
+    pub fn is_tracked(&self, id: usize) -> bool {
+        self.inner.read().tracker.read().contains_key(&id)
+    }
 }
 
 impl<T: Tracker> State<T> {

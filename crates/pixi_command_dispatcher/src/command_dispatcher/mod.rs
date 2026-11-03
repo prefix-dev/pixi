@@ -469,7 +469,10 @@ impl CommandDispatcher {
             channel_priority: Default::default(),
         };
 
-        let key = crate::EphemeralEnvKey::new(ephemeral_spec);
+        let key = crate::EphemeralEnvKey::new(
+            ephemeral_spec,
+            format!("tool: {}", primary_name.as_source()),
+        );
         let installed = self
             .engine
             .with_ctx(async |ctx| ctx.compute(&key).await)
