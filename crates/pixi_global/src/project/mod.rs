@@ -17,7 +17,7 @@ use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::{Either, Itertools};
-pub use manifest::{ExposedType, Manifest, ManifestError, Mapping};
+pub use manifest::{ExposedType, Manifest, ManifestError, ManifestLock, Mapping};
 use miette::Diagnostic;
 use once_cell::sync::OnceCell;
 pub use parsed_manifest::{

@@ -23,6 +23,9 @@ pub async fn uninstall_environment(
     project: &mut Project,
     env_name: &EnvironmentName,
 ) -> Result<StateChanges, UninstallError> {
+    let _lock = project.manifest.lock().await?;
+    project.manifest.reload()?;
+
     let mut modified_project = project.clone();
     match apply_changes(env_name, &mut modified_project).await {
         Ok(state_changes) => {

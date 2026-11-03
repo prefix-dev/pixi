@@ -116,17 +116,96 @@ async fn setup_environment(
 ) -> Result<StateChanges, InstallError> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
-    // The manifest as it was before this environment was touched, so the
-    // shortcut below can tell whether it still owes the file a write.
-    let manifest_before = project.manifest.document.to_string();
-
+    // Install the prefix
     if options.force_reinstall && project.environment(env_name).is_some() {
+        let _lock = project.manifest.lock().await?;
         state_changes |= project
             .remove_environment(env_name)
             .await
             .map_err(Box::new)?;
     }
 
+    if edit_manifest(env_name, options, specs, project)? {
+        state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+    }
+
+    // When the prefix already satisfies the manifest, there is nothing to
+    // solve, install or expose
+    let environment_update = if project.environment_in_sync_internal(env_name, true).await? {
+        None
+    } else {
+        // Installing the environment to be able to find the bin paths later
+        let environment_update = project
+            .install_environment_with_options(env_name, options.force_reinstall)
+            .await?;
+        project.clear_progress();
+        Some(environment_update)
+    };
+
+    // Update the manifest and expose the environment
+    let _lock = project.manifest.lock().await?;
+    project.manifest.reload()?;
+
+    // The manifest as it was before this environment was touched, so the
+    // shortcut below can tell whether it still owes the file a write.
+    let manifest_before = project.manifest.document.to_string();
+
+    if options.force_reinstall && project.manifest.parsed.envs.contains_key(env_name) {
+        project.manifest.remove_environment(env_name)?;
+    }
+    edit_manifest(env_name, options, specs, project)?;
+
+    // The manifest itself can still have changed: it may have just gained
+    // the environment that the prefix was left over from, and that change
+    // still has to be written out.
+    let Some(environment_update) = environment_update else {
+        if project.manifest.document.to_string() != manifest_before {
+            project.manifest.save().await?;
+        }
+        return Ok(state_changes);
+    };
+
+    // Sync exposed name
+    sync_exposed_names(env_name, project, options).await?;
+
+    // Add shortcuts
+    if !options.no_shortcuts {
+        let prefix = project.environment_prefix(env_name).await?;
+        for spec in specs.iter() {
+            let prefix_record = prefix.find_designated_package(spec.name()).await?;
+            if contains_menuinst_document(&prefix_record, prefix.root()) {
+                project.manifest.add_shortcut(env_name, spec.name())?;
+            }
+        }
+        state_changes |= project.sync_shortcuts(env_name).await?;
+    }
+
+    state_changes.insert_change(
+        env_name,
+        StateChange::UpdatedEnvironment(environment_update),
+    );
+
+    // Expose executables of the new environment
+    state_changes |= project
+        .expose_executables_from_environment(env_name)
+        .await?;
+
+    // Sync completions
+    state_changes |= project.sync_completions(env_name).await?;
+
+    project.manifest.save().await?;
+    Ok(state_changes)
+}
+
+/// Adds the environment, its platform, dependencies and exposed mappings to
+/// the manifest of `project`, without saving it. Returns whether the
+/// environment was newly added.
+fn edit_manifest(
+    env_name: &EnvironmentName,
+    options: &InstallOptions,
+    specs: &[GlobalSpec],
+    project: &mut Project,
+) -> Result<bool, InstallError> {
     let channels = eventual_environment_channels(
         project,
         Some(env_name),
@@ -135,13 +214,13 @@ async fn setup_environment(
     );
 
     // Modify the project to include the new environment
-    if !project.manifest.parsed.envs.contains_key(env_name) {
+    let added = !project.manifest.parsed.envs.contains_key(env_name);
+    if added {
         let channels = channels
             .into_iter()
             .map(|channel| channel.channel)
             .collect();
         project.manifest.add_environment(env_name, Some(channels))?;
-        state_changes.insert_change(env_name, StateChange::AddedEnvironment);
     }
 
     if let Some(platform) = options.platform {
@@ -177,53 +256,7 @@ async fn setup_environment(
         }
     }
 
-    // The prefix already satisfies the manifest, so there is nothing to solve,
-    // install or expose. The manifest itself can still have changed: it may
-    // have just gained the environment that the prefix was left over from, and
-    // that change still has to be written out.
-    if project.environment_in_sync_internal(env_name, true).await? {
-        if project.manifest.document.to_string() != manifest_before {
-            project.manifest.save().await?;
-        }
-        return Ok(state_changes);
-    }
-
-    // Installing the environment to be able to find the bin paths later
-    let environment_update = project
-        .install_environment_with_options(env_name, options.force_reinstall)
-        .await?;
-    project.clear_progress();
-
-    // Sync exposed name
-    sync_exposed_names(env_name, project, options).await?;
-
-    // Add shortcuts
-    if !options.no_shortcuts {
-        let prefix = project.environment_prefix(env_name).await?;
-        for spec in specs.iter() {
-            let prefix_record = prefix.find_designated_package(spec.name()).await?;
-            if contains_menuinst_document(&prefix_record, prefix.root()) {
-                project.manifest.add_shortcut(env_name, spec.name())?;
-            }
-        }
-        state_changes |= project.sync_shortcuts(env_name).await?;
-    }
-
-    state_changes.insert_change(
-        env_name,
-        StateChange::UpdatedEnvironment(environment_update),
-    );
-
-    // Expose executables of the new environment
-    state_changes |= project
-        .expose_executables_from_environment(env_name)
-        .await?;
-
-    // Sync completions
-    state_changes |= project.sync_completions(env_name).await?;
-
-    project.manifest.save().await?;
-    Ok(state_changes)
+    Ok(added)
 }
 
 async fn sync_exposed_names(
