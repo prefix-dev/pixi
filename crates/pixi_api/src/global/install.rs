@@ -2,6 +2,7 @@ use std::ops::Not;
 
 use itertools::Itertools;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Subdir};
+use serde::{Deserialize, Serialize};
 
 use pixi_global::{
     EnvironmentName, Mapping, Project, StateChange, StateChanges,
@@ -59,7 +60,7 @@ pub enum InstallError {
 }
 
 /// Options for installing packages into a global environment.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InstallOptions {
     /// The channels of a newly created environment. If empty, the default
     /// channels of the config are used.
