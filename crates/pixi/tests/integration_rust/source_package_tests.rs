@@ -3505,9 +3505,18 @@ my-package = {{ path = "./my-package" }}
         .await
         .unwrap()
         .0;
+    let selection = lock_file
+        .resolve_platform(
+            &environment,
+            pixi_core::workspace::platform_selection::PrefixPolicy::Replace,
+            UpdateMode::QuickValidate,
+        )
+        .await
+        .unwrap();
     lock_file
         .prefix(
             &environment,
+            &selection,
             UpdateMode::QuickValidate,
             &ReinstallPackages::default(),
             &InstallFilter::default(),

@@ -1,19 +1,19 @@
-use std::future::Future;
+use std::{collections::HashMap, future::Future, sync::Arc};
 
 use miette::Diagnostic;
 use pixi_core::{
     Workspace,
-    host::HostProbeError,
+    lock_file::UpdatePrefixError,
     workspace::{
         Environment,
-        virtual_packages::{
-            EnvironmentRunnability, classify_environment_runnability,
-            verify_current_platform_can_run_environment,
-        },
+        platform_selection::ResolvedPlatform,
+        virtual_packages::{EnvironmentRunnability, classify_resolved_platform_runnability},
     },
 };
-use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform, Task, TaskName};
-use rattler_lock::LockFile;
+use pixi_manifest::{
+    EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task,
+    TaskName,
+};
 use thiserror::Error;
 
 use crate::error::{AmbiguousTaskError, MissingTaskError};
@@ -66,12 +66,15 @@ impl<
 }
 
 /// An object to help with searching for tasks.
-pub struct SearchEnvironments<'p, 'lock, D: TaskDisambiguation<'p> = NoDisambiguation> {
+pub struct SearchEnvironments<'p, F, D: TaskDisambiguation<'p> = NoDisambiguation> {
     pub project: &'p Workspace,
     pub explicit_environment: Option<Environment<'p>>,
-    pub platform: Option<&'p PixiPlatform>,
+    pub platform: Option<PixiPlatformName>,
     pub disambiguate: D,
-    lock_file: Option<&'lock LockFile>,
+    resolve_platform: F,
+    pub platforms: HashMap<EnvironmentName, ResolvedPlatform<'p>>,
+    failures: HashMap<EnvironmentName, Arc<UpdatePrefixError>>,
+    installed_ambiguity: HashMap<EnvironmentName, bool>,
 }
 
 /// Information about an task that was found when searching for a task
@@ -108,7 +111,7 @@ pub enum FindTaskError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    HostProbe(#[from] HostProbeError),
+    PlatformResolution(#[from] Arc<UpdatePrefixError>),
 }
 
 /// Choosing the environment to run an ambiguous task in failed.
@@ -123,7 +126,10 @@ pub struct DisambiguationError {
     pub source: DisambiguationSource,
 }
 
-impl<'p, 'lock> SearchEnvironments<'p, 'lock, NoDisambiguation> {
+impl<'p, F> SearchEnvironments<'p, F, NoDisambiguation>
+where
+    F: AsyncFn(&Environment<'p>) -> Result<ResolvedPlatform<'p>, UpdatePrefixError>,
+{
     // Determine which environments we are allowed to check for tasks.
     //
     // If the user specified an environment, look for tasks in the main environment
@@ -134,14 +140,18 @@ impl<'p, 'lock> SearchEnvironments<'p, 'lock, NoDisambiguation> {
     pub fn from_opt_env(
         project: &'p Workspace,
         explicit_environment: Option<Environment<'p>>,
-        platform: Option<&'p PixiPlatform>,
+        platform: Option<PixiPlatformName>,
+        resolve_platform: F,
     ) -> Self {
         Self {
             project,
             explicit_environment,
             platform,
             disambiguate: NoDisambiguation,
-            lock_file: None,
+            resolve_platform,
+            platforms: HashMap::new(),
+            failures: HashMap::new(),
+            installed_ambiguity: HashMap::new(),
         }
     }
 }
@@ -172,77 +182,78 @@ pub(crate) fn environments_defining_task(
         .collect()
 }
 
-/// The platform to resolve an environment's task targets against when the
-/// caller did not pin one: the platform the environment was last installed
-/// for, the selected platform for this machine, or -- so tasks of
-/// machine-incompatible environments are still found -- the first declared
-/// platform.
-pub(crate) fn default_search_platform<'p>(
-    env: &Environment<'p>,
-    lock_file: Option<&LockFile>,
-) -> Option<&'p PixiPlatform> {
-    env.installed_or_selected_platform(lock_file).or_else(|| {
-        let env_platform_names = env.platforms();
-        env.workspace_manifest()
-            .workspace
-            .platforms
-            .iter()
-            .find(|platform| env_platform_names.contains(platform.name()))
-    })
-}
-
-impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
-    /// Use locked requirements when selecting each task's platform.
-    pub fn with_lock_file(mut self, lock_file: &'lock LockFile) -> Self {
-        self.lock_file = Some(lock_file);
-        self
-    }
-
+impl<'p, F, D> SearchEnvironments<'p, F, D>
+where
+    F: AsyncFn(&Environment<'p>) -> Result<ResolvedPlatform<'p>, UpdatePrefixError>,
+    D: TaskDisambiguation<'p>,
+{
     /// Returns a new `SearchEnvironments` with the given disambiguation
     /// function.
     pub fn with_disambiguate_fn<
-        F: AsyncFn(&AmbiguousTask<'p>) -> Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource>,
+        G: AsyncFn(&AmbiguousTask<'p>) -> Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource>,
     >(
         self,
-        func: F,
-    ) -> SearchEnvironments<'p, 'lock, DisambiguateFn<F>> {
+        func: G,
+    ) -> SearchEnvironments<'p, F, DisambiguateFn<G>> {
         SearchEnvironments {
             project: self.project,
             explicit_environment: self.explicit_environment,
             platform: self.platform,
             disambiguate: DisambiguateFn(func),
-            lock_file: self.lock_file,
+            resolve_platform: self.resolve_platform,
+            platforms: self.platforms,
+            failures: self.failures,
+            installed_ambiguity: self.installed_ambiguity,
         }
     }
 
-    /// The platform to resolve `env`'s task targets against: the caller's
-    /// pinned platform when one was given, otherwise the environment's own
-    /// default (installed / selected / first declared).
-    pub(crate) fn search_platform_for(&self, env: &Environment<'p>) -> Option<&'p PixiPlatform> {
-        match self.platform {
-            Some(platform) => Some(platform),
-            None => default_search_platform(env, self.lock_file),
-        }
+    pub fn search_platform_for(&self, env: &Environment<'p>) -> Option<&PixiPlatform> {
+        self.platforms
+            .get(env.name())
+            .map(ResolvedPlatform::platform)
     }
 
     pub(crate) async fn prepare_environment(
-        &self,
+        &mut self,
         env: &Environment<'p>,
-    ) -> Result<(), HostProbeError> {
-        if env.installed_resolved_platform().is_some() {
+    ) -> Result<(), Arc<UpdatePrefixError>> {
+        if self.platforms.contains_key(env.name()) {
             return Ok(());
         }
-        match self.lock_file {
-            Some(lock_file) => {
-                self.project
-                    .refresh_locked_environment_host(env, lock_file)
-                    .await
+        if let Some(error) = self.failures.get(env.name()) {
+            return Err(Arc::clone(error));
+        }
+        match (self.resolve_platform)(env).await {
+            Ok(platform) => {
+                self.platforms.insert(env.name().clone(), platform);
+                Ok(())
             }
-            None => {
-                self.project
-                    .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(env))
-                    .await
+            Err(error) => {
+                let error = Arc::new(error);
+                self.failures.insert(env.name().clone(), Arc::clone(&error));
+                Err(error)
             }
+        }
+    }
+
+    fn can_disambiguate(&mut self, environment: &Environment<'p>) -> bool {
+        let selection = self.platforms.get(environment.name());
+        match selection {
+            Some(
+                ResolvedPlatform::Explicit(_)
+                | ResolvedPlatform::HostMatch(_)
+                | ResolvedPlatform::HostBaseline(_),
+            ) => true,
+            Some(ResolvedPlatform::Installed(_)) => *self
+                .installed_ambiguity
+                .entry(environment.name().clone())
+                .or_insert_with(|| {
+                    matches!(
+                        classify_resolved_platform_runnability(environment, selection),
+                        EnvironmentRunnability::ByDesign | EnvironmentRunnability::NoDependencies
+                    )
+                }),
+            _ => false,
         }
     }
 
@@ -258,9 +269,6 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
             env.task(name, platform)
                 .is_ok_and(|task| inherited.is_none_or(|inherited| !std::ptr::eq(task, inherited)))
         };
-        if let Some(platform) = self.platform {
-            return is_candidate(Some(platform));
-        }
         let platforms = env.platforms();
         std::iter::once(None)
             .chain(
@@ -277,7 +285,7 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
     /// Finds the task with the given name or returns an error that explains why
     /// the task could not be found.
     pub(crate) async fn find_task(
-        &self,
+        &mut self,
         name: TaskName,
         source: FindTaskSource<'p>,
         task_specific_environment: Option<Environment<'p>>,
@@ -285,13 +293,16 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
         // If no explicit environment was specified
         if self.explicit_environment.is_none() && task_specific_environment.is_none() {
             let default_env = self.project.default_environment();
-            if self.has_task_candidate(&default_env, &name, None) {
-                self.prepare_environment(&default_env).await?;
-            }
-            // If the default environment has the task
-            if let Ok(default_env_task) =
-                default_env.task(&name, self.search_platform_for(&default_env))
+            let default_env_task = if self.has_task_candidate(&default_env, &name, None)
+                && self.prepare_environment(&default_env).await.is_ok()
             {
+                default_env
+                    .task(&name, self.search_platform_for(&default_env))
+                    .ok()
+            } else {
+                None
+            };
+            if let Some(default_env_task) = default_env_task {
                 // If the task in the default environment declares a `default-environment`
                 // and that environment exists and can run on this platform, prefer that
                 // environment instead of returning the default environment.
@@ -303,8 +314,7 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
                         .find(|e| e.name() == default_env_name)
                     && self.has_task_candidate(&env, &name, None)
                 {
-                    self.prepare_environment(&env).await?;
-                    if verify_current_platform_can_run_environment(&env, self.lock_file).is_ok()
+                    if self.prepare_environment(&env).await.is_ok()
                         && let Ok(task_in_env) = env.task(&name, self.search_platform_for(&env))
                     {
                         return Ok((env, task_in_env));
@@ -319,10 +329,9 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
                     {
                         continue;
                     }
-                    self.prepare_environment(&env).await?;
-                    // Locked-only fallbacks and incompatible siblings do not make the task ambiguous.
-                    if classify_environment_runnability(&env, self.lock_file)
-                        == EnvironmentRunnability::ByDesign
+                    // Lock-only fallbacks and incompatible siblings do not make a default task ambiguous.
+                    if self.prepare_environment(&env).await.is_ok()
+                        && self.can_disambiguate(&env)
                         && let Ok(task) = env.task(&name, self.search_platform_for(&env))
                         && !std::ptr::eq(task, default_env_task)
                     {
@@ -335,6 +344,8 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
                 }
             }
         }
+        let required_environment =
+            task_specific_environment.is_some() || self.explicit_environment.is_some();
 
         let environments = match (task_specific_environment, &self.explicit_environment) {
             (Some(task_specific_environment), _) => {
@@ -355,11 +366,18 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
 
         // Find all the task and environment combinations
         let mut tasks = Vec::new();
+        let mut first_error = None;
         for env in environments.iter() {
             if !self.has_task_candidate(env, &name, None) {
                 continue;
             }
-            self.prepare_environment(env).await?;
+            if let Err(error) = self.prepare_environment(env).await {
+                if required_environment {
+                    return Err(error.into());
+                }
+                first_error.get_or_insert(error);
+                continue;
+            }
             if let Some(task) = env
                 .tasks(self.search_platform_for(env))
                 .ok()
@@ -370,6 +388,7 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
         }
 
         match tasks.len() {
+            0 if first_error.is_some() => Err(first_error.unwrap().into()),
             0 => Err(FindTaskError::MissingTask(MissingTaskError {
                 task_name: name,
             })),
@@ -401,15 +420,49 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
 }
 
 #[cfg(test)]
+pub(crate) fn search_for_test<'p>(
+    project: &'p Workspace,
+    environment: Option<Environment<'p>>,
+    platform: Option<&'p PixiPlatform>,
+) -> SearchEnvironments<
+    'p,
+    impl AsyncFn(&Environment<'p>) -> Result<ResolvedPlatform<'p>, UpdatePrefixError>,
+> {
+    SearchEnvironments::from_opt_env(
+        project,
+        environment,
+        platform.map(|platform| platform.name().clone()),
+        async move |env: &Environment<'p>| {
+            let selected = platform
+                .or_else(|| env.best_declared_platform())
+                .or_else(|| {
+                    let platforms = env.platforms();
+                    project
+                        .workspace_manifest()
+                        .workspace
+                        .platforms
+                        .iter()
+                        .find(|platform| platforms.contains(platform.name()))
+                });
+            Ok(match selected {
+                Some(platform) => ResolvedPlatform::HostMatch(platform),
+                None => ResolvedPlatform::HostBaseline(PixiPlatform::from_subdir(
+                    rattler_conda_types::Subdir::current()
+                        .unwrap_or(rattler_conda_types::Subdir::NoArch),
+                )),
+            })
+        },
+    )
+}
+
+#[cfg(test)]
 mod tests {
     use std::path::Path;
 
     use super::*;
 
-    /// A task that only exists for an environment whose platforms exclude
-    /// this machine must still be found: each environment resolves its own
-    /// search platform (falling back to its first declared platform), rather
-    /// than inheriting the caller's.
+    /// Task lookup uses the caller's explicit per-environment selection even
+    /// when that environment's task targets differ from the host.
     #[tokio::test]
     async fn test_find_task_in_foreign_platform_environment() {
         let manifest_str = r#"
@@ -428,7 +481,7 @@ mod tests {
             riscv = ["riscv"]
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search = search_for_test(&project, None, None);
         let (env, _task) = search
             .find_task("flash".into(), FindTaskSource::CmdArgs, None)
             .await
@@ -453,7 +506,7 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let env = project.default_environment();
-        let search = SearchEnvironments::from_opt_env(&project, None, env.best_declared_platform());
+        let mut search = search_for_test(&project, None, env.best_declared_platform());
         let result = search
             .find_task("test".into(), FindTaskSource::CmdArgs, None)
             .await;
@@ -479,7 +532,7 @@ mod tests {
             test = ["test"]
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search = search_for_test(&project, None, None);
         let result = search
             .find_task("test".into(), FindTaskSource::CmdArgs, None)
             .await;
@@ -510,15 +563,14 @@ mod tests {
             macos = "10.6"
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search = search_for_test(&project, None, None);
         let result = search
             .find_task("test".into(), FindTaskSource::CmdArgs, None)
             .await;
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
 
         // With explicit environment
-        let search =
-            SearchEnvironments::from_opt_env(&project, Some(project.default_environment()), None);
+        let mut search = search_for_test(&project, Some(project.default_environment()), None);
         let result = search
             .find_task("test".into(), FindTaskSource::CmdArgs, None)
             .await;
@@ -543,7 +595,7 @@ mod tests {
             b = ["b"]
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None).with_disambiguate_fn(
+        let mut search = search_for_test(&project, None, None).with_disambiguate_fn(
             async |_: &AmbiguousTask| Err(std::io::Error::other("no answer").into()),
         );
         let result = search
@@ -576,18 +628,15 @@ mod tests {
             macos = "10.6"
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search = search_for_test(&project, None, None);
         let result = search
             .find_task("test".into(), FindTaskSource::CmdArgs, None)
             .await;
         assert!(result.unwrap().0.name().is_default());
 
         // With explicit environment
-        let search = SearchEnvironments::from_opt_env(
-            &project,
-            Some(project.environment("prod").unwrap()),
-            None,
-        );
+        let mut search =
+            search_for_test(&project, Some(project.environment("prod").unwrap()), None);
         let result = search
             .find_task("test".into(), FindTaskSource::CmdArgs, None)
             .await;
@@ -612,7 +661,7 @@ mod tests {
             other = ["other"]
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search = search_for_test(&project, None, None);
         let result = search
             .find_task("bla".into(), FindTaskSource::CmdArgs, None)
             .await;
@@ -655,7 +704,7 @@ mod tests {
 
         // Build a SearchEnvironments that will prefer a candidate environment
         // whose task declares a `default-environment` matching the env name.
-        let search = SearchEnvironments::from_opt_env(&project, None, None).with_disambiguate_fn(
+        let mut search = search_for_test(&project, None, None).with_disambiguate_fn(
             async |amb: &AmbiguousTask| {
                 Ok(amb
                     .environments
@@ -704,7 +753,7 @@ mod tests {
         // If the user explicitly requests `two`, that should be preferred even
         // though the task has a `default-environment` set to `three`.
         let explicit_env = project.environment("two").unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, Some(explicit_env), None);
+        let mut search = search_for_test(&project, Some(explicit_env), None);
         let result = search
             .find_task("test3".into(), FindTaskSource::CmdArgs, None)
             .await;
@@ -731,7 +780,7 @@ mod tests {
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
 
         // Build a SearchEnvironments that will apply default behavior.
-        let search = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search = search_for_test(&project, None, None);
 
         // Resolve `test` task; since the task declares `default-environment = "test"`
         // we expect the resolved environment to be `test` rather than the default.

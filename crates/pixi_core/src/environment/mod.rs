@@ -6,7 +6,7 @@ pub use conda_prefix::{
     CondaPrefixUpdaterBuilder,
 };
 use dialoguer::theme::ColorfulTheme;
-use futures::{FutureExt, StreamExt, TryStreamExt, stream};
+use futures::{StreamExt, TryStreamExt, stream};
 use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
@@ -46,7 +46,11 @@ use crate::{
         UpdateMode, UpdatePrefixError, resolve_lock_platform_for,
         virtual_packages::{unmet_constrains, unmet_requirements},
     },
-    workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
+    workspace::{
+        Environment, HasWorkspaceRef,
+        grouped_environment::GroupedEnvironment,
+        platform_selection::{PrefixPolicy, ResolvedPlatform, explicit_platform},
+    },
 };
 
 /// Errors that can occur while checking that the workspace is in a sane state.
@@ -922,7 +926,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
-) -> Result<(LockFileDerivedData<'env>, Prefix), LockFileAndPrefixesError> {
+) -> Result<(LockFileDerivedData<'env>, Prefix, ResolvedPlatform<'env>), LockFileAndPrefixesError> {
     let (lock_file, prefixes) = get_lock_file_and_prefixes(
         std::slice::from_ref(environment),
         None,
@@ -933,13 +937,11 @@ pub async fn get_update_lock_file_and_prefix<'env>(
         filter,
     )
     .await?;
-    Ok((
-        lock_file,
-        prefixes
-            .into_iter()
-            .next()
-            .expect("must be at least one prefix"),
-    ))
+    let (prefix, platform) = prefixes
+        .into_iter()
+        .next()
+        .expect("must be at least one prefix");
+    Ok((lock_file, prefix, platform))
 }
 
 /// A platform was requested for an environment that doesn't list it.
@@ -979,18 +981,16 @@ pub enum LockFileAndPrefixesError {
 }
 
 /// Chooses how installation obtains lock data.
-pub enum LockFileSource<'env> {
+pub enum LockFileSource {
     /// Updates the workspace's persistent lock file.
     Update(UpdateLockFileOptions),
     /// Uses storage-aware operational resolution, including the script cache.
     Resolve(UpdateLockFileOptions),
-    /// Installs from lock data already prepared for this workspace.
-    Prepared(Box<LockFileDerivedData<'env>>),
 }
 
-impl<'env> LockFileSource<'env> {
+impl LockFileSource {
     /// Prepares lock data and its installation prerequisites without installing prefixes.
-    pub async fn prepare(
+    pub async fn prepare<'env>(
         self,
         workspace: &'env Workspace,
         progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
@@ -998,7 +998,6 @@ impl<'env> LockFileSource<'env> {
         let (options, persist) = match self {
             Self::Update(options) => (options, true),
             Self::Resolve(options) => (options, false),
-            Self::Prepared(lock_file) => return Ok(*lock_file),
         };
 
         sanity_check_workspace(workspace).await?;
@@ -1028,50 +1027,36 @@ pub async fn get_lock_file_and_prefixes<'env>(
     target_platform: Option<&PixiPlatformName>,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     update_mode: UpdateMode,
-    lock_file_source: LockFileSource<'env>,
+    lock_file_source: LockFileSource,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
-) -> Result<(LockFileDerivedData<'env>, Vec<Prefix>), LockFileAndPrefixesError> {
+) -> Result<
+    (
+        LockFileDerivedData<'env>,
+        Vec<(Prefix, ResolvedPlatform<'env>)>,
+    ),
+    LockFileAndPrefixesError,
+> {
     if environments.is_empty() {
         return Err(LockFileAndPrefixesError::NoEnvironments);
     }
 
     let workspace = environments[0].workspace();
-    workspace
-        .refresh_environment_hosts_for_platform_selection(environments)
-        .await?;
 
     let no_install = match &lock_file_source {
         LockFileSource::Update(options) | LockFileSource::Resolve(options) => options.no_install,
-        LockFileSource::Prepared(_) => false,
     };
     for env in environments {
-        // A `--platform` the environment doesn't list is a membership error.
-        // With no platform requested, defer to the install path's minimum fallback.
-        if !no_install
-            && env
-                .named_or_selected_platform(target_platform, None)
-                .is_none()
-            && let Some(name) = target_platform
-        {
-            return Err(PlatformNotInEnvironmentError {
-                platform: name.clone(),
-                environment: env.name().clone(),
-            }
-            .into());
-        }
-        if !no_install {
-            env.emit_emulation_warning();
+        if let Some(name) = target_platform {
+            explicit_platform(env, name)?;
         }
     }
 
     // Every environment lists the pinned platform (checked above), so a
     // cross-target `--platform` (a subdir this host can't run) only warns
     // now -- after the clear membership error, never before it.
-    if !no_install
-        && target_platform.is_some()
-        && let Some(platform) = environments[0].named_or_selected_platform(target_platform, None)
-    {
+    if !no_install && let Some(name) = target_platform {
+        let platform = explicit_platform(&environments[0], name)?;
         let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let subdir = platform.subdir();
         if !candidate_subdirs(current).contains(&subdir) {
@@ -1100,14 +1085,24 @@ pub async fn get_lock_file_and_prefixes<'env>(
     let lock_file_ref = &lock_file;
     let reinstall_packages = &reinstall_packages;
     let prefixes = stream::iter(environments.iter())
-        .map(move |env| {
-            if no_install {
-                std::future::ready(Ok(Prefix::new(env.dir()))).left_future()
+        .map(move |env| async move {
+            let policy = if no_install {
+                PrefixPolicy::Reuse
             } else {
+                PrefixPolicy::Replace
+            };
+            let platform = lock_file_ref
+                .resolve_platform(env, policy, update_mode)
+                .await?;
+            let prefix = if no_install {
+                Prefix::new(env.dir())
+            } else {
+                env.emit_emulation_warning(platform.platform());
                 lock_file_ref
-                    .prefix(env, update_mode, reinstall_packages, filter)
-                    .right_future()
-            }
+                    .prefix(env, &platform, update_mode, reinstall_packages, filter)
+                    .await?
+            };
+            Ok::<_, UpdatePrefixError>((prefix, platform))
         })
         .buffer_unordered(environments.len())
         .try_collect()

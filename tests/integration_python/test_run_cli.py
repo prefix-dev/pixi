@@ -85,6 +85,9 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains=["a", "a1"],
     )
 
+    # An explicitly installed dependency-free sibling still makes the task ambiguous.
+    verify_cli_command([pixi, "install", "--manifest-path", manifest, "--environment", "a"])
+
     # Error on non-specified environment as ambiguous
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],

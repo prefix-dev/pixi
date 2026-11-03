@@ -1,5 +1,8 @@
 use crate::common::PixiControl;
 use crate::setup_tracing;
+use pixi_core::workspace::platform_selection::{
+    PrefixPolicy, resolve_diagnostic_platform, resolve_operational_platform,
+};
 use pixi_core::{
     activation::CurrentEnvVarBehavior, workspace::get_activated_environment_variables,
 };
@@ -22,7 +25,9 @@ async fn test_pixi_only_env_activation() {
     let pixi_only_env = get_activated_environment_variables(
         workspace.env_vars(),
         &default_env,
-        &default_env.activation_platform(),
+        resolve_diagnostic_platform(&default_env, None)
+            .unwrap()
+            .platform(),
         CurrentEnvVarBehavior::Exclude,
         None,
         false,
@@ -62,7 +67,9 @@ async fn test_full_env_activation() {
     let full_env = get_activated_environment_variables(
         project.env_vars(),
         &default_env,
-        &default_env.activation_platform(),
+        resolve_diagnostic_platform(&default_env, None)
+            .unwrap()
+            .platform(),
         CurrentEnvVarBehavior::Include,
         None,
         false,
@@ -93,7 +100,9 @@ async fn test_clean_env_activation() {
     let clean_env = get_activated_environment_variables(
         project.env_vars(),
         &default_env,
-        &default_env.activation_platform(),
+        resolve_diagnostic_platform(&default_env, None)
+            .unwrap()
+            .platform(),
         CurrentEnvVarBehavior::Clean,
         None,
         false,
@@ -163,17 +172,18 @@ mod custom_platform_scoping {
     async fn activated(pixi: &PixiControl, platform: Option<&str>) -> HashMap<String, String> {
         let workspace = pixi.workspace().unwrap();
         let env = workspace.default_environment();
-        let platform = match platform {
-            Some(name) => env
-                .named_or_selected_platform(Some(&platform_name(name)), None)
-                .expect("platform is declared by the default environment")
-                .clone(),
-            None => env.activation_platform(),
-        };
+        let platform = platform.map(platform_name);
+        let selection = resolve_operational_platform(
+            &env,
+            &rattler_lock::LockFile::default(),
+            platform.as_ref(),
+            PrefixPolicy::Reuse,
+        )
+        .unwrap();
         get_activated_environment_variables(
             workspace.env_vars(),
             &env,
-            &platform,
+            selection.platform(),
             CurrentEnvVarBehavior::Exclude,
             None,
             false,
@@ -223,9 +233,14 @@ mod custom_platform_scoping {
         let env = workspace.default_environment();
 
         // Write the `conda-meta/pixi` marker an install for `local` would leave.
-        let local = env
-            .named_or_selected_platform(Some(&platform_name("local")), None)
-            .unwrap();
+        let selection = resolve_operational_platform(
+            &env,
+            &rattler_lock::LockFile::default(),
+            Some(&platform_name("local")),
+            PrefixPolicy::Reuse,
+        )
+        .unwrap();
+        let local = selection.platform();
         pixi_core::environment::write_environment_file(
             &env.dir(),
             pixi_core::environment::EnvironmentFile {
@@ -277,10 +292,14 @@ mod custom_platform_scoping {
         let workspace = pixi.workspace().unwrap();
         let env = workspace.default_environment();
         let script_names = |name: &str| {
-            let platform = env
-                .named_or_selected_platform(Some(&platform_name(name)), None)
-                .unwrap();
-            get_activator(&env, ShellEnum::default(), platform)
+            let selection = resolve_operational_platform(
+                &env,
+                &rattler_lock::LockFile::default(),
+                Some(&platform_name(name)),
+                PrefixPolicy::Reuse,
+            )
+            .unwrap();
+            get_activator(&env, ShellEnum::default(), selection.platform())
                 .unwrap()
                 .activation_scripts
                 .into_iter()

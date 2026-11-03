@@ -20,7 +20,9 @@ use pixi_core::host::{
     consent_key_argument,
 };
 use pixi_core::workspace::{
-    PlatformSelection, errors::SkippedPlatform, grouped_environment::GroupedEnvironment,
+    errors::SkippedPlatform,
+    grouped_environment::GroupedEnvironment,
+    platform_selection::{PlatformSelectionSource, resolve_diagnostic_platform_with_host},
 };
 use pixi_global::{BinDir, EnvRoot};
 use pixi_manifest::platform::subdir_default_virtual_packages;
@@ -163,6 +165,7 @@ pub struct EnvironmentInfo {
     pypi_dependencies: Vec<String>,
     platforms: Vec<PlatformInfo>,
     selected_platform: Option<PlatformInfo>,
+    selected_platform_source: Option<PlatformSelectionSource>,
     skipped_platforms: Vec<SkippedPlatform>,
     resolved_platform: Option<PlatformInfo>,
     minimum_supported_platform: Option<PlatformInfo>,
@@ -260,6 +263,21 @@ impl Display for EnvironmentInfo {
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Selected platform"),
                 format_platform(selected)
+            )?;
+        }
+        if let Some(source) = self.selected_platform_source {
+            let source = match source {
+                PlatformSelectionSource::Explicit => "explicit",
+                PlatformSelectionSource::Installed => "installed",
+                PlatformSelectionSource::HostMatch => "host match",
+                PlatformSelectionSource::LockFallback => "lock fallback",
+                PlatformSelectionSource::HostBaseline => "host baseline",
+            };
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Selection source"),
+                source
             )?;
         }
         for skipped in &self.skipped_platforms {
@@ -765,17 +783,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     });
     let mut environments_info = Vec::new();
     if let Some(ws) = &workspace {
-        let lock = if ws
-            .persistent_lock_file_path()
-            .is_some_and(|path| path.is_file())
-        {
-            ws.load_lock_file()
-                .await
-                .ok()
-                .and_then(|lock| lock.into_lock_file().ok())
-        } else {
-            None
-        };
+        let mut lock = None;
         let mut detected_scopes = HashMap::new();
         for env in ws.environments() {
             let channels = GroupedEnvironment::from(env.clone()).channel_urls(&ws.channel_config());
@@ -817,14 +825,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if let Err(error) = environment_host.platform() {
                 detection_error.get_or_insert_with(|| error.to_string());
             }
-            let (best, skipped_platforms) =
-                match env.select_platform(&environment_host, lock.as_ref()) {
-                    Ok(PlatformSelection::Declared { platform, skipped })
-                    | Ok(PlatformSelection::LockedOnly { platform, skipped }) => {
-                        (Some(platform), skipped)
-                    }
-                    Err(error) => (None, error.skipped_platforms),
-                };
+            let (mut selected, mut skipped_platforms) =
+                resolve_diagnostic_platform_with_host(&env, &environment_host, None);
+            if selected.is_none() {
+                if lock.is_none() {
+                    lock = Some(match ws.load_lock_file().await {
+                        Ok(result) => match result.into_lock_file() {
+                            Ok(lock) => Some(lock),
+                            Err(error) => {
+                                tracing::warn!("could not load lock file for info: {error}");
+                                None
+                            }
+                        },
+                        Err(error) => {
+                            tracing::warn!("could not load lock file for info: {error}");
+                            None
+                        }
+                    });
+                }
+                if let Some(existing_lock) = lock.as_ref().and_then(Option::as_ref) {
+                    (selected, skipped_platforms) = resolve_diagnostic_platform_with_host(
+                        &env,
+                        &environment_host,
+                        Some(existing_lock),
+                    );
+                }
+            }
+            let best = selected.as_ref().map(|selection| selection.platform());
             let tasks = env
                 .tasks(best)
                 .ok()
@@ -865,6 +892,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     })
                     .collect(),
                 selected_platform: best.map(PlatformInfo::from),
+                selected_platform_source: selected.as_ref().map(|selection| selection.source()),
                 skipped_platforms,
                 resolved_platform: resolved_platform.as_ref().map(PlatformInfo::from),
                 minimum_supported_platform: minimum_supported_platform
@@ -965,6 +993,7 @@ mod tests {
                 platform("cpu", Vec::new()),
             ],
             selected_platform: Some(platform("cpu", Vec::new())),
+            selected_platform_source: Some(PlatformSelectionSource::LockFallback),
             skipped_platforms: vec![SkippedPlatform {
                 platform: PixiPlatformName::try_from("cuda").unwrap(),
                 reason: "requires __cuda >=12.4, but the host provides __cuda=12.2=0".to_string(),
@@ -976,6 +1005,14 @@ mod tests {
             prefix: PathBuf::from("prefix"),
             virtual_package_detection_error: None,
         };
+        let json = serde_json::to_value(&info).unwrap();
+        assert_eq!(json["selected_platform"]["name"], "cpu");
+        assert_eq!(json["selected_platform_source"], "lock_fallback");
+        assert_eq!(json["resolved_platform"]["name"], "linux-64");
+        assert_eq!(
+            json["minimum_supported_platform"]["virtual_packages"],
+            serde_json::json!(["__glibc >=2.17"])
+        );
 
         let rendered = info.to_string();
         let rendered = console::strip_ansi_codes(&rendered);
@@ -985,6 +1022,7 @@ mod tests {
         Dependency count: 0
         Target platforms: cuda (cuda=12.0), cpu
         Selected platform: cpu
+        Selection source: lock fallback
         Skipped platform: cuda (requires __cuda >=12.4, but the host provides __cuda=12.2=0)
         Resolved platform: linux-64
         Minimum platform: linux-64 (__glibc >=2.17; constrains: __cuda >=12)

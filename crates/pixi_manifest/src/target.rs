@@ -855,10 +855,10 @@ impl<T> Targets<T> {
     /// and the default target last.
     ///
     /// This also always includes the default target.
-    pub fn resolve<'a>(
+    pub fn resolve<'a, 'p>(
         &'a self,
-        platform: Option<&'a PixiPlatform>,
-    ) -> impl DoubleEndedIterator<Item = &'a T> + 'a {
+        platform: Option<&'p PixiPlatform>,
+    ) -> impl DoubleEndedIterator<Item = &'a T> + use<'a, 'p, T> {
         if let Some(platform) = platform {
             Either::Left(self.resolve_for_platform(platform))
         } else {
@@ -875,10 +875,10 @@ impl<T> Targets<T> {
     /// This also always includes the default target.
     ///
     /// You should use the [`Self::resolve`] function.
-    fn resolve_for_platform<'a>(
+    fn resolve_for_platform<'a, 'p>(
         &'a self,
-        platform: &'a PixiPlatform,
-    ) -> impl DoubleEndedIterator<Item = &'a T> + 'a {
+        platform: &'p PixiPlatform,
+    ) -> impl DoubleEndedIterator<Item = &'a T> + use<'a, 'p, T> {
         std::iter::once(&self.default_target)
             .chain(self.targets.iter().filter_map(move |(selector, target)| {
                 if selector.matches(platform) {

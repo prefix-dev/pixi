@@ -149,8 +149,7 @@ impl Environment<'_> {
 
 /// Get the complete activator for the environment.
 /// This method will create an activator for the environment and add the activation scripts from the project.
-/// `platform` selects which `[target.*]` activation applies, see
-/// [`Environment::activation_platform`] for the default.
+/// `platform` is the authoritative platform selected by the command boundary.
 pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
@@ -724,7 +723,7 @@ mod tests {
         // even with experimental=true and a lock file present.
         let env = run_activation(
             &default_env,
-            &default_env.activation_platform(),
+            &pixi_manifest::platform::host::host_baseline(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -740,7 +739,7 @@ mod tests {
 
         let _env = run_activation(
             &default_env,
-            &default_env.activation_platform(),
+            &pixi_manifest::platform::host::host_baseline(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -759,7 +758,7 @@ mod tests {
         tokio_fs::write(&cache_file, modified).await.unwrap();
         let env = run_activation(
             &default_env,
-            &default_env.activation_platform(),
+            &pixi_manifest::platform::host::host_baseline(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -775,7 +774,7 @@ mod tests {
         write_fingerprint(&default_env.dir(), "000000000000000b").await;
         let env = run_activation(
             &default_env,
-            &default_env.activation_platform(),
+            &pixi_manifest::platform::host::host_baseline(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -816,9 +815,9 @@ mod tests {
 
         let activate_for = async |name: &str| {
             let name = name.parse().unwrap();
-            let platform = default_env
-                .named_or_selected_platform(Some(&name), None)
-                .unwrap();
+            let platform =
+                crate::workspace::platform_selection::explicit_platform(&default_env, &name)
+                    .unwrap();
             run_activation(
                 &default_env,
                 platform,
@@ -863,7 +862,7 @@ mod tests {
         write_fingerprint(&default_env.dir(), "00000000000000fb").await;
         let env = run_activation(
             &default_env,
-            &default_env.activation_platform(),
+            &pixi_manifest::platform::host::host_baseline(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -897,7 +896,7 @@ mod tests {
         write_fingerprint(&default_env.dir(), "00000000000000fb").await;
         let env = run_activation(
             &default_env,
-            &default_env.activation_platform(),
+            &pixi_manifest::platform::host::host_baseline(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -937,7 +936,7 @@ mod tests {
 
         let err = run_activation(
             &default_env,
-            &default_env.activation_platform(),
+            &pixi_manifest::platform::host::host_baseline(),
             &CurrentEnvVarBehavior::Exclude,
             None,
             false,

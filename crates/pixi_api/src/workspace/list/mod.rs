@@ -4,8 +4,11 @@ use std::sync::Arc;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_core::{
-    UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
+    UpdateLockFileOptions, Workspace,
+    environment::LockFileUsage,
+    lock_file::UvResolutionContext,
     lock_file::resolve_lock_platform_for,
+    workspace::platform_selection::{PrefixPolicy, resolve_operational_platform},
 };
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
@@ -33,11 +36,8 @@ pub async fn list(
     no_install: bool,
     lock_file_usage: LockFileUsage,
     progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
-) -> miette::Result<Vec<Package>> {
+) -> miette::Result<(Vec<Package>, PixiPlatformName)> {
     let environment = workspace.environment_from_name_or_env_var(environment)?;
-    workspace
-        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
-        .await?;
 
     // Held across the solve so the package table is not written over bars that
     // have finished but are still rendered.
@@ -61,26 +61,29 @@ pub async fn list(
     // priority; a bare conda subdir is accepted as a fallback so the user
     // never has to spell out which workspace platform they mean. Falls
     // back to the environment's best platform when unset.
-    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
+    let workspace_platforms = &workspace.workspace_manifest().workspace.platforms;
     let resolved_platform = match platform {
         Some(name) => Some(
-            resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
+            resolve_platforms(workspace_platforms, std::slice::from_ref(&name))?
                 .into_iter()
                 .next()
                 .expect("resolve_platforms preserves length"),
         ),
         None => None,
     };
+    if resolved_platform.is_none() && environment.installed_resolved_platform().is_none() {
+        workspace
+            .refresh_locked_environment_host(&environment, &lock_file)
+            .await?;
+    }
+    let selection;
     let platform = match resolved_platform.as_ref() {
         Some(p) => p,
-        None => environment
-            .installed_or_selected_platform(Some(&lock_file))
-            .ok_or_else(|| {
-                miette::miette!(
-                    "no platform supported by environment '{}' matches the current system",
-                    environment.name()
-                )
-            })?,
+        None => {
+            selection =
+                resolve_operational_platform(&environment, &lock_file, None, PrefixPolicy::Reuse)?;
+            selection.platform()
+        }
     };
     let locked_platform = resolve_lock_platform_for(&lock_file, platform);
     let locked_environment = lock_file.environment(environment.name().as_str());
@@ -198,5 +201,5 @@ pub async fn list(
             .collect::<Vec<_>>();
     }
 
-    Ok(packages_to_output)
+    Ok((packages_to_output, platform.name().clone()))
 }

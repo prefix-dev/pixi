@@ -5,14 +5,16 @@ use pixi_config::ConfigCli;
 use pixi_core::{
     UpdateLockFileOptions,
     environment::{InstallFilter, LockFileSource, get_lock_file_and_prefixes},
-    lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
+    lock_file::{
+        LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode, UpdatePrefixError,
+    },
+    workspace::platform_selection::{PlatformResolutionError, PrefixPolicy},
 };
 use pixi_manifest::PixiPlatformName;
 use std::fmt::Write;
 
 use crate::cli_config::ScriptWorkspaceConfig;
 use crate::shared::install_platform::resolve_install_platform;
-use pixi_manifest::platform::host::host_baseline;
 
 /// Install an environment.
 ///
@@ -166,29 +168,42 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         max_concurrent_solves: workspace.config().max_concurrent_solves(),
         ..Default::default()
     };
-    let mut lock_file_source = if args.workspace_config.script.is_some() {
+    let lock_file_source = if args.workspace_config.script.is_some() {
         LockFileSource::Resolve(update_lock_file_options)
     } else {
         LockFileSource::Update(update_lock_file_options)
     };
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
-    // Resolve before selecting: a stale lock can exclude newly added or newly
-    // compatible environments, and an empty lock misses package requirements.
-    // Explicit targets bypass host selection and retain membership validation.
-    if args.all && target_platform.is_none() {
-        workspace.refresh_environment_hosts().await?;
-        let lock_file = {
-            let _clear_progress =
-                pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
-            lock_file_source
-                .prepare(&workspace, Some(progress.clone()))
-                .await?
-        };
-        let (supported, skipped): (Vec<_>, Vec<_>) = environments.into_iter().partition(|env| {
-            env.select_platform(&env.host(), Some(&lock_file.lock_file))
-                .is_ok()
-        });
+    let filter = InstallFilter::new()
+        .skip_direct(args.skip.clone().unwrap_or_default())
+        .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
+        .target_packages(args.only.clone().unwrap_or_default());
+
+    let (LockFileDerivedData { lock_file, .. }, prefixes) = if args.all && target_platform.is_none()
+    {
+        let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+        let lock_file = lock_file_source
+            .prepare(&workspace, Some(progress.clone()))
+            .await?;
+        let mut supported = Vec::new();
+        let mut skipped = Vec::new();
+        let mut platforms = Vec::new();
+        for environment in environments {
+            match lock_file
+                .resolve_platform(&environment, PrefixPolicy::Replace, UpdateMode::Revalidate)
+                .await
+            {
+                Ok(platform) => {
+                    supported.push(environment);
+                    platforms.push(platform);
+                }
+                Err(UpdatePrefixError::PlatformResolution(
+                    PlatformResolutionError::UnsupportedPlatform(_),
+                )) => skipped.push(environment),
+                Err(error) => return Err(error.into()),
+            }
+        }
 
         if !skipped.is_empty() {
             tracing::warn!(
@@ -204,25 +219,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if environments.is_empty() {
             return Ok(());
         }
-        lock_file_source = LockFileSource::Prepared(Box::new(lock_file));
-    }
-
-    // Build the install filter from CLI args
-    let filter = InstallFilter::new()
-        .skip_direct(args.skip.clone().unwrap_or_default())
-        .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
-        .target_packages(args.only.clone().unwrap_or_default());
-
-    let (LockFileDerivedData { lock_file, .. }, prefixes) = get_lock_file_and_prefixes(
-        &environments,
-        target_platform.as_ref(),
-        Some(progress),
-        UpdateMode::Revalidate,
-        lock_file_source,
-        ReinstallPackages::default(),
-        &filter,
-    )
-    .await?;
+        let reinstall_packages = ReinstallPackages::default();
+        let prefixes = futures::future::try_join_all(environments.iter().zip(platforms).map(
+            |(environment, platform)| {
+                let lock_file = &lock_file;
+                let filter = &filter;
+                let reinstall_packages = &reinstall_packages;
+                async move {
+                    environment.emit_emulation_warning(platform.platform());
+                    let prefix = lock_file
+                        .prefix(
+                            environment,
+                            &platform,
+                            UpdateMode::Revalidate,
+                            reinstall_packages,
+                            filter,
+                        )
+                        .await?;
+                    Ok::<_, UpdatePrefixError>((prefix, platform))
+                }
+            },
+        ))
+        .await?;
+        (lock_file, prefixes)
+    } else {
+        get_lock_file_and_prefixes(
+            &environments,
+            target_platform.as_ref(),
+            Some(progress),
+            UpdateMode::Revalidate,
+            lock_file_source,
+            ReinstallPackages::default(),
+            &filter,
+        )
+        .await?
+    };
 
     // Message what's installed
     let mut message = console::style(console::Emoji("✔ ", "")).green().to_string();
@@ -245,15 +276,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         if skip_opts {
-            // Honor an explicit target and otherwise keep the installed platform.
-            let host_platform = host_baseline();
-            let installed_platform = environment.installed_resolved_platform_name();
-            let platform = environment
-                .named_or_selected_platform(
-                    target_platform.as_ref().or(installed_platform.as_ref()),
-                    Some(&lock_file),
-                )
-                .unwrap_or(&host_platform);
+            let platform = prefixes[0].1.platform();
             let locked_env = lock_file
                 .environment(environment.name().as_str())
                 .expect("lock file is missing installed environment");
@@ -323,7 +346,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.workspace_config.script.is_some() {
         // Script environments live in the cache, not in the workspace, so the
         // location is not otherwise discoverable.
-        if let Some(prefix) = prefixes.first() {
+        if let Some((prefix, _)) = prefixes.first() {
             write!(
                 &mut message,
                 " at '{}'",

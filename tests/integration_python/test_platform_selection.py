@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import errno
 import json
+import os
+import select
+import signal
+import time
 from pathlib import Path
 
 import pytest
+import yaml
+from inline_snapshot import snapshot
 
-from .common import CURRENT_PLATFORM, verify_cli_command
+from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
 from .test_virtual_package_detectors import DetectorChannel
 
 pytestmark = pytest.mark.skipif(
@@ -193,8 +200,9 @@ cpu-package = "*"
     assert not _marker(tmp_pixi_workspace).exists()
 
 
+@pytest.mark.parametrize("no_install", [False, True])
 def test_task_dependency_uses_its_own_selected_platform_and_activation(
-    pixi: Path, tmp_pixi_workspace: Path
+    pixi: Path, tmp_pixi_workspace: Path, no_install: bool
 ) -> None:
     channel = _channel(tmp_pixi_workspace)
     manifest = tmp_pixi_workspace / "pixi.toml"
@@ -234,11 +242,23 @@ worker = ["worker"]
     verify_cli_command([pixi, "lock", "--manifest-path", manifest])
     _tighten_gpu_requirement(tmp_pixi_workspace / "pixi.lock")
     verify_cli_command(
-        [pixi, "run", "--frozen", "--manifest-path", manifest, "root"],
+        [
+            pixi,
+            "run",
+            "--frozen",
+            *(["--no-install"] if no_install else []),
+            "--manifest-path",
+            manifest,
+            "root",
+        ],
         env={"CONDA_OVERRIDE_CUDA": "12.2"},
         stdout_contains=["ROOT-gpu", "CHILD-cpu"],
         stdout_excludes="WRONG-GPU-CHILD",
     )
+    if no_install:
+        assert not _marker(tmp_pixi_workspace).exists()
+        assert not _marker(tmp_pixi_workspace, "worker").exists()
+        return
     default_marker = json.loads(_marker(tmp_pixi_workspace).read_text())
     worker_marker = json.loads(_marker(tmp_pixi_workspace, "worker").read_text())
     assert any(
@@ -325,15 +345,15 @@ def test_manifest_export_selects_platform_from_lock(pixi: Path, tmp_pixi_workspa
 
 
 def test_task_list_selects_platform_from_lock(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _bounded_gpu_workspace(tmp_pixi_workspace)
+    _lock_fallback_workspace(tmp_pixi_workspace)
     verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
-    host = {"CONDA_OVERRIDE_CUDA": "12.5"}
+    host = {"CONDA_OVERRIDE_CUDA": ""}
     output = verify_cli_command(
         [pixi, "task", "list"], env=host, cwd=tmp_pixi_workspace, strip_ansi=True
     )
     listed = (output.stdout + output.stderr).split()
-    assert "cpu-only" in listed
-    assert "gpu-only" not in listed
+    assert "plain-only" in listed
+    assert "fancy-only" not in listed
 
     tasks = json.loads(
         verify_cli_command(
@@ -346,7 +366,7 @@ def test_task_list_selects_platform_from_lock(pixi: Path, tmp_pixi_workspace: Pa
         for group in [environment["tasks"], *(f["tasks"] for f in environment["features"])]
         for task in group
     }
-    assert names == {"cpu-only"}
+    assert names == {"which", "plain-only"}
 
 
 def test_info_tolerates_unparsable_lock_file(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -414,8 +434,9 @@ lint = {{ features = ["lint"], no-default-feature = true }}
     assert not _marker(tmp_pixi_workspace, "lint").exists()
 
 
+@pytest.mark.parametrize("no_install", [False, True])
 def test_fallback_environment_does_not_make_task_ambiguous(
-    pixi: Path, tmp_pixi_workspace: Path
+    pixi: Path, tmp_pixi_workspace: Path, no_install: bool
 ) -> None:
     channel = _channel(tmp_pixi_workspace)
     (tmp_pixi_workspace / "pixi.toml").write_text(f"""
@@ -446,15 +467,16 @@ hello = "echo from-accelerated"
 accelerated = {{ features = ["accelerated"], no-default-feature = true }}
 """)
     verify_cli_command(
-        [pixi, "run", "hello"],
+        [pixi, "run", *(["--no-install"] if no_install else []), "hello"],
         env={"CONDA_OVERRIDE_CUDA": "12.6"},
         cwd=tmp_pixi_workspace,
         stdout_contains="from-default",
     )
 
 
+@pytest.mark.parametrize("no_install", [False, True])
 def test_unavailable_custom_capability_does_not_make_task_ambiguous(
-    pixi: Path, tmp_pixi_workspace: Path
+    pixi: Path, tmp_pixi_workspace: Path, no_install: bool
 ) -> None:
     channel = _channel(tmp_pixi_workspace)
     channel.package("custom-package", ["__test_detector_capability >=3"])
@@ -487,7 +509,7 @@ worker = ["worker"]
 """)
     verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
     result = verify_cli_command(
-        [pixi, "run", "--frozen", "hello"],
+        [pixi, "run", "--frozen", *(["--no-install"] if no_install else []), "hello"],
         cwd=tmp_pixi_workspace,
     )
     assert result.stdout.strip() == "from-default"
@@ -573,3 +595,470 @@ which = "echo SELECTED-$SELECTION"
             cwd=tmp_pixi_workspace,
         )
         assert result.stdout.strip() == f"SELECTED-{expected}"
+
+
+def _lock_fallback_workspace(root: Path, *, order: tuple[str, str] = ("fancy", "plain")) -> None:
+    """Neither declaration matches; only the plain alias has runnable locked packages."""
+    channel = _channel(root)
+    platforms = ",\n".join(
+        f'    {{ name = "{name}", platform = "linux-64", cuda = "99" }}' for name in order
+    )
+    (root / "pixi.toml").write_text(f"""
+[workspace]
+name = "lock-fallback"
+channels = ["{channel.url}"]
+platforms = [
+{platforms}
+]
+
+[tasks]
+which = "echo SELECTED-$SELECTION-$SCRIPT_SELECTION"
+
+[target.fancy.dependencies]
+gpu-package = "*"
+
+[target.fancy.tasks]
+fancy-only = "echo WRONG-FANCY-TASK"
+
+[target.fancy.activation]
+scripts = ["fancy.sh"]
+env.SELECTION = "fancy"
+
+[target.plain.dependencies]
+cpu-package = "*"
+
+[target.plain.tasks]
+plain-only = "echo SELECTED-$SELECTION-$SCRIPT_SELECTION"
+
+[target.plain.activation]
+scripts = ["plain.sh"]
+env.SELECTION = "plain"
+""")
+    for name in order:
+        (root / f"{name}.sh").write_text(f"export SCRIPT_SELECTION={name}\n")
+
+
+@pytest.mark.parametrize("command", ["run", "hook-text", "hook-json"])
+def test_frozen_no_install_uses_locked_alias_everywhere(
+    pixi: Path, tmp_pixi_workspace: Path, command: str
+) -> None:
+    _lock_fallback_workspace(tmp_pixi_workspace)
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    lock = tmp_pixi_workspace / "pixi.lock"
+    before = lock.read_bytes()
+    host = {"CONDA_OVERRIDE_CUDA": ""}
+    if command == "run":
+        output = verify_cli_command(
+            [pixi, "run", "--frozen", "--no-install", "plain-only"],
+            cwd=tmp_pixi_workspace,
+            env=host,
+        )
+        assert output.stdout == snapshot("SELECTED-plain-plain\n")
+    elif command == "hook-json":
+        output = verify_cli_command(
+            [pixi, "shell-hook", "--frozen", "--no-install", "--json"],
+            cwd=tmp_pixi_workspace,
+            env=host,
+        )
+        variables = json.loads(output.stdout)["environment_variables"]
+        assert {key: variables[key] for key in ("SELECTION", "SCRIPT_SELECTION")} == snapshot(
+            {"SELECTION": "plain", "SCRIPT_SELECTION": "plain"}
+        )
+    else:
+        output = verify_cli_command(
+            [pixi, "shell-hook", "--frozen", "--no-install", "--shell", "bash"],
+            cwd=tmp_pixi_workspace,
+            env=host,
+        )
+        activated = verify_cli_command(
+            ["bash", "--noprofile", "--norc"],
+            stdin=output.stdout + '\nprintf "SELECTED-%s-%s\\n" "$SELECTION" "$SCRIPT_SELECTION"\n',
+            cwd=tmp_pixi_workspace,
+            env=host,
+        )
+        assert activated.stdout == snapshot("SELECTED-plain-plain\n")
+    assert lock.read_bytes() == before
+    assert not _marker(tmp_pixi_workspace).exists()
+
+
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_frozen_no_install_shell_activates_locked_alias(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    import pty
+
+    _lock_fallback_workspace(tmp_pixi_workspace)
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    before = (tmp_pixi_workspace / "pixi.lock").read_bytes()
+    home = tmp_pixi_workspace / "home"
+    home.mkdir()
+    # The prompt is printed after pixi has sourced its activation script.
+    (home / ".bashrc").write_text("PS1='PLATFORM_TEST_READY> '\n")
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.execve(
+            str(pixi),
+            [
+                str(pixi),
+                "shell",
+                "--frozen",
+                "--no-install",
+                "--manifest-path",
+                str(tmp_pixi_workspace),
+            ],
+            dict(os.environ)
+            | {"CONDA_OVERRIDE_CUDA": "", "SHELL": "/bin/bash", "HOME": str(home), "TERM": "dumb"},
+        )
+    output = b""
+    sent = False
+    exited = False
+    eof = False
+    deadline = time.monotonic() + 30
+    try:
+        while time.monotonic() < deadline:
+            if not select.select([fd], [], [], max(0, deadline - time.monotonic()))[0]:
+                break
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError as error:
+                if error.errno != errno.EIO:
+                    raise
+                eof = True
+                break
+            if not chunk:
+                eof = True
+                break
+            output += chunk
+            if not sent and b"PLATFORM_TEST_READY> " in output:
+                os.write(
+                    fd,
+                    b'printf "ACTIVATED-%s-%s\\n" "$SELECTION" "$SCRIPT_SELECTION"\nexit\n',
+                )
+                sent = True
+        waited, status = os.waitpid(pid, 0 if eof else os.WNOHANG)
+        exited = waited == pid
+        assert exited, output.decode(errors="replace")
+        assert os.waitstatus_to_exitcode(status) == 0, output.decode(errors="replace")
+        assert b"ACTIVATED-plain-plain\r\n" in output
+    finally:
+        if not exited:
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+        os.close(fd)
+    assert (tmp_pixi_workspace / "pixi.lock").read_bytes() == before
+    assert not _marker(tmp_pixi_workspace).exists()
+
+
+def test_lock_selected_tasks_reach_info_run_listing_and_typo_suggestions(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _lock_fallback_workspace(tmp_pixi_workspace)
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    host = {"CONDA_OVERRIDE_CUDA": ""}
+    info = json.loads(
+        verify_cli_command([pixi, "info", "--json"], env=host, cwd=tmp_pixi_workspace).stdout
+    )
+    [environment] = info["environments_info"]
+    assert environment["selected_platform"]["name"] == "plain"
+    assert environment["selected_platform_source"] == "lock_fallback"
+    assert sorted(environment["tasks"]) == snapshot(["plain-only", "which"])
+    verify_cli_command(
+        [pixi, "info"],
+        env=host,
+        cwd=tmp_pixi_workspace,
+        stderr_excludes="Rosetta",
+        stdout_contains=["plain", "lock fallback"],
+    )
+    listing = verify_cli_command([pixi, "run"], env=host, cwd=tmp_pixi_workspace)
+    assert "plain-only" in listing.stdout + listing.stderr
+    assert "fancy-only" not in listing.stdout + listing.stderr
+    verify_cli_command(
+        # spellchecker:off
+        [pixi, "run", "--frozen", "--no-install", "plain-onl"],
+        # spellchecker:on
+        ExitCode.COMMAND_NOT_FOUND,
+        env=host,
+        cwd=tmp_pixi_workspace,
+        stderr_contains="plain-only",
+        stderr_excludes="fancy-only",
+    )
+    assert not _marker(tmp_pixi_workspace).exists()
+
+
+@pytest.mark.parametrize("lock_state", ["missing", "malformed", "newer", "stale", "unreadable"])
+@pytest.mark.parametrize("command", [["info", "--json"], ["task", "list", "--json"], ["run"]])
+def test_unresolved_diagnostics_do_not_require_a_current_lock(
+    pixi: Path, tmp_pixi_workspace: Path, lock_state: str, command: list[str]
+) -> None:
+    _lock_fallback_workspace(tmp_pixi_workspace)
+    lock = tmp_pixi_workspace / "pixi.lock"
+    if lock_state == "malformed":
+        lock.write_text("<<<<<<< HEAD\nnot: [a lock file\n")
+    elif lock_state == "newer":
+        lock.write_text("version: 99999\nenvironments: {}\npackages: []\n")
+    elif lock_state == "unreadable":
+        lock.mkdir()
+    elif lock_state == "stale":
+        verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+        manifest = tmp_pixi_workspace / "pixi.toml"
+        manifest.write_text(manifest.read_text() + '\n[dependencies]\nnot-in-any-channel = "*"\n')
+    before = lock.read_bytes() if lock.is_file() else None
+    output = verify_cli_command(
+        [pixi, *command],
+        cwd=tmp_pixi_workspace,
+        env={"CONDA_OVERRIDE_CUDA": ""},
+        stderr_excludes="Rosetta",
+    )
+    assert "which" in output.stdout + output.stderr
+    if command == ["info", "--json"]:
+        [environment] = json.loads(output.stdout)["environments_info"]
+        if lock_state != "stale":
+            assert environment["selected_platform"] is None
+            assert environment["selected_platform_source"] is None
+    if before is not None:
+        assert lock.read_bytes() == before
+    elif lock_state == "unreadable":
+        assert lock.is_dir()
+    else:
+        assert not lock.exists()
+    assert not _marker(tmp_pixi_workspace).exists()
+
+
+@pytest.mark.parametrize(
+    "command", [["run", "which"], ["shell-hook"], ["shell-hook", "--json"], ["shell"]]
+)
+def test_no_install_rejects_lock_without_runnable_alias(
+    pixi: Path, tmp_pixi_workspace: Path, command: list[str]
+) -> None:
+    _lock_fallback_workspace(tmp_pixi_workspace)
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(manifest.read_text().replace('cpu-package = "*"', 'gpu-package = "*"'))
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    lock = tmp_pixi_workspace / "pixi.lock"
+    before = lock.read_bytes()
+    verify_cli_command(
+        [pixi, command[0], "--frozen", "--no-install", *command[1:]],
+        ExitCode.FAILURE,
+        cwd=tmp_pixi_workspace,
+        env={"CONDA_OVERRIDE_CUDA": ""},
+        stdout_excludes="SELECTED-",
+        stderr_contains="platform",
+    )
+    assert lock.read_bytes() == before
+    assert not _marker(tmp_pixi_workspace).exists()
+
+
+@pytest.mark.parametrize("order", [("fancy", "plain"), ("plain", "fancy")])
+def test_lock_fallback_preserves_alias_declaration_order(
+    pixi: Path, tmp_pixi_workspace: Path, order: tuple[str, str]
+) -> None:
+    _lock_fallback_workspace(tmp_pixi_workspace, order=order)
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(manifest.read_text().replace('gpu-package = "*"', 'cpu-package = "*"'))
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    output = verify_cli_command(
+        [pixi, "run", "--frozen", "--no-install", "which"],
+        cwd=tmp_pixi_workspace,
+        env={"CONDA_OVERRIDE_CUDA": ""},
+    )
+    assert output.stdout == f"SELECTED-{order[0]}-{order[0]}\n"
+
+
+def test_reused_prefix_wins_until_lock_change_rematerializes_it(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _lock_fallback_workspace(tmp_pixi_workspace)
+    verify_cli_command(
+        [pixi, "run", "which"],
+        cwd=tmp_pixi_workspace,
+        env={"CONDA_OVERRIDE_CUDA": ""},
+        stdout_contains="SELECTED-plain-plain",
+    )
+    host = {"CONDA_OVERRIDE_CUDA": "99"}
+    marker = _marker(tmp_pixi_workspace).read_bytes()
+    for args in (["run", "--frozen", "--no-install", "which"], ["run", "--frozen", "which"]):
+        verify_cli_command(
+            [pixi, *args],
+            cwd=tmp_pixi_workspace,
+            env=host,
+            stdout_contains="SELECTED-plain-plain",
+        )
+    info = json.loads(
+        verify_cli_command([pixi, "info", "--json"], cwd=tmp_pixi_workspace, env=host).stdout
+    )
+    assert info["environments_info"][0]["selected_platform_source"] == "installed"
+    assert _marker(tmp_pixi_workspace).read_bytes() == marker
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(manifest.read_text() + '\n[dependencies]\ngpu-package = "*"\n')
+    verify_cli_command(
+        [pixi, "run", "which"],
+        cwd=tmp_pixi_workspace,
+        env=host,
+        stdout_contains="SELECTED-fancy-fancy",
+    )
+    assert (
+        json.loads(_marker(tmp_pixi_workspace).read_text())["resolved_platform"]["name"] == "fancy"
+    )
+    hook = json.loads(
+        verify_cli_command(
+            [pixi, "shell-hook", "--frozen", "--no-install", "--json"],
+            cwd=tmp_pixi_workspace,
+            env=host,
+        ).stdout
+    )
+    assert hook["environment_variables"]["SELECTION"] == "fancy"
+
+
+@pytest.mark.parametrize("dependencies", [False, True])
+def test_empty_platforms_baseline_requires_dependency_free_environment(
+    pixi: Path, tmp_pixi_workspace: Path, dependencies: bool
+) -> None:
+    channel = _channel(tmp_pixi_workspace)
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(
+        f"""
+[workspace]
+name = "empty-platforms"
+channels = ["{channel.url}"]
+platforms = []
+
+[tasks]
+hello = "echo HOST-BASELINE"
+"""
+        + ('\n[dependencies]\ncpu-package = "*"\n' if dependencies else "")
+    )
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    output = verify_cli_command(
+        [pixi, "run", "--frozen", "--no-install", "hello"],
+        ExitCode.FAILURE if dependencies else ExitCode.SUCCESS,
+        cwd=tmp_pixi_workspace,
+    )
+    if dependencies:
+        assert "HOST-BASELINE" not in output.stdout
+    else:
+        assert output.stdout == snapshot("HOST-BASELINE\n")
+        info = json.loads(
+            verify_cli_command([pixi, "info", "--json"], cwd=tmp_pixi_workspace).stdout
+        )
+        assert info["environments_info"][0]["selected_platform_source"] == "host_baseline"
+
+
+def test_explicit_platform_is_checked_for_task_dependency_environment(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    (tmp_pixi_workspace / "pixi.toml").write_text("""
+[workspace]
+name = "per-environment-explicit"
+channels = []
+platforms = [
+    { name = "first", platform = "linux-64" },
+    { name = "second", platform = "linux-64" },
+]
+
+[tasks]
+root = { cmd = "echo ROOT-RAN", depends-on = [{ task = "child", environment = "worker" }] }
+
+[feature.worker]
+platforms = ["second"]
+
+[feature.worker.tasks]
+child = "echo CHILD-RAN"
+
+[environments]
+worker = ["worker"]
+""")
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    verify_cli_command(
+        [pixi, "run", "--frozen", "--no-install", "--platform", "first", "root"],
+        ExitCode.FAILURE,
+        cwd=tmp_pixi_workspace,
+        stderr_contains=["first", "worker"],
+        stdout_excludes=["ROOT-RAN", "CHILD-RAN"],
+    )
+    verify_cli_command(
+        [pixi, "run", "--frozen", "--no-install", "--platform", "second", "root"],
+        cwd=tmp_pixi_workspace,
+        stdout_contains=["ROOT-RAN", "CHILD-RAN"],
+    )
+
+
+@pytest.mark.parametrize("mode", ["default", "locked", "frozen"])
+@pytest.mark.parametrize("command", [["run", "which"], ["shell-hook", "--json"]])
+def test_no_install_preserves_lock_mode_semantics(
+    pixi: Path, tmp_pixi_workspace: Path, mode: str, command: list[str]
+) -> None:
+    _lock_fallback_workspace(tmp_pixi_workspace)
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    lock = tmp_pixi_workspace / "pixi.lock"
+    before = lock.read_bytes()
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(manifest.read_text().replace('gpu-package = "*"', 'cpu-package = "*"'))
+    output = verify_cli_command(
+        [
+            pixi,
+            command[0],
+            "--no-install",
+            *([] if mode == "default" else [f"--{mode}"]),
+            *command[1:],
+        ],
+        ExitCode.FAILURE if mode == "locked" else ExitCode.SUCCESS,
+        cwd=tmp_pixi_workspace,
+        env={"CONDA_OVERRIDE_CUDA": ""},
+    )
+    if mode == "default":
+        assert lock.read_bytes() != before
+        assert "fancy" in output.stdout
+    else:
+        assert lock.read_bytes() == before
+        if mode == "frozen":
+            assert "plain" in output.stdout
+    assert not _marker(tmp_pixi_workspace).exists()
+
+
+def test_lock_selected_target_task_is_found_in_its_named_feature(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _lock_fallback_workspace(tmp_pixi_workspace)
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(
+        manifest.read_text()
+        .replace("[target.plain.tasks]", "[feature.tools.target.plain.tasks]")
+        .replace("[target.fancy.tasks]", "[feature.tools.target.fancy.tasks]")
+        + '\n[environments]\ntools = ["tools"]\n'
+    )
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    host = {"CONDA_OVERRIDE_CUDA": ""}
+    output = verify_cli_command(
+        [pixi, "run", "--frozen", "--no-install", "plain-only"],
+        cwd=tmp_pixi_workspace,
+        env=host,
+    )
+    assert output.stdout == snapshot("SELECTED-plain-plain\n")
+    tasks = json.loads(
+        verify_cli_command(
+            [pixi, "task", "list", "--json"], cwd=tmp_pixi_workspace, env=host
+        ).stdout
+    )
+    tools = next(environment for environment in tasks if environment["environment"] == "tools")
+    feature = next(feature for feature in tools["features"] if feature["name"] == "tools")
+    assert [task["name"] for task in feature["tasks"]] == snapshot(["plain-only"])
+    assert not _marker(tmp_pixi_workspace, "tools").exists()
+
+
+def test_manifest_export_without_lock_keeps_dependency_specifications(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    (tmp_pixi_workspace / "pixi.toml").write_text("""
+[workspace]
+name = "unlocked-export"
+channels = []
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.12"
+""")
+    output = verify_cli_command(
+        [pixi, "workspace", "export", "conda-environment"], cwd=tmp_pixi_workspace
+    )
+    assert yaml.safe_load(output.stdout)["dependencies"] == ["python >=3.12"]
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()

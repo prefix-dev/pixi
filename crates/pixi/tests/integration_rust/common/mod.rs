@@ -688,7 +688,7 @@ impl PixiControl {
             .transpose()?;
 
         // Ensure the lock file is up-to-date
-        let lock_file = project
+        let mut lock_file = project
             .update_lock_file(
                 None,
                 UpdateLockFileOptions {
@@ -699,21 +699,28 @@ impl PixiControl {
             .await?
             .0;
 
-        // Create a task graph from the command line arguments.
-        let fallback_platform =
-            pixi_manifest::PixiPlatform::from_subdir(Subdir::current().unwrap_or(Subdir::NoArch));
-        let search_env_platform = explicit_environment
-            .as_ref()
-            .and_then(|e| e.best_declared_platform())
-            .unwrap_or(&fallback_platform);
-        let search_env = SearchEnvironments::from_opt_env(
+        lock_file.set_explicit_target_platform(args.platform.clone());
+        let mut search_env = SearchEnvironments::from_opt_env(
             &project,
             explicit_environment.clone(),
-            Some(search_env_platform),
+            args.platform.clone(),
+            async |environment| {
+                lock_file
+                    .resolve_platform(
+                        environment,
+                        if args.lock_and_install_config.no_install() {
+                            pixi_core::workspace::platform_selection::PrefixPolicy::Reuse
+                        } else {
+                            pixi_core::workspace::platform_selection::PrefixPolicy::Replace
+                        },
+                        UpdateMode::Revalidate,
+                    )
+                    .await
+            },
         );
         let task_graph = TaskGraph::from_cmd_args(
             &project,
-            &search_env,
+            &mut search_env,
             args.task,
             false,
             if args.executable {
@@ -727,34 +734,47 @@ impl PixiControl {
         .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.
-        let mut task_env = None;
+        let mut task_envs = std::collections::HashMap::new();
         let mut result = RunOutput::default();
         for task_id in task_graph.topological_order() {
-            let task = ExecutableTask::from_task_graph(&task_graph, task_id, None);
+            let resolved = &search_env.platforms[task_graph[task_id].run_environment.name()];
+            let task =
+                ExecutableTask::from_task_graph(&task_graph, task_id, None, resolved.platform());
+            if !task.task().is_executable() {
+                continue;
+            }
 
-            // Construct the task environment if not already created.
-            let task_env = match task_env.as_ref() {
-                None => {
-                    lock_file
-                        .prefix(
-                            &task.run_environment,
-                            UpdateMode::Revalidate,
-                            &ReinstallPackages::default(),
-                            &InstallFilter::default(),
-                        )
-                        .await?;
+            let task_env = match task_envs.entry(task.run_environment.name().clone()) {
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    if !args.lock_and_install_config.no_install() {
+                        lock_file
+                            .prefix(
+                                &task.run_environment,
+                                resolved,
+                                UpdateMode::Revalidate,
+                                &ReinstallPackages::default(),
+                                &InstallFilter::default(),
+                            )
+                            .await?;
+                    }
+                    pixi_core::workspace::virtual_packages::verify_resolved_platform(
+                        &task.run_environment,
+                        resolved,
+                    )?;
+                    task.run_environment
+                        .emit_emulation_warning(resolved.platform());
                     let env = get_task_env(
                         &task.run_environment,
-                        &task.platform,
+                        resolved.platform(),
                         args.clean_env,
-                        None,
+                        Some(lock_file.as_lock_file()),
                         false,
                         false,
                     )
                     .await?;
-                    task_env.insert(env)
+                    entry.insert(env)
                 }
-                Some(task_env) => task_env,
+                std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
             };
 
             let task_env = task_env

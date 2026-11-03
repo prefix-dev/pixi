@@ -13,16 +13,18 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_manifest::{
-    EnvironmentName, FeatureName, PixiPlatformName,
+    EnvironmentName, FeatureName, HasFeaturesIter, PixiPlatform, PixiPlatformName,
     task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, TemplateString, quote},
 };
-use rattler_lock::LockFile;
 use serde::Serialize;
 use serde_with::serde_as;
 
 use pixi_core::{
     Workspace,
-    workspace::{Environment, EnvironmentFromNameError, virtual_packages::EnvironmentRunnability},
+    workspace::{
+        Environment, EnvironmentFromNameError, platform_selection::resolve_diagnostic_platform,
+        virtual_packages::EnvironmentRunnability,
+    },
 };
 
 use crate::{
@@ -422,7 +424,7 @@ async fn list_tasks(
         .transpose()?;
 
     if args.json {
-        return print_tasks_json(workspace_ctx.workspace(), environment);
+        return print_tasks_json(workspace_ctx.workspace(), environment).await;
     }
 
     let tasks_per_env = workspace_ctx.list_tasks(environment).await?;
@@ -501,20 +503,53 @@ async fn remove_tasks(
     Ok(())
 }
 
-fn print_tasks_json(
+async fn print_tasks_json(
     project: &Workspace,
     environment: Option<EnvironmentName>,
 ) -> miette::Result<()> {
-    let lock_file = LockFile::from_path(&project.lock_file_path()).ok();
-    let env_feature_task_map: Vec<EnvTasks> = match environment {
-        Some(name) => {
-            let env = project
+    let environments = match environment {
+        Some(name) => vec![
+            project
                 .environment(&name)
-                .ok_or(EnvironmentFromNameError::Unknown(name))?;
-            vec![EnvTasks::new(&env, lock_file.as_ref())]
-        }
-        None => build_env_feature_task_map(project, lock_file.as_ref()),
+                .ok_or(EnvironmentFromNameError::Unknown(name))?,
+        ],
+        None => project
+            .environments()
+            .into_iter()
+            .sorted_by_key(|env| env.name().to_string())
+            .collect(),
     };
+    let mut selections: Vec<_> = environments
+        .iter()
+        .map(|env| resolve_diagnostic_platform(env, None))
+        .collect();
+    if selections.iter().any(Option::is_none) {
+        let lock = match project.load_lock_file().await {
+            Ok(result) => match result.into_lock_file() {
+                Ok(lock) => Some(lock),
+                Err(error) => {
+                    tracing::warn!("could not load lock file for task listing: {error}");
+                    None
+                }
+            },
+            Err(error) => {
+                tracing::warn!("could not load lock file for task listing: {error}");
+                None
+            }
+        };
+        if let Some(lock) = lock.as_ref() {
+            for (env, selection) in environments.iter().zip(&mut selections) {
+                if selection.is_none() {
+                    *selection = resolve_diagnostic_platform(env, Some(lock));
+                }
+            }
+        }
+    }
+    let env_feature_task_map: Vec<_> = environments
+        .iter()
+        .zip(&selections)
+        .map(|(env, selection)| EnvTasks::new(env, selection.as_ref().map(|s| s.platform())))
+        .collect();
 
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");
@@ -522,15 +557,6 @@ fn print_tasks_json(
         .into_diagnostic()?;
 
     Ok(())
-}
-
-fn build_env_feature_task_map(project: &Workspace, lock_file: Option<&LockFile>) -> Vec<EnvTasks> {
-    project
-        .environments()
-        .iter()
-        .sorted_by_key(|env| env.name().to_string())
-        .map(|env| EnvTasks::new(env, lock_file))
-        .collect()
 }
 
 #[derive(Serialize, Debug)]
@@ -542,11 +568,26 @@ struct EnvTasks {
 }
 
 impl EnvTasks {
-    fn new(env: &Environment, lock_file: Option<&LockFile>) -> Self {
+    fn new(env: &Environment, platform: Option<&PixiPlatform>) -> Self {
         let mut tasks = Vec::new();
         let mut features = Vec::new();
-        let platform = env.installed_or_selected_platform(lock_file);
-        for (feature_name, task_map) in env.feature_tasks(platform).iter() {
+        let feature_tasks = match platform {
+            Some(platform) => env.feature_tasks(platform),
+            None => env
+                .features()
+                .map(|feature| {
+                    (
+                        &feature.name,
+                        feature
+                            .targets
+                            .resolve(None)
+                            .flat_map(|target| target.tasks.iter())
+                            .collect(),
+                    )
+                })
+                .collect(),
+        };
+        for (feature_name, task_map) in &feature_tasks {
             if feature_name.is_environment() {
                 tasks.extend(serializable_tasks(task_map));
             } else {

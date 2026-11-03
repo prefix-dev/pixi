@@ -11,6 +11,7 @@ use pep508_rs::{ExtraName, MarkerEnvironment, Requirement};
 use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_core::lock_file::{UpdateLockFileOptions, resolve_lock_platform_for};
 use pixi_core::workspace::Environment;
+use pixi_core::workspace::platform_selection::{PrefixPolicy, resolve_operational_platform};
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest as _, PixiPlatform, PixiPlatformName};
 use pixi_uv_conversions::to_marker_environment;
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -85,9 +86,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = workspace
         .environment_from_name_or_env_var(args.environment)
         .wrap_err("Environment not found")?;
-    workspace
-        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
-        .await?;
 
     let lock_file_usage = script_lock_file_usage(
         args.lock_file_update_config.lock_file_usage()?,
@@ -113,36 +111,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_lock_file();
     drop(clear_progress);
 
-    let workspace_platforms = (&workspace)
-        .workspace_manifest()
-        .workspace
-        .platforms
-        .clone();
-    let platform = match args.platform {
-        Some(name) => resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
-            .into_iter()
-            .next()
-            .expect("resolve_platforms preserves length"),
-        None => environment
-            .installed_or_selected_platform(Some(&lock_file))
-            .cloned()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "no platform supported by environment '{}' matches the current system",
-                    environment.name()
-                )
-            })?,
+    let workspace_platforms = &(&workspace).workspace_manifest().workspace.platforms;
+    let explicit_platform = args
+        .platform
+        .map(|name| resolve_platforms(workspace_platforms, std::slice::from_ref(&name)))
+        .transpose()?
+        .and_then(|platforms| platforms.into_iter().next());
+    if explicit_platform.is_none() && environment.installed_resolved_platform().is_none() {
+        workspace
+            .refresh_locked_environment_host(&environment, &lock_file)
+            .await?;
+    }
+    let selection;
+    let platform = match explicit_platform.as_ref() {
+        Some(platform) => platform,
+        None => {
+            selection =
+                resolve_operational_platform(&environment, &lock_file, None, PrefixPolicy::Reuse)?;
+            selection.platform()
+        }
     };
     let locked_deps = lock_file
         .environment(environment.name().as_str())
         .and_then(|env| {
-            let p = resolve_lock_platform_for(&lock_file, &platform)?;
+            let p = resolve_lock_platform_for(&lock_file, platform)?;
             env.packages(p).map(Vec::from_iter)
         })
         .unwrap_or_default();
 
-    let dep_map = DependencyMapBuilder::new(&environment, &platform, &locked_deps).build();
-    let direct_deps = direct_dependencies(&environment, &platform, &dep_map);
+    let dep_map = DependencyMapBuilder::new(&environment, platform, &locked_deps).build();
+    let direct_deps = direct_dependencies(&environment, platform, &dep_map);
 
     if !environment.is_default() {
         eprintln!("Environment: {}", environment.name().fancy_display());

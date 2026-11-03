@@ -424,7 +424,11 @@ def test_unreadable_requirement_costs_only_that_requirement(
             "requirements": ["__cuda >=99999999999999999999", "__cuda >=12"],
         },
     )
-    _run(pixi, manifest, ExitCode.FAILURE, stderr_contains="__cuda >=12")
+    verify_cli_command(
+        [pixi, "run", "--frozen", "--no-install", "--manifest-path", manifest, "hello"],
+        ExitCode.FAILURE,
+        stderr_contains="__cuda >=12",
+    )
     # The marker survives, so the readable requirement is still enforced next time.
     assert "requirements" in _read_marker(tmp_pixi_workspace)["minimum_supported_platform"]
 
@@ -468,7 +472,8 @@ def test_refusal_omits_an_override_the_host_platform_ignores(
         },
     )
     output = verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "hello"], ExitCode.FAILURE
+        [pixi, "run", "--frozen", "--no-install", "--manifest-path", manifest, "hello"],
+        ExitCode.FAILURE,
     )
     assert "CONDA_OVERRIDE" not in output.stderr, output.stderr
 
@@ -676,7 +681,10 @@ packages: []
 
 
 @requires_cuda_channel
-def test_locked_cuda_requirement_skips_declared_match(pixi: Path, tmp_pixi_workspace: Path) -> None:
+@pytest.mark.parametrize("no_install", [False, True])
+def test_locked_cuda_requirement_skips_declared_match(
+    pixi: Path, tmp_pixi_workspace: Path, no_install: bool
+) -> None:
     channel = DetectorChannel(tmp_pixi_workspace / "channel")
     channel.package("gpu", ["__cuda >=12"])
     channel.package("cpu", [])
@@ -708,7 +716,16 @@ hello = "echo selected-gpu"
     lock = tmp_pixi_workspace / "pixi.lock"
     lock.write_text(lock.read_text().replace("__cuda >=12", "__cuda >=12.4"))
     verify_cli_command(
-        [pixi, "-v", "run", "--frozen", "--manifest-path", manifest, "hello"],
+        [
+            pixi,
+            "-v",
+            "run",
+            "--frozen",
+            *(["--no-install"] if no_install else []),
+            "--manifest-path",
+            manifest,
+            "hello",
+        ],
         ExitCode.SUCCESS,
         env={"CONDA_OVERRIDE_CUDA": "12.2"},
         stdout_contains="selected-cpu",
@@ -782,6 +799,17 @@ def test_optional_cuda_constraint_at_install_and_run(
     )
     shutil.rmtree(tmp_pixi_workspace / ".pixi" / "envs")
     verify_cli_command(
+        [pixi, "run", "--frozen", "--no-install", "--manifest-path", manifest, "hello"],
+        ExitCode.FAILURE if cuda == "11.8" else ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": cuda},
+        **(
+            {"stderr_contains": "__cuda >=12"}
+            if cuda == "11.8"
+            else {"stdout_contains": "TASK-RAN"}
+        ),
+    )
+    assert not _marker(tmp_pixi_workspace).exists()
+    verify_cli_command(
         [pixi, "install", "--frozen", "--manifest-path", manifest],
         ExitCode.FAILURE if cuda == "11.8" else ExitCode.SUCCESS,
         env={"CONDA_OVERRIDE_CUDA": cuda},
@@ -824,7 +852,10 @@ hello = "echo selected-amd"
 
 
 @pytest.mark.skipif(CURRENT_PLATFORM != "linux-64", reason="uses linux wheel tags")
-def test_incompatible_locked_wheel_skips_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+@pytest.mark.parametrize("no_install", [False, True])
+def test_incompatible_locked_wheel_skips_platform(
+    pixi: Path, tmp_pixi_workspace: Path, no_install: bool
+) -> None:
     channel = DetectorChannel(tmp_pixi_workspace / "channel")
     channel.package("python", [], version="3.11.0")
     manifest = _write(
@@ -856,7 +887,16 @@ hello = "echo selected-wheel"
     lock["packages"].append({"pypi": wheel, "name": "incompatible", "version": "1.0"})
     lock_path.write_text(yaml.safe_dump(lock))
     verify_cli_command(
-        [pixi, "-v", "run", "--frozen", "--manifest-path", manifest, "hello"],
+        [
+            pixi,
+            "-v",
+            "run",
+            "--frozen",
+            *(["--no-install"] if no_install else []),
+            "--manifest-path",
+            manifest,
+            "hello",
+        ],
         stdout_contains="selected-fallback",
         stderr_contains="skipping platform 'wheel'",
     )

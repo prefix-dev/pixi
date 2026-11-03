@@ -693,25 +693,36 @@ impl WorkspaceMut {
             && default_environment_is_affected
         {
             let default_environment = self.workspace().default_environment();
-            // The lock file is solved for every declared platform, but a prefix
-            // can only be materialised for the current system. When none of the
-            // environment's platforms match this machine (e.g. a `__cuda`
-            // platform on a GPU-less host) just skip the install -- the add
-            // still succeeds and the lock file is up to date.
-            if default_environment.best_declared_platform().is_some() {
-                updated_lock_file
-                    .prefix(
-                        &default_environment,
-                        UpdateMode::Revalidate,
-                        &ReinstallPackages::default(),
-                        &crate::environment::InstallFilter::default(),
-                    )
-                    .await?;
-            } else {
-                tracing::info!(
-                    "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
-                    default_environment.name().fancy_display()
-                );
+            // Adding dependencies remains useful on hosts that cannot run the environment.
+            match updated_lock_file
+                .resolve_platform(
+                    &default_environment,
+                    super::platform_selection::PrefixPolicy::Replace,
+                    UpdateMode::Revalidate,
+                )
+                .await
+            {
+                Ok(selection) => {
+                    default_environment.emit_emulation_warning(selection.platform());
+                    updated_lock_file
+                        .prefix(
+                            &default_environment,
+                            &selection,
+                            UpdateMode::Revalidate,
+                            &ReinstallPackages::default(),
+                            &crate::environment::InstallFilter::default(),
+                        )
+                        .await?;
+                }
+                Err(crate::lock_file::UpdatePrefixError::PlatformResolution(
+                    super::platform_selection::PlatformResolutionError::UnsupportedPlatform(_),
+                )) => {
+                    tracing::info!(
+                        "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
+                        default_environment.name().fancy_display()
+                    );
+                }
+                Err(error) => return Err(error.into()),
             }
         }
 

@@ -98,9 +98,19 @@ async fn revalidate_locked_prefix(workspace: &Workspace, lock_file: &LockFile) {
         )
         .await
         .unwrap();
+    let environment = workspace.default_environment();
+    let selection = derived
+        .resolve_platform(
+            &environment,
+            pixi_core::workspace::platform_selection::PrefixPolicy::Replace,
+            UpdateMode::Revalidate,
+        )
+        .await
+        .unwrap();
     derived
         .prefix(
-            &workspace.default_environment(),
+            &environment,
+            &selection,
             UpdateMode::Revalidate,
             &ReinstallPackages::default(),
             &InstallFilter::default(),

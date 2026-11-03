@@ -39,7 +39,7 @@ use pixi_install_pypi::{
 use pixi_manifest::{
     ChannelPriority, ChannelPriorityCombinationError, EnvironmentName, ExcludeNewerError,
     FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    platform::{VirtualPackageRecords, host::platform_override_is_foreign},
+    platform::VirtualPackageRecords,
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, LockFileResolverError, PixiRecord, UnresolvedPixiRecord};
@@ -81,22 +81,16 @@ use crate::{
         read_environment_file, write_environment_file,
     },
     lock_file::{
-        self,
-        reporter::SolveProgressBar,
-        virtual_packages::{
-            MachineValidationError, UnknownNames, compute_required_virtual_package_specs,
-            validate_system_meets_environment_requirements,
-        },
+        self, reporter::SolveProgressBar, virtual_packages::compute_required_virtual_package_specs,
     },
     workspace::{
         CommandDispatcherBuilderError, Environment, EnvironmentVars, HasWorkspaceRef,
-        PlatformSelection,
         errors::{UnsupportedPlatformError, VariantsError},
         get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        virtual_packages::{
-            VerifyCurrentPlatformError, environment_has_dependencies_for_platform,
-            verify_current_platform_can_run_environment,
+        platform_selection::{
+            PlatformResolutionError, PrefixPolicy, ResolvedPlatform, explicit_platform,
+            resolve_operational_platform,
         },
     },
 };
@@ -733,36 +727,12 @@ pub enum UpdatePrefixError {
     #[diagnostic(transparent)]
     HostProbe(#[from] crate::host::HostProbeError),
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PlatformResolution(#[from] PlatformResolutionError),
+
     #[error("the lock file is not up-to-date with the requested environment '{0}'")]
     LockFileMissingEnv(EnvironmentName),
-
-    #[error("no platform supported by environment '{0}' matches the current system")]
-    NoMatchingPlatform(EnvironmentName),
-
-    #[error("cannot install environment '{environment}'")]
-    #[diagnostic(forward(source))]
-    PlatformUnsupported {
-        environment: EnvironmentName,
-        #[source]
-        source: Cause<VerifyCurrentPlatformError>,
-    },
-
-    #[error("cannot install environment '{environment}'")]
-    #[diagnostic(forward(source))]
-    RequirementsUnmet {
-        environment: EnvironmentName,
-        #[source]
-        source: Cause<MachineValidationError>,
-    },
-
-    #[error("the lock file has no entry for platform '{platform}' in environment '{environment}'")]
-    #[diagnostic(help(
-        "Run `pixi lock` to resolve it for this platform. Without `--frozen` or `--locked`, pixi updates the lock file itself."
-    ))]
-    MissingLockPlatform {
-        platform: PixiPlatformName,
-        environment: EnvironmentName,
-    },
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -893,27 +863,16 @@ pub struct UpdatedPrefix {
     pub prefix: Prefix,
 }
 
-enum InstallTarget {
-    Explicit(PixiPlatformName),
-    Installed(PixiPlatformName),
-}
-
-impl InstallTarget {
-    fn name(&self) -> &PixiPlatformName {
-        match self {
-            Self::Explicit(name) | Self::Installed(name) => name,
-        }
-    }
-}
-
 /// A struct that holds the lock file and any potential derived data that was
 /// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
     pub workspace: &'p Workspace,
 
-    /// The selected install platform and whether the user explicitly chose it.
-    /// Only explicit targets bypass host requirement validation.
-    target_platform: Option<InstallTarget>,
+    /// A user-requested target; automatic selection remains per environment.
+    target_platform: Option<PixiPlatformName>,
+
+    /// Prefixes whose freshness was established before platform resolution.
+    cached_prefixes: DashMap<EnvironmentName, ()>,
 
     /// The lock file
     ///
@@ -985,6 +944,7 @@ impl<'p> LockFileDerivedData<'p> {
         Self {
             workspace,
             target_platform: None,
+            cached_prefixes: Default::default(),
             lock_file,
             package_cache,
             updated_conda_prefixes: Default::default(),
@@ -1000,12 +960,7 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Select a user-requested platform, bypassing host requirement validation.
     pub fn set_explicit_target_platform(&mut self, platform: Option<PixiPlatformName>) {
-        self.target_platform = platform.map(InstallTarget::Explicit);
-    }
-
-    /// Select an installed platform while retaining host requirement validation.
-    pub fn set_installed_target_platform(&mut self, platform: Option<PixiPlatformName>) {
-        self.target_platform = platform.map(InstallTarget::Installed);
+        self.target_platform = platform;
     }
 
     /// Returns a resolver for the current lock file, building it on first
@@ -1112,25 +1067,53 @@ impl<'p> LockFileDerivedData<'p> {
         &self.lock_file
     }
 
-    /// Explicit target, declaration match, installed platform, then locked-only fallback.
-    fn install_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
-        if let Some(target) = self.target_platform.as_ref() {
-            return environment
-                .named_or_selected_platform(Some(target.name()), Some(&self.lock_file));
+    /// Resolve once, checking prefix reuse before preparing host detectors.
+    pub async fn resolve_platform(
+        &self,
+        environment: &Environment<'p>,
+        prefix_policy: PrefixPolicy,
+        update_mode: UpdateMode,
+    ) -> Result<ResolvedPlatform<'p>, UpdatePrefixError> {
+        let explicit = self.target_platform.as_ref();
+        let candidate = match explicit {
+            Some(name) => {
+                Some(explicit_platform(environment, name).map_err(PlatformResolutionError::from)?)
+            }
+            None => environment
+                .installed_resolved_platform()
+                .filter(|platform| environment.platforms().contains(platform.name())),
+        };
+        let cached =
+            if prefix_policy == PrefixPolicy::Replace && update_mode == UpdateMode::QuickValidate {
+                candidate.is_some_and(|platform| {
+                    let Some(locked_environment) =
+                        self.lock_file.environment(environment.name().as_str())
+                    else {
+                        return false;
+                    };
+                    let hash =
+                        LockedEnvironmentHash::from_environment(locked_environment, Some(platform));
+                    self.prefix_is_current(environment, platform, &hash)
+                })
+            } else {
+                false
+            };
+        let policy = if prefix_policy == PrefixPolicy::Reuse || cached {
+            PrefixPolicy::Reuse
+        } else {
+            PrefixPolicy::Replace
+        };
+        if explicit.is_none() && !(policy == PrefixPolicy::Reuse && candidate.is_some()) {
+            self.workspace
+                .refresh_locked_environment_host(environment, &self.lock_file)
+                .await?;
         }
-        let selection = environment
-            .select_platform(&environment.host(), Some(&self.lock_file))
-            .ok();
-        if let Some(PlatformSelection::Declared { platform, .. }) = selection {
-            return Some(platform);
+        let selected =
+            resolve_operational_platform(environment, &self.lock_file, explicit, policy)?;
+        if cached {
+            self.cached_prefixes.insert(environment.name().clone(), ());
         }
-        environment
-            .installed_resolved_platform()
-            .filter(|platform| {
-                let declared = environment.platforms();
-                declared.is_empty() || declared.contains(platform.name())
-            })
-            .or_else(|| selection.map(|selection| selection.platform()))
+        Ok(selected)
     }
 
     /// The platform data recorded in the `conda-meta/pixi` marker file for the
@@ -1159,97 +1142,29 @@ impl<'p> LockFileDerivedData<'p> {
     pub async fn prefix(
         &self,
         environment: &Environment<'p>,
+        selection: &ResolvedPlatform<'p>,
         update_mode: UpdateMode,
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
     ) -> Result<Prefix, UpdatePrefixError> {
-        // An installed prefix that matches the lock file runs without detecting
-        // the host. Detector-provided names are unknown then and not checked.
-        if update_mode == UpdateMode::QuickValidate
-            && let Some(platform) = self.reusable_prefix_platform(environment)
-            && let Some(locked_environment) =
-                self.lock_file.environment(environment.name().as_str())
+        if matches!(selection, ResolvedPlatform::HostBaseline(_))
+            || self
+                .lock_file
+                .environment(environment.name().as_str())
+                .is_none()
         {
-            let hash = LockedEnvironmentHash::from_environment(locked_environment, Some(platform));
-            if let Some(prefix) = self.cached_prefix(environment, platform, &hash) {
-                if !matches!(self.target_platform, Some(InstallTarget::Explicit(_)))
-                    && !platform_override_is_foreign()
-                {
-                    validate_system_meets_environment_requirements(
-                        &self.lock_file,
-                        platform,
-                        environment.name(),
-                        &environment.host_for_cached_run(),
-                        UnknownNames::Unchecked,
-                    )
-                    .map_err(|source| {
-                        UpdatePrefixError::RequirementsUnmet {
-                            environment: environment.name().clone(),
-                            source: Cause::new(source),
-                        }
-                    })?;
-                }
-                return Ok(prefix);
-            }
+            return Ok(Prefix::new(environment.dir()));
         }
-
-        self.workspace
-            .refresh_locked_environment_host(environment, &self.lock_file)
-            .await?;
-
-        // A current prefix hash says nothing about this machine's capabilities.
-        // Validate locked requirements before either the cached or install path.
-        let selected_platform = self.install_platform(environment).ok_or_else(|| {
-            match verify_current_platform_can_run_environment(environment, Some(&self.lock_file)) {
-                Err(source) => UpdatePrefixError::PlatformUnsupported {
-                    environment: environment.name().clone(),
-                    source: Cause::new(source),
-                },
-                Ok(()) => UpdatePrefixError::NoMatchingPlatform(environment.name().clone()),
-            }
-        })?;
-
-        // Check if the prefix is already up-to-date by validating the hash with the
-        // environment file
+        if update_mode == UpdateMode::QuickValidate
+            && self.cached_prefixes.contains_key(environment.name())
+        {
+            return Ok(Prefix::new(environment.dir()));
+        }
+        let selected_platform = selection.platform();
         let hash = LockedEnvironmentHash::from_environment(
             self.locked_env(environment)?,
             Some(selected_platform),
         );
-        let cached = (update_mode == UpdateMode::QuickValidate)
-            .then(|| self.cached_prefix(environment, selected_platform, &hash))
-            .flatten();
-
-        // Explicit overrides may intentionally target a foreign machine. A
-        // current prefix keeps running where a detector could not be asked,
-        // while a new install needs every value it depends on.
-        if !matches!(self.target_platform, Some(InstallTarget::Explicit(_)))
-            && !platform_override_is_foreign()
-        {
-            let unknown = if cached.is_some() {
-                UnknownNames::Unchecked
-            } else {
-                UnknownNames::Absent
-            };
-            let host = if cached.is_some() {
-                environment.host_for_cached_run()
-            } else {
-                environment.host()
-            };
-            validate_system_meets_environment_requirements(
-                &self.lock_file,
-                selected_platform,
-                environment.name(),
-                &host,
-                unknown,
-            )
-            .map_err(|source| UpdatePrefixError::RequirementsUnmet {
-                environment: environment.name().clone(),
-                source: Cause::new(source),
-            })?;
-        }
-        if let Some(prefix) = cached {
-            return Ok(prefix);
-        }
 
         // Get the up-to-date prefix
         let UpdatedPrefix { prefix } = self
@@ -1311,34 +1226,19 @@ impl<'p> LockFileDerivedData<'p> {
         Ok(prefix)
     }
 
-    /// The platform an installed prefix can be reused for without detecting
-    /// the host: the selected platform, or the one it was installed for.
-    fn reusable_prefix_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
-        match self.target_platform.as_ref().map(InstallTarget::name) {
-            Some(name) => environment.named_or_selected_platform(Some(name), Some(&self.lock_file)),
-            None => environment
-                .installed_resolved_platform()
-                .filter(|platform| {
-                    let declared = environment.platforms();
-                    declared.is_empty() || declared.contains(platform.name())
-                }),
-        }
-    }
-
-    /// The installed prefix of `environment` if its environment file matches
-    /// `hash`, judging source packages by the selected `platform`.
-    fn cached_prefix(
+    /// Whether the installed prefix matches `hash`, including source freshness.
+    fn prefix_is_current(
         &self,
         environment: &Environment<'p>,
-        platform: &'p PixiPlatform,
+        platform: &PixiPlatform,
         hash: &LockedEnvironmentHash,
-    ) -> Option<Prefix> {
+    ) -> bool {
         let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) else {
             tracing::debug!(
                 "Environment file not found or parsable for '{}'",
                 environment.name().fancy_display()
             );
-            return None;
+            return false;
         };
 
         if environment_file.environment_lock_file_hash == *hash {
@@ -1376,17 +1276,17 @@ impl<'p> LockFileDerivedData<'p> {
                     "Environment '{}' is up-to-date with lock file hash",
                     environment.name().fancy_display()
                 );
-                return Some(Prefix::new(environment.dir()));
+                return true;
             }
         }
-        None
+        false
     }
 
     /// Returns the up-to-date prefix for the given environment.
     async fn update_prefix(
         &self,
         environment: &Environment<'p>,
-        best_declared_platform: &'p PixiPlatform,
+        best_declared_platform: &PixiPlatform,
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
     ) -> Result<UpdatedPrefix, UpdatePrefixError> {
@@ -1413,22 +1313,6 @@ impl<'p> LockFileDerivedData<'p> {
                     platform.name(),
                     environment.workspace_manifest(),
                 );
-                // No row for the platform means nothing to install, which is
-                // right whenever the environment declares nothing for it: all
-                // dependencies sit under another `[target]`, or the lock file
-                // only carries rows for platforms that had packages. When it
-                // does declare something, an empty prefix would silently hand
-                // the run whatever is on `PATH`. Mostly reached through
-                // `--frozen`, which consumes the lock file without checking
-                // that it still covers this machine.
-                if lock_platform.is_none()
-                    && environment_has_dependencies_for_platform(environment, platform)
-                {
-                    return Err(UpdatePrefixError::MissingLockPlatform {
-                        platform: platform.name().clone(),
-                        environment: environment.name().clone(),
-                    });
-                }
                 let result = subset.filter(lock_platform.and_then(|p| locked_env.packages(p)))?;
                 let packages = result.install;
                 let ignored = result.ignore;
@@ -1590,6 +1474,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                     let lazy_env_vars = LazyPixiEnvironmentVars {
                         environment: environment.clone(),
+                        platform,
                     };
                     let context_config = PyPIContextConfig {
                         uv_context: &uv_context,
@@ -1637,7 +1522,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn conda_prefix(
         &self,
         environment: &Environment<'p>,
-        pixi_platform: &'p PixiPlatform,
+        pixi_platform: &PixiPlatform,
         reinstall_packages: Option<HashSet<PackageName>>,
         ignore_packages: Option<HashSet<PackageName>>,
     ) -> Result<CondaPrefixUpdated, UpdatePrefixError> {
@@ -1742,11 +1627,12 @@ impl<'p> LockFileDerivedData<'p> {
 }
 
 /// A trait to lazily evaluate the environment variables for a given pixi environment.
-struct LazyPixiEnvironmentVars<'p> {
+struct LazyPixiEnvironmentVars<'p, 'a> {
     environment: Environment<'p>,
+    platform: &'a PixiPlatform,
 }
 
-impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
+impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_, '_> {
     fn resolve(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<HashMap<String, String>, LazyEnvVarsError>> + '_>> {
@@ -1756,7 +1642,7 @@ impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
             let result = get_activated_environment_variables(
                 workspace.env_vars(),
                 &environment,
-                &environment.activation_platform(),
+                self.platform,
                 CurrentEnvVarBehavior::Exclude,
                 None,
                 false,
@@ -3154,6 +3040,7 @@ impl<'p> UpdateContext<'p> {
         Ok(LockFileDerivedData {
             workspace: project,
             target_platform: None,
+            cached_prefixes: Default::default(),
             lock_file,
             updated_conda_prefixes: self
                 .take_instantiated_conda_prefixes()
@@ -4004,17 +3891,15 @@ mod tests {
             rattler_conda_types::ParseStrictness::Strict,
         )
         .unwrap();
-        let err = UpdatePrefixError::RequirementsUnmet {
-            environment: EnvironmentName::Default,
-            source: Cause::new(
+        let err =
+            UpdatePrefixError::PlatformResolution(PlatformResolutionError::RequirementsUnmet(
                 crate::lock_file::virtual_packages::VirtualPackageNotFoundError::new(
                     &spec,
                     &[],
                     rattler_conda_types::Subdir::OsxArm64,
                 )
                 .into(),
-            ),
-        };
+            ));
         assert!(err.diagnostic_source().is_none());
         let help = err.help().expect("help is forwarded").to_string();
         assert!(help.contains("CONDA_OVERRIDE_OSX"), "{help}");
