@@ -125,18 +125,18 @@ Suppose an advisory says that `openssl` releases before `3.5.4` are affected, an
 
 ```shell
 # 1. Check which environments are affected. Exits non-zero if any locked openssl is older than 3.5.4.
-pixi lock --check --constraint 'openssl>=3.5.4'
+pixi lock --check --with-constraint 'openssl>=3.5.4'
 
 # 2. After reviewing the fixed release, let it through the exclude-newer cutoff.
 pixi workspace exclude-newer exempt openssl==3.5.4
 
 # 3. Move the affected environments to a fixed release with the smallest possible lock file change.
-pixi lock --constraint 'openssl>=3.5.4'
+pixi lock --with-constraint 'openssl>=3.5.4'
 ```
 
 - Step 2 only edits the manifest. Exemptions only relax the cutoff, so the existing lock file stays valid and nothing is re-solved yet.
   Skip this step if the fixed release is already older than your `exclude-newer` cutoff.
-- Step 3 uses [`pixi lock --constraint`](reference/cli/pixi/lock.md#arg---constraint), which acts like a temporary [`[constraints]`](reference/pixi_manifest.md#constraints) entry that is not written to the manifest.
+- Step 3 uses [`pixi lock --with-constraint`](reference/cli/pixi/lock.md#arg---with-constraint), which acts like a temporary [`[constraints]`](reference/pixi_manifest.md#constraints) entry that is not written to the manifest.
   Only environments whose locked `openssl` violates the constraint are re-solved, and their other locked packages are kept as preferences, so only `openssl` and whatever it requires move.
   Environments that do not contain `openssl`, or are already on a fixed release, are left alone.
   Add `--json` to get a machine-readable diff of the lock file changes, or `--dry-run` to preview them.
@@ -145,7 +145,7 @@ pixi lock --constraint 'openssl>=3.5.4'
 - Keep the exemption in the manifest. The solve depends on it until the release is older than the cutoff, after which `pixi workspace exclude-newer prune` removes it.
 
 Compared with `pixi update openssl`, this does not unlock `openssl` in environments that are already fixed and does not upgrade it further than the constraint requires.
-`pixi update` accepts `--constraint` as well, if you want to update packages and enforce the fix in one go.
+`pixi update` accepts `--with-constraint` as well, if you want to update packages and enforce the fix in one go.
 If you want the constraint to keep applying to future solves, add it to the [`[constraints]`](reference/pixi_manifest.md#constraints) table instead.
 
 !!! tip "Fixes released on several branches"
@@ -155,7 +155,7 @@ If you want the constraint to keep applying to future solves, add it to the [`[c
 
     ```shell
     pixi workspace exclude-newer exempt python==3.11.18 python==3.12.16 python==3.13.18 python==3.14.10 python==3.15.2
-    pixi lock --constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
+    pixi lock --with-constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
     ```
 
     The specs of one package are combined into a single exemption, `python = "==3.11.18|==3.12.16|..."`.

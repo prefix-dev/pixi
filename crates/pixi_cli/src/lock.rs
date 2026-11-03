@@ -93,6 +93,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Inject the temporary constraints. They only live in memory and take part
     // in both the satisfiability check and the solve.
     args.constraint_args.apply(&mut workspace)?;
+    if !args.json {
+        args.constraint_args.print_applied();
+    }
 
     // Update the lock file, and extract it from the derived data to drop additional resources
     // created for the solve.

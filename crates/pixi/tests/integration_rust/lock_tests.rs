@@ -201,7 +201,7 @@ async fn test_lock_check_does_not_create_missing_lock_file() {
     );
 }
 
-/// `pixi lock --constraint` re-solves only the environments whose locked
+/// `pixi lock --with-constraint` re-solves only the environments whose locked
 /// packages violate the constraint, keeps the other locked packages as
 /// preferences, and never writes the constraint to the manifest.
 #[tokio::test]
