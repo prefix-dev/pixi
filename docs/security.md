@@ -132,6 +132,25 @@ pixi lock --constraint 'openssl>=3.5.4'
 - Keep the exemption in the manifest. The solve depends on it until the release is older than the cutoff, after which `pixi workspace exclude-newer prune` removes it.
 
 Compared with `pixi update openssl`, this does not unlock `openssl` in environments that are already fixed and does not upgrade it further than the constraint requires.
+`pixi update` accepts `--constraint` as well, if you want to update packages and enforce the fix in one go.
+
+!!! tip "Fixes released on several branches"
+    Some fixes are published for several release branches at once.
+    For example, a fix might ship in Python `3.11.18`, `3.12.16`, `3.13.18`, `3.14.10` and `3.15.2`.
+    Combine the branches with `|`, both in the exemption and in the constraint:
+
+    ```shell
+    pixi workspace exclude-newer exempt 'python==3.11.18|==3.12.16|==3.13.18|==3.14.10|==3.15.2'
+    pixi lock --constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
+    ```
+
+    Pass all releases of a package in a single exemption: `exempt` keeps one exemption per package, so a second `python==...` spec replaces the first.
+    In the constraint, `,` binds tighter than `|`, so each `>=fix,<next-branch` pair allows the fixed releases of one branch.
+
+    An environment stays on its branch only if something keeps it there, typically a requirement like `python = "3.12.*"`.
+    The locked version violates the constraint, so it no longer acts as a preference.
+    With a looser requirement such as `python = ">=3.11"`, an environment locked on `3.12.15` can move to the newest allowed release, e.g. `3.15.2`.
+    Check the diff, or tighten the requirement first, if a minor version change is not acceptable.
 If you want the constraint to keep applying to future solves, add it to the [`[constraints]`](reference/pixi_manifest.md#constraints) table instead.
 
 This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, `exclude-newer` exemptions, and overrides help you respond once a vulnerable version is already known.

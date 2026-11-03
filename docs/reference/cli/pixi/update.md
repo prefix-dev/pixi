@@ -32,6 +32,9 @@ pixi update [OPTIONS] [PACKAGES]...
 <br>May be provided more than once.
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
+- <a id="arg---constraint" href="#arg---constraint">`--constraint <MATCHSPEC>`</a>
+:  Temporarily constrain a conda package to the given match spec, e.g. `--constraint 'openssl>=3.5.4'`
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
