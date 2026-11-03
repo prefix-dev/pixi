@@ -1116,9 +1116,7 @@ package = "*"
     assert json.loads(output.stdout)["environment"]["default"]
 
     verify_cli_command([pixi, "lock", *constraint, *flags])
-    verify_cli_command(
-        [pixi, "list", *flags], stdout_contains="0.1.0", stdout_excludes="0.2.0"
-    )
+    verify_cli_command([pixi, "list", *flags], stdout_contains="0.1.0", stdout_excludes="0.2.0")
     # The constraint is not written to the manifest
     assert manifest_path.read_text() == manifest
 
