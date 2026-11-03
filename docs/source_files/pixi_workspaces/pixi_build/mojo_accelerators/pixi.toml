@@ -6,7 +6,7 @@ platforms = [
 ]
 
 [dependencies]
-mojo-fractal = "*"
+mojo-matmul = "*"
 
 [tasks]
-fractal = "mojo-fractal"
+matmul = "matmul"

@@ -7,7 +7,7 @@ preview = ["pixi-build"]
 mojo_accelerator = ["cpu", "gfx1103"]
 
 [package]
-name = "mojo-fractal"
+name = "mojo-matmul"
 version = "0.1.0"
 
 [package.build.backend]
@@ -15,9 +15,7 @@ name = "pixi-build-mojo"
 version = "*"
 
 [[package.build.config.bins]]
-name = "mojo-fractal"
-path = "main.mojo"
-extra-args = ["--fp-mode", "contract=off"]
+name = "matmul"
 
 [package.build-dependencies]
 mojo-compiler = "==1.2.0"
