@@ -78,8 +78,10 @@ pixi workspace exclude-newer exempt [OPTIONS] <SPEC>...
 Exempt package releases from the cutoff.
 
 Exemptions are match specs, a bare package name exempts every release.
-An existing exemption of the same package is replaced, with a warning
-if that moves its cutoff later.
+Several specs of the same package are combined into one exemption,
+e.g. `python==3.11.18 python==3.12.16`. An existing exemption of the
+same package is replaced, with a warning if that moves its cutoff
+later.
 
 An exemption with a version only exempts the releases that are already
 published, so e.g. a later build of an exempt version is not exempt.

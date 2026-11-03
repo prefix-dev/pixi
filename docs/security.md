@@ -106,6 +106,19 @@ Once that cutoff is older than 14 days, the exemption has no effect anymore and 
 
 When an advisory lands, update to the fixed version first. If the fix is fresh, [exempt](reference/pixi_manifest.md#exemptions) the fixed release from `exclude-newer` after reviewing it, as shown above, so you can adopt it immediately without relaxing the cutoff for anything else. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports [`dependency-overrides`](advanced/override.md) for PyPI packages.
 
+This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, `exclude-newer` exemptions, and overrides help you respond once a vulnerable version is already known.
+
+!!! note "PyPI-only for now"
+    We are planning to support a similar feature like this for Conda packages as well. For more information, see [pixi#4891](https://github.com/prefix-dev/pixi/issues/4891).
+
+```toml
+[pypi-options.dependency-overrides]
+# force all packages to depend on urllib3 >=2.2.2
+urllib3 = ">=2.2.2"
+```
+
+Do not trust overrides blindly. In the best case, maintainers publish a patch release on the same minor version you are already using, so the compatibility risk stays small. In practice, the available fix can sometimes be in a newer major version, and forcing that version through an override can break compatibility with other packages. Treat overrides as a short-term mitigation: apply the smallest possible change, test the affected environment, and remove the override once upstream metadata or upstream releases make it unnecessary.
+
 ### Recommended Workflow For A Conda Package CVE
 
 Suppose an advisory says that `openssl` releases before `3.5.4` are affected, and `3.5.4` was published yesterday.
@@ -133,38 +146,25 @@ pixi lock --constraint 'openssl>=3.5.4'
 
 Compared with `pixi update openssl`, this does not unlock `openssl` in environments that are already fixed and does not upgrade it further than the constraint requires.
 `pixi update` accepts `--constraint` as well, if you want to update packages and enforce the fix in one go.
+If you want the constraint to keep applying to future solves, add it to the [`[constraints]`](reference/pixi_manifest.md#constraints) table instead.
 
 !!! tip "Fixes released on several branches"
     Some fixes are published for several release branches at once.
-    For example, a fix might ship in Python `3.11.18`, `3.12.16`, `3.13.18`, `3.14.10` and `3.15.2`.
-    Combine the branches with `|`, both in the exemption and in the constraint:
+    For example, the [eMudhra emSign CA certificate security incident](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576) required updating Python to `3.11.18`, `3.12.16`, `3.13.18`, `3.14.10` or `3.15.2`.
+    Exempt all fixed releases, and combine the branches with `|` in the constraint:
 
     ```shell
-    pixi workspace exclude-newer exempt 'python==3.11.18|==3.12.16|==3.13.18|==3.14.10|==3.15.2'
+    pixi workspace exclude-newer exempt python==3.11.18 python==3.12.16 python==3.13.18 python==3.14.10 python==3.15.2
     pixi lock --constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
     ```
 
-    Pass all releases of a package in a single exemption: `exempt` keeps one exemption per package, so a second `python==...` spec replaces the first.
+    The specs of one package are combined into a single exemption, `python = "==3.11.18|==3.12.16|..."`.
     In the constraint, `,` binds tighter than `|`, so each `>=fix,<next-branch` pair allows the fixed releases of one branch.
 
     An environment stays on its branch only if something keeps it there, typically a requirement like `python = "3.12.*"`.
     The locked version violates the constraint, so it no longer acts as a preference.
     With a looser requirement such as `python = ">=3.11"`, an environment locked on `3.12.15` can move to the newest allowed release, e.g. `3.15.2`.
     Check the diff, or tighten the requirement first, if a minor version change is not acceptable.
-If you want the constraint to keep applying to future solves, add it to the [`[constraints]`](reference/pixi_manifest.md#constraints) table instead.
-
-This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, `exclude-newer` exemptions, and overrides help you respond once a vulnerable version is already known.
-
-!!! note "PyPI-only for now"
-    We are planning to support a similar feature like this for Conda packages as well. For more information, see [pixi#4891](https://github.com/prefix-dev/pixi/issues/4891).
-
-```toml
-[pypi-options.dependency-overrides]
-# force all packages to depend on urllib3 >=2.2.2
-urllib3 = ">=2.2.2"
-```
-
-Do not trust overrides blindly. In the best case, maintainers publish a patch release on the same minor version you are already using, so the compatibility risk stays small. In practice, the available fix can sometimes be in a newer major version, and forcing that version through an override can break compatibility with other packages. Treat overrides as a short-term mitigation: apply the smallest possible change, test the affected environment, and remove the override once upstream metadata or upstream releases make it unnecessary.
 
 ## 4. Treat Package Hooks As Code Execution
 
