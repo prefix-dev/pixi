@@ -6288,6 +6288,7 @@ dependencies = [
  "rstest",
  "same-file",
  "serde",
+ "temp-env",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
