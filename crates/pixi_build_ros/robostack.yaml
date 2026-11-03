@@ -1005,6 +1005,8 @@ range-v3:
   robostack: [range-v3]
 rti-connext-dds-5.3.1:
   robostack: []
+rtklib:
+  robostack: [rtklib-ex]
 ruby:
   robostack: [ruby]
 sbcl:
