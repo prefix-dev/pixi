@@ -4,7 +4,6 @@ use std::{
     str::FromStr,
 };
 
-use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
 use pixi_config::Config;
@@ -49,13 +48,6 @@ pub enum ManifestError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Parse(#[from] Box<ManifestParseError>),
-
-    #[error("failed to lock the global manifest '{}'", .path.display())]
-    Lock {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
 
     #[error("failed to save the global manifest '{}'", .path.display())]
     Save {
@@ -714,39 +706,6 @@ impl Manifest {
         Ok(())
     }
 
-    pub async fn lock(&self) -> Result<ManifestLock, ManifestError> {
-        let path = self.path.with_file_name(format!(
-            ".{}.lock",
-            self.path
-                .file_name()
-                .map(|name| name.to_string_lossy())
-                .unwrap_or_default()
-        ));
-        let lock_error = |source| ManifestError::Lock {
-            path: path.clone(),
-            source,
-        };
-
-        let file = tokio::fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(&path)
-            .await
-            .map_err(lock_error)?;
-        let guard = file
-            .lock_write()
-            .await
-            .map_err(|err| lock_error(err.error))?;
-
-        Ok(ManifestLock { _guard: guard })
-    }
-
-    pub fn reload(&mut self) -> Result<(), ManifestError> {
-        *self = Self::from_path(&self.path)?;
-        Ok(())
-    }
-
     /// Saves the manifest to the file system
     pub async fn save(&self) -> Result<(), ManifestError> {
         let contents = {
@@ -770,10 +729,6 @@ impl Manifest {
             })?;
         Ok(())
     }
-}
-#[derive(Debug)]
-pub struct ManifestLock {
-    _guard: RwLockWriteGuard<tokio::fs::File>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, SerializeDisplay, DeserializeFromStr)]
@@ -1600,56 +1555,5 @@ exposed = { python = "python" }
         let document = manifest.document.to_string();
         let count = document.to_lowercase().matches("pytest").count();
         assert_eq!(count, 1, "pytest is now listed more than once:\n{document}");
-    }
-
-    #[tokio::test]
-    async fn test_lock_waits_for_holder() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let path = tempdir.path().join("pixi-global.toml");
-        fs_err::write(&path, "").unwrap();
-        let manifest = Manifest::from_path(&path).unwrap();
-
-        let lock = manifest.lock().await.unwrap();
-        let waiting = tokio::time::timeout(std::time::Duration::from_millis(200), manifest.lock());
-        assert!(waiting.await.is_err(), "the lock was taken twice");
-
-        drop(lock);
-        manifest.lock().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_reload_keeps_concurrent_changes() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let path = tempdir.path().join("pixi-global.toml");
-        fs_err::write(&path, "").unwrap();
-        let channels = Some(vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]);
-
-        // Two operations that loaded the manifest before either saved
-        let mut first = Manifest::from_path(&path).unwrap();
-        let mut second = Manifest::from_path(&path).unwrap();
-
-        for (manifest, name) in [(&mut first, "first"), (&mut second, "second")] {
-            let _lock = manifest.lock().await.unwrap();
-            manifest.reload().unwrap();
-            let env_name = EnvironmentName::from_str(name).unwrap();
-            manifest
-                .add_environment(&env_name, channels.clone())
-                .unwrap();
-            manifest.save().await.unwrap();
-        }
-
-        let saved = Manifest::from_path(&path).unwrap();
-        assert!(
-            saved
-                .parsed
-                .envs
-                .contains_key(&EnvironmentName::from_str("first").unwrap())
-        );
-        assert!(
-            saved
-                .parsed
-                .envs
-                .contains_key(&EnvironmentName::from_str("second").unwrap())
-        );
     }
 }

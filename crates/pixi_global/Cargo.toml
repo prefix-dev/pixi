@@ -10,7 +10,6 @@ license.workspace = true
 
 [dependencies]
 ahash = { workspace = true }
-async-fd-lock = { workspace = true }
 chrono = { workspace = true }
 console = { workspace = true }
 dirs = { workspace = true }
