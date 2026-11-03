@@ -12,7 +12,7 @@ pixi update --platform osx-arm64 mlx # (6)!
 pixi update -p linux-64 -p osx-64 numpy  # (7)!
 pixi update --dry-run numpy # (8)!
 pixi update --no-install boto3 # (9)!
-pixi update numpy --constraint 'numpy<2' # (10)!
+pixi update numpy --with-constraint 'numpy<2' # (10)!
 ```
 
 1. This will update the `numpy` package to the latest version that fits the requirement.

@@ -991,8 +991,8 @@ openssl = { channel = "conda-forge", version = ">=3.0" }
 
 !!! tip "One-off constraints"
     To apply a constraint for a single lock operation without editing the manifest, use
-    [`pixi lock --constraint`](cli/pixi/lock.md#arg---constraint), e.g.
-    `pixi lock --constraint 'openssl>=3.5.4'`.
+    [`pixi lock --with-constraint`](cli/pixi/lock.md#arg---with-constraint), e.g.
+    `pixi lock --with-constraint 'openssl>=3.5.4'`.
     Only environments whose locked packages violate the constraint are re-solved, and the other
     locked packages are kept as preferences.
 

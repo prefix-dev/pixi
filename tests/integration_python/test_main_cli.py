@@ -1085,6 +1085,49 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     assert not dot_pixi.exists()
 
 
+def test_pixi_lock_with_constraint(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    """`--with-constraint` re-locks with a temporary constraint and reports it."""
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest = f"""
+[workspace]
+name = "test"
+channels = ["{multiple_versions_channel_1}"]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[dependencies]
+package = "*"
+"""
+    manifest_path.write_text(manifest)
+    flags: list[str | Path] = ["--manifest-path", manifest_path]
+    verify_cli_command([pixi, "lock", *flags])
+    verify_cli_command([pixi, "list", *flags], stdout_contains="0.2.0")
+
+    constraint = ["--with-constraint", "package<0.2"]
+    verify_cli_command(
+        [pixi, "lock", "--check", *constraint, *flags],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Applying temporary constraints: package<0.2",
+    )
+    # The JSON output only contains the diff
+    output = verify_cli_command([pixi, "lock", "--dry-run", "--json", *constraint, *flags])
+    assert "Applying temporary constraints" not in output.stderr
+    assert json.loads(output.stdout)["environment"]["default"]
+
+    verify_cli_command([pixi, "lock", *constraint, *flags])
+    verify_cli_command(
+        [pixi, "list", *flags], stdout_contains="0.1.0", stdout_excludes="0.2.0"
+    )
+    # The constraint is not written to the manifest
+    assert manifest_path.read_text() == manifest
+
+    verify_cli_command(
+        [pixi, "update", "--with-constraint", "package<0.2", *flags],
+        stderr_contains="Applying temporary constraints: package<0.2",
+    )
+
+
 @pytest.mark.extra_slow
 def test_pixi_auth(pixi: Path, tmp_path: Path) -> None:
     # `pixi auth` delegates to rattler, whose only storage override is the

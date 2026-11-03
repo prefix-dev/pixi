@@ -596,7 +596,7 @@ pkg-b = {{ git = "{base_url}", subdirectory = "pkg-b", rev = "{first_commit}" }}
     );
 }
 
-/// `pixi update --constraint` restricts the updated packages, and also
+/// `pixi update --with-constraint` restricts the updated packages, and also
 /// re-solves environments whose locked packages violate the constraint.
 #[tokio::test]
 async fn test_update_with_constraint() {

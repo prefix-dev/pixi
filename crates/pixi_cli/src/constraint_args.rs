@@ -1,4 +1,4 @@
-//! The `--constraint` option shared by `pixi lock` and `pixi update`.
+//! The `--with-constraint` option shared by `pixi lock` and `pixi update`.
 
 use clap::Parser;
 use pixi_core::Workspace;
@@ -12,7 +12,7 @@ use rattler_conda_types::{
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConstraintArgs {
     /// Temporarily constrain a conda package to the given match spec, e.g.
-    /// `--constraint 'openssl>=3.5.4'`.
+    /// `--with-constraint 'openssl>=3.5.4'`.
     ///
     /// Behaves like an additional entry in the `[constraints]` table that
     /// applies to all environments: it restricts the allowed versions of a
@@ -20,7 +20,7 @@ pub struct ConstraintArgs {
     /// packages violate the constraint are re-solved, keeping the other
     /// locked packages as preferences. The constraint is not written to the
     /// manifest. Can be specified multiple times.
-    #[clap(long = "constraint", value_name = "MATCHSPEC")]
+    #[clap(long = "with-constraint", value_name = "MATCHSPEC")]
     pub constraints: Vec<String>,
 }
 
@@ -36,9 +36,22 @@ impl ConstraintArgs {
         workspace.workspace.value.extra_constraints = constraints;
         Ok(())
     }
+
+    /// Tells the user which temporary constraints are applied, so that the
+    /// resulting lock file changes can be traced back to them.
+    pub fn print_applied(&self) {
+        if self.constraints.is_empty() {
+            return;
+        }
+        eprintln!(
+            "{}Applying temporary constraints: {}",
+            console::style(console::Emoji("i ", "i ")).blue(),
+            self.constraints.join(", ")
+        );
+    }
 }
 
-/// An error that occurs when parsing a `--constraint` argument.
+/// An error that occurs when parsing a `--with-constraint` argument.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum ConstraintParseError {
     #[error("failed to parse constraint '{constraint}'")]
@@ -51,7 +64,7 @@ pub enum ConstraintParseError {
     MissingPackageName(String),
 }
 
-/// Parses the `--constraint` arguments into conda constraints.
+/// Parses the `--with-constraint` arguments into conda constraints.
 fn parse_constraints(
     constraints: &[String],
     channel_config: &ChannelConfig,
