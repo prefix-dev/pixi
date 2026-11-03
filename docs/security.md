@@ -106,6 +106,34 @@ Once that cutoff is older than 14 days, the exemption has no effect anymore and 
 
 When an advisory lands, update to the fixed version first. If the fix is fresh, [exempt](reference/pixi_manifest.md#exemptions) the fixed release from `exclude-newer` after reviewing it, as shown above, so you can adopt it immediately without relaxing the cutoff for anything else. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports [`dependency-overrides`](advanced/override.md) for PyPI packages.
 
+### Recommended Workflow For A Conda Package CVE
+
+Suppose an advisory says that `openssl` releases before `3.5.4` are affected, and `3.5.4` was published yesterday.
+
+```shell
+# 1. Check which environments are affected. Exits non-zero if any locked openssl is older than 3.5.4.
+pixi lock --check --constraint 'openssl>=3.5.4'
+
+# 2. After reviewing the fixed release, let it through the exclude-newer cutoff.
+pixi workspace exclude-newer exempt openssl==3.5.4
+
+# 3. Move the affected environments to a fixed release with the smallest possible lock file change.
+pixi lock --constraint 'openssl>=3.5.4'
+```
+
+- Step 2 only edits the manifest. Exemptions only relax the cutoff, so the existing lock file stays valid and nothing is re-solved yet.
+  Skip this step if the fixed release is already older than your `exclude-newer` cutoff.
+- Step 3 uses [`pixi lock --constraint`](reference/cli/pixi/lock.md#arg---constraint), which acts like a temporary [`[constraints]`](reference/pixi_manifest.md#constraints) entry that is not written to the manifest.
+  Only environments whose locked `openssl` violates the constraint are re-solved, and their other locked packages are kept as preferences, so only `openssl` and whatever it requires move.
+  Environments that do not contain `openssl`, or are already on a fixed release, are left alone.
+  Add `--json` to get a machine-readable diff of the lock file changes, or `--dry-run` to preview them.
+- Use a lower bound such as `>=3.5.4` for the constraint rather than `==3.5.4`: an exact pin would also move environments that are already on a newer fixed release.
+  The exemption, on the other hand, should name the exact release you reviewed.
+- Keep the exemption in the manifest. The solve depends on it until the release is older than the cutoff, after which `pixi workspace exclude-newer prune` removes it.
+
+Compared with `pixi update openssl`, this does not unlock `openssl` in environments that are already fixed and does not upgrade it further than the constraint requires.
+If you want the constraint to keep applying to future solves, add it to the [`[constraints]`](reference/pixi_manifest.md#constraints) table instead.
+
 This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, `exclude-newer` exemptions, and overrides help you respond once a vulnerable version is already known.
 
 !!! note "PyPI-only for now"
