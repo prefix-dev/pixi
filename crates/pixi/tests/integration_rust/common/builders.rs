@@ -642,6 +642,14 @@ impl UpdateBuilder {
         self
     }
 
+    pub fn with_constraint(mut self, constraint: impl Into<String>) -> Self {
+        self.args
+            .constraint_args
+            .constraints
+            .push(constraint.into());
+        self
+    }
+
     pub fn json(mut self, json: bool) -> Self {
         self.args.json = json;
         self
@@ -677,7 +685,10 @@ impl LockBuilder {
         self
     }
     pub fn with_constraint(mut self, constraint: impl Into<String>) -> Self {
-        self.args.constraints.push(constraint.into());
+        self.args
+            .constraint_args
+            .constraints
+            .push(constraint.into());
         self
     }
 }

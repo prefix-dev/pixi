@@ -595,3 +595,68 @@ pkg-b = {{ git = "{base_url}", subdirectory = "pkg-b", rev = "{first_commit}" }}
         "sibling package pkg-b sharing the same git repo should also update to the latest commit"
     );
 }
+
+/// `pixi update --constraint` restricts the updated packages, and also
+/// re-solves environments whose locked packages violate the constraint.
+#[tokio::test]
+async fn test_update_with_constraint() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = url::Url::from_file_path(channel_dir.path()).unwrap();
+    let manifest = format!(
+        r#"
+    [workspace]
+    name = "test-update-with-constraint"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    [dependencies]
+    foo = "*"
+    bar = "*"
+    "#,
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    );
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+    pixi.lock().await.unwrap();
+
+    for version in ["2", "3"] {
+        package_database.add_package(Package::build("foo", version).finish());
+        package_database.add_package(Package::build("bar", version).finish());
+    }
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+    let env = consts::DEFAULT_ENVIRONMENT_NAME;
+
+    // Updating `bar` also moves `foo`, because its locked version violates
+    // the constraint, but no further than the constraint allows.
+    pixi.update()
+        .with_package("bar")
+        .with_constraint("foo>=2,<3")
+        .await
+        .unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(env, platform, "foo ==2"));
+    assert!(lock.contains_match_spec(env, platform, "bar ==3"));
+
+    // Updating everything respects the constraint as an upper bound.
+    pixi.update().with_constraint("foo<3").await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(env, platform, "foo ==2"));
+
+    // The constraint is not persisted in the manifest.
+    assert_eq!(pixi.manifest_contents().unwrap(), manifest);
+}

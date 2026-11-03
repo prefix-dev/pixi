@@ -831,6 +831,7 @@ impl PixiControl {
                 dry_run: false,
                 specs: Default::default(),
                 json: false,
+                constraint_args: Default::default(),
             },
         }
     }
@@ -877,7 +878,7 @@ impl PixiControl {
                 check: false,
                 json: false,
                 dry_run: false,
-                constraints: Vec::new(),
+                constraint_args: Default::default(),
             },
         }
     }

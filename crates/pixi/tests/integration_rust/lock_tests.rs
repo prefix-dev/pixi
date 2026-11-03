@@ -336,3 +336,99 @@ async fn test_lock_constraint_unsatisfiable() {
         "unexpected error: {err:?}"
     );
 }
+
+/// A fix that is released on several branches at once can be expressed with
+/// `|` in both the exemption and the constraint. Each environment moves to
+/// the fixed release of its own branch, as long as its manifest keeps it on
+/// that branch.
+#[tokio::test]
+async fn test_lock_constraint_multiple_branches() {
+    let old: chrono::DateTime<chrono::Utc> = "2010-01-01T00:00:00Z".parse().unwrap();
+    let new: chrono::DateTime<chrono::Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let mut package_database = MockRepoData::default();
+    for version in ["3.11.1", "3.12.1", "3.13.1"] {
+        package_database.add_package(
+            Package::build("python", version)
+                .with_timestamp(old)
+                .finish(),
+        );
+    }
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+    let channel = url::Url::from_file_path(channel_dir.path()).unwrap();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    let manifest = |exclude_newer: &str, loose_python: &str| {
+        format!(
+            r#"
+    [workspace]
+    name = "test-lock-constraint-multiple-branches"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = {exclude_newer}
+
+    [feature.py311.dependencies]
+    python = "3.11.*"
+
+    [feature.py312.dependencies]
+    python = "3.12.*"
+
+    [feature.loose.dependencies]
+    python = "{loose_python}"
+
+    [environments]
+    py311 = {{ features = ["py311"], no-default-feature = true }}
+    py312 = {{ features = ["py312"], no-default-feature = true }}
+    loose = {{ features = ["loose"], no-default-feature = true }}
+    "#
+        )
+    };
+    let cutoff = r#""2015-01-01T00:00:00Z""#;
+    // Lock `loose` on the 3.12 branch, then loosen its requirement. The lock
+    // file stays valid, so `loose` remains on 3.12.
+    let pixi = PixiControl::from_manifest(&manifest(cutoff, "3.12.*")).unwrap();
+    pixi.lock().await.unwrap();
+    pixi.update_manifest(&manifest(cutoff, ">=3.11")).unwrap();
+    pixi.lock().with_check(true).await.unwrap();
+
+    // The fix is published on all branches, after the exclude-newer cutoff.
+    for version in ["3.11.2", "3.12.2", "3.13.2"] {
+        package_database.add_package(
+            Package::build("python", version)
+                .with_timestamp(new)
+                .finish(),
+        );
+    }
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Exempt the fixed releases. This is what
+    // `pixi workspace exclude-newer exempt 'python==3.11.2|==3.12.2|==3.13.2'`
+    // writes.
+    pixi.update_manifest(&manifest(
+        r#"{ cutoff = "2015-01-01T00:00:00Z", exemptions = { python = "==3.11.2|==3.12.2|==3.13.2" } }"#,
+        ">=3.11",
+    ))
+    .unwrap();
+    // Exemptions only relax the cutoff, so nothing needs to be re-solved yet.
+    pixi.lock().with_check(true).await.unwrap();
+
+    pixi.lock()
+        .with_constraint("python>=3.11.2,<3.12|>=3.12.2,<3.13|>=3.13.2")
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec("py311", platform, "python ==3.11.2"));
+    assert!(lock.contains_match_spec("py312", platform, "python ==3.12.2"));
+    // The locked `python 3.12.1` violates the constraint, so it is no longer
+    // a usable preference. Nothing in the manifest keeps `loose` on the 3.12
+    // branch, so the solver picks the highest allowed version.
+    assert!(lock.contains_match_spec("loose", platform, "python ==3.13.2"));
+}
