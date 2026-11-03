@@ -210,6 +210,22 @@ pub fn effective_tls_root_certs(
     }
 }
 
+#[cfg(feature = "rustls")]
+#[allow(deprecated)]
+fn rustls_certificates_for_mode(
+    mode: pixi_config::TlsRootCerts,
+    env_certs: Option<Certificates>,
+) -> Option<Certificates> {
+    match mode {
+        pixi_config::TlsRootCerts::Webpki => {
+            Some(env_certs.unwrap_or_else(Certificates::webpki_roots))
+        }
+        pixi_config::TlsRootCerts::System
+        | pixi_config::TlsRootCerts::LegacyNative
+        | pixi_config::TlsRootCerts::All => env_certs,
+    }
+}
+
 pub fn reqwest_client_builder(
     config: Option<&Config>,
 ) -> Result<reqwest::ClientBuilder, ReqwestClientError> {
@@ -224,11 +240,9 @@ pub fn reqwest_client_builder(
     )]
     let tls_root_certs = resolve_tls_root_certs(config);
 
-    // rustls has no OS trust store, so it needs explicit anchors via
-    // `tls_certs_only`. native-tls already uses the OS store; routing System
-    // mode through `tls_certs_only` sets `disable_built_in_roots` and rejects
-    // enterprise/proxy CAs the OS trusts (issue #6229), so we keep the OS store
-    // and only merge env roots there.
+    // Let reqwest's rustls backend use rustls-platform-verifier for System
+    // mode. Explicit roots disable that verifier, so only configure them for
+    // Webpki mode or when SSL_CERT_FILE / SSL_CERT_DIR override the mode.
     #[cfg(feature = "native-tls")]
     {
         builder = builder.use_native_tls();
@@ -237,7 +251,10 @@ pub fn reqwest_client_builder(
     #[cfg(feature = "rustls")]
     {
         builder = builder.use_rustls_tls();
-        builder = builder.tls_certs_only(Certificates::for_mode(tls_root_certs).to_reqwest_certs());
+        if let Some(certs) = rustls_certificates_for_mode(tls_root_certs, Certificates::from_env())
+        {
+            builder = builder.tls_certs_only(certs.to_reqwest_certs());
+        }
     }
 
     let proxies = config
@@ -453,6 +470,26 @@ mod tests {
     use url::Url;
 
     use super::*;
+
+    #[cfg(feature = "rustls")]
+    #[test]
+    fn rustls_system_mode_uses_the_platform_verifier_unless_env_certs_override_it() {
+        assert!(rustls_certificates_for_mode(pixi_config::TlsRootCerts::System, None).is_none());
+
+        let env_certs = Certificates::webpki_roots();
+        assert!(
+            rustls_certificates_for_mode(pixi_config::TlsRootCerts::System, Some(env_certs))
+                .is_some()
+        );
+    }
+
+    #[cfg(feature = "rustls")]
+    #[test]
+    fn rustls_webpki_mode_uses_bundled_roots_without_env_certs() {
+        let certs = rustls_certificates_for_mode(pixi_config::TlsRootCerts::Webpki, None)
+            .expect("webpki mode should configure explicit roots");
+        assert!(!certs.is_empty());
+    }
 
     #[test]
     fn test_uv_middlewares_includes_auth_with_mirrors() {

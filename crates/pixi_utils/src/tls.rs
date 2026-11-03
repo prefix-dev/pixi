@@ -27,11 +27,14 @@ pub struct CertEnvSource {
 pub struct Certificates(Vec<CertificateDer<'static>>);
 
 impl Certificates {
-    /// Resolve the certificates to install on pixi's reqwest client.
+    /// Resolve explicit certificates for a configured root-certificate mode.
     ///
     /// Priority follows uv's model:
     /// 1. `SSL_CERT_FILE` / `SSL_CERT_DIR` env vars (if set and valid)
     /// 2. The configured [`TlsRootCerts`] mode
+    ///
+    /// The rustls reqwest client uses the platform verifier for `System` mode
+    /// and only calls this when explicit certificates are required.
     ///
     /// Deprecation warnings for the legacy [`TlsRootCerts::LegacyNative`] and
     /// [`TlsRootCerts::All`] spellings fire once at config-load time
