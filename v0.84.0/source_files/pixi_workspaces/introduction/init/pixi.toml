@@ -1,0 +1,4 @@
+[workspace]
+channels = ["conda-forge"]
+name = "hello-world"
+platforms = ["linux-64", "osx-arm64", "win-64"]

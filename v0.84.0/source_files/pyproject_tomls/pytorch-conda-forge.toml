@@ -1,0 +1,17 @@
+#:tombi toml-version = "v1.0.0"
+# The Python packaging ecosystem parses this file with TOML 1.0 parsers
+
+# --8<-- [start:minimal]
+[project]
+name = "pytorch-conda-forge"
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = [{ platform = "linux-64", cuda = "12.0" }]
+
+# --8<-- [start:cuda-version]
+[tool.pixi.dependencies]
+pytorch-gpu = "*"
+# --8<-- [end:minimal]
+cuda-version = "12.6.*"
+# --8<-- [end:cuda-version]
