@@ -8,7 +8,7 @@ use pixi_core::{
     lock_file::{
         LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode, UpdatePrefixError,
     },
-    workspace::platform_selection::{PlatformResolutionError, PrefixPolicy},
+    workspace::platform_selection::{PlatformResolutionError, PrefixPolicy, ResolvedPlatform},
 };
 use pixi_manifest::PixiPlatformName;
 use std::fmt::Write;
@@ -25,6 +25,9 @@ use crate::shared::install_platform::resolve_install_platform;
 /// if you have multiple environments you can select the right one with the
 /// `--environment` flag. If you don't provide an environment, the `default`
 /// environment will be installed.
+///
+/// Without `--platform`, an environment must have a compatible declared or locked
+/// platform, even if its dependency-free tasks can run directly on the host.
 ///
 /// If you want to install all environments, you can use the `--all` flag.
 /// Unless `--platform` is specified, environments incompatible with this
@@ -180,8 +183,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
         .target_packages(args.only.clone().unwrap_or_default());
 
-    let (LockFileDerivedData { lock_file, .. }, prefixes) = if args.all && target_platform.is_none()
-    {
+    let (LockFileDerivedData { lock_file, .. }, prefixes) = if target_platform.is_none() {
         let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
         let lock_file = lock_file_source
             .prepare(&workspace, Some(progress.clone()))
@@ -194,13 +196,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .resolve_platform(&environment, PrefixPolicy::Replace, UpdateMode::Revalidate)
                 .await
             {
+                Ok(ResolvedPlatform::HostBaseline(_)) if args.all => skipped.push(environment),
+                Ok(ResolvedPlatform::HostBaseline(_)) => {
+                    return Err(environment.unsupported_platform_error().into());
+                }
                 Ok(platform) => {
                     supported.push(environment);
                     platforms.push(platform);
                 }
                 Err(UpdatePrefixError::PlatformResolution(
                     PlatformResolutionError::UnsupportedPlatform(_),
-                )) => skipped.push(environment),
+                )) if args.all => skipped.push(environment),
                 Err(error) => return Err(error.into()),
             }
         }

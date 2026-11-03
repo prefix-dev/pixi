@@ -803,20 +803,17 @@ async fn test_v6_local_archive_path_upgrade() {
         &pixi_config::GlobalConfigSource::None,
     )
     .unwrap();
-    pixi_core::environment::get_update_lock_file_and_prefix(
-        &project.default_environment(),
-        None,
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
-            no_install: true,
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
-    )
-    .await
-    .unwrap();
+    project
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Update,
+                no_install: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
 
     // After re-resolve, foo.tar.gz should be a Source package.
     let new_lock = rattler_lock::LockFile::from_path(&test_dir.join("pixi.lock")).unwrap();
@@ -833,20 +830,17 @@ async fn test_v6_local_archive_path_upgrade() {
 
     // Round-trip: a second revalidate should not change the lock file.
     let lock_str = fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap();
-    pixi_core::environment::get_update_lock_file_and_prefix(
-        &project.default_environment(),
-        None,
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
-            no_install: true,
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
-    )
-    .await
-    .unwrap();
+    project
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Update,
+                no_install: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
     assert_eq!(
         lock_str,
         fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap(),

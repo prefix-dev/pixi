@@ -255,20 +255,12 @@ worker = ["worker"]
         stdout_contains=["ROOT-gpu", "CHILD-cpu"],
         stdout_excludes="WRONG-GPU-CHILD",
     )
+    assert not _marker(tmp_pixi_workspace).exists()
     if no_install:
-        assert not _marker(tmp_pixi_workspace).exists()
         assert not _marker(tmp_pixi_workspace, "worker").exists()
         return
-    default_marker = json.loads(_marker(tmp_pixi_workspace).read_text())
     worker_marker = json.loads(_marker(tmp_pixi_workspace, "worker").read_text())
-    assert any(
-        value.startswith("__cuda=")
-        for value in default_marker["resolved_platform"]["virtual_packages"]
-    )
-    assert not any(
-        value.startswith("__cuda=")
-        for value in worker_marker["resolved_platform"]["virtual_packages"]
-    )
+    assert worker_marker["resolved_platform"]["name"] == "cpu"
 
 
 def test_foreign_platform_override_skips_locked_host_validation(

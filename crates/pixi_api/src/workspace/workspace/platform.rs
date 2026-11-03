@@ -13,7 +13,8 @@ use pixi_manifest::FeaturesExt;
 use pixi_core::{
     UpdateLockFileOptions,
     environment::{
-        InstallFilter, LockFileAndPrefixesError, LockFileUsage, get_update_lock_file_and_prefix,
+        InstallFilter, LockFileAndPrefixesError, LockFileSource, LockFileUsage,
+        get_update_lock_file_and_prefix,
     },
     host::HostProbeError,
     lock_file::{ReinstallPackages, UpdateMode},
@@ -72,37 +73,49 @@ pub async fn get_workspace_platform(
 ///
 /// The lock file is solved for every declared platform, but a prefix can only
 /// be materialised for the current system. When none of the environment's
-/// platforms match this machine, skip prefix installation.
+/// platforms match this machine, skip prefix installation. Lock-only mutations
+/// resolve workspace storage without selecting a runnable platform.
 async fn update_platform_lock_file_and_prefix(
     workspace: &Workspace,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     no_install: bool,
     lock_file_usage: LockFileUsage,
 ) -> Result<(), PlatformError> {
-    workspace.refresh_environment_hosts().await?;
     let default_env = workspace.default_environment();
-    let no_install = no_install || default_env.best_declared_platform().is_none();
-    if no_install && default_env.best_declared_platform().is_none() {
-        tracing::info!(
-            "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
-            default_env.name().fancy_display()
-        );
+    let no_install = if no_install {
+        true
+    } else {
+        workspace.refresh_environment_hosts().await?;
+        let unsupported = default_env.best_declared_platform().is_none();
+        if unsupported {
+            tracing::info!(
+                "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
+                default_env.name().fancy_display()
+            );
+        }
+        unsupported
+    };
+    let update_options = UpdateLockFileOptions {
+        lock_file_usage,
+        no_install,
+        max_concurrent_solves: workspace.config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    if no_install {
+        LockFileSource::Update(update_options)
+            .prepare(workspace, progress)
+            .await?;
+    } else {
+        get_update_lock_file_and_prefix(
+            &default_env,
+            progress,
+            UpdateMode::Revalidate,
+            update_options,
+            ReinstallPackages::default(),
+            &InstallFilter::default(),
+        )
+        .await?;
     }
-
-    get_update_lock_file_and_prefix(
-        &default_env,
-        progress,
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage,
-            no_install,
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
-    )
-    .await?;
     Ok(())
 }
 

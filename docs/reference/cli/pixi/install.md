@@ -97,6 +97,8 @@ This command installs an environment, if the lock file is not up-to-date it will
 
 `pixi install` only installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag. If you don't provide an environment, the `default` environment will be installed.
 
+Without `--platform`, an environment must have a compatible declared or locked platform, even if its dependency-free tasks can run directly on the host.
+
 If you want to install all environments, you can use the `--all` flag. Unless `--platform` is specified, environments incompatible with this machine are skipped using the lock file.
 
 Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`. These commands will automatically install the environment if it is not already installed.

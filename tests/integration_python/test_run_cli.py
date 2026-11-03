@@ -1,4 +1,3 @@
-import json
 import platform
 import shutil
 import signal
@@ -284,25 +283,38 @@ def test_using_prefix_validation(
         assert Path(file).exists()
 
 
-def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = f"""
-    {EMPTY_BOILERPLATE_PROJECT}
-    [activation.env]
-    TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test123"
+def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    value_file = tmp_pixi_workspace / "activation-value.txt"
+    value_file.write_text("test123\n")
+    activation_script = "activate.bat" if sys.platform == "win32" else "activate.sh"
+    (tmp_pixi_workspace / activation_script).write_text(
+        f'@set /p TEST_ENV_VAR_FOR_ACTIVATION_TEST=<"{value_file}"\n'
+        if sys.platform == "win32"
+        else f'export TEST_ENV_VAR_FOR_ACTIVATION_TEST="$(cat "{value_file}")"\n'
+    )
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(f"""
+    [workspace]
+    name = "activation-cache"
+    channels = ["{dummy_channel_1}"]
+    platforms = ["{CURRENT_PLATFORM}"]
+    [dependencies]
+    dummy-a = "*"
+    [activation]
+    scripts = ["{activation_script}"]
     [tasks]
     task = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
-    """
-    manifest.write_text(toml)
-
-    # Run the default task
+    """)
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test123",
     )
 
-    # Validate that without experimental caching it does not use the cache
-    assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
+    value_file.write_text("test456\n")
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+    )
 
     # Enable the experimental cache config
     verify_cli_command(
@@ -318,31 +330,24 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
     )
 
-    # Run the default task and create cache
+    value_file.write_text("test123\n")
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test123",
     )
 
-    # Modify the environment variable in cache
-    cache_path = tmp_pixi_workspace.joinpath(
-        ".pixi", "activation-env-v0", "activation_default.json"
-    )
-    data = json.loads(cache_path.read_text())
-    data["environment_variables"]["TEST_ENV_VAR_FOR_ACTIVATION_TEST"] = "test456"
-    cache_path.write_text(json.dumps(data, indent=4))
+    value_file.write_text("test456\n")
 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
-        # Contain overwritten value
-        stdout_contains="test456",
-        stdout_excludes="test123",
+        stdout_contains="test123",
+        stdout_excludes="test456",
     )
 
     # Ignore activation cache
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "--force-activate", "task", "-vvv"],
-        stdout_contains="test123",
+        stdout_contains="test456",
     )
 
 

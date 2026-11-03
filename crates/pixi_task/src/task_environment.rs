@@ -313,12 +313,10 @@ where
                         .into_iter()
                         .find(|e| e.name() == default_env_name)
                     && self.has_task_candidate(&env, &name, None)
+                    && self.prepare_environment(&env).await.is_ok()
+                    && let Ok(task_in_env) = env.task(&name, self.search_platform_for(&env))
                 {
-                    if self.prepare_environment(&env).await.is_ok()
-                        && let Ok(task_in_env) = env.task(&name, self.search_platform_for(&env))
-                    {
-                        return Ok((env, task_in_env));
-                    }
+                    return Ok((env, task_in_env));
                 }
                 // If no other environment has the task name but a different task, return the
                 // default environment
