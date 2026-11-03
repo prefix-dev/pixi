@@ -89,6 +89,15 @@ On a compatible Radeon 780M, this prints:
 path=gfx1103 side=1024 validation=ok
 ```
 
+To run the CPU build explicitly:
+
+```nu
+pixi run --platform cpu matmul
+```
+
+```text
+path=cpu side=1024 validation=ok
+```
 
 ## Optional: measure whole-program time
 
