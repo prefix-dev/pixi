@@ -11,6 +11,11 @@ pixi lock
 pixi lock --manifest-path ~/myworkspace/pixi.toml
 pixi lock --json
 pixi lock --check
+pixi lock --constraint 'openssl>=3.5.4' # (1)!
+pixi lock --check --constraint 'openssl>=3.5.4' # (2)!
 ```
+
+1. Re-lock only the environments whose locked `openssl` is older than `3.5.4`, keeping all other locked packages as preferences. The constraint is not written to the manifest.
+2. Exit with a non-zero code if any environment has a locked `openssl` older than `3.5.4`.
 
 --8<-- [end:example]

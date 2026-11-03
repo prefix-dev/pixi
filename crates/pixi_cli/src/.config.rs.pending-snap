@@ -1,0 +1,47 @@
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2128,"new":{"module_name":"pixi_cli__config__tests","snapshot_name":"append_from_scratch","metadata":{"source":"crates/pixi_cli/src/config.rs","assertion_line":2128,"expression":"test_context.read_config()"},"snapshot":"default-channels = [\"https://quantco.jfrog.io/artifactory/api/conda/qc-internal\", \"conda-forge\", \"new-channel\"]"},"old":{"module_name":"pixi_cli__config__tests","metadata":{},"snapshot":"default-channels = [\"new-channel\"]"}}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2079,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2334,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2175,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2149,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":1883,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2198,"new":{"module_name":"pixi_cli__config__tests","snapshot_name":"prepend_from_scratch","metadata":{"source":"crates/pixi_cli/src/config.rs","assertion_line":2198,"expression":"test_context.read_config()"},"snapshot":"default-channels = [\"new-channel\", \"https://quantco.jfrog.io/artifactory/api/conda/qc-internal\", \"conda-forge\"]"},"old":{"module_name":"pixi_cli__config__tests","metadata":{},"snapshot":"default-channels = [\"new-channel\"]"}}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2216,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2233,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2285,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":1901,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":1845,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2259,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":1866,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2032,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2054,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":1925,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2008,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2379,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":1962,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":2357,"new":null,"old":null}
+{"run_id":"f83afa75-91c2-4c56-8ea9-eaa5d0639a62","line":1985,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2079,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2105,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2310,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2128,"new":{"module_name":"pixi_cli__config__tests","snapshot_name":"append_from_scratch","metadata":{"source":"crates/pixi_cli/src/config.rs","assertion_line":2128,"expression":"test_context.read_config()"},"snapshot":"default-channels = [\"https://quantco.jfrog.io/artifactory/api/conda/qc-internal\", \"conda-forge\", \"new-channel\"]"},"old":{"module_name":"pixi_cli__config__tests","metadata":{},"snapshot":"default-channels = [\"new-channel\"]"}}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2149,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2175,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":1883,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2216,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2233,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2285,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2259,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2334,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2198,"new":{"module_name":"pixi_cli__config__tests","snapshot_name":"prepend_from_scratch","metadata":{"source":"crates/pixi_cli/src/config.rs","assertion_line":2198,"expression":"test_context.read_config()"},"snapshot":"default-channels = [\"new-channel\", \"https://quantco.jfrog.io/artifactory/api/conda/qc-internal\", \"conda-forge\"]"},"old":{"module_name":"pixi_cli__config__tests","metadata":{},"snapshot":"default-channels = [\"new-channel\"]"}}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":1845,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":1866,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":1901,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":1925,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2054,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2032,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2379,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2008,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":1962,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":1985,"new":null,"old":null}
+{"run_id":"e77d04ff-cd8b-40f9-ba21-c58752103487","line":2357,"new":null,"old":null}
+{"run_id":"c697d845-1e52-459d-8e6c-ea93dd525350","line":2128,"new":{"module_name":"pixi_cli__config__tests","snapshot_name":"append_from_scratch","metadata":{"source":"crates/pixi_cli/src/config.rs","assertion_line":2128,"expression":"test_context.read_config()"},"snapshot":"default-channels = [\"https://quantco.jfrog.io/artifactory/api/conda/qc-internal\", \"conda-forge\", \"new-channel\"]"},"old":{"module_name":"pixi_cli__config__tests","metadata":{},"snapshot":"default-channels = [\"new-channel\"]"}}

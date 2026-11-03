@@ -648,6 +648,7 @@ impl TomlManifest {
             environments,
             solve_groups,
             loaded_at: chrono::Utc::now(),
+            extra_constraints: Default::default(),
         };
         workspace_manifest.register_composed_platforms()?;
 
