@@ -1,18 +1,23 @@
 # Building Mojo CPU and AMD Packages
 
-Build two `mojo-matmul` packages from one source: a single-threaded CPU executable and an AMD GPU executable, selected at compile time.
-Publish both to a local channel, then install the compatible binary in a separate workspace without a source dependency or build backend.
+In this tutorial, we will build CPU and AMD GPU variants of a Mojo package with Pixi.
+For background on building packages, see the [Getting Started](./getting_started.md) guide and the [Mojo backend documentation](backends/pixi-build-mojo.md#accelerator-variants).
 
+!!! warning
+    `pixi-build` is a preview feature and may change before it is stabilized.
+
+## Why is This Useful?
+
+Build variants let us distribute CPU and GPU implementations of the same package without changing its name or version.
+Pixi can then select the AMD build on compatible hardware and use the CPU build otherwise.
+We will publish both builds to a local channel and install them in a separate workspace, without a source dependency or build backend in the consumer.
+
+## Let's Get Started
+
+We will create a `mojo-matmul` package that multiplies two matrices.
 This example needs Linux x86-64, glibc 2.34 or newer, and an x86-64-v3-capable CPU for both builds.
 The GPU build targets `gfx1103`, such as the Radeon 780M, and needs a working driver and permission to access the device.
-See the [Mojo backend reference](backends/pixi-build-mojo.md#accelerator-variants) for implementation limits and runtime requirements, and [rich platforms](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for hardware declarations, including other AMD targets.
-`pixi-build` is a preview feature.
-
-!!! warning "Backend prerequisite"
-    This tutorial requires Pixi and `pixi-build-mojo` with managed accelerator variants.
-    Until that support is released, use the checkout setup in [PR #7432](https://github.com/prefix-dev/pixi/pull/7432).
-
-## Create the producer
+See [rich platforms](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for hardware declarations, including other AMD targets.
 
 Create these files in a new directory:
 
