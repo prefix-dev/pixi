@@ -1237,7 +1237,7 @@ impl<'p> LockFileDerivedData<'p> {
             }
         }
 
-        self.workspace.refresh_environment_hosts().await?;
+        self.workspace.refresh_environment_host(environment).await?;
 
         // A current prefix hash says nothing about this machine's capabilities.
         // Validate locked requirements before either the cached or install path.
