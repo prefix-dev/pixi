@@ -515,10 +515,10 @@ struct RepodataReporterInner {
     multi_progress: MultiProgress,
     pb: ProgressBar,
     title: Option<String>,
-    /// Downloads by the id handed to the gateway, which keeps reporting
-    /// progress against that id. Ids are never reused, so callbacks for a
-    /// download forgotten by [`RepodataReporterInner::clear`] can be told
-    /// apart from current ones.
+    /// A map from unique IDs to tracked downloads.
+    /// When a download is forgotten by [`RepodataReporterInner::clear`],
+    /// it is dropped from the map, so its callbacks can be told apart
+    /// from those for currently tracked downloads.
     downloads: Arc<RwLock<HashMap<usize, TrackedDownload>>>,
     next_download_id: usize,
     unsupported_revision_warnings: HashSet<String>,
