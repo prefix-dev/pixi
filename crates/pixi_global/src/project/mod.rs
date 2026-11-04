@@ -1642,6 +1642,15 @@ impl Project {
                 );
                 Ok(match_spec)
             })
+            // Source dependencies are matched by name, but their extras must be
+            // taken into account as well.
+            .chain(source_specs.specs.iter().map(|(name, spec)| {
+                Ok(MatchSpec {
+                    name: name.clone().into(),
+                    extras: spec.extras().map(<[String]>::to_vec),
+                    ..MatchSpec::default()
+                })
+            }))
             .collect::<Result<IndexSet<MatchSpec>, EnvironmentInSyncError>>()?;
 
         let source_package_names = source_specs.specs.keys().cloned().collect::<HashSet<_>>();
@@ -1728,12 +1737,8 @@ impl Project {
             }
         }
 
-        let specs_in_sync = environment_specs_in_sync(
-            &prefix_records,
-            &specs,
-            &source_package_names,
-            environment.platform,
-        );
+        let specs_in_sync =
+            environment_specs_in_sync(&prefix_records, &specs, environment.platform);
         if !specs_in_sync {
             tracing::debug!("Environment out of sync because package specifications don't match");
             return Ok(false);

@@ -280,10 +280,10 @@ fn parse_dependency(dependency: &str) -> Option<MatchSpec> {
 /// local environment's prefix records and that there are no extra entries in
 /// the prefix records that are not reachable from any of the specifications.
 ///
+/// Source dependencies are passed as name-only specs, optionally with extras.
 pub(crate) fn local_environment_matches_spec(
     prefix_records: Vec<PackageRecord>,
-    binary_specs: &IndexSet<MatchSpec>,
-    source_package_names: &HashSet<PackageName>,
+    specs: &IndexSet<MatchSpec>,
     platform: Option<Subdir>,
 ) -> bool {
     // Check whether all packages in the installed environment have the correct
@@ -319,15 +319,8 @@ pub(crate) fn local_environment_matches_spec(
     // dependencies are never required.
     let mut reached = vec![false; prefix_records.len()];
     let mut enabled_extras = vec![HashSet::<&str>::new(); prefix_records.len()];
-    let mut work_queue: Vec<(MatchSpec, bool)> = binary_specs
-        .iter()
-        .cloned()
-        .chain(source_package_names.iter().map(|name| MatchSpec {
-            name: name.clone().into(),
-            ..MatchSpec::default()
-        }))
-        .map(|spec| (spec, true))
-        .collect();
+    let mut work_queue: Vec<(MatchSpec, bool)> =
+        specs.iter().map(|spec| (spec.clone(), true)).collect();
     while let Some((spec, required)) = work_queue.pop() {
         let Some(index) = prefix_records
             .iter()
@@ -479,7 +472,6 @@ mod tests {
         assert!(local_environment_matches_spec(
             ripgrep_records,
             &ripgrep_specs,
-            &HashSet::new(),
             None
         ));
     }
@@ -495,7 +487,6 @@ mod tests {
         assert!(!local_environment_matches_spec(
             ripgrep_records,
             &ripgrep_specs,
-            &HashSet::new(),
             None
         ));
     }
@@ -507,22 +498,12 @@ mod tests {
         ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
-            !local_environment_matches_spec(
-                ripgrep_bat_records.clone(),
-                &ripgrep_specs,
-                &HashSet::new(),
-                None
-            ),
+            !local_environment_matches_spec(ripgrep_bat_records.clone(), &ripgrep_specs, None),
             "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
         );
 
         assert!(
-            local_environment_matches_spec(
-                ripgrep_bat_records,
-                &ripgrep_bat_specs,
-                &HashSet::new(),
-                None
-            ),
+            local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, None),
             "The records and specs match and the function should return `true`."
         );
     }
@@ -533,12 +514,7 @@ mod tests {
         ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
-            local_environment_matches_spec(
-                ripgrep_records,
-                &ripgrep_specs,
-                &HashSet::new(),
-                Some(Subdir::Linux64)
-            ),
+            local_environment_matches_spec(ripgrep_records, &ripgrep_specs, Some(Subdir::Linux64)),
             "The records contains only linux-64 entries"
         );
     }
@@ -549,12 +525,7 @@ mod tests {
         ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
-            !local_environment_matches_spec(
-                ripgrep_records,
-                &ripgrep_specs,
-                &HashSet::new(),
-                Some(Subdir::Win64)
-            ),
+            !local_environment_matches_spec(ripgrep_records, &ripgrep_specs, Some(Subdir::Win64)),
             "The record contains linux-64 entries, so the function should always return `false`"
         );
     }
@@ -601,7 +572,6 @@ mod tests {
         assert!(local_environment_matches_spec(
             without_extra_records.clone(),
             &spec("diffle"),
-            &HashSet::new(),
             None
         ));
 
@@ -609,7 +579,6 @@ mod tests {
         assert!(!local_environment_matches_spec(
             without_extra_records,
             &spec("diffle[extras=[rust]]"),
-            &HashSet::new(),
             None
         ));
 
@@ -618,7 +587,6 @@ mod tests {
         assert!(local_environment_matches_spec(
             all_records.clone(),
             &spec("diffle[extras=[rust]]"),
-            &HashSet::new(),
             None
         ));
 
@@ -626,7 +594,6 @@ mod tests {
         assert!(!local_environment_matches_spec(
             all_records.clone(),
             &spec("diffle"),
-            &HashSet::new(),
             None
         ));
 
@@ -637,7 +604,6 @@ mod tests {
                 .filter(|r| !["rust", "libgcc"].contains(&r.name.as_normalized()))
                 .collect(),
             &spec("diffle[extras=[unknown]]"),
-            &HashSet::new(),
             None
         ));
     }
@@ -682,12 +648,7 @@ mod tests {
             ["other", "mid", "top[extras=[deep]]"],
         ] {
             assert!(
-                local_environment_matches_spec(
-                    records.clone(),
-                    &specs(&order),
-                    &HashSet::new(),
-                    None
-                ),
+                local_environment_matches_spec(records.clone(), &specs(&order), None),
                 "{order:?}"
             );
         }
@@ -696,7 +657,6 @@ mod tests {
         assert!(!local_environment_matches_spec(
             without(&["other", "widedep", "deepdep"]),
             &specs(&["top[extras=[deep]]"]),
-            &HashSet::new(),
             None
         ));
 
@@ -704,7 +664,6 @@ mod tests {
         assert!(!local_environment_matches_spec(
             without(&["other", "widedep"]),
             &specs(&["top"]),
-            &HashSet::new(),
             None
         ));
     }
