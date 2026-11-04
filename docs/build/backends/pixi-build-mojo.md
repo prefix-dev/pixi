@@ -169,7 +169,7 @@ env = { ASSERT = "all" }
 
 #### `debug-dir`
 
-The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; if present, the backend emits a warning to highlight that it no longer has any effect.
+The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored. If present, the backend emits a warning to highlight that it no longer has any effect.
 
 #### `extra-input-globs`
 
@@ -355,33 +355,33 @@ mojo_accelerator = ["cpu", "gfx1103"]
 ```
 
 Only `cpu` and `gfx1103` are supported, with exactly this spelling.
-Without this variant, the backend keeps its ordinary Mojo build behavior.
+Without this variant, the backend only produces binaries that only rely on the CPU.
 Managed variants support `linux-64` executable `bins` only, not `pkg` builds, other GPU architectures, or CUDA.
-Both outputs keep the same package name, version, executable name, and build number; the variant changes the build hash.
+Both outputs keep the same package name, version, executable name, and build number. The variant changes the build hash.
 
 ### Compilation
 
 The backend invokes `mojo` through the activated build environment's `PATH` and sets `MODULAR_HOME` to the host environment's `share/max`.
 It passes `-D mojo_accelerator=cpu` or `-D mojo_accelerator=gfx1103` so the source can select its implementation at compile time.
 The CPU build hides devices with `ROCR_VISIBLE_DEVICES=-1`, `HIP_VISIBLE_DEVICES=-1`, and `CUDA_VISIBLE_DEVICES=-1`.
-It does not pass `--target-accelerator none`; CPU code must exclude GPU APIs through a compile-time branch.
+It does not pass `--target-accelerator none`. CPU code must exclude GPU APIs through a compile-time branch.
 The AMD build passes `--target-accelerator gfx1103`.
 
 Both builds use `--target-cpu x86-64-v3 --target-features ''`, matching the prebuilt [Modular runtime's CPU minimum](https://mojolang.org/docs/requirements/#hardware), without host-native specialization.
-Both require `_x86_64-microarch-level >=3`, conda-forge's runtime CPU-capability package; older CPUs cannot solve these outputs.
+Both require `_x86_64-microarch-level >=3`, conda-forge's [runtime CPU-capability package](https://prefix.dev/blog/building_cpu_optimized_packages).
 Binary `extra-args` are passed through without validation, including options such as `--fp-mode contract=off`.
 Callers are responsible for keeping these arguments consistent with the managed CPU/GPU target, `mojo_accelerator` define, executable output, and package compatibility requirements.
 
 The build requirements include `mojo-compiler >=1.2`, conda-forge's `compiler('c')` and `compiler('cxx')` requirements, and `patchelf`.
-Compiler activation supplies the prefixed `$CC`; the backend resolves it and sets `MODULAR_MOJO_MAX_LINKER_DRIVER` to that executable.
+Compiler activation supplies the prefixed `$CC`. The backend resolves it and sets `MODULAR_MOJO_MAX_LINKER_DRIVER` to that executable.
 The C standard library requirement is inferred from the target's declared glibc version through `stdlib('c')`.
-Declare `glibc = "2.34"` as above; no compiler metapackages, explicit sysroot pins, or machine-specific compiler paths are needed.
+Declare `glibc = "2.34"` as above. No compiler metapackages, explicit sysroot pins, or machine-specific compiler paths are needed.
 
 ### Runtime and selection
 
 Both outputs add the selected build compiler to the host requirements with `${{ pin_compatible('mojo-compiler', exact=True) }}` and require `max-core >=26.7` there.
 The `mojo-compiler` package is needed in both environments because it bundles the compiler executable and the linked `libKGENCompilerRTShared.so` runtime.
-Pin `mojo-compiler` in `[package.build-dependencies]` to select its version; the host and runtime requirements follow that selection.
+Pin `mojo-compiler` in `[package.build-dependencies]` to select its version. The host and runtime requirements follow that selection.
 Their runtime requirements exactly pin the selected `mojo-compiler` and `max-core` providers, require `__glibc >=2.34`, and inherit the C and C++ runtimes through compiler run exports.
 The AMD output also requires `hip-runtime-amd >=6.3.3`, `__amdgpu`, and `__amdgpu_arch ==11.0.3`.
 The CPU output does not require an AMD runtime.
