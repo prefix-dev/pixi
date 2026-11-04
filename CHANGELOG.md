@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.84.1] - 2026-11-04
+#### ✨ Highlights
+
+This patch release fixes a memory-usage regression introduced in v0.82.1,
+alongside some smaller fixes and work towards future features.
+
+
+#### Features
+
+- Integrate conda-pypi wheels using released rattler by @nichmor in [#7392](https://github.com/prefix-dev/pixi/pull/7392)
+- pixi-build-ros: Rtklib by @Timple in [#7461](https://github.com/prefix-dev/pixi/pull/7461)
+
+
+#### Fixes
+
+- cli: Fix multiple reporters problems by @lucascolley in [#7429](https://github.com/prefix-dev/pixi/pull/7429)
+- export: Honour `--ignore-source-errors` in conda explicit export by @lucascolley in [#7425](https://github.com/prefix-dev/pixi/pull/7425)
+- run: Detect only the installed environment's host by @lucascolley in [#7462](https://github.com/prefix-dev/pixi/pull/7462)
+- reporters: Hide the repodata bar on clear with downloads in flight by @lucascolley in [#7459](https://github.com/prefix-dev/pixi/pull/7459)
+
+
+#### Maintenance
+
+- Adapt to new `exclude-newer` design by @lucascolley in [#7470](https://github.com/prefix-dev/pixi/pull/7470)
+- Publish dev release builds of main via octo-sts by @pavelzw in [#7193](https://github.com/prefix-dev/pixi/pull/7193)
+- pixi_api: type the run errors by @lucascolley in [#7463](https://github.com/prefix-dev/pixi/pull/7463)
+
+
 ### [0.84.0] - 2026-11-02
 #### ✨ Highlights
 
