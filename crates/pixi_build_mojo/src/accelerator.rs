@@ -1,4 +1,3 @@
-use miette::IntoDiagnostic;
 use pixi_build_backend::package_dependency::PackageDependency;
 use rattler_build_recipe::stage0::{
     Conditional, ConditionalList, IncludeExclude, Item, JinjaExpression, JinjaTemplate,
@@ -41,21 +40,21 @@ pub fn configure_recipe(
     )?);
 
     let requirements = &mut recipe.requirements;
-    requirements.build.push(dependency("patchelf")?);
-    requirements.build.push(dependency("mojo-compiler >=1.2")?);
+    requirements.build.push(dependency("patchelf"));
+    requirements.build.push(dependency("mojo-compiler >=1.2"));
     requirements.host.push(Item::Value(template(
         "${{ pin_compatible('mojo-compiler', exact=True) }}",
     )?));
-    requirements.host.push(dependency("max-core >=26.7")?);
+    requirements.host.push(dependency("max-core >=26.7"));
     for provider in ["mojo-compiler", "max-core"] {
         requirements.run.push(Item::Value(template(format!(
             "${{{{ pin_compatible('{provider}', exact=True) }}}}"
         ))?));
     }
-    requirements.run.push(dependency("__glibc >=2.34")?);
+    requirements.run.push(dependency("__glibc >=2.34"));
     requirements
         .run
-        .push(dependency("_x86_64-microarch-level >=3")?);
+        .push(dependency("_x86_64-microarch-level >=3"));
 
     let arch = AmdGpuArchInfo::from_target_id("gfx1103")
         .expect("gfx1103 is a supported AMD architecture")
@@ -68,7 +67,7 @@ pub fn configure_recipe(
         requirements.run.push(Item::Conditional(Conditional {
             condition: JinjaExpression::new("mojo_accelerator == 'gfx1103'".to_string())
                 .map_err(miette::Error::msg)?,
-            then: NestedItemList::single(dependency(&requirement)?),
+            then: NestedItemList::single(dependency(&requirement)),
             else_value: None,
             condition_span: None,
         }));
@@ -83,9 +82,11 @@ pub fn template<T>(source: impl Into<String>) -> miette::Result<Value<T>> {
     ))
 }
 
-fn dependency(spec: &str) -> miette::Result<Item<SerializableMatchSpec>> {
-    let dependency: PackageDependency = spec.parse().into_diagnostic()?;
-    Ok(Item::Value(Value::new_concrete(dependency.into(), None)))
+fn dependency(spec: &str) -> Item<SerializableMatchSpec> {
+    let dependency: PackageDependency = spec
+        .parse()
+        .expect("backend-defined dependency specs are valid");
+    Item::Value(Value::new_concrete(dependency.into(), None))
 }
 
 #[cfg(test)]
@@ -139,17 +140,53 @@ mod tests {
     }
 
     #[test]
+    fn amd_runtime_requirements_only_for_gfx1103() {
+        let recipe = recipe();
+        let run = |variant: &str| -> Vec<String> {
+            recipe
+                .requirements
+                .evaluate(&context(variant))
+                .unwrap()
+                .run
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        };
+        let cpu = run("cpu");
+        insta::assert_debug_snapshot!(cpu, @r#"
+        [
+            "pin_compatible(mojo-compiler)",
+            "pin_compatible(max-core)",
+            "__glibc >=2.34",
+            "_x86_64-microarch-level >=3",
+        ]
+        "#);
+        let amd = run("gfx1103");
+        assert_eq!(amd[..cpu.len()], cpu[..]);
+        insta::assert_debug_snapshot!(amd[cpu.len()..], @r#"
+        [
+            "__amdgpu",
+            "__amdgpu_arch ==11.0.3",
+            "hip-runtime-amd >=6.3.3",
+        ]
+        "#);
+    }
+
+    #[test]
     fn rejects_packages_and_non_linux_executables() {
         let mut recipe = recipe();
-        assert!(configure_recipe(&mut recipe, Subdir::OsxArm64, Some(&[bin()]), None).is_err());
-        assert!(
-            configure_recipe(
-                &mut recipe,
-                Subdir::Linux64,
-                None,
-                Some(&MojoPkgConfig::default())
-            )
-            .is_err()
-        );
+        let platform =
+            configure_recipe(&mut recipe, Subdir::OsxArm64, Some(&[bin()]), None).unwrap_err();
+        let pkg = configure_recipe(
+            &mut recipe,
+            Subdir::Linux64,
+            None,
+            Some(&MojoPkgConfig::default()),
+        )
+        .unwrap_err();
+        let no_bins = configure_recipe(&mut recipe, Subdir::Linux64, Some(&[]), None).unwrap_err();
+        insta::assert_snapshot!(platform, @"mojo_accelerator variants support only linux-64 executable builds");
+        insta::assert_snapshot!(pkg, @"mojo_accelerator variants support only executable bins, not pkg builds");
+        insta::assert_snapshot!(no_bins, @"mojo_accelerator variants support only executable bins, not pkg builds");
     }
 }

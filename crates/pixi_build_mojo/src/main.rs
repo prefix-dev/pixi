@@ -811,4 +811,85 @@ mod tests {
             "C++ compiler should be in build requirements"
         );
     }
+
+    async fn generate_with_variant(
+        key: &str,
+        compilers: Option<Vec<String>>,
+        platform: Subdir,
+    ) -> miette::Result<GeneratedRecipe> {
+        let project_model = project_fixture!({"name": "foobar", "version": "0.1.0"});
+        let temp = tempfile::TempDir::new().unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        MojoGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &MojoBackendConfig {
+                    compilers,
+                    ..Default::default()
+                },
+                temp.path().to_path_buf(),
+                platform,
+                None,
+                &HashSet::from([NormalizedKey::from(key)]),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+    }
+
+    fn compiler_templates(recipe: &GeneratedRecipe) -> Vec<String> {
+        recipe
+            .recipe
+            .requirements
+            .build
+            .iter()
+            .filter_map(|item| match item {
+                Item::Value(v) => v.as_template().map(ToString::to_string),
+                _ => None,
+            })
+            .filter(|s| s.contains("compiler("))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_accelerator_adds_c_and_cxx_without_duplicates() {
+        let recipe =
+            generate_with_variant("mojo_accelerator", Some(vec!["c".into()]), Subdir::Linux64)
+                .await
+                .unwrap();
+        insta::assert_debug_snapshot!(compiler_templates(&recipe), @r#"
+        [
+            "${{ compiler('c') }}",
+            "${{ compiler('cxx') }}",
+        ]
+        "#);
+        assert!(recipe.recipe.build.variant.use_keys.iter().any(|k| matches!(k, Item::Value(v) if v.as_concrete().map(String::as_str) == Some("mojo_accelerator"))));
+    }
+
+    #[tokio::test]
+    async fn test_hyphenated_accelerator_key_is_normalized() {
+        let recipe = generate_with_variant("mojo-accelerator", None, Subdir::Linux64)
+            .await
+            .unwrap();
+        assert_eq!(compiler_templates(&recipe).len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_without_accelerator_osx_is_untouched() {
+        let recipe = generate_with_variant("python", None, Subdir::OsxArm64)
+            .await
+            .unwrap();
+        assert!(compiler_templates(&recipe).is_empty());
+        assert!(
+            recipe
+                .recipe
+                .build
+                .variant
+                .down_prioritize_variant
+                .is_none()
+        );
+    }
 }
