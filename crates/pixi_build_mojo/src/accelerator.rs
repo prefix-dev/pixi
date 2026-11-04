@@ -33,18 +33,17 @@ pub fn validate_variants(variants: &BTreeMap<NormalizedKey, Vec<Variable>>) -> m
     Ok(())
 }
 
-pub fn configure_recipe(
-    recipe: &mut SingleOutputRecipe,
+/// Whether the variant applies to a package. Build variants are shared by the
+/// whole workspace, so other packages and platforms build as if it was unset.
+pub fn applies(
     platform: Subdir,
     bins: Option<&[MojoBinConfig]>,
     pkg: Option<&MojoPkgConfig>,
-) -> miette::Result<()> {
-    if platform != Subdir::Linux64 {
-        miette::bail!("mojo_accelerator variants support only linux-64 executable builds");
-    }
-    if pkg.is_some() || bins.is_none_or(|bins| bins.is_empty()) {
-        miette::bail!("mojo_accelerator variants support only executable bins, not pkg builds");
-    }
+) -> bool {
+    platform == Subdir::Linux64 && pkg.is_none() && bins.is_some_and(|bins| !bins.is_empty())
+}
+
+pub fn configure_recipe(recipe: &mut SingleOutputRecipe) -> miette::Result<()> {
     recipe.build.files = Some(IncludeExclude::List(ConditionalList::new(vec![
         Item::Value(Value::new_concrete("bin/*".to_string(), None)),
     ])));
@@ -130,7 +129,7 @@ mod tests {
     fn recipe() -> SingleOutputRecipe {
         let mut recipe =
             parse_recipe_from_source("package:\n  name: example\n  version: 1.0\n").unwrap();
-        configure_recipe(&mut recipe, Subdir::Linux64, Some(&[bin()]), None).unwrap();
+        configure_recipe(&mut recipe).unwrap();
         recipe
     }
 
@@ -197,20 +196,13 @@ mod tests {
     }
 
     #[test]
-    fn rejects_packages_and_non_linux_executables() {
-        let mut recipe = recipe();
-        let platform =
-            configure_recipe(&mut recipe, Subdir::OsxArm64, Some(&[bin()]), None).unwrap_err();
-        let pkg = configure_recipe(
-            &mut recipe,
-            Subdir::Linux64,
-            None,
-            Some(&MojoPkgConfig::default()),
-        )
-        .unwrap_err();
-        let no_bins = configure_recipe(&mut recipe, Subdir::Linux64, Some(&[]), None).unwrap_err();
-        insta::assert_snapshot!(platform, @"mojo_accelerator variants support only linux-64 executable builds");
-        insta::assert_snapshot!(pkg, @"mojo_accelerator variants support only executable bins, not pkg builds");
-        insta::assert_snapshot!(no_bins, @"mojo_accelerator variants support only executable bins, not pkg builds");
+    fn applies_only_to_linux_64_bins() {
+        let bins = [bin()];
+        let pkg = MojoPkgConfig::default();
+        assert!(applies(Subdir::Linux64, Some(&bins), None));
+        assert!(!applies(Subdir::OsxArm64, Some(&bins), None));
+        assert!(!applies(Subdir::Linux64, Some(&bins), Some(&pkg)));
+        assert!(!applies(Subdir::Linux64, None, Some(&pkg)));
+        assert!(!applies(Subdir::Linux64, Some(&[]), None));
     }
 }

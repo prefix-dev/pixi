@@ -76,15 +76,11 @@ impl GenerateRecipe for MojoGenerator {
         let (mut bins, mut pkg) = config.auto_derive(&manifest_root, &cleaned_project_name)?;
         Self::make_paths_absolute(&manifest_root, &mut bins, &mut pkg)?;
 
-        let accelerator_variants_enabled =
-            variants.contains(&NormalizedKey::from(accelerator::VARIANT_KEY));
+        let accelerator_variants_enabled = variants
+            .contains(&NormalizedKey::from(accelerator::VARIANT_KEY))
+            && accelerator::applies(host_platform, bins.as_deref(), pkg.as_ref());
         if accelerator_variants_enabled {
-            accelerator::configure_recipe(
-                &mut generated_recipe.recipe,
-                host_platform,
-                bins.as_deref(),
-                pkg.as_ref(),
-            )?;
+            accelerator::configure_recipe(&mut generated_recipe.recipe)?;
         }
 
         // Add compiler
@@ -885,11 +881,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_without_accelerator_osx_is_untouched() {
-        let recipe = generate_with_variant("python", None, Subdir::OsxArm64)
+    async fn test_accelerator_is_ignored_on_osx() {
+        let recipe = generate_with_variant("mojo_accelerator", None, Subdir::OsxArm64)
             .await
             .unwrap();
         assert!(compiler_templates(&recipe).is_empty());
+        assert!(recipe.recipe.build.variant.use_keys.is_empty());
         assert!(
             recipe
                 .recipe
