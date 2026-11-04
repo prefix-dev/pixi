@@ -265,6 +265,31 @@ fn path_diff(
     env::join_paths(path_diff).map(|p| p.to_string_lossy().to_string())
 }
 
+/// Parses a dependency string of a package record into a [`MatchSpec`].
+fn parse_dependency(dependency: &str) -> Option<MatchSpec> {
+    MatchSpec::from_str(
+        dependency,
+        ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+    )
+    .ok()
+}
+
+/// Returns the dependencies that the given `extras` add to `record`.
+///
+/// Extras that the record doesn't define are ignored, just like the solver
+/// does.
+fn requested_extra_dependencies<'a>(
+    record: &'a PackageRecord,
+    extras: Option<&'a [String]>,
+) -> impl Iterator<Item = MatchSpec> + 'a {
+    extras
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|extra| record.extra_depends.get(extra))
+        .flatten()
+        .filter_map(|dependency| parse_dependency(dependency))
+}
+
 /// Checks if the local environment matches the given specifications.
 ///
 /// This function verifies that all the given specifications are present in the
@@ -277,10 +302,16 @@ pub(crate) fn local_environment_matches_spec(
     platform: Option<Subdir>,
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
-    // environment
-    let specs_in_manifest_are_present = binary_specs
-        .iter()
-        .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
+    // environment. `MatchSpec::matches` ignores extras, so for specs that
+    // request extras we additionally verify that the dependencies those extras
+    // pull in are installed as well.
+    let specs_in_manifest_are_present = binary_specs.iter().all(|spec| {
+        prefix_records.iter().any(|record| {
+            spec.matches(record)
+                && requested_extra_dependencies(record, spec.extras.as_deref())
+                    .all(|extra_spec| prefix_records.iter().any(|r| extra_spec.matches(r)))
+        })
+    });
 
     let prefix_record_set: HashSet<_> = prefix_records
         .iter()
@@ -319,19 +350,21 @@ pub(crate) fn local_environment_matches_spec(
     // Prune dependencies from the repodata that are valid for the requested specs
     fn prune_dependencies(
         mut remaining_prefix_records: Vec<PackageRecord>,
-        matched_record: &PackageRecord,
+        matched_record: PackageRecord,
+        extras: Option<&[String]>,
     ) -> Vec<PackageRecord> {
-        let mut work_queue = Vec::from([matched_record.as_ref().clone()]);
+        let mut work_queue = Vec::from([(matched_record, extras.map(<[String]>::to_vec))]);
 
-        while let Some(current_record) = work_queue.pop() {
-            let dependencies = &current_record.depends;
-            for dependency in dependencies {
-                let Ok(match_spec) = MatchSpec::from_str(
-                    dependency,
-                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
-                ) else {
-                    continue;
-                };
+        while let Some((current_record, current_extras)) = work_queue.pop() {
+            let dependencies = current_record
+                .depends
+                .iter()
+                .filter_map(|dependency| parse_dependency(dependency))
+                .chain(requested_extra_dependencies(
+                    &current_record,
+                    current_extras.as_deref(),
+                ));
+            for match_spec in dependencies {
                 let Some(index) = remaining_prefix_records
                     .iter()
                     .position(|record| match_spec.matches(record))
@@ -339,8 +372,8 @@ pub(crate) fn local_environment_matches_spec(
                     continue;
                 };
 
-                let matched_record = remaining_prefix_records.remove(index).as_ref().clone();
-                work_queue.push(matched_record);
+                let matched_record = remaining_prefix_records.remove(index);
+                work_queue.push((matched_record, match_spec.extras));
             }
         }
 
@@ -349,11 +382,11 @@ pub(crate) fn local_environment_matches_spec(
 
     // Process each spec and remove matched entries and their dependencies
     let remaining_prefix_records = binary_specs.iter().fold(prefix_records, |mut acc, spec| {
-        let Some(index) = acc.iter().position(|record| spec.matches(record.as_ref())) else {
+        let Some(index) = acc.iter().position(|record| spec.matches(record)) else {
             return acc;
         };
         let matched_record = acc.swap_remove(index);
-        prune_dependencies(acc, &matched_record)
+        prune_dependencies(acc, matched_record, spec.extras.as_deref())
     });
 
     // Do the same for source package names
@@ -365,7 +398,7 @@ pub(crate) fn local_environment_matches_spec(
                     return acc;
                 };
                 let matched_record = acc.swap_remove(index);
-                prune_dependencies(acc, &matched_record)
+                prune_dependencies(acc, matched_record, None)
             });
 
     // If there are no remaining prefix records, then this means that
@@ -549,6 +582,85 @@ mod tests {
             ),
             "The record contains linux-64 entries, so the function should always return `false`"
         );
+    }
+
+    /// Records for a package `diffle` with an extra `rust` that pulls in
+    /// `rust` (which itself depends on `libgcc`), plus `python` as a regular
+    /// dependency.
+    fn diffle_records() -> Vec<PackageRecord> {
+        let record = |name: &str, depends: &[&str]| {
+            let mut record = PackageRecord::new(
+                PackageName::from_str(name).unwrap(),
+                rattler_conda_types::Version::from_str("1.0").unwrap(),
+                "0".parse().unwrap(),
+            );
+            record.depends = depends.iter().map(ToString::to_string).collect();
+            record
+        };
+        let mut diffle = record("diffle", &["python"]);
+        diffle.extra_depends = [("rust".to_string(), vec!["rust >=1".to_string()])].into();
+        vec![
+            diffle,
+            record("python", &[]),
+            record("rust", &["libgcc"]),
+            record("libgcc", &[]),
+        ]
+    }
+
+    #[test]
+    fn test_local_environment_extras() {
+        let all_records = diffle_records();
+        let without_extra_records: Vec<_> = all_records
+            .iter()
+            .filter(|r| !["rust", "libgcc"].contains(&r.name.as_normalized()))
+            .cloned()
+            .collect();
+        let spec = |s: &str| IndexSet::from([parse_dependency(s).unwrap()]);
+        let no_sources = HashSet::new();
+
+        // Plain spec against environment without the extra installed.
+        assert!(local_environment_matches_spec(
+            without_extra_records.clone(),
+            &spec("diffle"),
+            &no_sources,
+            None
+        ));
+
+        // Requesting an extra that isn't installed yet must be out of sync.
+        assert!(!local_environment_matches_spec(
+            without_extra_records,
+            &spec("diffle[extras=[rust]]"),
+            &no_sources,
+            None
+        ));
+
+        // With the extra dependencies installed, the extra (and its transitive
+        // dependencies) must not count as unexpected entries.
+        assert!(local_environment_matches_spec(
+            all_records.clone(),
+            &spec("diffle[extras=[rust]]"),
+            &no_sources,
+            None
+        ));
+
+        // Dropping the extra from the manifest leaves stale packages behind.
+        assert!(!local_environment_matches_spec(
+            all_records.clone(),
+            &spec("diffle"),
+            &no_sources,
+            None
+        ));
+
+        // Unknown extras are ignored, like the solver does.
+        assert!(local_environment_matches_spec(
+            all_records
+                .into_iter()
+                .filter(|r| !["rust", "libgcc"].contains(&r.name.as_normalized()))
+                .collect(),
+            &spec("diffle[extras=[unknown]]"),
+            &no_sources,
+            None
+        ));
     }
 
     #[tokio::test]
