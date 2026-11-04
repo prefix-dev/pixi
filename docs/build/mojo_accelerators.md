@@ -1,7 +1,7 @@
-# Building Mojo CPU and AMD Packages
+# Building Mojo CPU and AMD GPU Packages
 
 In this tutorial, we will build CPU and AMD GPU variants of a Mojo package with Pixi.
-For background on building packages, see the [Getting Started](./getting_started.md) guide and the [Mojo backend documentation](backends/pixi-build-mojo.md#accelerator-variants).
+For background on building packages, see the [Getting Started](./getting_started.md) guide and the [Mojo backend documentation](backends/pixi-build-mojo.md).
 
 !!! warning
     `pixi-build` is a preview feature and may change before it is stabilized.
@@ -9,7 +9,7 @@ For background on building packages, see the [Getting Started](./getting_started
 ## Why is This Useful?
 
 Build variants let us distribute CPU and GPU implementations of the same package without changing its name or version.
-Pixi can then select the AMD build on compatible hardware and use the CPU build otherwise.
+Pixi can then select the AMD GPU build on compatible hardware and use the CPU build otherwise.
 We will publish both builds to a local channel and install them in a separate workspace, without a source dependency or build backend in the consumer.
 
 ## Let's Get Started
@@ -40,7 +40,7 @@ The important bit is that different code is executed if `ACCELERATOR == "cpu"` t
 
 The CPU branch uses a plain, single-threaded loop with normal compiler optimizations.
 The GPU branch copies the inputs to device buffers, launches one thread per output cell, copies the result back, and synchronizes before reading it.
-While we expect a performance difference, both execute calculate the same dot product, which is why we also expect the same result.
+Both branches multiply the same matrices, so we expect the same result but different performance.
 
 Next, define the producer workspace and package:
 
@@ -48,7 +48,7 @@ Next, define the producer workspace and package:
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/mojo_accelerators/package/pixi.toml"
 ```
 
-The `mojo_accelerator` build variant produces two packages with the same name and version but different build hashes.
+The [`mojo_accelerator`](backends/pixi-build-mojo.md#accelerator-variants) build variant produces two packages with the same name and version but different build hashes.
 The backend supplies the compile-time define and compiler flags for each implementation, with a shared x86-64-v3 host baseline.
 The compiler and runtime pins keep this example on a matching toolchain.
 The backend supplies C/C++ compiler requirements, derives the glibc sysroot from the platform, and records the runtime and hardware requirements in each package.
@@ -88,6 +88,7 @@ On a compatible Radeon 780M, this prints:
 ```text
 path=gfx1103 side=1024 validation=ok
 ```
+
 
 ## Optional: measure whole-program time
 
