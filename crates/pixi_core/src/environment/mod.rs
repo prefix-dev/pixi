@@ -907,6 +907,14 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     ))
 }
 
+/// A platform was requested for an environment that doesn't list it.
+#[derive(Debug, Error, Diagnostic)]
+#[error("platform '{platform}' is not part of environment '{environment}'")]
+pub struct PlatformNotInEnvironmentError {
+    pub platform: PixiPlatformName,
+    pub environment: EnvironmentName,
+}
+
 /// An error that can occur while updating the lock file and the prefixes of
 /// a set of environments.
 #[derive(Debug, Error, Diagnostic)]
@@ -918,11 +926,9 @@ pub enum LockFileAndPrefixesError {
     #[error("no environments provided to install")]
     NoEnvironments,
 
-    #[error("platform '{platform}' is not part of environment '{environment}'")]
-    PlatformNotInEnvironment {
-        platform: PixiPlatformName,
-        environment: EnvironmentName,
-    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PlatformNotInEnvironment(#[from] PlatformNotInEnvironmentError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -983,10 +989,11 @@ pub async fn get_lock_file_and_prefixes<'env>(
                 .is_none()
             && let Some(name) = target_platform
         {
-            return Err(LockFileAndPrefixesError::PlatformNotInEnvironment {
+            return Err(PlatformNotInEnvironmentError {
                 platform: name.clone(),
                 environment: env.name().clone(),
-            });
+            }
+            .into());
         }
         if !no_install {
             env.emit_emulation_warning();

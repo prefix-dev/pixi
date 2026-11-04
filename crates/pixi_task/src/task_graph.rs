@@ -19,7 +19,7 @@ use pixi_manifest::{
 use thiserror::Error;
 
 use crate::{
-    TaskDisambiguation,
+    DisambiguationError, TaskDisambiguation,
     error::{
         AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError,
         UnrunnableTaskError,
@@ -271,6 +271,9 @@ impl<'p> TaskGraph<'p> {
                 Err(FindTaskError::AmbiguousTask(err)) => {
                     return Err(TaskGraphError::AmbiguousTask(err));
                 }
+                Err(FindTaskError::Disambiguation(err)) => {
+                    return Err(TaskGraphError::Disambiguation(err));
+                }
                 Ok((task_env, task)) => {
                     // If an explicit environment was specified and the task is from the default
                     // environment use the specified environment instead.
@@ -498,6 +501,9 @@ impl<'p> TaskGraph<'p> {
                     Err(FindTaskError::AmbiguousTask(err)) => {
                         return Err(TaskGraphError::AmbiguousTask(err));
                     }
+                    Err(FindTaskError::Disambiguation(err)) => {
+                        return Err(TaskGraphError::Disambiguation(err));
+                    }
                     Ok(result) => result,
                 };
 
@@ -711,6 +717,10 @@ pub enum TaskGraphError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Disambiguation(DisambiguationError),
 
     #[error("could not split task, assuming non valid task")]
     InvalidTask,

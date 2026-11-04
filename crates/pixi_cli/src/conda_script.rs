@@ -5,7 +5,7 @@ use miette::{IntoDiagnostic, NamedSource, Report};
 use pixi_api::workspace::run_future_forwarding_signals;
 use pixi_core::{
     Workspace,
-    environment::sanity_check_workspace,
+    environment::{PlatformNotInEnvironmentError, sanity_check_workspace},
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::virtual_packages::{
         EnvironmentRunnability, classify_environment_runnability,
@@ -91,11 +91,11 @@ pub(crate) async fn execute_run(
         && best_declared_platform.is_none()
         && let Some(name) = user_platform.as_ref()
     {
-        return Err(miette::miette!(
-            "platform '{}' is not part of environment '{}'",
-            name,
-            environment.name(),
-        ));
+        return Err(PlatformNotInEnvironmentError {
+            platform: name.clone(),
+            environment: environment.name().clone(),
+        }
+        .into());
     }
     if allow_installs {
         environment.emit_emulation_warning();
