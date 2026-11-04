@@ -1,8 +1,9 @@
 name: Build release binaries
 
 # Reusable workflow that builds and packages the pixi release binaries for every
-# target. Used by release.yml (signed, published to prefix-dev/pixi) and
-# dev-release.yml (unsigned development builds from main).
+# target. Used by release.yml (published to prefix-dev/pixi) and
+# dev-release.yml (development builds from main, published to
+# prefix-dev/pixi-nightly). Binaries are signed unless `sign` is false.
 
 on:
   workflow_call:
@@ -10,7 +11,7 @@ on:
       sign:
         description: "Codesign the macOS and Windows binaries and the MSI"
         type: boolean
-        default: false
+        default: true
       pixi-version:
         description: "Override the version baked into the binary (PIXI_VERSION); defaults to crates/pixi/Cargo.toml"
         type: string
