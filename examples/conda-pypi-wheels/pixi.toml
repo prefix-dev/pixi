@@ -1,0 +1,14 @@
+# Example: solve a package from the conda-pypi channel, which serves PyPI wheels
+# as repodata v3 `whl` records. `cowsay` also exists on conda-forge, so it is
+# pinned to conda-pypi to force the wheel to be selected.
+[workspace]
+name = "conda-pypi-wheels"
+channels = ["conda-forge", "https://conda.anaconda.org/conda-pypi"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.12.*"
+cowsay = { version = "*", channel = "https://conda.anaconda.org/conda-pypi" }
+
+[tasks]
+moo = "python -c 'import cowsay; cowsay.cow(\"locked from a wheel\")'"

@@ -1,0 +1,13 @@
+[workspace]
+channels = ["conda-forge", "https://conda.anaconda.org/conda-pypi"]
+platforms = ["linux-64"]
+
+# `cowsay` is locked as a wheel served by the conda-pypi channel: a repodata v3
+# `whl` record whose location is the real wheel file on files.pythonhosted.org
+# while its `file_name` is the synthetic conda-style identifier. The lock file
+# must satisfy this manifest, so a wheel record is matched by name/version/build
+# and its `depends` are walked like any other conda binary package.
+
+[dependencies]
+python = "3.12.*"
+cowsay = { version = "*", channel = "https://conda.anaconda.org/conda-pypi" }
