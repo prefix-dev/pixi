@@ -62,6 +62,12 @@ pixi self-update --version x.y.z
 
 Although we recommend installing Pixi through the above method we also provide additional installation methods.
 
+!!! note
+
+    Unlike the recommended installer, most alternative methods install the `pixi` binary only.
+    They do **not** add [`PIXI_HOME`](reference/environment_variables.md)/bin (default: `~/.pixi/bin`) to your `PATH`.
+    Add that directory yourself if you want tools installed with [`pixi global`](global_tools/introduction.md) to be available from the command line.
+
 ### Homebrew
 
 Pixi is available via homebrew. To install Pixi via homebrew simply run:
@@ -91,7 +97,7 @@ scoop install main/pixi
 
 Pixi is a single executable and can be run without any external dependencies.
 That means you can manually download the suitable archive for your architecture and operating system from our [GitHub releases](https://github.com/prefix-dev/pixi/releases), unpack it and then use it as is.
-If you want `pixi` itself or the executables installed via `pixi global` to be available in your `PATH`, you have to add them manually.
+If you want `pixi` itself or the executables installed via `pixi global` to be available in your `PATH`, you have to add them manually (see the note under [Alternative Installation Methods](#alternative-installation-methods)).
 The executables are located in [PIXI_HOME](reference/environment_variables.md)/bin.
 
 
