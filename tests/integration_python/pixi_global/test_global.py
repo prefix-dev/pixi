@@ -1985,6 +1985,45 @@ def test_global_update_single_package_with_transient_dependency(
     )
 
 
+def test_global_update_with_custom_exposed_name(
+    pixi: Path, tmp_path: Path, non_self_expose_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Environment `jupyter` auto-exposes the `jupyter` binary.
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", non_self_expose_channel_1, "jupyter"],
+        env=env,
+    )
+    assert (tmp_path / "bin" / exec_extension("jupyter")).is_file()
+
+    # Environment `custom` depends on the same package but exposes the binary
+    # under a custom name.
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            non_self_expose_channel_1,
+            "--environment",
+            "custom",
+            "--expose",
+            "jupyter-custom=jupyter",
+            "jupyter",
+        ],
+        env=env,
+    )
+    assert (tmp_path / "bin" / exec_extension("jupyter-custom")).is_file()
+
+    # Updating must not re-expose `jupyter` for the `custom` environment: that
+    # would clash with the same exposed name in the `jupyter` environment.
+    verify_cli_command([pixi, "global", "update", "custom"], env=env)
+
+    manifest = tomli.loads((tmp_path / "manifests" / "pixi-global.toml").read_text())
+    assert manifest["envs"]["custom"]["exposed"] == {"jupyter-custom": "jupyter"}
+
+
 def test_global_update_doesnt_remove_exposed_key_of_transient_dependencies(
     pixi: Path, tmp_path: Path, multiple_versions_channel_1: Path
 ) -> None:
