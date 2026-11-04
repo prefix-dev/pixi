@@ -94,8 +94,8 @@ mod tests {
                 export HIP_VISIBLE_DEVICES=-1
                 export CUDA_VISIBLE_DEVICES=-1
                 ;;
-            gfx1103)
-                mojo_build_args+=(--target-accelerator gfx1103)
+            *)
+                mojo_build_args+=(--target-accelerator "${{ mojo_accelerator }}")
                 ;;
         esac
 

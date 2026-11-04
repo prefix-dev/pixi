@@ -16,14 +16,12 @@ def main() raises:
             result += i * i
         assert_equal(result, 332833500)
         print("path=cpu result=", result, sep="")
-    elif accelerator == "gfx1103":
-        comptime assert default_accelerator().is_amd_gpu["gfx1103"](), "wrong AMD target"
+    else:
+        comptime assert default_accelerator().is_amd_gpu[accelerator](), "wrong AMD target"
         var ctx = DeviceContext()
         var output = ctx.enqueue_create_buffer[DType.int32](1)
         ctx.enqueue_function[kernel](output, grid_dim=1, block_dim=1)
         ctx.synchronize()
         with output.map_to_host() as values:
             assert_equal(values[0], 332833500)
-            print("path=gfx1103 device=", ctx.name(), " result=", values[0], sep="")
-    else:
-        comptime assert False, "unsupported accelerator"
+            print("path=", accelerator, " device=", ctx.name(), " result=", values[0], sep="")

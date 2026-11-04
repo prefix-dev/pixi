@@ -98,12 +98,18 @@ def test_mojo_variants_publish_solve_and_run(pixi: Path, mojo_workspace: Path) -
     )
 
     archives = sorted(channel.joinpath("linux-64").glob("*.conda"))
-    assert len(archives) == 2
+    assert len(archives) == 3
     packages = {}
     for position, archive in enumerate(archives):
         index = _package_index(archive, mojo_workspace.joinpath(f"extracted-{position}"))
-        dependencies = {dependency.split()[0] for dependency in index["depends"]}
-        variant = "gfx1103" if "__amdgpu" in dependencies else "cpu"
+        arch = [
+            dependency for dependency in index["depends"] if dependency.startswith("__amdgpu_arch")
+        ]
+        variant = (
+            {"__amdgpu_arch ==11.0.0": "gfx1100", "__amdgpu_arch ==11.0.3": "gfx1103"}[arch[0]]
+            if arch
+            else "cpu"
+        )
         assert variant not in packages
         packages[variant] = (archive, index)
         assert index["name"] == PACKAGE_NAME
@@ -114,14 +120,15 @@ def test_mojo_variants_publish_solve_and_run(pixi: Path, mojo_workspace: Path) -
         _runtime_pin(index, "mojo-compiler", "1.2.0")
         _runtime_pin(index, "max-core", "26.7.0")
 
-    assert set(packages) == {"cpu", "gfx1103"}
+    assert set(packages) == {"cpu", "gfx1100", "gfx1103"}
     cpu_archive, cpu_index = packages["cpu"]
+    other_amd_archive, other_amd_index = packages["gfx1100"]
     amd_archive, amd_index = packages["gfx1103"]
-    assert cpu_index["build"] != amd_index["build"]
+    assert len({cpu_index["build"], other_amd_index["build"], amd_index["build"]}) == 3
     assert cpu_index["track_features"] == f"{PACKAGE_NAME}-p-0"
-    assert not amd_index.get("track_features")
-    assert "__amdgpu_arch ==11.0.3" in amd_index["depends"]
-    assert "hip-runtime-amd >=6.3.3" in amd_index["depends"]
+    for index in [other_amd_index, amd_index]:
+        assert not index.get("track_features")
+        assert {"__amdgpu", "hip-runtime-amd >=6.3.3"} <= set(index["depends"])
     assert not any(
         dependency.split()[0] in {"__amdgpu", "__amdgpu_arch", "hip-runtime-amd"}
         for dependency in cpu_index["depends"]
@@ -177,7 +184,7 @@ def test_mojo_variants_publish_solve_and_run(pixi: Path, mojo_workspace: Path) -
     for platform, expected in [
         ("cpu", cpu_archive),
         ("matching-amd", amd_archive),
-        ("other-amd", cpu_archive),
+        ("other-amd", other_amd_archive),
         ("newer-amd", cpu_archive),
         ("newer-cpu", cpu_archive),
     ]:

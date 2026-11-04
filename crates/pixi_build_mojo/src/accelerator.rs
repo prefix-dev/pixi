@@ -13,7 +13,29 @@ use rattler_virtual_packages::amdgpu::AmdGpuArchInfo;
 use crate::config::{MojoBinConfig, MojoPkgConfig};
 
 pub const VARIANT_KEY: &str = "mojo_accelerator";
-const SUPPORTED_VALUES: [&str; 2] = ["cpu", "gfx1103"];
+const CPU: &str = "cpu";
+/// AMD targets listed at <https://max.modular.com/gpu/hardware-compatibility/>,
+/// with the minimum HIP runtime each needs.
+const AMD_TARGETS: [(&str, &str); 14] = [
+    ("gfx90a", "6.3.3"),
+    ("gfx942", "6.3.3"),
+    ("gfx950", "7.0"),
+    ("gfx1030", "6.3.3"),
+    ("gfx1033", "6.3.3"),
+    ("gfx1100", "6.3.3"),
+    ("gfx1101", "6.3.3"),
+    ("gfx1102", "6.3.3"),
+    ("gfx1103", "6.3.3"),
+    ("gfx1150", "6.3.3"),
+    ("gfx1151", "6.3.3"),
+    ("gfx1152", "6.3.3"),
+    ("gfx1200", "6.3.3"),
+    ("gfx1201", "6.3.3"),
+];
+
+fn supported_values() -> impl Iterator<Item = &'static str> {
+    std::iter::once(CPU).chain(AMD_TARGETS.iter().map(|(target, _)| *target))
+}
 
 pub fn validate_variants(variants: &BTreeMap<NormalizedKey, Vec<Variable>>) -> miette::Result<()> {
     let Some(values) = variants.get(&NormalizedKey::from(VARIANT_KEY)) else {
@@ -22,11 +44,11 @@ pub fn validate_variants(variants: &BTreeMap<NormalizedKey, Vec<Variable>>) -> m
     for value in values {
         if !value
             .as_str()
-            .is_some_and(|value| SUPPORTED_VALUES.contains(&value))
+            .is_some_and(|value| supported_values().any(|supported| supported == value))
         {
             miette::bail!(
                 "invalid value '{value}' for '{VARIANT_KEY}', supported values are: {}",
-                SUPPORTED_VALUES.join(", ")
+                supported_values().collect::<Vec<_>>().join(", ")
             );
         }
     }
@@ -76,18 +98,18 @@ pub fn configure_recipe(recipe: &mut SingleOutputRecipe) -> miette::Result<()> {
         .run
         .push(dependency("_x86_64-microarch-level >=3"));
 
-    let arch = AmdGpuArchInfo::from_target_id("gfx1103")
-        .expect("gfx1103 is a supported AMD architecture")
-        .to_version();
-    for requirement in [
-        "__amdgpu".to_string(),
-        format!("__amdgpu_arch =={arch}"),
-        "hip-runtime-amd >=6.3.3".to_string(),
-    ] {
+    for (target, hip_runtime) in AMD_TARGETS {
+        let arch = AmdGpuArchInfo::from_target_id(target)
+            .expect("backend-defined AMD targets are valid")
+            .to_version();
         requirements.run.push(Item::Conditional(Conditional {
-            condition: JinjaExpression::new("mojo_accelerator == 'gfx1103'".to_string())
+            condition: JinjaExpression::new(format!("mojo_accelerator == '{target}'"))
                 .map_err(miette::Error::msg)?,
-            then: NestedItemList::single(dependency(&requirement)),
+            then: NestedItemList::new(vec![
+                dependency("__amdgpu"),
+                dependency(&format!("__amdgpu_arch =={arch}")),
+                dependency(&format!("hip-runtime-amd >={hip_runtime}")),
+            ]),
             else_value: None,
             condition_span: None,
         }));
@@ -155,15 +177,15 @@ mod tests {
             |values: Vec<Variable>| BTreeMap::from([(NormalizedKey::from(VARIANT_KEY), values)]);
         validate_variants(&BTreeMap::new()).unwrap();
         validate_variants(&variants(vec!["cpu".into(), "gfx1103".into()])).unwrap();
-        for invalid in ["CPU", "gfx1100", "amdgpu:gfx1103", ""] {
+        for invalid in ["CPU", "gfx1103:xnack-", "gfx1036", "amdgpu:gfx1103", ""] {
             assert!(validate_variants(&variants(vec!["cpu".into(), invalid.into()])).is_err());
         }
-        let error = validate_variants(&variants(vec!["gfx1100".into()])).unwrap_err();
-        insta::assert_snapshot!(error, @"invalid value 'gfx1100' for 'mojo_accelerator', supported values are: cpu, gfx1103");
+        let error = validate_variants(&variants(vec!["gfx1036".into()])).unwrap_err();
+        insta::assert_snapshot!(error, @"invalid value 'gfx1036' for 'mojo_accelerator', supported values are: cpu, gfx90a, gfx942, gfx950, gfx1030, gfx1033, gfx1100, gfx1101, gfx1102, gfx1103, gfx1150, gfx1151, gfx1152, gfx1200, gfx1201");
     }
 
     #[test]
-    fn amd_runtime_requirements_only_for_gfx1103() {
+    fn amd_runtime_requirements_per_target() {
         let recipe = recipe();
         let run = |variant: &str| -> Vec<String> {
             recipe
@@ -184,15 +206,31 @@ mod tests {
             "_x86_64-microarch-level >=3",
         ]
         "#);
-        let amd = run("gfx1103");
-        assert_eq!(amd[..cpu.len()], cpu[..]);
-        insta::assert_debug_snapshot!(amd[cpu.len()..], @r#"
-        [
-            "__amdgpu",
-            "__amdgpu_arch ==11.0.3",
-            "hip-runtime-amd >=6.3.3",
-        ]
-        "#);
+        let amd = AMD_TARGETS
+            .iter()
+            .map(|(target, _)| {
+                let run = run(target);
+                assert_eq!(run[..cpu.len()], cpu[..]);
+                format!("{target}: {}", run[cpu.len()..].join(", "))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!(amd, @"
+        gfx90a: __amdgpu, __amdgpu_arch ==9.0.10, hip-runtime-amd >=6.3.3
+        gfx942: __amdgpu, __amdgpu_arch ==9.4.2, hip-runtime-amd >=6.3.3
+        gfx950: __amdgpu, __amdgpu_arch ==9.5.0, hip-runtime-amd >=7.0
+        gfx1030: __amdgpu, __amdgpu_arch ==10.3.0, hip-runtime-amd >=6.3.3
+        gfx1033: __amdgpu, __amdgpu_arch ==10.3.3, hip-runtime-amd >=6.3.3
+        gfx1100: __amdgpu, __amdgpu_arch ==11.0.0, hip-runtime-amd >=6.3.3
+        gfx1101: __amdgpu, __amdgpu_arch ==11.0.1, hip-runtime-amd >=6.3.3
+        gfx1102: __amdgpu, __amdgpu_arch ==11.0.2, hip-runtime-amd >=6.3.3
+        gfx1103: __amdgpu, __amdgpu_arch ==11.0.3, hip-runtime-amd >=6.3.3
+        gfx1150: __amdgpu, __amdgpu_arch ==11.5.0, hip-runtime-amd >=6.3.3
+        gfx1151: __amdgpu, __amdgpu_arch ==11.5.1, hip-runtime-amd >=6.3.3
+        gfx1152: __amdgpu, __amdgpu_arch ==11.5.2, hip-runtime-amd >=6.3.3
+        gfx1200: __amdgpu, __amdgpu_arch ==12.0.0, hip-runtime-amd >=6.3.3
+        gfx1201: __amdgpu, __amdgpu_arch ==12.0.1, hip-runtime-amd >=6.3.3
+        ");
     }
 
     #[test]
