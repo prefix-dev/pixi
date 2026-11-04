@@ -309,6 +309,10 @@ pub(crate) fn local_environment_matches_spec(
         prefix_records.iter().any(|record| {
             spec.matches(record)
                 && requested_extra_dependencies(record, spec.extras.as_deref())
+                    // We can't evaluate conditions (e.g. `foo; if __win`) here,
+                    // so we don't require conditional dependencies to be
+                    // present. They are still followed when pruning below.
+                    .filter(|extra_spec| extra_spec.condition.is_none())
                     .all(|extra_spec| prefix_records.iter().any(|r| extra_spec.matches(r)))
         })
     });
@@ -598,7 +602,15 @@ mod tests {
             record
         };
         let mut diffle = record("diffle", &["python"]);
-        diffle.extra_depends = [("rust".to_string(), vec!["rust >=1".to_string()])].into();
+        diffle.extra_depends = [(
+            "rust".to_string(),
+            vec![
+                "rust >=1".to_string(),
+                // Never installed in these tests; must not affect the result.
+                "winrust; if __win".to_string(),
+            ],
+        )]
+        .into();
         vec![
             diffle,
             record("python", &[]),
