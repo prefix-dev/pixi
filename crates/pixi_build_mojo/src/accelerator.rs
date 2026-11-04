@@ -1,14 +1,37 @@
+use std::collections::BTreeMap;
+
 use pixi_build_backend::package_dependency::PackageDependency;
+use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{
     Conditional, ConditionalList, IncludeExclude, Item, JinjaExpression, JinjaTemplate,
     NestedItemList, SerializableMatchSpec, SingleOutputRecipe, Value,
 };
+use rattler_build_types::NormalizedKey;
 use rattler_conda_types::Subdir;
 use rattler_virtual_packages::amdgpu::AmdGpuArchInfo;
 
 use crate::config::{MojoBinConfig, MojoPkgConfig};
 
 pub const VARIANT_KEY: &str = "mojo_accelerator";
+const SUPPORTED_VALUES: [&str; 2] = ["cpu", "gfx1103"];
+
+pub fn validate_variants(variants: &BTreeMap<NormalizedKey, Vec<Variable>>) -> miette::Result<()> {
+    let Some(values) = variants.get(&NormalizedKey::from(VARIANT_KEY)) else {
+        return Ok(());
+    };
+    for value in values {
+        if !value
+            .as_str()
+            .is_some_and(|value| SUPPORTED_VALUES.contains(&value))
+        {
+            miette::bail!(
+                "invalid value '{value}' for '{VARIANT_KEY}', supported values are: {}",
+                SUPPORTED_VALUES.join(", ")
+            );
+        }
+    }
+    Ok(())
+}
 
 pub fn configure_recipe(
     recipe: &mut SingleOutputRecipe,
@@ -34,10 +57,8 @@ pub fn configure_recipe(
             VARIANT_KEY.to_string(),
             None,
         )));
-    // Only 'cpu' and 'gfx1103' are accepted; any other value fails this lookup.
-    recipe.build.variant.down_prioritize_variant = Some(template(
-        "${{ {'cpu': 1, 'gfx1103': 0}[mojo_accelerator] }}",
-    )?);
+    recipe.build.variant.down_prioritize_variant =
+        Some(template("${{ 1 if mojo_accelerator == 'cpu' else 0 }}")?);
 
     let requirements = &mut recipe.requirements;
     requirements.build.push(dependency("patchelf"));
@@ -120,23 +141,26 @@ mod tests {
     }
 
     #[test]
-    fn variants_are_strict_and_used_for_identity_and_priority() {
+    fn variants_are_used_for_identity_and_priority() {
         let recipe = recipe();
         for (variant, priority) in [("cpu", 1), ("gfx1103", 0)] {
             let variant_usage = recipe.build.variant.evaluate(&context(variant)).unwrap();
             assert!(variant_usage.use_keys.contains(&VARIANT_KEY.to_string()));
             assert_eq!(variant_usage.down_prioritize_variant, Some(priority));
         }
-        for invalid in ["CPU", "GFX1103", "gfx1100", "amdgpu:gfx1103", "none", ""] {
-            assert!(recipe.build.variant.evaluate(&context(invalid)).is_err());
+    }
+
+    #[test]
+    fn validates_variant_values() {
+        let variants =
+            |values: Vec<Variable>| BTreeMap::from([(NormalizedKey::from(VARIANT_KEY), values)]);
+        validate_variants(&BTreeMap::new()).unwrap();
+        validate_variants(&variants(vec!["cpu".into(), "gfx1103".into()])).unwrap();
+        for invalid in ["CPU", "gfx1100", "amdgpu:gfx1103", ""] {
+            assert!(validate_variants(&variants(vec!["cpu".into(), invalid.into()])).is_err());
         }
-        assert!(
-            recipe
-                .build
-                .variant
-                .evaluate(&EvaluationContext::new())
-                .is_err()
-        );
+        let error = validate_variants(&variants(vec!["gfx1100".into()])).unwrap_err();
+        insta::assert_snapshot!(error, @"invalid value 'gfx1100' for 'mojo_accelerator', supported values are: cpu, gfx1103");
     }
 
     #[test]

@@ -137,6 +137,17 @@ pub trait GenerateRecipe {
         Ok(BTreeMap::new())
     }
 
+    /// Validates the variant values before a recipe is generated from them.
+    ///
+    /// This allows backends to reject unsupported values with a clear error
+    /// instead of failing later while the recipe is evaluated.
+    fn validate_variants(
+        &self,
+        _variants: &BTreeMap<NormalizedKey, Vec<Variable>>,
+    ) -> miette::Result<()> {
+        Ok(())
+    }
+
     /// The path through which the outputs of the generated recipe refer to
     /// each other as source dependencies (e.g. via `pin_subpackage`), relative
     /// to the package's source directory. `manifest_path` is the manifest the

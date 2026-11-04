@@ -156,6 +156,13 @@ impl GenerateRecipe for MojoGenerator {
             .collect())
     }
 
+    fn validate_variants(
+        &self,
+        variants: &BTreeMap<NormalizedKey, Vec<Variable>>,
+    ) -> miette::Result<()> {
+        accelerator::validate_variants(variants)
+    }
+
     fn default_variants(
         &self,
         host_platform: Subdir,
