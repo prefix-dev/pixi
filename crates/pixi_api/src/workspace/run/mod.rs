@@ -11,24 +11,32 @@ use std::io::IsTerminal;
 use deno_task_shell::{KillSignal, ShellCommand};
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_core::{
     Workspace,
-    environment::{LockFileUsage, sanity_check_workspace},
-    lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
+    activation::ActivationError,
+    environment::{
+        LockFileUsage, PlatformNotInEnvironmentError, SanityCheckError, sanity_check_workspace,
+    },
+    host::HostProbeError,
+    lock_file::{
+        ReinstallPackages, UpdateLockFileError, UpdateLockFileOptions, UpdateMode,
+        UpdatePrefixError,
+    },
     workspace::{
         Environment, EnvironmentFromNameError,
         errors::UnsupportedPlatformError,
         virtual_packages::{
-            EnvironmentRunnability, classify_environment_runnability,
-            verify_current_platform_can_run_environment,
+            EnvironmentRunnability, RunPlatformUnsupportedError, VerifyCurrentPlatformError,
+            classify_environment_runnability, verify_current_platform_can_run_environment,
         },
     },
 };
 use pixi_manifest::{EnvironmentName, HasWorkspaceManifest, PixiPlatformName};
 use pixi_task::{
-    AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
+    AmbiguousTask, CacheUpdateError, CanSkip, DisambiguationSource, ExecutableTask,
+    FailedToParseShellScript, InputHashesError, InvalidWorkingDirectory, PreferExecutable,
+    SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskGraphError, get_task_env,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -75,18 +83,95 @@ pub struct RunOptions {
     pub display_command: Option<String>,
 }
 
+/// An error that can occur while running a task or command.
+#[derive(Debug, Error, Diagnostic)]
+pub enum RunError {
+    #[error("no task or command provided")]
+    NoTask,
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    EnvironmentFromName(#[from] EnvironmentFromNameError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SanityCheck(#[from] SanityCheckError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostProbe(#[from] HostProbeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PlatformNotInEnvironment(#[from] PlatformNotInEnvironmentError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdateLockFile(#[from] UpdateLockFileError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TaskGraph(#[from] TaskGraphError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    VerifyCurrentPlatform(#[from] VerifyCurrentPlatformError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnsupportedPlatform(#[from] Box<UnsupportedPlatformError>),
+
+    #[error(transparent)]
+    CheckCache(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdatePrefix(#[from] UpdatePrefixError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RunPlatformUnsupported(#[from] RunPlatformUnsupportedError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Activation(#[from] ActivationError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    FailedToParseShellScript(#[from] FailedToParseShellScript),
+
+    #[error(transparent)]
+    InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InputHashes(#[from] InputHashesError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CacheUpdate(#[from] CacheUpdateError),
+}
+
 pub async fn run<I: Interface>(
     interface: &I,
     workspace: &Workspace,
     options: RunOptions,
     progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
-) -> miette::Result<i32> {
+) -> Result<i32, RunError> {
     // Fail before resolving the lock file, there is nothing to run
     if options.task.iter().all(|arg| arg.trim().is_empty()) {
-        miette::bail!("no task or command provided");
+        return Err(RunError::NoTask);
     }
 
-    let explicit_environment = explicit_environment(workspace, options.environment.as_ref())?;
+    let explicit_environment = options
+        .environment
+        .as_ref()
+        .map(|name| {
+            workspace
+                .environment(name)
+                .ok_or_else(|| EnvironmentFromNameError::Unknown(name.clone()))
+        })
+        .transpose()?;
     let environment = explicit_environment
         .clone()
         .unwrap_or_else(|| workspace.default_environment());
@@ -119,11 +204,11 @@ pub async fn run<I: Interface>(
         && best_declared_platform.is_none()
         && let Some(name) = user_platform.as_ref()
     {
-        return Err(miette::miette!(
-            "platform '{}' is not part of environment '{}'",
-            name,
-            environment.name(),
-        ));
+        return Err(PlatformNotInEnvironmentError {
+            platform: name.clone(),
+            environment: environment.name().clone(),
+        }
+        .into());
     }
 
     if allow_installs {
@@ -218,10 +303,10 @@ pub async fn run<I: Interface>(
                     Some(lock_file.as_lock_file()),
                 ) {
                     Err(err) => err.into(),
-                    Ok(()) => executable_task
-                        .run_environment
-                        .unsupported_platform_error()
-                        .into(),
+                    Ok(()) => {
+                        Box::new(executable_task.run_environment.unsupported_platform_error())
+                            .into()
+                    }
                 },
             );
         }
@@ -276,7 +361,7 @@ pub async fn run<I: Interface>(
         let task_cache = match executable_task
             .can_skip(lock_file.as_lock_file())
             .await
-            .into_diagnostic()?
+            .map_err(RunError::CheckCache)?
         {
             CanSkip::No(cache) => cache,
             CanSkip::Yes => {
@@ -373,51 +458,29 @@ pub async fn run<I: Interface>(
 
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we return the same code.
-        match execute_task(
+        let code = execute_task(
             &executable_task,
             &task_env,
             signal.clone(),
             &options.custom_commands,
         )
-        .await
-        {
-            Ok(_) => {
-                task_idx += 1;
-            }
-            Err(TaskExecutionError::NonZeroExitCode(code)) => {
-                return Ok(code);
-            }
-            Err(err) => return Err(err.into()),
+        .await?;
+        if code != 0 {
+            return Ok(code);
         }
+        task_idx += 1;
 
         // Compute post-run hash, warn on missing globs, and update the cache
         let post_hash = executable_task
             .compute_post_run_hash(lock_file.as_lock_file(), task_cache)
-            .await
-            .into_diagnostic()?;
+            .await?;
         if let Some(ref hash) = post_hash {
             executable_task.warn_on_missing_globs(hash);
         }
-        executable_task
-            .save_cache(post_hash)
-            .await
-            .into_diagnostic()?;
+        executable_task.save_cache(post_hash).await?;
     }
 
     Ok(0)
-}
-
-/// Looks up the environment the caller asked for.
-fn explicit_environment<'p>(
-    workspace: &'p Workspace,
-    name: Option<&EnvironmentName>,
-) -> miette::Result<Option<Environment<'p>>> {
-    name.map(|name| {
-        workspace
-            .environment(name)
-            .ok_or_else(|| EnvironmentFromNameError::Unknown(name.clone()).into())
-    })
-    .transpose()
 }
 
 async fn build_task_graph<'p, I: Interface>(
@@ -425,7 +488,7 @@ async fn build_task_graph<'p, I: Interface>(
     workspace: &'p Workspace,
     explicit_environment: Option<Environment<'p>>,
     options: &RunOptions,
-) -> miette::Result<TaskGraph<'p>> {
+) -> Result<TaskGraph<'p>, TaskGraphError> {
     // Pin the search only to an explicit `--platform`; otherwise each
     // environment resolves its own platform, so foreign-platform tasks are found.
     let search_platform = if !options.no_install {
@@ -444,7 +507,7 @@ async fn build_task_graph<'p, I: Interface>(
                 disambiguate_task_interactive(interface, problem).await
             });
 
-    Ok(TaskGraph::from_cmd_args(
+    TaskGraph::from_cmd_args(
         workspace,
         &search_environment,
         options.task.clone(),
@@ -456,34 +519,18 @@ async fn build_task_graph<'p, I: Interface>(
         },
         options.templated,
     )
-    .await?)
+    .await
 }
 
-#[derive(Debug, Error, Diagnostic)]
-enum TaskExecutionError {
-    #[error("the script exited with a non-zero exit code {0}")]
-    NonZeroExitCode(i32),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    FailedToParseShellScript(#[from] FailedToParseShellScript),
-
-    #[error(transparent)]
-    InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
-
-    #[error(transparent)]
-    UnsupportedPlatformError(#[from] Box<UnsupportedPlatformError>),
-}
-
-/// Called to execute a single command.
+/// Called to execute a single command. Returns its exit code.
 async fn execute_task(
     task: &ExecutableTask<'_>,
     command_env: &HashMap<OsString, OsString>,
     kill_signal: KillSignal,
     custom_commands: &HashMap<String, Rc<dyn ShellCommand>>,
-) -> Result<(), TaskExecutionError> {
+) -> Result<i32, RunError> {
     let Some(script) = task.as_deno_script()? else {
-        return Ok(());
+        return Ok(0);
     };
     let cwd = task.working_directory()?;
     let execute_future = deno_task_shell::execute(
@@ -495,19 +542,14 @@ async fn execute_task(
     );
 
     // Execute the process and forward signals.
-    let status_code = run_future_forwarding_signals(kill_signal, execute_future).await;
-    if status_code != 0 {
-        return Err(TaskExecutionError::NonZeroExitCode(status_code));
-    }
-
-    Ok(())
+    Ok(run_future_forwarding_signals(kill_signal, execute_future).await)
 }
 
 /// Called to disambiguate between environments to run a task in.
 async fn disambiguate_task_interactive<'p, I: Interface>(
     interface: &I,
     problem: &AmbiguousTask<'p>,
-) -> Option<TaskAndEnvironment<'p>> {
+) -> Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource> {
     // If any of the candidate tasks declares a `default-environment` that
     // corresponds to one of the candidate environments, prefer that
     // environment automatically.
@@ -518,7 +560,7 @@ async fn disambiguate_task_interactive<'p, I: Interface>(
             false
         }
     }) {
-        return Some(problem.environments[idx].clone());
+        return Ok(Some(problem.environments[idx].clone()));
     }
 
     let environment_names = problem
@@ -527,7 +569,7 @@ async fn disambiguate_task_interactive<'p, I: Interface>(
         .map(|(env, _)| env.name().to_string())
         .collect_vec();
 
-    interface
+    let selected = interface
         .select(
             &format!(
                 "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
@@ -540,9 +582,8 @@ async fn disambiguate_task_interactive<'p, I: Interface>(
             ),
             &environment_names,
         )
-        .await
-        .unwrap_or(None)
-        .map(|idx| problem.environments[idx].clone())
+        .await?;
+    Ok(selected.map(|idx| problem.environments[idx].clone()))
 }
 
 /// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or

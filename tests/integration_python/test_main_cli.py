@@ -1482,6 +1482,73 @@ def test_pixi_task_list_multiline_description(pixi: Path, tmp_pixi_workspace: Pa
     assert len(result.stdout.strip().splitlines()) == 3
 
 
+def test_pixi_task_list_invalid_environment_name(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """An invalid environment name is reported instead of listing every environment."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        foo = "echo foo"
+        """
+    manifest.write_text(toml)
+    for extra in ([], ["--json"]):
+        verify_cli_command(
+            [pixi, "task", "list", "-e", "Bad_Name", *extra, "--manifest-path", manifest],
+            expected_exit_code=ExitCode.FAILURE,
+            stdout_excludes="foo",
+            stderr_contains="Bad_Name",
+        )
+
+
+def test_pixi_task_list_json_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`--json` lists only the environment passed with `-e`."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [feature.a.tasks]
+        foo = "echo foo"
+
+        [environments]
+        a = ["a"]
+        """
+    manifest.write_text(toml)
+    result = verify_cli_command(
+        [pixi, "task", "list", "--json", "-e", "a", "--manifest-path", manifest]
+    )
+    assert [env["environment"] for env in json.loads(result.stdout)] == ["a"]
+    verify_cli_command(
+        [pixi, "task", "list", "--json", "-e", "nope", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="unknown environment 'nope'",
+    )
+
+
+def test_pixi_task_remove_missing_does_not_save(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Removing only tasks that don't exist leaves a read-only manifest alone."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+        """
+    manifest.write_text(toml)
+    manifest.chmod(0o444)
+    verify_cli_command(
+        [pixi, "task", "remove", "nope", "--manifest-path", manifest],
+        stderr_contains="does not exist",
+        stderr_excludes="failed to save",
+    )
+
+
 def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """

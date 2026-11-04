@@ -112,7 +112,7 @@ pub fn parse_conda_exemption(
         .into_source_or_binary()
         .right()
         .ok_or(InvalidExemptionSpec::NotBinary)
-        .and_then(validate_exemption_spec)
+        .and_then(|spec| validate_exemption_spec(&name, spec))
         .map_err(invalid)?;
     Ok((name, binary))
 }
@@ -166,6 +166,24 @@ impl ExcludeNewerConfig {
         Ok(())
     }
 
+    /// Replaces the configuration with `config`, and the `exclude-newer`
+    /// entry of `parent` with `value`, the TOML that `config` was parsed from.
+    /// The cutoffs and exemptions are written as in `value`, e.g. `7d` instead
+    /// of the duration it parses into.
+    pub fn replace(
+        &mut self,
+        parent: &mut Table,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> Result<(), ExcludeNewerEditError> {
+        let mut value = Value::from_str(value)
+            .map_err(|_| ExcludeNewerEditError::MalformedEntry(CONDA_KEY.to_string()))?;
+        value.decor_mut().clear();
+        upsert_table_entry(parent, CONDA_KEY, value);
+        *self = config;
+        Ok(())
+    }
+
     /// Adds an exemption, or replaces the exemption of the same package, in
     /// both the configuration and `parent`.
     pub fn add_exemption(
@@ -180,15 +198,15 @@ impl ExcludeNewerConfig {
         // Replacing an exemption with a later cutoff exempts releases that may
         // not have been vetted.
         if let Some(old) = self.exemptions.get(&name).and_then(|old| old.cutoff)
-            && exemption.cutoff.is_none_or(|new| new > old)
+            && exemption.cutoff.is_none_or(|new| exempts_later(new, old))
         {
             let new = exemption
                 .cutoff
-                .map_or_else(|| "no cutoff".to_string(), crate::format_cutoff);
+                .map_or_else(|| "no cutoff".to_string(), crate::format_exclude_newer);
             tracing::warn!(
                 "moved the exclude-newer exemption cutoff of {} from {} to {new}",
                 name.as_source(),
-                crate::format_cutoff(old)
+                crate::format_exclude_newer(old)
             );
         }
         let value = exemption.to_toml_value();
@@ -434,8 +452,10 @@ fn find_key(table: &dyn TableLike, matches: impl Fn(&str) -> bool) -> Option<Str
 }
 
 /// Tidies up the `key` table of `parent` after an edit: drops empty
-/// `exemptions`, collapses a lone cutoff back into a bare string and removes
-/// the key entirely when nothing is left.
+/// `exemptions`, collapses an inline table with a lone cutoff back into a
+/// bare string and removes the key entirely when nothing is left. A standard
+/// table keeps its header, as replacing it would drop the comments in and
+/// above it, like `rattler_config` does when editing `exclude-newer`.
 fn collapse(parent: &mut Table, key: &str) {
     let Some(item) = parent.get_mut(key) else {
         return;
@@ -454,7 +474,8 @@ fn collapse(parent: &mut Table, key: &str) {
     };
     if table.is_empty() {
         remove_table_entry(parent, key);
-    } else if table.len() == 1
+    } else if item.is_inline_table()
+        && table.len() == 1
         && let Some(cutoff) = table.get("cutoff").and_then(Item::as_value)
         && cutoff.is_str()
     {
@@ -463,6 +484,18 @@ fn collapse(parent: &mut Table, key: &str) {
         // Overwrite the table in place, so the key keeps its position and
         // comments.
         upsert_table_entry(parent, key, cutoff);
+    }
+}
+
+/// Returns whether the exemption cutoff `new` lets through releases that
+/// `old` doesn't, now or later.
+fn exempts_later(new: ExcludeNewer, old: ExcludeNewer) -> bool {
+    match (new, old) {
+        (ExcludeNewer::Timestamp(new), ExcludeNewer::Timestamp(old)) => new > old,
+        (ExcludeNewer::Duration(new), ExcludeNewer::Duration(old)) => new < old,
+        // A duration moves forward in time, past every point in time.
+        (ExcludeNewer::Duration(_), ExcludeNewer::Timestamp(_)) => true,
+        (ExcludeNewer::Timestamp(new), old) => new > old.cutoff(),
     }
 }
 
@@ -508,6 +541,21 @@ mod tests {
     }
 
     #[test]
+    fn replace_writes_the_value_as_given() {
+        let value = r#"{ cutoff = "7d", exemptions = { ruff = { version = ">=0.1", cutoff = "2026-10-12T05:00:00+02:00" } } }"#;
+        let (expected, _) = conda(&format!("exclude-newer = {value}\n"));
+        let (mut config, mut document) = conda("name = \"x\"\n");
+        config
+            .replace(document.as_table_mut(), value, expected.clone())
+            .unwrap();
+        assert_eq!(config, expected);
+        assert_snapshot!(document.to_string(), @r#"
+        name = "x"
+        exclude-newer = { cutoff = "7d", exemptions = { ruff = { version = ">=0.1", cutoff = "2026-10-12T05:00:00+02:00" } } }
+        "#);
+    }
+
+    #[test]
     fn exempt_turns_cutoff_into_inline_table() {
         assert_snapshot!(exempt("exclude-newer = \"7d\" # comment\nname = \"x\"\n", "python=3.13.*"), @r#"
         exclude-newer = { cutoff = "7d", exemptions = { python = "3.13.*" } } # comment
@@ -528,12 +576,9 @@ mod tests {
             let (name, spec) =
                 parse_conda_exemption(spec, &ChannelConfig::default_with_root_dir("/".into()))
                     .unwrap();
-            let ExcludeNewer::Timestamp(cutoff) = cutoff.parse().unwrap() else {
-                panic!("expected an absolute cutoff");
-            };
             let exemption = ExcludeNewerExemption {
                 spec,
-                cutoff: Some(cutoff),
+                cutoff: Some(cutoff.parse().unwrap()),
             };
             config
                 .add_exemption(document.as_table_mut(), name, exemption)
@@ -595,19 +640,24 @@ python = "*"
     }
 
     #[test]
-    fn unexempt_collapses_to_cutoff() {
+    fn unexempt_collapses_an_inline_table_to_cutoff() {
         assert_snapshot!(unexempt("exclude-newer = { cutoff = \"7d\", exemptions = { python = \"*\", numpy = \"*\" } }\n", "python"), @r#"exclude-newer = { cutoff = "7d", exemptions = { numpy = "*" } }"#);
         assert_snapshot!(unexempt("exclude-newer = { cutoff = \"7d\", exemptions = { python = \"*\" } } # keep\n", "python"), @r#"exclude-newer = "7d" # keep"#);
+        // A standard table keeps its header and comments.
         assert_snapshot!(unexempt(r#"name = "x"
 
+# a week back
 [exclude-newer]
-cutoff = "7d"
+cutoff = "7d" # a week
 
 [exclude-newer.exemptions]
 Python = "*"
 "#, "python"), @r#"
         name = "x"
-        exclude-newer = "7d"
+
+        # a week back
+        [exclude-newer]
+        cutoff = "7d" # a week
         "#);
     }
 
@@ -667,9 +717,11 @@ Python = "*"
     fn parse_exemptions() {
         let channel_config = ChannelConfig::default_with_root_dir("/".into());
         assert!(parse_conda_exemption("python[extras=[foo]]", &channel_config).is_err());
-        assert!(
-            parse_conda_exemption("https://example.com/foo-1-0.conda", &channel_config).is_err()
-        );
+        // A package archive can be exempted, like in `rattler_config`.
+        let (name, spec) =
+            parse_conda_exemption("https://example.com/foo-1-0.conda", &channel_config).unwrap();
+        assert_eq!(name.as_source(), "foo");
+        assert!(matches!(spec, BinarySpec::Url(_)), "{spec:?}");
         assert!(parse_pypi_exemption("torch").is_ok());
         assert!(matches!(
             parse_pypi_exemption("torch==2"),

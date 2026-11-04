@@ -1498,7 +1498,10 @@ platforms = ["linux-64"]
     let error = result.unwrap_err();
 
     // Use insta to snapshot test the full error message format including help text
-    insta::assert_debug_snapshot!("git_dependency_without_preview_error", error);
+    insta::assert_snapshot!(pixi_test_utils::format_diagnostic(error.as_ref()), @"
+    × conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
+    help: Run `pixi workspace preview add pixi-build` to enable the preview flag
+    ");
 }
 
 #[tokio::test]

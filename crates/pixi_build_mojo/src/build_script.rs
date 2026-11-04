@@ -18,7 +18,7 @@ impl BuildScriptContext {
             .unwrap();
         // Normalize line endings to Unix-style for consistent output across platforms
         template
-            .render(self)
+            .render(minijinja::value::Serde(self))
             .unwrap()
             .trim()
             .replace("\r\n", "\n")

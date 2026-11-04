@@ -6,6 +6,7 @@ use std::{
     str::FromStr,
 };
 
+use chrono::{DateTime, Utc};
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::SourceCode;
@@ -18,9 +19,9 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerEditError,
-    ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform, PixiPlatformError,
-    PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerConfig,
+    ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform,
+    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
     consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
@@ -40,7 +41,7 @@ use crate::{
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
 /// describes the part related to the workspace only.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct WorkspaceManifest {
     /// Information about the project
     pub workspace: Workspace,
@@ -56,6 +57,22 @@ pub struct WorkspaceManifest {
 
     /// The solve groups that are part of the project.
     pub solve_groups: SolveGroups,
+
+    /// The time relative `exclude-newer` cutoffs are resolved against, fixed
+    /// at load so that every environment resolves them to the same time.
+    pub loaded_at: DateTime<Utc>,
+}
+
+impl Default for WorkspaceManifest {
+    fn default() -> Self {
+        Self {
+            workspace: Workspace::default(),
+            features: IndexMap::default(),
+            environments: Environments::default(),
+            solve_groups: SolveGroups::default(),
+            loaded_at: Utc::now(),
+        }
+    }
 }
 
 impl WorkspaceManifest {
@@ -214,6 +231,24 @@ impl WorkspaceManifest {
             .flat_map(|target| target.tasks.iter())
             .map(|(name, task)| (name.clone(), task))
             .collect())
+    }
+
+    /// Returns whether the task `name` is declared in the target for
+    /// `platform` itself. Unlike [`Self::tasks`], this ignores the tasks
+    /// inherited from the default target.
+    pub fn declares_task(
+        &self,
+        name: &TaskName,
+        platform: Option<&PixiPlatform>,
+        feature_name: &FeatureName,
+    ) -> Result<bool, GetFeatureError> {
+        Ok(self
+            .features
+            .get(feature_name)
+            .ok_or(GetFeatureError::FeatureDoesNotExist(feature_name.clone()))?
+            .targets
+            .for_opt_target(platform.map(PixiPlatform::as_target_selector).as_ref())
+            .is_some_and(|target| target.tasks.contains_key(name)))
     }
 
     /// Returns a mutable reference to a [`WorkspaceTarget`], creating it if
@@ -386,9 +421,12 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task already exists
-        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
-            && tasks.contains_key(&name)
+        // A task inherited from the default target may be overridden for a
+        // platform. A missing feature is created below.
+        if self
+            .workspace
+            .declares_task(&name, platform, feature_name)
+            .unwrap_or(false)
         {
             return Err(TaskEditError::AlreadyExists(name));
         }
@@ -410,7 +448,7 @@ impl WorkspaceManifestMut<'_> {
         // Add the task to the manifest
         self.workspace
             .get_or_insert_target_mut(
-                platform.map(TargetSelector::from).as_ref(),
+                platform.map(PixiPlatform::as_target_selector).as_ref(),
                 Some(feature_name),
             )
             .tasks
@@ -429,11 +467,9 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task exists
         if !self
             .workspace
-            .tasks(platform, feature_name)?
-            .contains_key(&name)
+            .declares_task(&name, platform, feature_name)?
         {
             return Err(TaskEditError::NotFound(name));
         }
@@ -448,7 +484,7 @@ impl WorkspaceManifestMut<'_> {
             .feature_mut(feature_name)
             .expect("feature existence checked above")
             .targets
-            .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
+            .for_opt_target_mut(platform.map(PixiPlatform::as_target_selector).as_ref())
             .map(|target| target.tasks.remove(&name));
 
         Ok(())
@@ -1965,6 +2001,23 @@ impl WorkspaceManifestMut<'_> {
             .set_cutoff(self.document.workspace_table_mut()?, cutoff)
     }
 
+    /// Replaces the `exclude-newer` of the workspace with `config`, written
+    /// as `value`, the TOML that `config` was parsed from.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer(
+        &mut self,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.replace(
+            self.document.workspace_table_mut()?,
+            value,
+            config,
+        )
+    }
+
     /// Exempts the releases of `name` that match the spec of `exemption`
     /// from the `exclude-newer` cutoff, replacing an existing exemption of the
     /// package.
@@ -2187,10 +2240,10 @@ pub struct FeatureNotFoundError(pub FeatureName);
 /// [`WorkspaceManifestMut::remove_task`].
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum TaskEditError {
-    #[error("task {0} already exists")]
+    #[error("task '{0}' already exists")]
     AlreadyExists(TaskName),
 
-    #[error("task {0} does not exist")]
+    #[error("task '{0}' does not exist")]
     NotFound(TaskName),
 
     #[error("the environment '{0}' does not exist")]
@@ -6680,6 +6733,37 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
         assert!(config.is_excluded(&uploaded_record("pandas", "2.0.0", None)));
     }
 
+    /// Regression test. Every solve resolved a relative cutoff against its
+    /// own `Utc::now()`, so the compute keys carrying the resolved cutoff,
+    /// such as the build backend environment, were never deduplicated.
+    #[test]
+    fn test_relative_exclude_newer_resolves_against_load_time() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "14d"
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let expected = manifest.loaded_at - chrono::Duration::days(14);
+
+        let resolve = || {
+            features
+                .exclude_newer_config_resolved(&default_channel_config())
+                .unwrap()
+                .unwrap()
+        };
+        let first = resolve();
+        assert_eq!(first.cutoff, expected);
+        assert_eq!(first, resolve());
+
+        let pypi = features.pypi_exclude_newer_config_resolved();
+        assert_eq!(pypi.cutoff, Some(expected));
+        assert_eq!(pypi, features.pypi_exclude_newer_config_resolved());
+    }
+
     #[test]
     fn test_pypi_exclude_newer_config_falls_back_to_conda_cutoff() {
         let contents = r#"
@@ -7301,6 +7385,9 @@ platforms = [
             [tasks]
             hello = "echo hello"
 
+            [target.linux-64.tasks]
+            lin = "echo lin"
+
             [feature.f1.activation]
             scripts = ["a.sh"]
             env = { FOO = "1" }
@@ -7321,11 +7408,61 @@ platforms = [
             )
             .unwrap_err();
         assert_matches::assert_matches!(&err, TaskEditError::AlreadyExists(name) if *name == hello);
-        assert_eq!(err.to_string(), "task hello already exists");
+        assert_eq!(err.to_string(), "task 'hello' already exists");
         let err = manifest
             .remove_task(TaskName::from("nope"), None, &FeatureName::Default)
             .unwrap_err();
         assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        // A task inherited from the default target is not declared for a
+        // platform.
+        let linux = PixiPlatform::from_subdir(Subdir::Linux64);
+        let err = manifest
+            .remove_task(hello.clone(), Some(&linux), &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        let lin = TaskName::from("lin");
+        manifest
+            .remove_task(lin.clone(), Some(&linux), &FeatureName::Default)
+            .unwrap();
+        assert!(
+            !manifest
+                .workspace
+                .declares_task(&lin, Some(&linux), &FeatureName::Default)
+                .unwrap()
+        );
+        manifest
+            .add_task(
+                lin.clone(),
+                Task::Plain("echo lin".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        assert!(
+            manifest
+                .workspace
+                .declares_task(&lin, Some(&linux), &FeatureName::Default)
+                .unwrap()
+        );
+        // A task from the default target can be overridden for a platform,
+        // but only once.
+        manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        let err = manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::AlreadyExists(_));
         let err = manifest
             .remove_task(hello, None, &FeatureName::from("nosuch"))
             .unwrap_err();

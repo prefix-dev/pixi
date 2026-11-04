@@ -27,7 +27,9 @@ pub struct SaveManifestError {
 /// doesn't always carry the path.
 ///
 /// Not `async`: that would store the `save` future twice, and it is large.
-fn save(workspace: WorkspaceMut) -> impl Future<Output = Result<Workspace, SaveManifestError>> {
+pub(crate) fn save(
+    workspace: WorkspaceMut,
+) -> impl Future<Output = Result<Workspace, SaveManifestError>> {
     let path = workspace.workspace().workspace.provenance.path.clone();
     workspace
         .save()

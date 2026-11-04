@@ -1,6 +1,11 @@
-use pixi_api::{Interface, InterfaceError, WorkspaceContext};
+use pixi_api::{GlobalContext, Interface, InterfaceError, WorkspaceContext, global::Project};
 use pixi_core::Workspace;
 use pixi_progress::global_multi_progress;
+
+/// Builds the [`GlobalContext`] every `pixi global` command works through.
+pub fn cli_global_context(project: Project) -> GlobalContext<CliInterface> {
+    GlobalContext::new(CliInterface {}, project)
+}
 
 /// Builds the [`WorkspaceContext`] every CLI command works through.
 ///
@@ -9,7 +14,7 @@ use pixi_progress::global_multi_progress;
 /// context method that solves reports through it without the command having to
 /// opt in. `search` is the exception, because it builds its own gateway rather
 /// than going through the command dispatcher.
-pub fn cli_context(workspace: Workspace) -> WorkspaceContext<CliInterface> {
+pub fn cli_workspace_context(workspace: Workspace) -> WorkspaceContext<CliInterface> {
     WorkspaceContext::new(CliInterface {}, workspace)
         .with_progress(pixi_reporters::TopLevelProgress::from_global())
 }
@@ -32,20 +37,33 @@ impl Interface for CliInterface {
     }
 
     async fn select(&self, msg: &str, options: &[String]) -> Result<Option<usize>, InterfaceError> {
+        // The prompt draws on stderr, so without a terminal nobody can
+        // answer, and no choice is made.
+        if !console::Term::stderr().is_term() {
+            return Ok(None);
+        }
+
         let theme = dialoguer::theme::ColorfulTheme {
             active_item_style: console::Style::new().for_stderr().magenta(),
             ..dialoguer::theme::ColorfulTheme::default()
         };
 
-        Ok(global_multi_progress().suspend(|| {
+        let selection = global_multi_progress().suspend(|| {
             dialoguer::Select::with_theme(&theme)
                 .with_prompt(msg)
                 .report(false)
                 .items(options)
                 .default(0)
                 .interact_opt()
-                .unwrap_or(None)
-        }))
+        });
+
+        match selection {
+            // Ctrl-C cancels the prompt, like Esc.
+            Err(dialoguer::Error::IO(err)) if err.kind() == std::io::ErrorKind::Interrupted => {
+                Ok(None)
+            }
+            result => result.map_err(InterfaceError::new),
+        }
     }
 
     async fn info(&self, msg: &str) {

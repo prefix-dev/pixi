@@ -105,7 +105,7 @@ pub(crate) enum ExcludeNewerError {
     Save(#[from] std::io::Error),
     #[error("'{0}' is not a valid exemption cutoff")]
     #[diagnostic(help(
-        "use `now`, an RFC 3339 timestamp, or a date like `2026-01-01`, durations are not supported"
+        "use `now`, an RFC 3339 timestamp, a date like `2026-01-01`, or a duration like `7d`"
     ))]
     InvalidExemptionCutoff(String),
     #[error("PyPI exemptions do not support a cutoff")]
@@ -116,10 +116,10 @@ pub(crate) enum ExcludeNewerError {
 /// The cutoff of new exemptions.
 #[derive(Parser, Debug)]
 pub(crate) struct ExemptionCutoffArgs {
-    /// Only exempt the releases published up to this point in time: `now`,
-    /// an RFC 3339 timestamp, or a date like `2026-01-01`, which includes the
-    /// whole day in UTC. Defaults to `now` for specs with a version, e.g.
-    /// `openssl==3.2.1`
+    /// Only exempt the releases published up to this cutoff: `now`, an RFC
+    /// 3339 timestamp, a date like `2026-01-01`, which includes the whole day
+    /// in UTC, or a duration like `7d`, which moves with the current time.
+    /// Defaults to `now` for specs with a version, e.g. `openssl==3.2.1`
     #[arg(long, value_name = "CUTOFF")]
     pub cutoff: Option<String>,
 
@@ -141,21 +141,18 @@ impl ExemptionCutoffArgs {
         &self,
         spec: &BinarySpec,
         now: DateTime<Utc>,
-    ) -> Result<Option<DateTime<Utc>>, ExcludeNewerError> {
+    ) -> Result<Option<ExcludeNewer>, ExcludeNewerError> {
         if self.no_cutoff {
             return Ok(None);
         }
         match self.cutoff.as_deref() {
-            Some("now") => Ok(Some(now)),
-            Some(cutoff) => match ExcludeNewer::from_str(cutoff) {
-                Ok(ExcludeNewer::Timestamp(cutoff)) => Ok(Some(cutoff)),
-                Ok(ExcludeNewer::Duration(_)) | Err(_) => Err(
-                    ExcludeNewerError::InvalidExemptionCutoff(cutoff.to_string()),
-                ),
-            },
+            Some("now") => Ok(Some(ExcludeNewer::Timestamp(now))),
+            Some(cutoff) => ExcludeNewer::from_str(cutoff)
+                .map(Some)
+                .map_err(|_| ExcludeNewerError::InvalidExemptionCutoff(cutoff.to_string())),
             // A bare name or `*` trusts the package entirely, any other
             // version only the releases that were vetted.
-            None => Ok(has_version(spec).then_some(now)),
+            None => Ok(has_version(spec).then_some(ExcludeNewer::Timestamp(now))),
         }
     }
 }
@@ -183,11 +180,15 @@ fn now() -> DateTime<Utc> {
 }
 
 /// Describes an exempted spec for the success message.
-fn describe_exemption(spec: &str, cutoff: Option<DateTime<Utc>>) -> String {
+fn describe_exemption(spec: &str, cutoff: Option<ExcludeNewer>) -> String {
     match cutoff {
+        Some(cutoff @ ExcludeNewer::Duration(_)) => format!(
+            "{spec} (published up to {} ago)",
+            pixi_manifest::format_exclude_newer(cutoff)
+        ),
         Some(cutoff) => format!(
             "{spec} (published up to {})",
-            pixi_manifest::format_cutoff(cutoff)
+            pixi_manifest::format_exclude_newer(cutoff)
         ),
         None => spec.to_string(),
     }

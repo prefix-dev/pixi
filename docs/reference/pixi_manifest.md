@@ -400,6 +400,7 @@ The cutoff may be specified in the following formats:
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
 Both PyPI and conda packages are considered.
+The cutoff also applies to the build and host dependencies when packages of the workspace are built, both as source dependencies and with `pixi publish`.
 
 ```toml
 [workspace]
@@ -415,7 +416,7 @@ Instead of lowering the cutoff for every future release of such a package, exemp
 Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
 An exempted release is never excluded, regardless of its upload time.
 
-The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`.
+The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`, or the `url` of a package archive, optionally with its `md5` or `sha256` but no other field.
 `polars = "==1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
 
 ```toml
@@ -446,7 +447,7 @@ Exemptions take precedence over the channel cutoff, which in turn takes preceden
 
 An exemption without a `cutoff` also lets through matching releases that are published later, e.g. a new build of `polars ==1.43.1`.
 Give an exemption a `cutoff` to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
-The cutoff of an exemption is an RFC 3339 timestamp or a date, durations are not supported.
+The cutoff of an exemption takes the same values as the workspace cutoff, so it can also be a duration such as `"1d"`, which exempts matching releases once they are a day old.
 Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.
 
 Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.

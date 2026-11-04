@@ -21,7 +21,7 @@ pixi workspace exclude-newer exempt [OPTIONS] <SPEC>...
 
 ## Options
 - <a id="arg---cutoff" href="#arg---cutoff">`--cutoff <CUTOFF>`</a>
-:  Only exempt the releases published up to this point in time: `now`, an RFC 3339 timestamp, or a date like `2026-01-01`, which includes the whole day in UTC. Defaults to `now` for specs with a version, e.g. `openssl==3.2.1`
+:  Only exempt the releases published up to this cutoff: `now`, an RFC 3339 timestamp, a date like `2026-01-01`, which includes the whole day in UTC, or a duration like `7d`, which moves with the current time. Defaults to `now` for specs with a version, e.g. `openssl==3.2.1`
 - <a id="arg---no-cutoff" href="#arg---no-cutoff">`--no-cutoff`</a>
 :  Exempt every matching release, including the ones published in the future
 - <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>

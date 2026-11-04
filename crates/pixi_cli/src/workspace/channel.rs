@@ -11,7 +11,7 @@ use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
     cli_config::{LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::cli_context,
+    cli_interface::cli_workspace_context,
 };
 
 /// Commands to manage workspace channels.
@@ -139,7 +139,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let is_script = args.workspace_config.script.is_some();
     let lock_file_exists = workspace.lock_file_path().is_file();
     let channel_config = workspace.channel_config();
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
 
     match args.command {
         Command::Add(add_args) => {
