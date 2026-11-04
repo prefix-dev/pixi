@@ -12,6 +12,10 @@ on:
         description: "Codesign the macOS and Windows binaries and the MSI"
         type: boolean
         default: true
+      pgo:
+        description: "Use profile-guided optimization on the targets that support it"
+        type: boolean
+        default: true
       pixi-version:
         description: "Override the version baked into the binary (PIXI_VERSION); defaults to crates/pixi/Cargo.toml"
         type: string
@@ -124,12 +128,12 @@ jobs:
           PIXI_VERSION_INPUT: ${{ inputs.pixi-version }}
 
       - name: Install LLVM tools
-        if: matrix.pgo
+        if: matrix.pgo && inputs.pgo
         run: rustup component add llvm-tools-preview
 
       - name: Build
         shell: bash
-        run: python scripts/build_pgo.py --target ${{ matrix.target }} ${{ matrix.pgo && '--pgo' || '' }}
+        run: python scripts/build_pgo.py --target ${{ matrix.target }} ${{ (matrix.pgo && inputs.pgo) && '--pgo' || '' }}
 
       - name: Codesign and notarize macOS binary
         if: contains(matrix.target, 'apple-darwin') && env.SIGN == 'true'

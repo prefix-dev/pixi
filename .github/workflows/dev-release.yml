@@ -52,6 +52,8 @@ jobs:
       id-token: write
     with:
       sign: true
+      # PGO builds, profiles and rebuilds pixi; dev builds skip it to finish sooner.
+      pgo: false
       pixi-version: ${{ needs.prepare.outputs.version }}
     secrets:
       CODESIGN_CERTIFICATE: ${{ secrets.CODESIGN_CERTIFICATE }}
