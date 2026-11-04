@@ -8,10 +8,10 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::global::{
     EnvironmentName, GlobalDependency, GlobalEnvironment, GlobalExposedMapping, ListError, Project,
-    report::{self, EnvReport, Item, Label, Marker, Row},
 };
 use pixi_config::{Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
+use pixi_global::report::{self, EnvReport, Item, Label, Marker, Row};
 use rattler_conda_types::PackageName;
 use serde::Serialize;
 use std::str::FromStr;
