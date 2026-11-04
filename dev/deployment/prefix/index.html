@@ -9463,7 +9463,7 @@ Create a channel by navigating to <code>Channels</code> and clicking "New Channe
 <h2 id="using-the-channel-in-pixi">Using the channel in pixi<a class="headerlink" href="#using-the-channel-in-pixi" title="Permanent link">#</a></h2>
 <p>Once your channel is set up and has packages, you can use it in your <code>pixi.toml</code>:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&lt;channel-name&gt;&quot;</span><span class="p">]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"https://prefix.dev/&lt;channel-name&gt;"</span><span class="p">]</span>
 </span></code></pre></div>
 <p>For private channels, you need to authenticate first:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span>&lt;your-token&gt;<span class="w"> </span>https://prefix.dev

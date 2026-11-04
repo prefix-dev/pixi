@@ -9510,7 +9510,7 @@ in <code>noarch/</code> works on every platform — these are typically pure-Pyt
 packages or data-only packages with no compiled code.</p>
 <p>In a Pixi workspace you declare which platforms you support:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"linux-64"</span><span class="p">,</span><span class="w"> </span><span class="s2">"osx-arm64"</span><span class="p">,</span><span class="w"> </span><span class="s2">"win-64"</span><span class="p">]</span>
 </span></code></pre></div>
 <p>Pixi solves dependencies for each listed platform and records the
 result in the lock file, even for platforms you're not currently
@@ -9536,7 +9536,7 @@ configuration, and a build number:</p>
 already in your environment. If you've resolved Python 3.12, it
 selects the <code>py312</code> variant of numpy. You can also pin a specific
 build using the <a href="../concepts/package_specifications/">MatchSpec</a> syntax:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;pytorch [build=&#39;cuda*&#39;]&quot;</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span><span class="s2">"pytorch [build='cuda*']"</span>
 </span></code></pre></div>
 <p>When <em>building</em> packages with pixi-build, you can define variants
 to produce multiple builds from a single source. See
@@ -9588,7 +9588,7 @@ can also declare them explicitly per platform — for example, to
 tell the solver that your <code>linux-64</code> deployment target has CUDA 12:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"linux-64"</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"12"</span><span class="w"> </span><span class="p">},</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>See <a href="../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">Declaring virtual packages per platform</a>

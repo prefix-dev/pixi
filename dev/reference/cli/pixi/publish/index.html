@@ -9587,7 +9587,7 @@
 <p><code>pixi publish</code> <strong>builds</strong> the conda packages of your workspace and <strong>uploads</strong> them to a channel or copies them into a directory.</p>
 <p>By default every workspace package that opts into publishing with <code>publish = true</code> in its <code>[package]</code> section is published:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[package]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-package&quot;</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"my-package"</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">publish</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
 <p>Packages are discovered by walking the workspace directory tree. The walk respects ignore files such as <code>.gitignore</code> and skips subdirectories that contain their own workspace. Packages that do not set <code>publish = true</code> are left out of the publish set; if no package opts in, the package at the current directory is published instead, as if <code>--path .</code> had been passed.</p>

@@ -9506,7 +9506,7 @@ This allows you to invoke <code>pixi</code> from anywhere.</p>
 <div class="tabbed-block">
 <p><a class="md-button" href="https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.msi">Download installer</a></p>
 <p>Or run:</p>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">Bypass</span> <span class="n">-c</span> <span class="s2">&quot;irm -useb https://pixi.sh/install.ps1 | iex&quot;</span>
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">Bypass</span> <span class="n">-c</span> <span class="s2">"irm -useb https://pixi.sh/install.ps1 | iex"</span>
 </span></code></pre></div>
 <details class="note">
 <summary>What does this do?</summary>
@@ -9718,11 +9718,11 @@ Or set the version
 </tbody>
 </table>
 <p>For example, set the version:
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nv">$env:PIXI_VERSION</span><span class="p">=</span><span class="s1">&#39;v0.18.0&#39;</span><span class="p">;</span> <span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">Bypass</span> <span class="n">-Command</span> <span class="s2">&quot;iwr -useb https://pixi.sh/install.ps1 | iex&quot;</span>
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nv">$env:PIXI_VERSION</span><span class="p">=</span><span class="s1">'v0.18.0'</span><span class="p">;</span> <span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">Bypass</span> <span class="n">-Command</span> <span class="s2">"iwr -useb https://pixi.sh/install.ps1 | iex"</span>
 </span></code></pre></div></p>
 <h4 id="authentication-for-private-repositories">Authentication for Private Repositories<a class="headerlink" href="#authentication-for-private-repositories" title="Permanent link">#</a></h4>
 <p>If you need to download Pixi from a private repository that requires authentication, you can embed credentials in the <code>PIXI_DOWNLOAD_URL</code>. The install script will automatically mask credentials in its output for security.</p>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nv">$env:PIXI_DOWNLOAD_URL</span><span class="p">=</span><span class="s1">&#39;https://username:token@private.example.com/pixi-latest.zip&#39;</span><span class="p">;</span> <span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">Bypass</span> <span class="n">-Command</span> <span class="s2">&quot;iwr -useb https://pixi.sh/install.ps1 | iex&quot;</span>
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nv">$env:PIXI_DOWNLOAD_URL</span><span class="p">=</span><span class="s1">'https://username:token@private.example.com/pixi-latest.zip'</span><span class="p">;</span> <span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">Bypass</span> <span class="n">-Command</span> <span class="s2">"iwr -useb https://pixi.sh/install.ps1 | iex"</span>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Security Note</p>
@@ -9744,13 +9744,13 @@ Afterwards, restart the shell or source the shell config file.</p>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>Add the following to the end of <code>~/.bashrc</code>:
-<div class="language-bash highlight"><span class="filename">~/.bashrc</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>bash<span class="k">)</span><span class="s2">&quot;</span>
+<div class="language-bash highlight"><span class="filename">~/.bashrc</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>bash<span class="k">)</span><span class="s2">"</span>
 </span></code></pre></div></p>
 </div>
 <div class="tabbed-block">
 <p>Add the following to the end of <code>~/.zshrc</code>:</p>
 <div class="language-zsh highlight"><span class="filename">~/.zshrc</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>autoload<span class="w"> </span>-Uz<span class="w"> </span>compinit<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>compinit<span class="w">  </span><span class="c1"># redundant with Oh My Zsh</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>zsh<span class="k">)</span><span class="s2">&quot;</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>zsh<span class="k">)</span><span class="s2">"</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9768,8 +9768,8 @@ Typically the path is <code>~\Documents\PowerShell\Microsoft.PowerShell_profile.
 </div>
 <div class="tabbed-block">
 <p>Add the following to your Nushell config file (find it by running <code>$nu.config-path</code> in Nushell):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>mkdir $&quot;($nu.data-dir)/vendor/autoload&quot;
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>pixi completion --shell nushell | save --force $&quot;($nu.data-dir)/vendor/autoload/pixi-completions.nu&quot;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>mkdir $"($nu.data-dir)/vendor/autoload"
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">

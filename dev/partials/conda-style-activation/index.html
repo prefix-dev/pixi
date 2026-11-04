@@ -9197,12 +9197,12 @@
 <p>If you prefer to use the traditional <code>conda activate</code>-like activation, you can use the <code>pixi shell-hook</code> command.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>$<span class="w"> </span>which<span class="w"> </span>python
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>not<span class="w"> </span>found
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>$<span class="w"> </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>$<span class="w"> </span><span class="nb">eval</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">"</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>$<span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>which<span class="w"> </span>python
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>/path/to/project/.pixi/envs/default/bin/python
 </span></code></pre></div>
 <p>For example, with <code>bash</code> and <code>zsh</code> you can use the following command:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">"</span>
 </span></code></pre></div>
 <details class="tip">
 <summary>Custom activation function</summary>
@@ -9212,8 +9212,8 @@
 <div class="tabbed-block">
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">function</span><span class="w"> </span>pixi_activate<span class="o">()</span><span class="w"> </span><span class="o">{</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="c1"># default to current directory if no path is given</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nb">local</span><span class="w"> </span><span class="nv">manifest_path</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">1</span><span class="k">:-</span><span class="p">.</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--manifest-path<span class="w"> </span><span class="nv">$manifest_path</span><span class="k">)</span><span class="s2">&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nb">local</span><span class="w"> </span><span class="nv">manifest_path</span><span class="o">=</span><span class="s2">"</span><span class="si">${</span><span class="nv">1</span><span class="k">:-</span><span class="p">.</span><span class="si">}</span><span class="s2">"</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nb">eval</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--manifest-path<span class="w"> </span><span class="nv">$manifest_path</span><span class="k">)</span><span class="s2">"</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">}</span>
 </span></code></pre></div>
 <p>After adding this function to your <code>~/.bashrc</code>/<code>~/.zshrc</code>, you can activate the environment by running:</p>
@@ -9226,9 +9226,9 @@
 <p><div class="language-fish highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">function</span> pixi_activate
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="c"># default to current directory if no path is given</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="k">set</span> -l manifest_path <span class="nv">$argv</span><span class="o">[</span>1<span class="o">]</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">test</span> -z <span class="s2">&quot;</span><span class="nv">$manifest_path</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">and</span> <span class="k">set</span> manifest_path <span class="s2">&quot;.&quot;</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">test</span> -z <span class="s2">"</span><span class="nv">$manifest_path</span><span class="s2">"</span><span class="p">;</span> <span class="k">and</span> <span class="k">set</span> manifest_path <span class="s2">"."</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    pixi shell-hook --manifest-path <span class="s2">&quot;</span><span class="nv">$manifest_path</span><span class="s2">&quot;</span> <span class="o">|</span> <span class="nb">source</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    pixi shell-hook --manifest-path <span class="s2">"</span><span class="nv">$manifest_path</span><span class="s2">"</span> <span class="o">|</span> <span class="nb">source</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">end</span>
 </span></code></pre></div>
 After adding this function to your <code>~/.config/fish/config.fish</code>, you can activate the environment by running:</p>
