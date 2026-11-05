@@ -87,6 +87,7 @@ pub fn configure_recipe(recipe: &mut SingleOutputRecipe) -> miette::Result<()> {
     requirements.host.push(Item::Value(template(
         "${{ pin_compatible('mojo-compiler', exact=True) }}",
     )?));
+    // TODO: Adapt these runtime providers and pins when the Mojo and MAX packages are split up.
     requirements.host.push(dependency("max-core >=26.7"));
     for provider in ["mojo-compiler", "max-core"] {
         requirements.run.push(Item::Value(template(format!(

@@ -11,12 +11,7 @@ from rattler.package_streaming import extract
 
 from .common import CURRENT_PLATFORM, ExitCode, copytree_with_local_backend, verify_cli_command
 
-pytestmark = [
-    pytest.mark.slow,
-    pytest.mark.skipif(
-        CURRENT_PLATFORM != "linux-64", reason="Mojo accelerator binaries need linux-64"
-    ),
-]
+pytestmark = pytest.mark.slow
 
 PACKAGE_NAME = "mojo-accelerator-test"
 CHANNELS = ["https://conda.modular.com/max", "https://prefix.dev/conda-forge"]
@@ -83,6 +78,54 @@ def _write_consumer(workspace: Path, channel: Path, platforms: list[dict[str, An
     workspace.joinpath("pixi.toml").write_text(tomli_w.dumps(manifest))
 
 
+@pytest.mark.skipif(CURRENT_PLATFORM != "osx-arm64", reason="Needs the macOS Mojo compiler")
+def test_mojo_macos_binary_installs_compiler_runtime(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    workspace = tmp_pixi_workspace
+    workspace.joinpath("main.mojo").write_text('def main():\n    print("hello from Mojo")\n')
+    manifest = {
+        "workspace": {
+            "channels": CHANNELS,
+            "platforms": [CURRENT_PLATFORM],
+            "preview": ["pixi-build"],
+        },
+        "package": {
+            "name": PACKAGE_NAME,
+            "version": "1.0.0",
+            "build": {
+                "backend": {"name": "pixi-build-mojo", "version": "*"},
+                "config": {"bins": [{"name": PACKAGE_NAME, "path": "main.mojo"}]},
+            },
+            "build-dependencies": {"mojo-compiler": "==1.2.0"},
+        },
+    }
+    workspace.joinpath("pixi.toml").write_text(tomli_w.dumps(manifest))
+    channel = workspace.joinpath("channel")
+    verify_cli_command(
+        [pixi, "publish", "--target-channel", channel.as_uri()],
+        cwd=workspace,
+    )
+    [archive] = channel.joinpath(CURRENT_PLATFORM).glob("*.conda")
+    index = _package_index(archive, workspace.joinpath("extracted"))
+    compiler_build = _runtime_pin(index, "mojo-compiler", "1.2.0")
+
+    consumer = workspace.joinpath("consumer")
+    _write_consumer(consumer, channel, [{"platform": CURRENT_PLATFORM}])
+    verify_cli_command(
+        [pixi, "run", PACKAGE_NAME],
+        cwd=consumer,
+        stdout_contains="hello from Mojo",
+    )
+    [compiler_record] = consumer.joinpath(".pixi", "envs", "default", "conda-meta").glob(
+        "mojo-compiler-*.json"
+    )
+    compiler = json.loads(compiler_record.read_text())
+    assert compiler["version"] == "1.2.0"
+    assert compiler["build"] == compiler_build
+
+
+@pytest.mark.skipif(
+    CURRENT_PLATFORM != "linux-64", reason="Mojo accelerator binaries need linux-64"
+)
 def test_mojo_variants_publish_solve_and_run(pixi: Path, mojo_workspace: Path) -> None:
     channel = mojo_workspace.joinpath("channel")
     verify_cli_command(

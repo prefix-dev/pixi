@@ -17,6 +17,8 @@ This backend automatically generates conda packages from Mojo projects.
 
 The generated packages can be installed into local envs for development, or packaged for distribution.
 
+On macOS, executable packages include an exact runtime dependency on `mojo-compiler`, which also supplies `libKGENCompilerRTShared.dylib`.
+
 ### Auto-derive of pkg and bin
 
 The Mojo backend includes auto-discovery of your project structure and will derive the following:

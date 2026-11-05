@@ -83,6 +83,18 @@ impl GenerateRecipe for MojoGenerator {
             accelerator::configure_recipe(&mut generated_recipe.recipe)?;
         }
 
+        if host_platform.is_osx() && bins.as_ref().is_some_and(|bins| !bins.is_empty()) {
+            // mojo-compiler bundles libKGENCompilerRTShared.dylib but has no strong run export.
+            // TODO: Adapt the runtime dependency when the Mojo and MAX packages are split up.
+            generated_recipe
+                .recipe
+                .requirements
+                .run
+                .push(Item::Value(accelerator::template(
+                    "${{ pin_compatible('mojo-compiler', exact=True) }}",
+                )?));
+        }
+
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
 
