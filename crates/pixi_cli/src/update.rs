@@ -18,6 +18,7 @@ use pixi_record::{LockFileResolver, LockedGitUrl, PinnedSourceSpec, UnresolvedPi
 use rattler_lock::{LockFile, LockedPackage};
 
 use crate::cli_config::ScriptWorkspaceConfig;
+use crate::constraint_args::ConstraintArgs;
 
 /// Update dependencies to newer compatible versions.
 ///
@@ -49,6 +50,9 @@ pub struct Args {
     /// Output the changes in JSON format.
     #[clap(long)]
     pub json: bool,
+
+    #[clap(flatten)]
+    pub constraint_args: ConstraintArgs,
 }
 
 #[derive(Parser, Debug, Default)]
@@ -131,12 +135,19 @@ impl UpdateSpecs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .with_cli_config(args.config)
         .locate()
         .await?;
+
+    // Inject the temporary constraints. They only live in memory and take part
+    // in both the satisfiability check and the solve.
+    args.constraint_args.apply(&mut workspace)?;
+    if !args.json {
+        args.constraint_args.print_applied();
+    }
 
     let mut specs = UpdateSpecs::from(args.specs);
 
