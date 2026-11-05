@@ -49,9 +49,6 @@ Next, define the producer workspace and package:
 ```
 
 The [`mojo_accelerator`](backends/pixi-build-mojo.md#accelerator-variants) build variant produces two packages with the same name and version but different build hashes.
-The backend supplies the compile-time define and compiler flags for each implementation, with a shared x86-64-v3 host baseline.
-The compiler and runtime pins keep this example on a matching toolchain.
-The backend supplies C/C++ compiler requirements, derives the glibc sysroot from the platform, and records the runtime and hardware requirements in each package.
 
 You can create a local conda channel like this:
 
@@ -73,7 +70,7 @@ Create the consumer manifest beside `package/`:
 The two rich platforms describe separate solves for the same `linux-64` subdir.
 `amd` comes first, so Pixi selects it automatically on compatible hardware, otherwise it selects `cpu`.
 Both require `archspec = "x86_64_v3"` because the prebuilt Modular runtime needs that CPU baseline.
-`amdgpu = "gfx1103"` requires that exact [ISA](https://gpuopen.com/amd-gpu-architecture-programming-documentation/), not `gfx1103` or newer.
+`amdgpu = "gfx1103"` requires exactly that [ISA](https://gpuopen.com/amd-gpu-architecture-programming-documentation/); even newer ISAs do not match.
 If the GPU build is suitable, typically the CPU is suitable as well.
 To make sure that the GPU build is prioritized in that case `pixi-build-mojo` makes sure to [down prioritize](https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration) the CPU build.
 

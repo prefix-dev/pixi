@@ -354,8 +354,17 @@ preview = ["pixi-build"]
 mojo_accelerator = ["cpu", "gfx1103"]
 ```
 
-Only `cpu` and `gfx1103` are supported, for `linux-64` binaries (`bins`).
-Packages (`pkg`), other GPU targets, and CUDA are not supported.
+Supported values are `cpu` and the following AMD GPU targets:
+
+- `gfx90a`, `gfx942`, `gfx950`
+- `gfx1030`, `gfx1033`
+- `gfx1100`, `gfx1101`, `gfx1102`, `gfx1103`
+- `gfx1150`, `gfx1151`, `gfx1152`
+- `gfx1200`, `gfx1201`
+
+Accelerator variants apply only to `linux-64` binaries (`bins`).
+The variant is ignored for packages (`pkg`) and other platforms.
+Other GPU targets, including CUDA, are not supported.
 Without this variant, builds are CPU-only.
 
 Both outputs share the package name, version, executable name, and build number.
@@ -363,9 +372,11 @@ The `mojo_accelerator` value changes the [build hash](https://rattler-build.pref
 
 ### Compilation
 
-The backend passes `-D mojo_accelerator=cpu` or `-D mojo_accelerator=gfx1103` to select code at compile time.
-CPU builds must exclude GPU APIs through a compile-time branch.
-AMD builds use `--target-accelerator gfx1103`.
+The backend passes `-D mojo_accelerator=<value>`, where `<value>` is the selected variant.
+Your Mojo source can read this value with `get_defined_string["mojo_accelerator"]()` and use `comptime if` to compile either its CPU or GPU implementation.
+This does not automatically turn CPU code into GPU code or select an accelerator at runtime.
+CPU builds must exclude GPU API calls through a compile-time branch.
+AMD builds also pass `--target-accelerator <value>` to target the selected GPU architecture.
 
 Both builds target x86-64-v3, the [Modular runtime's minimum](https://mojolang.org/docs/requirements/#hardware), without host-specific optimizations.
 Keep binary `extra-args` consistent with the selected target and package requirements.
@@ -378,8 +389,9 @@ Host and runtime requirements follow that selection.
 ### Runtime and selection
 
 Both builds require glibc 2.34 or newer, x86-64-v3, and matching `mojo-compiler` and `max-core >=26.7` runtimes.
-The AMD build also requires `hip-runtime-amd >=6.3.3` and the `__amdgpu` and `__amdgpu_arch ==11.0.3` virtual packages.
-`gfx1103` is an exact GPU architecture, not a minimum generation.
+AMD builds also require `__amdgpu` and an exact `__amdgpu_arch` match for the selected target.
+For example, `gfx1103` requires `__amdgpu_arch ==11.0.3`, not that architecture or newer.
+The minimum `hip-runtime-amd` version is 7.0 for `gfx950` and 6.3.3 for all other supported AMD targets.
 
 The AMD build is preferred when its requirements are met, with CPU as the fallback.
 Use [rich platforms](../../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) to define AMD and CPU solve targets, with AMD first for automatic selection.
