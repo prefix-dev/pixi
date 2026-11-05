@@ -36,6 +36,7 @@ class DetectorChannel:
     root: Path
     registrations: dict[str, list[str]] = field(default_factory=dict)
     packages: dict[str, dict[str, Any]] = field(default_factory=dict)
+    relations: dict[str, str] = field(default_factory=dict)
 
     @property
     def url(self) -> str:
@@ -127,6 +128,7 @@ class DetectorChannel:
                         "info": {
                             "subdir": subdir,
                             "virtual_package_detectors": self.registrations,
+                            "channel_relations": self.relations,
                         },
                         "packages": self.packages if subdir == "noarch" else {},
                         "packages.conda": {},
@@ -299,35 +301,26 @@ def test_detector_values_reach_consumers_and_platform_selection(
     assert not default_env_path(unsupported).exists()
 
 
-@pytest.mark.parametrize("command", ["info", "install", "exec"])
-@pytest.mark.parametrize("channel_order", [(0, 1), (1, 0)], ids=["prefer-3", "prefer-4"])
-def test_detector_dependencies_follow_explicit_channel_order_without_replacing_origin(
-    detector_sandbox: DetectorSandbox, command: str, channel_order: tuple[int, int]
-) -> None:
+@pytest.fixture
+def detector_dependency_channels(
+    detector_sandbox: DetectorSandbox,
+) -> tuple[DetectorChannel, DetectorChannel, Path, Path]:
     sandbox = detector_sandbox
     origin = DetectorChannel(sandbox.root / "origin")
-    dependencies = [
-        DetectorChannel(sandbox.root / "first-dependency-channel"),
-        DetectorChannel(sandbox.root / "second-dependency-channel"),
-    ]
-    helper_versions = ("3.0", "4.0")
-    helper_markers = []
-    for channel, version in zip(dependencies, helper_versions, strict=True):
-        marker = channel.root / "helper.runs"
-        helper_markers.append(marker)
-        channel.package(
-            "dependency-version",
-            [],
-            {
-                "bin/dependency-version": (
-                    f"#!/bin/sh\necho run >> {shlex.quote(str(marker))}\necho {version}\n"
-                ).encode(),
-                "Scripts/dependency-version.bat": (
-                    f'@echo off\r\necho run>>"{marker}"\r\necho {version}\r\n'
-                ).encode(),
-            },
-        )
-
+    dependency = DetectorChannel(sandbox.root / "dependency")
+    helper_marker = dependency.root / "helper.runs"
+    dependency.package(
+        "dependency-version",
+        [],
+        {
+            "bin/dependency-version": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(helper_marker))}\necho 3.0\n"
+            ).encode(),
+            "Scripts/dependency-version.bat": (
+                f'@echo off\r\necho run>>"{helper_marker}"\r\necho 3.0\r\n'
+            ).encode(),
+        },
+    )
     detector = "dependency-detect"
     origin_marker = origin.root / "detector.runs"
     report = json.dumps({"version": 1, "virtual_packages": {CAPABILITY: {"version": "%s"}}})
@@ -348,67 +341,76 @@ def test_detector_dependencies_follow_explicit_channel_order_without_replacing_o
             ).encode(),
         },
     )
-    shadow_marker = dependencies[0].root / "shadow.runs"
-    # This higher-priority package is deliberately not registered as a detector.
-    dependencies[0].package(
-        detector,
+    origin.consumer("dependency-consumer", CAPABILITY, "==3.0")
+    return origin, dependency, origin_marker, helper_marker
+
+
+def test_unrelated_consumer_channel_cannot_supply_detector_dependencies(
+    detector_sandbox: DetectorSandbox,
+    detector_dependency_channels: tuple[DetectorChannel, DetectorChannel, Path, Path],
+) -> None:
+    sandbox = detector_sandbox
+    origin, dependency, origin_marker, helper_marker = detector_dependency_channels
+    workspace = sandbox.workspace(
+        "unrelated-dependency-channel", [dependency, origin], consumer="dependency-consumer"
+    )
+    sandbox.decision(workspace, origin, "allow")
+
+    info = sandbox.info(workspace)
+    report = next(
+        item
+        for item in info["virtual_package_detectors"]
+        if item["detector"] == "dependency-detect"
+    )
+    assert report["origin"] == origin.url
+    assert report["state"] == "failed"
+    assert "dependency-version" in report["detail"]
+    assert report["virtual_packages"] == []
+    assert CAPABILITY not in versions(info)
+    sandbox.run(workspace, "install", expected=ExitCode.FAILURE)
+    assert not (
+        default_env_path(workspace) / "conda-meta" / "dependency-consumer-1.0-0.json"
+    ).exists()
+    assert not origin_marker.exists()
+    assert not helper_marker.exists()
+
+
+def test_detector_dependencies_follow_relative_relation_without_replacing_origin(
+    detector_sandbox: DetectorSandbox,
+    detector_dependency_channels: tuple[DetectorChannel, DetectorChannel, Path, Path],
+) -> None:
+    sandbox = detector_sandbox
+    origin, dependency, origin_marker, helper_marker = detector_dependency_channels
+    origin.relations["base"] = "../dependency"
+    origin.write_repodata()
+    shadow_marker = dependency.root / "shadow.runs"
+    # The relation's higher-priority channel must not replace the registered detector.
+    dependency.package(
+        "dependency-detect",
         [],
         {
-            f"bin/{detector}": (
+            "bin/dependency-detect": (
                 f"#!/bin/sh\necho run >> {shlex.quote(str(shadow_marker))}\nexit 99\n"
             ).encode(),
-            f"Scripts/{detector}.bat": (
+            "Scripts/dependency-detect.bat": (
                 f'@echo off\r\necho run>>"{shadow_marker}"\r\nexit /b 99\r\n'
             ).encode(),
         },
     )
-    expected_version = helper_versions[channel_order[0]]
-    origin.consumer("dependency-consumer", CAPABILITY, f"=={expected_version}")
-    channels = [*(dependencies[index] for index in channel_order), origin]
     workspace = sandbox.workspace(
-        "explicit-dependency-channels",
-        channels,
+        "related-dependency-channel",
+        [origin],
         capability=CAPABILITY,
-        required=expected_version,
-        consumer="dependency-consumer" if command == "install" else None,
+        consumer="dependency-consumer",
     )
     sandbox.decision(workspace, origin, "allow")
 
-    if command == "info":
-        info = sandbox.info(workspace)
-    else:
-        if command == "install":
-            sandbox.run(workspace, "install")
-            assert (
-                default_env_path(workspace) / "conda-meta" / "dependency-consumer-1.0-0.json"
-            ).exists()
-        else:
-            args = [arg for channel in channels for arg in ("--channel", channel.url)]
-            assert (
-                "consumer-ready"
-                in sandbox.run(
-                    workspace,
-                    "exec",
-                    *args,
-                    "--spec",
-                    "dependency-consumer",
-                    bat_extension("dependency-consumer"),
-                ).stdout
-            )
-        # Assert before info, so all-mode detection cannot conceal a demand-path failure.
-        assert helper_markers[channel_order[0]].exists()
-        info = sandbox.info(workspace)
-
-    assert versions(info)[CAPABILITY] == expected_version
-    detector_report = next(
-        item for item in info["virtual_package_detectors"] if item["detector"] == detector
-    )
-    assert detector_report["origin"] == origin.url
-    assert detector_report["state"] in {"ran", "cached"}
-    assert detector_report["virtual_packages"] == [f"{CAPABILITY}={expected_version}=0"]
+    sandbox.run(workspace, "install")
+    assert (default_env_path(workspace) / "conda-meta" / "dependency-consumer-1.0-0.json").exists()
+    # Check execution before info's all-mode detection can conceal an install-path failure.
     assert origin_marker.read_text(encoding="utf-8").splitlines() == ["run"]
-    assert helper_markers[channel_order[0]].read_text(encoding="utf-8").splitlines() == ["run"]
-    assert not helper_markers[channel_order[1]].exists()
+    assert helper_marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert_report(sandbox.info(workspace), origin, "dependency-detect", CAPABILITY)
     assert not shadow_marker.exists()
 
 

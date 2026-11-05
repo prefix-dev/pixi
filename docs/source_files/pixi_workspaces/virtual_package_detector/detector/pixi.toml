@@ -1,15 +1,17 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 preview = ["pixi-build"]
 
-[package]
-name = "username-length-detect"
-version = "0.1.0"
-
 [package.build.backend]
-name = "pixi-build-python"
+name = "pixi-build-rust"
 channels = ["https://prefix.dev/conda-forge"]
 
-[package.host-dependencies]
-hatchling = "*"
+[package.build.config]
+compilers = ["rust"]
+
+[package.build.target.linux.config]
+env = { RUSTFLAGS = "-C target-feature=+crt-static -C relocation-model=static" }
+
+[package.build.target.win.config]
+env = { RUSTFLAGS = "-C target-feature=+crt-static" }

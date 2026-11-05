@@ -14,12 +14,10 @@ use pixi_record::UnresolvedPixiRecord;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::DetailedSpec;
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{
-    Channel, ChannelUrl, GenericVirtualPackage, NamedChannelOrUrl, Subdir, prefix::Prefix,
-};
+use rattler_conda_types::{GenericVirtualPackage, NamedChannelOrUrl, Subdir, prefix::Prefix};
 use rattler_environment_digest::environment_digest;
 use rattler_networking::LazyClient;
-use rattler_repodata_gateway::{AcceptedDetectorRegistration, Gateway};
+use rattler_repodata_gateway::{AcceptedDetectorRegistration, ChannelRelationsMode, Gateway};
 use rattler_virtual_package_detectors::{
     DetectorEnvironment, DetectorEnvironmentProvider, EnvironmentError, ResolvedDetector,
     environment::{detector_spec, prefix_for},
@@ -30,7 +28,6 @@ use super::HostDetectError;
 pub(super) struct PixiEnvironmentProvider<'a> {
     dispatcher: CommandDispatcher,
     root: &'a Path,
-    channels: &'a [ChannelUrl],
     offline: bool,
     progress: Arc<TopLevelProgress>,
 }
@@ -41,7 +38,6 @@ impl<'a> PixiEnvironmentProvider<'a> {
         gateway: Gateway,
         client: LazyClient,
         root: &'a Path,
-        channels: &'a [ChannelUrl],
         platform: Subdir,
         virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<Self, HostDetectError> {
@@ -81,7 +77,6 @@ impl<'a> PixiEnvironmentProvider<'a> {
         Ok(Self {
             dispatcher,
             root,
-            channels,
             offline: config.offline(),
             progress,
         })
@@ -106,11 +101,13 @@ impl DetectorEnvironmentProvider for PixiEnvironmentProvider<'_> {
             .dispatcher
             .gateway()
             .query(
-                self.channels.iter().cloned().map(Channel::from_url),
+                registration.resolution_channels.iter().cloned(),
                 [platform, Subdir::NoArch],
                 [detector_spec(registration)],
             )
             .recursive(true)
+            // Registration discovery has already expanded these channels.
+            .channel_relations(ChannelRelationsMode::Disabled)
             .channel_notices(reporter.is_some());
         if let Some(reporter) = reporter {
             query = query.with_reporter(WrappingGatewayReporter(reporter));
@@ -144,7 +141,11 @@ impl DetectorEnvironmentProvider for PixiEnvironmentProvider<'_> {
                 binary_specs,
                 binary_repodata: repodata,
                 platform,
-                channels: self.channels.to_vec(),
+                channels: registration
+                    .resolution_channels
+                    .iter()
+                    .map(|channel| channel.base_url.clone())
+                    .collect(),
                 // Only built-in capabilities are available, preventing detector recursion.
                 virtual_packages: virtual_packages.to_vec(),
                 excluded_candidates,
