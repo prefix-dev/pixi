@@ -65,6 +65,7 @@ for further details on how to use the software.
 - [Dev](https://pixi.prefix.dev/latest/build/dev/)
 - [Getting started](https://pixi.prefix.dev/latest/build/getting_started/)
 - [Inline packages](https://pixi.prefix.dev/latest/build/inline_packages/)
+- [Building Mojo CPU and AMD GPU Packages](https://pixi.prefix.dev/latest/build/mojo_accelerators/)
 - [Package source](https://pixi.prefix.dev/latest/build/package_source/)
 - [Python](https://pixi.prefix.dev/latest/build/python/)
 - [then](https://pixi.prefix.dev/latest/build/ros/)

@@ -1570,6 +1570,8 @@
       
         
       
+        
+      
     
     
     
@@ -1678,6 +1680,33 @@
     
   
   Building a ROS Package
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mojo_accelerators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Building Mojo CPU and AMD Packages
 
     
   </span>
@@ -2308,6 +2337,45 @@
       </span>
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accelerator-variants" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Accelerator variants
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accelerator variants">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compilation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Compilation
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runtime-and-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Runtime and selection
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -9482,6 +9550,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#accelerator-variants" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Accelerator variants
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accelerator variants">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#compilation" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Compilation
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runtime-and-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Runtime and selection
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9530,6 +9637,13 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">#</a></h2>
 <p>This backend automatically generates conda packages from Mojo projects.</p>
 <p>The generated packages can be installed into local envs for development, or packaged for distribution.</p>
+<p>On macOS, executable packages include an exact runtime dependency on <code>mojo-compiler</code>, which also supplies <code>libKGENCompilerRTShared.dylib</code>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Cross-compilation</p>
+<p>Cross-compiling between conda platforms is not supported by <code>pixi-build-mojo</code>.
+The <code>mojo-compiler</code> activation script runs <code>python3</code> from the environment being activated, which can fail when it targets a different operating system or architecture.
+Build on a machine matching the package's target platform.</p>
+</div>
 <h3 id="auto-derive-of-pkg-and-bin">Auto-derive of pkg and bin<a class="headerlink" href="#auto-derive-of-pkg-and-bin" title="Permanent link">#</a></h3>
 <p>The Mojo backend includes auto-discovery of your project structure and will derive the following:</p>
 <ul>
@@ -9652,7 +9766,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ASSERT</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"all"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <h4 id="debug-dir"><code>debug-dir</code><a class="headerlink" href="#debug-dir" title="Permanent link">#</a></h4>
-<p>The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the <code>debug</code> subdirectory inside the work directory (for example <code>&lt;work_directory&gt;/debug</code>). The deprecated <code>debug-dir</code> configuration option is ignored; if present, the backend emits a warning to highlight that it no longer has any effect.</p>
+<p>The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the <code>debug</code> subdirectory inside the work directory (for example <code>&lt;work_directory&gt;/debug</code>). The deprecated <code>debug-dir</code> configuration option is ignored. If present, the backend emits a warning to highlight that it no longer has any effect.</p>
 <h4 id="extra-input-globs"><code>extra-input-globs</code><a class="headerlink" href="#extra-input-globs" title="Permanent link">#</a></h4>
 <ul>
 <li><strong>Type</strong>: <code>Array&lt;String&gt;</code></li>
@@ -9793,6 +9907,49 @@ The <code>vs2022</code> compiler is more widely supported on modern GitHub runne
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"vs2019"</span><span class="p">]</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"vs2019"</span><span class="p">]</span>
 </span></code></pre></div>
+<h2 id="accelerator-variants">Accelerator variants<a class="headerlink" href="#accelerator-variants" title="Permanent link">#</a></h2>
+<p>Build CPU and AMD GPU variants with <code>mojo_accelerator</code>:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"linux-64"</span><span class="p">,</span><span class="w"> </span><span class="n">glibc</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"2.34"</span><span class="p">,</span><span class="w"> </span><span class="n">archspec</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"x86_64_v3"</span><span class="w"> </span><span class="p">}]</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"pixi-build"</span><span class="p">]</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="k">[workspace.build-variants]</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="n">mojo_accelerator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"cpu"</span><span class="p">,</span><span class="w"> </span><span class="s2">"gfx1103"</span><span class="p">]</span>
+</span></code></pre></div>
+<p>Supported values are <code>cpu</code> and the following AMD GPU targets:</p>
+<ul>
+<li><code>gfx90a</code>, <code>gfx942</code>, <code>gfx950</code></li>
+<li><code>gfx1030</code>, <code>gfx1033</code></li>
+<li><code>gfx1100</code>, <code>gfx1101</code>, <code>gfx1102</code>, <code>gfx1103</code></li>
+<li><code>gfx1150</code>, <code>gfx1151</code>, <code>gfx1152</code></li>
+<li><code>gfx1200</code>, <code>gfx1201</code></li>
+</ul>
+<p>Accelerator variants apply only to <code>linux-64</code> binaries (<code>bins</code>).
+The variant is ignored for packages (<code>pkg</code>) and other platforms.
+Other GPU targets, including CUDA, are not supported.
+Without this variant, builds are CPU-only.</p>
+<p>Both outputs share the package name, version, executable name, and build number.
+The <code>mojo_accelerator</code> value changes the <a href="https://rattler-build.prefix.dev/latest/variants/#package-hash-from-variant">build hash</a>.</p>
+<h3 id="compilation">Compilation<a class="headerlink" href="#compilation" title="Permanent link">#</a></h3>
+<p>The backend passes <code>-D mojo_accelerator=&lt;value&gt;</code>, where <code>&lt;value&gt;</code> is the selected variant.
+Your Mojo source can read this value with <code>get_defined_string["mojo_accelerator"]()</code> and use <code>comptime if</code> to compile either its CPU or GPU implementation.
+This does not automatically turn CPU code into GPU code or select an accelerator at runtime.
+CPU builds must exclude GPU API calls through a compile-time branch.
+AMD builds also pass <code>--target-accelerator &lt;value&gt;</code> to target the selected GPU architecture.</p>
+<p>Both builds target x86-64-v3, the <a href="https://mojolang.org/docs/requirements/#hardware">Modular runtime's minimum</a>, without host-specific optimizations.
+Keep binary <code>extra-args</code> consistent with the selected target and package requirements.</p>
+<p>The backend supplies C/C++ compilers, <code>patchelf</code>, and a sysroot matching the declared glibc version.
+No manual compiler paths or sysroot pins are needed.
+Pin <code>mojo-compiler &gt;=1.2</code> in <code>[package.build-dependencies]</code> to select the compiler version.
+Host and runtime requirements follow that selection.</p>
+<h3 id="runtime-and-selection">Runtime and selection<a class="headerlink" href="#runtime-and-selection" title="Permanent link">#</a></h3>
+<p>Both builds require glibc 2.34 or newer, x86-64-v3, and matching <code>mojo-compiler</code> and <code>max-core &gt;=26.7</code> runtimes.
+AMD builds also require <code>__amdgpu</code> and an exact <code>__amdgpu_arch</code> match for the selected target.
+For example, <code>gfx1103</code> requires <code>__amdgpu_arch ==11.0.3</code>, not that architecture or newer.
+The minimum <code>hip-runtime-amd</code> version is 7.0 for <code>gfx950</code> and 6.3.3 for all other supported AMD targets.</p>
+<p>The AMD build is preferred when its requirements are met, with CPU as the fallback.
+Use <a href="../../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">rich platforms</a> to define AMD and CPU solve targets, with AMD first for automatic selection.</p>
+<p>See <a href="../../mojo_accelerators/">Building Mojo CPU and AMD Packages</a> for a complete example.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">#</a></h2>
 <ul>
 <li><a href="https://docs.modular.com/pixi/">Mojo Pixi Basic</a></li>
