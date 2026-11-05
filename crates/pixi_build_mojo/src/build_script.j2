@@ -11,6 +11,7 @@ export MODULAR_CACHE_DIR="$SRC_DIR/.mojo-cache"
 
 {#- Build any binaries -#}
 {% if bins %}
+mkdir -p "{{ library_prefix }}/bin"
 mojo_build_args=()
 {% if accelerator_variants_enabled %}
 {% raw %}
