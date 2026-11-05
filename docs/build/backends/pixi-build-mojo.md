@@ -19,6 +19,11 @@ The generated packages can be installed into local envs for development, or pack
 
 On macOS, executable packages include an exact runtime dependency on `mojo-compiler`, which also supplies `libKGENCompilerRTShared.dylib`.
 
+!!! warning "Cross-compilation"
+    Cross-compiling between conda platforms is not supported by `pixi-build-mojo`.
+    The `mojo-compiler` activation script runs `python3` from the environment being activated, which can fail when it targets a different operating system or architecture.
+    Build on a machine matching the package's target platform.
+
 ### Auto-derive of pkg and bin
 
 The Mojo backend includes auto-discovery of your project structure and will derive the following:
