@@ -72,7 +72,7 @@ The two rich platforms describe separate solves for the same `linux-64` subdir.
 Both require `archspec = "x86_64_v3"` because the prebuilt Modular runtime needs that CPU baseline.
 `amdgpu = "gfx1103"` requires exactly that [ISA](https://gpuopen.com/amd-gpu-architecture-programming-documentation/); even newer ISAs do not match.
 If the GPU build is suitable, typically the CPU is suitable as well.
-To make sure that the GPU build is prioritized in that case `pixi-build-mojo` makes sure to [down prioritize](https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration) the CPU build.
+To prioritize the GPU build in that case, `pixi-build-mojo` makes sure to [down prioritize](https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration) the CPU build.
 
 Run from the consumer directory:
 
