@@ -10734,7 +10734,7 @@ This is the same format that parselmouth publishes under <a href="https://github
 <li><code>location</code>: URL or path of a mapping JSON file. Relative paths are resolved against the workspace root.</li>
 <li><code>mapping</code>: inline <code>conda_name = "pypi_name"</code> entries. A list of names maps one conda package to several PyPI packages; <code>false</code> marks the package as not available on PyPI. Inline entries override entries from <code>location</code>.</li>
 <li><code>mapping-mode</code>: <code>"overlay"</code> (default) or <code>"replace"</code>. With <code>overlay</code>, Pixi consults your entries first and falls back to the default <a href="https://conda-mapping.prefix.dev/">prefix.dev mapping</a> for anything not listed. With <code>replace</code>, Pixi uses your mapping instead of the default mapping data for that channel. If no <code>location</code> or <code>mapping</code> is provided, the project mapping is empty.</li>
-<li><code>same-name-heuristic</code>: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to <code>true</code> for conda-forge and <code>false</code> for other channels.</li>
+<li><code>same-name-heuristic</code>: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to <code>true</code> for conda-forge and the conda-pypi channel and <code>false</code> for other channels.</li>
 </ul>
 <p>A mapping fetched from a <code>location</code> URL is cached using standard HTTP cache semantics (honoring the server's <code>Cache-Control</code>/<code>ETag</code> headers). If a refresh fails (e.g. offline), the previously fetched copy is reused with a warning; if no copy has been fetched yet, the failure is an error.</p>
 <p>For example, <code>conda-forge = { mapping-mode = "replace" }</code> uses an empty project mapping, skips Pixi's default mapping data, and still keeps the conda-forge same-name heuristic.</p>
@@ -10759,8 +10759,8 @@ This is the same format that parselmouth publishes under <a href="https://github
 <tr>
 <td>unset</td>
 <td>no</td>
-<td>yes</td>
-<td>yes, for conda-forge</td>
+<td>yes, except for the conda-pypi channel</td>
+<td>yes, for conda-forge and the conda-pypi channel</td>
 </tr>
 <tr>
 <td><code>conda-pypi-map = false</code></td>
@@ -10772,7 +10772,7 @@ This is the same format that parselmouth publishes under <a href="https://github
 <td><code>conda-pypi-map = {}</code></td>
 <td>empty conda-forge mapping</td>
 <td>no</td>
-<td>yes, for conda-forge</td>
+<td>yes, for conda-forge and the conda-pypi channel</td>
 </tr>
 <tr>
 <td><code>&lt;channel&gt; = false</code></td>

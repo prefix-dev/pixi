@@ -9540,7 +9540,8 @@ Then, since <code>numpy</code> is not specified as a conda dependency, Pixi will
 <h3 id="overriding-the-name-mapping">Overriding the name mapping<a class="headerlink" href="#overriding-the-name-mapping" title="Permanent link">#</a></h3>
 <p><code>conda-pypi-map</code> layers your entries on top of the default mapping.
 For each package, Pixi first consults your entries and falls back to the default mapping only when your mapping does not mention the package.
-As a final fallback, Pixi can assume that the conda package name is also the PyPI package name. This same-name heuristic is enabled by default for conda-forge and can be enabled explicitly for other channels.</p>
+As a final fallback, Pixi can assume that the conda package name is also the PyPI package name. This same-name heuristic is enabled by default for conda-forge and for the <a href="https://github.com/conda/conda-pypi">conda-pypi</a> channel, and can be enabled explicitly for other channels.
+Packages from the conda-pypi channel are PyPI wheels, so Pixi derives their PURL from the package name directly and never consults the default mapping for them.</p>
 <p>This means fixing a single incorrectly mapped package is a one-liner:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[workspace.conda-pypi-map]</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">conda-forge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">mapping</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">pytorch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"torch"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
@@ -9558,7 +9559,7 @@ As a final fallback, Pixi can assume that the conda package name is also the PyP
 <li>If the package is explicitly marked as not available on PyPI (<code>false</code> in TOML, or <code>null</code>/<code>[]</code> in JSON), lookup stops and no PURL is emitted.</li>
 <li>If the package is missing from a project-defined mapping, <code>mapping-mode = "overlay"</code> falls back to the default mapping data. With <code>mapping-mode = "replace"</code>, Pixi skips the default mapping data for that channel.</li>
 <li>If fallback is allowed, Pixi consults the default prefix.dev mapping.</li>
-<li>If <code>same-name-heuristic</code> is enabled for the package's channel, Pixi may finally use the conda package name as the PyPI package name. This defaults to enabled for conda-forge and disabled for other channels.</li>
+<li>If <code>same-name-heuristic</code> is enabled for the package's channel, Pixi may finally use the conda package name as the PyPI package name. This defaults to enabled for conda-forge and the conda-pypi channel and disabled for other channels.</li>
 </ol>
 <h3 id="offline-and-firewall-restricted-environments">Offline and firewall-restricted environments<a class="headerlink" href="#offline-and-firewall-restricted-environments" title="Permanent link">#</a></h3>
 <p>The default mapping is fetched from <code>conda-mapping.prefix.dev</code>.
