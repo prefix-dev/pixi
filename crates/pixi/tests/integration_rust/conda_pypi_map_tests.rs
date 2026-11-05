@@ -902,14 +902,66 @@ fn offline_mapping_client(
     pypi_mapping::PurlDerivationClient::builder(blocked_client.into(), cache_dir, true).finish()
 }
 
-fn conda_forge_record(name: &str) -> RepoDataRecord {
+/// A minimal record for `name` whose channel is `channel`.
+fn channel_record(name: &str, channel: &str) -> RepoDataRecord {
     let package = Package::build(name, "2").finish();
     RepoDataRecord {
         identifier: package.identifier(),
         package_record: package.package_record,
         url: Url::parse(&format!("https://pypi.org/simple/{name}/")).unwrap(),
-        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
+        channel: Some(channel.to_owned()),
     }
+}
+
+fn conda_forge_record(name: &str) -> RepoDataRecord {
+    channel_record(name, "https://conda.anaconda.org/conda-forge/")
+}
+
+fn conda_pypi_record(name: &str) -> RepoDataRecord {
+    channel_record(name, "https://conda.anaconda.org/conda-pypi/")
+}
+
+/// Records from the conda-pypi channel are PyPI wheels, so the conda name is
+/// the PyPI name. The purl is derived with the same-name heuristic without
+/// consulting the prefix.dev mappings, hence without any network access.
+#[tokio::test]
+async fn test_conda_pypi_channel_record_gets_same_name_purl_without_network() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-conda-pypi-channel"
+    channels = ["conda-forge", "https://conda.anaconda.org/conda-pypi"]
+    platforms = ["linux-64"]
+    "#,
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let cache_dir = TempDir::new().unwrap();
+    let mapping_client = offline_mapping_client(&project, cache_dir.path().to_path_buf());
+
+    let mut packages = vec![conda_pypi_record("typing_extensions")];
+    mapping_client
+        .amend_purls(
+            project.pypi_name_derivation_mode().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let package = packages.pop().unwrap();
+    let purl = package
+        .package_record
+        .purls
+        .as_ref()
+        .and_then(BTreeSet::first)
+        .expect("a conda-pypi record should get the same-name heuristic purl");
+    // The same-name heuristic normalizes the name and adds no source qualifier.
+    assert_eq!(purl.name(), "typing-extensions");
+    assert!(purl.qualifiers().is_empty());
 }
 
 /// An inline mapping hit in the default (overlay) mode is final and requires

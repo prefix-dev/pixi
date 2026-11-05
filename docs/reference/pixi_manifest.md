@@ -253,7 +253,7 @@ The table form accepts:
 - `location`: URL or path of a mapping JSON file. Relative paths are resolved against the workspace root.
 - `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
 - `mapping-mode`: `"overlay"` (default) or `"replace"`. With `overlay`, Pixi consults your entries first and falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/) for anything not listed. With `replace`, Pixi uses your mapping instead of the default mapping data for that channel. If no `location` or `mapping` is provided, the project mapping is empty.
-- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and `false` for other channels.
+- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and the conda-pypi channel and `false` for other channels.
 
 A mapping fetched from a `location` URL is cached using standard HTTP cache semantics (honoring the server's `Cache-Control`/`ETag` headers). If a refresh fails (e.g. offline), the previously fetched copy is reused with a warning; if no copy has been fetched yet, the failure is an error.
 
@@ -274,9 +274,9 @@ Lookup behavior depends on where the configuration applies:
 
 | Configuration | Project-defined mapping | prefix.dev fallback | same-name heuristic |
 | --- | --- | --- | --- |
-| unset | no | yes | yes, for conda-forge |
+| unset | no | yes, except for the conda-pypi channel | yes, for conda-forge and the conda-pypi channel |
 | `conda-pypi-map = false` | no | no | no |
-| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge |
+| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge and the conda-pypi channel |
 | `<channel> = false` | no | no | no |
 | `mapping-mode = "overlay"`, package missing | miss | yes | yes, if enabled |
 | `mapping-mode = "replace"`, package missing | miss, or empty mapping | no | yes, if enabled |
