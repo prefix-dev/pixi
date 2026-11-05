@@ -902,27 +902,23 @@ fn offline_mapping_client(
     pypi_mapping::PurlDerivationClient::builder(blocked_client.into(), cache_dir, true).finish()
 }
 
-fn conda_forge_record(name: &str) -> RepoDataRecord {
+/// A minimal record for `name` whose channel is `channel`.
+fn channel_record(name: &str, channel: &str) -> RepoDataRecord {
     let package = Package::build(name, "2").finish();
     RepoDataRecord {
         identifier: package.identifier(),
         package_record: package.package_record,
         url: Url::parse(&format!("https://pypi.org/simple/{name}/")).unwrap(),
-        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
+        channel: Some(channel.to_owned()),
     }
 }
 
+fn conda_forge_record(name: &str) -> RepoDataRecord {
+    channel_record(name, "https://conda.anaconda.org/conda-forge/")
+}
+
 fn conda_pypi_record(name: &str) -> RepoDataRecord {
-    let package = Package::build(name, "2").finish();
-    RepoDataRecord {
-        identifier: package.identifier(),
-        package_record: package.package_record,
-        url: Url::parse(&format!(
-            "https://files.pythonhosted.org/packages/{name}-2-py3-none-any.whl"
-        ))
-        .unwrap(),
-        channel: Some("https://conda.anaconda.org/conda-pypi/".to_owned()),
-    }
+    channel_record(name, "https://conda.anaconda.org/conda-pypi/")
 }
 
 /// Records from the conda-pypi channel are PyPI wheels, so the conda name is

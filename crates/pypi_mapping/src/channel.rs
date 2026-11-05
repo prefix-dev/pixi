@@ -10,7 +10,7 @@ pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
 
 /// Returns `true` if the specified url refers to a conda-forge channel.
 pub fn is_conda_forge_url(url: &Url) -> bool {
-    url.path().starts_with("/conda-forge")
+    is_channel_url(url, "conda-forge")
 }
 
 /// Returns `true` if the specified record comes from the conda-pypi channel.
@@ -23,7 +23,15 @@ pub fn is_conda_pypi_record(record: &RepoDataRecord) -> bool {
 
 /// Returns `true` if the specified url refers to the conda-pypi channel.
 pub fn is_conda_pypi_url(url: &Url) -> bool {
-    url.path().starts_with("/conda-pypi")
+    is_channel_url(url, "conda-pypi")
+}
+
+/// Returns `true` if the path of `url` starts with the channel `name`, which
+/// matches the channel on any host, including mirrors.
+fn is_channel_url(url: &Url, name: &str) -> bool {
+    url.path()
+        .strip_prefix('/')
+        .is_some_and(|path| path.starts_with(name))
 }
 
 /// Parses the channel of a record as a URL, if it has one.
