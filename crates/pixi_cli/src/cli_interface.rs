@@ -1,5 +1,6 @@
 use pixi_api::{GlobalContext, Interface, InterfaceError, WorkspaceContext, global::Project};
 use pixi_core::Workspace;
+use pixi_progress::global_multi_progress;
 
 /// Builds the [`GlobalContext`] every `pixi global` command works through.
 pub fn cli_global_context(project: Project) -> GlobalContext<CliInterface> {
@@ -47,13 +48,16 @@ impl Interface for CliInterface {
             ..dialoguer::theme::ColorfulTheme::default()
         };
 
-        match dialoguer::Select::with_theme(&theme)
-            .with_prompt(msg)
-            .report(false)
-            .items(options)
-            .default(0)
-            .interact_opt()
-        {
+        let selection = global_multi_progress().suspend(|| {
+            dialoguer::Select::with_theme(&theme)
+                .with_prompt(msg)
+                .report(false)
+                .items(options)
+                .default(0)
+                .interact_opt()
+        });
+
+        match selection {
             // Ctrl-C cancels the prompt, like Esc.
             Err(dialoguer::Error::IO(err)) if err.kind() == std::io::ErrorKind::Interrupted => {
                 Ok(None)
