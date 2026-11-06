@@ -490,8 +490,9 @@ pub async fn resolve_dev_dependencies(
     channel_config: &rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
 ) -> Result<Vec<Dependency>, CommandDispatcherError<Box<PlatformUnsat>>> {
-    // Collect all dev source package names to filter out interdependencies
-    let dev_source_names: HashSet<PackageName> = dev_dependencies
+    // Dev source package names, used to filter out interdependencies. Each
+    // dev source may provide more names than the one it was requested by.
+    let mut dev_source_names: HashSet<PackageName> = dev_dependencies
         .iter()
         .map(|(name, _)| name.clone())
         .collect();
@@ -502,7 +503,6 @@ pub async fn resolve_dev_dependencies(
         let command_dispatcher = command_dispatcher.clone();
         let channel_config = channel_config.clone();
         let workspace_env_ref = workspace_env_ref.clone();
-        let dev_source_names = dev_source_names.clone();
 
         futures.push(resolve_single_dev_dependency(
             package_name,
@@ -510,23 +510,25 @@ pub async fn resolve_dev_dependencies(
             command_dispatcher,
             channel_config,
             workspace_env_ref,
-            dev_source_names,
         ));
     }
 
-    futures
-        .try_fold(
-            Vec::new(),
-            |mut resolved_dependencies, elements| async move {
-                resolved_dependencies.extend(elements);
-                Ok(resolved_dependencies)
-            },
-        )
-        .await
-        .map_err_with(Box::new)
+    let resolved: Vec<_> = futures.try_collect().await.map_err_with(Box::new)?;
+
+    dev_source_names.extend(resolved.iter().flat_map(|(names, _)| names.iter().cloned()));
+    Ok(resolved
+        .into_iter()
+        .flat_map(|(_, dependencies)| dependencies)
+        .filter(|dependency| {
+            dependency
+                .conda_package_name()
+                .is_none_or(|name| !dev_source_names.contains(&name))
+        })
+        .collect())
 }
 
-/// Resolves all dependencies of a single dev dependency
+/// Resolves the names a single dev dependency provides and all of its
+/// dependencies, unfiltered.
 // The unboxed `PlatformUnsat` error is boxed by the caller when the
 // per-dependency futures are collected.
 #[allow(clippy::result_large_err)]
@@ -536,8 +538,7 @@ async fn resolve_single_dev_dependency(
     command_dispatcher: CommandDispatcher,
     channel_config: rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
-    dev_source_names: HashSet<PackageName>,
-) -> Result<Vec<Dependency>, CommandDispatcherError<PlatformUnsat>> {
+) -> Result<(Vec<PackageName>, Vec<Dependency>), CommandDispatcherError<PlatformUnsat>> {
     let pinned_source = command_dispatcher
         .engine()
         .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec).await)
@@ -567,13 +568,14 @@ async fn resolve_single_dev_dependency(
     let (dev_source, dev_bin) =
         DevSourceRecord::split_into_source_and_binary_requirements(dev_deps);
 
+    let provided_names = dev_metadata
+        .records
+        .iter()
+        .map(|record| record.name.clone())
+        .collect();
     let mut dependencies = Vec::new();
 
-    // Process source dependencies, filtering out dependencies that are also dev sources
-    for (dep_name, dep) in dev_source
-        .into_specs()
-        .filter(|(name, _)| !dev_source_names.contains(name))
-    {
+    for (dep_name, dep) in dev_source.into_specs() {
         let anchored_source = dep.resolve(&SourceAnchor::Workspace);
 
         dependencies.push(Dependency::CondaSource(
@@ -583,11 +585,7 @@ async fn resolve_single_dev_dependency(
         ));
     }
 
-    // Process binary dependencies, filtering out dependencies that are also dev sources
-    for (dep_name, binary_spec) in dev_bin
-        .into_specs()
-        .filter(|(name, _)| !dev_source_names.contains(name))
-    {
+    for (dep_name, binary_spec) in dev_bin.into_specs() {
         // Convert BinarySpec to NamelessMatchSpec
         let nameless_spec = binary_spec
             .try_into_nameless_match_spec(&channel_config)
@@ -606,7 +604,7 @@ async fn resolve_single_dev_dependency(
         ));
     }
 
-    Ok(dependencies)
+    Ok((provided_names, dependencies))
 }
 
 /// Indexes a locked package URL may belong to: the regular `indexes` plus
