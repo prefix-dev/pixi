@@ -3,8 +3,18 @@
 use std::path::Path;
 
 use miette::Diagnostic;
+use rattler_build_recipe::stage0::{
+    Build, Conditional, Item, JinjaExpression, JinjaTemplate, NestedItemList, Value,
+};
 use rattler_conda_types::Subdir;
 use thiserror::Error;
+
+/// Variant key that selects the `CMAKE_BUILD_TYPE` of CMake based packages.
+pub const CMAKE_BUILD_TYPE_KEY: &str = "cmake_build_type";
+
+/// Environment variable the build script templates read the CMake build type
+/// from.
+pub const CMAKE_BUILD_TYPE_ENV: &str = "ROS_CMAKE_BUILD_TYPE";
 
 /// Errors that can occur during build script generation.
 #[derive(Debug, Error, Diagnostic)]
@@ -32,10 +42,52 @@ pub fn render_build_script(
     let rendered = template
         .replace("@SRC_DIR@", &src_dir_str)
         .replace("@DISTRO@", distro)
-        .replace("@BUILD_DIR@", "build")
-        .replace("@BUILD_TYPE@", "Release");
+        .replace("@BUILD_DIR@", "build");
 
     Ok(rendered)
+}
+
+/// Whether packages of this ROS build type are built with CMake, and can
+/// therefore be built as debug variants.
+pub fn uses_cmake(build_type: &str) -> bool {
+    matches!(build_type, "ament_cmake" | "cmake" | "catkin")
+}
+
+/// Turn the CMake build type into a variant of the package.
+///
+/// Every build type other than `Release` gets a flag named after it
+/// (`debug`, `relwithdebinfo`, ...), so it can be requested with e.g.
+/// `flags = ["debug"]`. Those variants are down-prioritized so the solver
+/// keeps picking the release build when no flag is requested.
+///
+/// Returns the script environment value that passes the build type to the
+/// build script.
+pub fn add_cmake_build_type_variant(build: &mut Build) -> Value<String> {
+    build.flags.push(Item::Conditional(Conditional {
+        condition: JinjaExpression::new(format!("{CMAKE_BUILD_TYPE_KEY} != 'Release'"))
+            .expect("valid jinja expression"),
+        then: NestedItemList::single(Item::Value(Value::new_template(
+            JinjaTemplate::new(format!("${{{{ {CMAKE_BUILD_TYPE_KEY} | lower }}}}"))
+                .expect("valid jinja template"),
+            None,
+        ))),
+        else_value: None,
+        condition_span: None,
+    }));
+
+    build.variant.down_prioritize_variant = Some(Value::new_template(
+        JinjaTemplate::new(format!(
+            "${{{{ 0 if {CMAKE_BUILD_TYPE_KEY} == 'Release' else 1 }}}}"
+        ))
+        .expect("valid jinja template"),
+        None,
+    ));
+
+    Value::new_template(
+        JinjaTemplate::new(format!("${{{{ {CMAKE_BUILD_TYPE_KEY} }}}}"))
+            .expect("valid jinja template"),
+        None,
+    )
 }
 
 fn select_template(build_type: &str, is_windows: bool) -> Result<&'static str, BuildScriptError> {
@@ -63,9 +115,8 @@ mod tests {
             render_build_script("ament_cmake", "humble", &PathBuf::from("/my/source")).unwrap();
 
         assert!(script.contains("/my/source"));
-        assert!(script.contains("Release"));
+        assert!(script.contains("ROS_CMAKE_BUILD_TYPE"));
         assert!(!script.contains("@SRC_DIR@"));
-        assert!(!script.contains("@BUILD_TYPE@"));
     }
 
     #[test]

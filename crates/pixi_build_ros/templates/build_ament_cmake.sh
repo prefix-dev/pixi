@@ -9,7 +9,15 @@ if [ ! -d "$BUILD_DIR" ]; then
 fi
 pushd $BUILD_DIR
 
-BUILD_TYPE=@BUILD_TYPE@
+BUILD_TYPE=${ROS_CMAKE_BUILD_TYPE:-Release}
+
+# The compiler activation scripts export debug flavours of the compiler flags
+# next to the release ones (`-Og -g` instead of `-O2`, no `-DNDEBUG`).
+if [[ "$BUILD_TYPE" == "Debug" ]]; then
+    export CFLAGS="${DEBUG_CFLAGS:-$CFLAGS}"
+    export CXXFLAGS="${DEBUG_CXXFLAGS:-$CXXFLAGS}"
+    export CPPFLAGS="${DEBUG_CPPFLAGS:-$CPPFLAGS}"
+fi
 
 # necessary for correctly linking SIP files (from python_qt_bindings)
 export LINK=$CXX

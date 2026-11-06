@@ -34,6 +34,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+rattler_build_core = { workspace = true }
 insta = { workspace = true, features = ["filters", "redactions", "yaml"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

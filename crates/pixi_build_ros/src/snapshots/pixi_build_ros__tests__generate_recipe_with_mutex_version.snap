@@ -8,6 +8,9 @@ package:
   version: 0.0.1
 build:
   script: "[script]"
+  flags:
+    - if: "cmake_build_type != 'Release'"
+      then: "${{ cmake_build_type | lower }}"
   python:
     entry_points: []
     skip_pyc_compilation: []
@@ -24,6 +27,7 @@ build:
   variant:
     use_keys: []
     ignore_keys: []
+    down_prioritize_variant: "${{ 0 if cmake_build_type == 'Release' else 1 }}"
   prefix_detection:
     force_file_type:
       text: []
