@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use derive_more::Display;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_build_frontend::BackendOverride;
+use pixi_build_frontend::{BackendOverride, tool::BackendVerbosity};
 use pixi_compute_engine::InjectedKey;
 use rattler_conda_types::ChannelConfig;
 
@@ -51,4 +51,13 @@ pub struct BackendOverrideKey;
 
 impl InjectedKey for BackendOverrideKey {
     type Value = Arc<BackendOverride>;
+}
+
+/// Injected backend verbosity for processes spawned by this dispatcher.
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("BackendVerbosity")]
+pub struct BackendVerbosityKey;
+
+impl InjectedKey for BackendVerbosityKey {
+    type Value = Arc<BackendVerbosity>;
 }
