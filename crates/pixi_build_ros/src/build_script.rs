@@ -69,6 +69,38 @@ mod tests {
     }
 
     #[test]
+    fn test_windows_ament_cmake_uses_absolute_python_install_dir() {
+        // Regression test: a relative PYTHON_INSTALL_DIR such as
+        // "../Lib/site-packages" is recorded literally by CMake in
+        // install_manifest.txt and then leaks into the package file list, where
+        // entries containing `..` are rejected.
+        let template = include_str!("../templates/bld_ament_cmake.bat");
+        assert!(
+            template.contains(r#"set "PYTHON_INSTALL_DIR=%SP_DIR:\=/%""#),
+            "the ament_cmake Windows template must use an absolute site-packages path"
+        );
+        assert!(
+            !template.contains("relpath"),
+            "the relative PYTHON_INSTALL_DIR computation must be gone"
+        );
+    }
+
+    #[test]
+    fn test_windows_ament_cmake_quotes_path_arguments() {
+        // cmd.exe splits an unquoted expanded value on spaces, so the build
+        // prefix must not be handed to cmake as a bare %VAR%.
+        let template = include_str!("../templates/bld_ament_cmake.bat");
+        for arg in [
+            r#""-DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX%""#,
+            r#""-DPYTHON_EXECUTABLE=%PYTHON%""#,
+            r#""-DPYTHON_INSTALL_DIR=%PYTHON_INSTALL_DIR%""#,
+            r#""%SRC_DIR%""#,
+        ] {
+            assert!(template.contains(arg), "expected quoted argument {arg}");
+        }
+    }
+
+    #[test]
     fn test_render_ament_python() {
         let script = render_build_script("ament_python", "jazzy", &PathBuf::from("/src")).unwrap();
 
