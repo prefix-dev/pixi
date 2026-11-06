@@ -147,6 +147,36 @@ static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
         default: "false",
     },
     ConfigOptionDescription {
+        key: "exclude-newer",
+        description: "The `exclude-newer` that `pixi init` and `pixi global` write into new manifests and that `pixi exec` solves with. It never applies to an existing workspace. A cutoff, or a table with `cutoff` and `exemptions`.",
+        value_type: "cutoff or table",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "exclude-newer.cutoff",
+        description: "Packages uploaded after this cutoff are excluded.",
+        value_type: "duration (e.g. `\"7d\"`), date or RFC 3339 timestamp",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "exclude-newer.exemptions",
+        description: "Packages whose releases are not excluded by the cutoff, keyed by package name.",
+        value_type: "map of package name → version spec or table",
+        default: "{}",
+    },
+    ConfigOptionDescription {
+        key: "exclude-newer.exemptions.<package>",
+        description: "The releases of `<package>` that are exempt from the cutoff: a version spec such as `\"*\"`, or a table of match spec fields.",
+        value_type: "version spec or table",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "exclude-newer.exemptions.<package>.<field>",
+        description: "A match spec field that selects the exempt releases of `<package>`, e.g. `version`, or a `cutoff` of its own.",
+        value_type: "string",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
         key: "experimental",
         description: "Opt-in experimental features. See `experimental.*` keys; can also be set as a JSON object.",
         value_type: "table",
