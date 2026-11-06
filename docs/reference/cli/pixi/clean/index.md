@@ -26,6 +26,9 @@ pixi clean [OPTIONS] [COMMAND]
 :  Only remove the activation cache
 - <a id="arg---build" href="#arg---build">`--build`</a>
 :  Only remove the pixi-build cache
+- <a id="arg---build-workspaces" href="#arg---build-workspaces">`--build-workspaces`</a>
+:  Only remove the source-build working directories (`.pixi/bld`), keeping the built artifacts so packages are not rebuilt
+<br>**aliases**: bld
 - <a id="arg---workspaces-registry" href="#arg---workspaces-registry">`--workspaces-registry`</a>
 :  Only remove disassociated workspace registries
 
