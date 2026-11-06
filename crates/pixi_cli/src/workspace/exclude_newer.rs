@@ -2,6 +2,7 @@ use std::{path::Path, str::FromStr};
 
 use chrono::{DateTime, SubsecRound, TimeDelta, Utc};
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
@@ -55,8 +56,10 @@ pub enum Command {
     /// Exempt package releases from the cutoff.
     ///
     /// Exemptions are match specs, a bare package name exempts every release.
-    /// An existing exemption of the same package is replaced, with a warning
-    /// if that moves its cutoff later.
+    /// A package has a single exemption, so to exempt several versions,
+    /// combine them in one spec, e.g. `python==3.11.18|==3.12.16`. An
+    /// existing exemption of the same package is replaced, with a warning if
+    /// that moves its cutoff later.
     ///
     /// An exemption with a version only exempts the releases that are already
     /// published, so e.g. a later build of an exempt version is not exempt.
@@ -111,6 +114,17 @@ pub(crate) enum ExcludeNewerError {
     #[error("PyPI exemptions do not support a cutoff")]
     #[diagnostic(help("remove `--cutoff` and `--no-cutoff`"))]
     PypiExemptionCutoff,
+    #[error(
+        "cannot exempt both `{first}` and `{second}`, as {package} can only have one exemption"
+    )]
+    #[diagnostic(help(
+        "pass a single spec for {package}, e.g. combine the versions with `|` as in `{package}==1.0|==2.0`"
+    ))]
+    DuplicateExemption {
+        package: String,
+        first: String,
+        second: String,
+    },
 }
 
 /// The cutoff of new exemptions.
@@ -196,16 +210,34 @@ fn describe_exemption(spec: &str, cutoff: Option<ExcludeNewer>) -> String {
 
 /// Exempts the conda `specs` with `add`, with the cutoff of `cutoff`.
 /// Returns the success message.
+///
+/// A package has a single exemption, so several specs of the same package
+/// are rejected instead of silently keeping only the last one.
 pub(crate) fn add_exemptions(
     specs: &[String],
     cutoff: &ExemptionCutoffArgs,
     channel_config: &ChannelConfig,
     mut add: impl FnMut(PackageName, ExcludeNewerExemption) -> miette::Result<()>,
 ) -> miette::Result<String> {
-    let now = now();
-    let mut names = Vec::with_capacity(specs.len());
+    // Parse every spec before adding any, so a rejected call leaves the
+    // manifest untouched.
+    let mut parsed: IndexMap<PackageName, (&str, BinarySpec)> = IndexMap::new();
     for spec in specs {
         let (name, binary) = pixi_manifest::parse_conda_exemption(spec, channel_config)?;
+        if let Some((first, _)) = parsed.get(&name) {
+            return Err(ExcludeNewerError::DuplicateExemption {
+                package: name.as_source().to_string(),
+                first: first.to_string(),
+                second: spec.clone(),
+            }
+            .into());
+        }
+        parsed.insert(name, (spec, binary));
+    }
+
+    let now = now();
+    let mut names = Vec::with_capacity(parsed.len());
+    for (name, (spec, binary)) in parsed {
         let cutoff = cutoff.cutoff_for(&binary, now)?;
         names.push(describe_exemption(spec, cutoff));
         add(

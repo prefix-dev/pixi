@@ -266,6 +266,60 @@ dummy-b = "*"
     }
 
 
+def test_exclude_newer_exempt_several_specs_of_one_package(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Several specs of the same package in one call are rejected.
+
+    Regression test: previously only the last spec of a package was kept.
+    """
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}"]
+exclude-newer = "7d"
+""")
+    flags: list[str | Path] = ["--manifest-path", manifest, "--no-install"]
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "exclude-newer",
+            "exempt",
+            "ruff",
+            "python==3.11.18",
+            "python==3.12.16",
+            *flags,
+        ],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "cannot exempt both `python==3.11.18` and `python==3.12.16`",
+            "python==1.0|==2.0",
+        ],
+    )
+    # Nothing is exempted, not even the other packages of the call
+    assert exclude_newer(manifest) == "7d"
+
+    # Combining the versions in one spec works
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "exclude-newer",
+            "exempt",
+            "python==3.11.18|==3.12.16",
+            "--cutoff",
+            "2026-01-01",
+            *flags,
+        ],
+    )
+    exemptions = cast(dict[str, Any], exclude_newer(manifest))["exemptions"]
+    assert exemptions == {"python": {"version": "==3.11.18|==3.12.16", "cutoff": "2026-01-01"}}
+
+
 def test_pypi_exclude_newer_cli(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """PyPI exemptions only take package names and work without a cutoff."""
     manifest = tmp_pixi_workspace / "pixi.toml"
