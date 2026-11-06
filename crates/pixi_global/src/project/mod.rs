@@ -1642,6 +1642,15 @@ impl Project {
                 );
                 Ok(match_spec)
             })
+            // Source dependencies are matched by name, but their extras must be
+            // taken into account as well.
+            .chain(source_specs.specs.iter().map(|(name, spec)| {
+                Ok(MatchSpec {
+                    name: name.clone().into(),
+                    extras: spec.extras().map(<[String]>::to_vec),
+                    ..MatchSpec::default()
+                })
+            }))
             .collect::<Result<IndexSet<MatchSpec>, EnvironmentInSyncError>>()?;
 
         let source_package_names = source_specs.specs.keys().cloned().collect::<HashSet<_>>();
@@ -1662,6 +1671,17 @@ impl Project {
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
+        let env_file = match pixi_core::environment::read_environment_file(env_dir.path()) {
+            Ok(env_file) => env_file,
+            Err(e) => {
+                tracing::debug!(
+                    "Failed to read environment file of environment {}, treating its contents as missing: {e}",
+                    env_name.fancy_display()
+                );
+                None
+            }
+        };
+
         // Source dependencies are matched by name against the prefix, so an
         // edit to a source spec (git rev, path, inline `package.*` table)
         // wouldn't otherwise register as out of sync. Compare the fingerprints
@@ -1670,20 +1690,10 @@ impl Project {
         // out of sync, which triggers a one-time rebuild.
         if !source_package_names.is_empty() {
             let expected_fingerprints = source_fingerprints_for_environment(environment);
-            let recorded_fingerprints = match pixi_core::environment::read_environment_file(
-                env_dir.path(),
-            ) {
-                Ok(env_file) => env_file
-                    .map(|env_file| env_file.source_fingerprints)
-                    .unwrap_or_default(),
-                Err(e) => {
-                    tracing::debug!(
-                        "Failed to read environment file of environment {}, treating source dependency fingerprints as missing: {e}",
-                        env_name.fancy_display()
-                    );
-                    Default::default()
-                }
-            };
+            let recorded_fingerprints = env_file
+                .as_ref()
+                .map(|env_file| env_file.source_fingerprints.clone())
+                .unwrap_or_default();
 
             if expected_fingerprints != recorded_fingerprints {
                 tracing::debug!(
@@ -1731,8 +1741,11 @@ impl Project {
         let specs_in_sync = environment_specs_in_sync(
             &prefix_records,
             &specs,
-            &source_package_names,
             environment.platform,
+            env_file
+                .as_ref()
+                .and_then(|env_file| env_file.resolved_platform.as_ref())
+                .map(|platform| platform.virtual_packages()),
         );
         if !specs_in_sync {
             tracing::debug!("Environment out of sync because package specifications don't match");
