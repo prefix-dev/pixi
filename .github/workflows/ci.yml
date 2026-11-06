@@ -357,18 +357,22 @@ jobs:
         run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
         env:
           NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
-      - name: "Setup cross-compilation toolchain"
-        run: |
-          sudo apt update
-          sudo apt install -y gcc-aarch64-linux-gnu
-          rustup target add aarch64-unknown-linux-musl
+      # Use the same Zig cross toolchain as release.yml. The Debian
+      # gcc-aarch64-linux-gnu compiles C dependencies against glibc headers,
+      # which leaves glibc-only symbols such as `__fprintf_chk` unresolved when
+      # linking against musl.
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          environments: release
+          activate-environment: true
+      - name: "Install Rust target"
+        run: rustup target add aarch64-unknown-linux-musl
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # The linker and C compiler come from .cargo/config.toml.
       - name: "Build"
         run: >
-          cargo build
+          cargo zigbuild
           --locked
           --target aarch64-unknown-linux-musl
           --profile $CARGO_BUILD_PROFILE
