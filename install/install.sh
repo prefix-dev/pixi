@@ -241,7 +241,7 @@ __wrap__() {
 
         zsh)
             LINE="export PATH=\"${PIXI_BIN_DIR}:\$PATH\""
-            update_shell ~/.zshrc "$LINE"
+            update_shell "${ZDOTDIR:-$HOME}/.zshrc" "$LINE"
             ;;
 
         tcsh)
