@@ -41,6 +41,8 @@ pub struct ConfigOptionDescription {
     pub default: &'static str,
 }
 
+/// One entry per key in [`Config::get_keys`]. The `describe_keys_matches_get_keys`
+/// test fails when a key is added there without a description here.
 static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
     ConfigOptionDescription {
         key: "authentication-override-file",
