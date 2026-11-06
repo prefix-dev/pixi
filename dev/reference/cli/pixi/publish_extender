@@ -94,6 +94,16 @@ pixi publish --to cloudsmith://my-org/my-repository/
 
 For authentication, set `CLOUDSMITH_API_KEY` or store credentials for the Cloudsmith API URL. Set `CLOUDSMITH_API_URL` only when targeting a custom Cloudsmith API endpoint.
 
+### Publishing to Artifactory
+
+```shell
+# Build and publish to an Artifactory Conda repository
+pixi publish --target-channel artifactory://repo.example.com:443/artifactory/my-channel/
+```
+
+Please note, prior to Artifactory version 7.0 is was possible to omit the `/artifactory` context if configured correctly in Artifactory or via a reverse proxy. [Artifactory versions >= 7.0 require this context to be present.](https://jfrog.com/help/r/how-to-remove-artifactory-from-the-context-url-in-artifactory-7/why-it-is-not-recommended-to-remove-artifactory-from-the-context-url-in-artifactory-7)
+
+
 ### Publishing to S3
 
 When publishing to S3, the channel is automatically initialized (if new) and indexed after the upload.
