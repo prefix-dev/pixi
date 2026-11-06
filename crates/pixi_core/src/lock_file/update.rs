@@ -121,16 +121,6 @@ pub enum LockFileLoadResult {
     },
 }
 
-/// Warning for when a lock file version is newer than supported
-#[derive(Debug, Error, Diagnostic)]
-#[error("lock-file version {lock_file_version} is newer than supported")]
-#[diagnostic(severity(Warning))]
-struct LockFileVersionMismatchWarning {
-    lock_file_version: u64,
-    #[help]
-    help_message: String,
-}
-
 /// Error for when a lock file version is newer than supported and cannot continue
 #[derive(Debug, Error, Diagnostic)]
 #[error("lock-file version {lock_file_version} is newer than supported")]
@@ -209,7 +199,7 @@ impl LockFileLoadResult {
     ///
     /// This method:
     /// - Returns the loaded lock file if successful
-    /// - Displays a prominent warning if version is incompatible
+    /// - Logs a warning if version is incompatible
     /// - Returns an empty lock file (treating it as missing) to allow graceful continuation
     ///
     /// Use this in CLI code where version mismatches should be warned about but shouldn't
@@ -221,28 +211,19 @@ impl LockFileLoadResult {
                 lock_file_version,
                 max_supported_version,
             } => {
-                // Display a prominent warning about the version mismatch
                 #[cfg(feature = "self_update")]
                 let update_instruction =
                     "Consider running `pixi self-update` to update to the latest version.";
                 #[cfg(not(feature = "self_update"))]
                 let update_instruction = "Consider updating pixi to the latest version.";
 
-                let help_message = format!(
-                    "Maximum supported version: {} (pixi v{})\n\
-                     The lock file will be treated as missing and regenerated.\n\
-                     {}",
-                    max_supported_version,
+                tracing::warn!(
+                    "lock-file version {lock_file_version} is newer than supported\n  \
+                     help: Maximum supported version: {max_supported_version} (pixi v{})\n        \
+                     The lock file will be treated as missing.\n        \
+                     {update_instruction}",
                     consts::PIXI_VERSION,
-                    update_instruction
                 );
-
-                let warning = LockFileVersionMismatchWarning {
-                    lock_file_version,
-                    help_message,
-                };
-
-                eprintln!("{:?}", miette::Report::new(warning));
 
                 // Treat as missing lock file (same as if it doesn't exist)
                 LockFile::default()
@@ -1237,7 +1218,7 @@ impl<'p> LockFileDerivedData<'p> {
             }
         }
 
-        self.workspace.refresh_environment_hosts().await?;
+        self.workspace.refresh_environment_host(environment).await?;
 
         // A current prefix hash says nothing about this machine's capabilities.
         // Validate locked requirements before either the cached or install path.

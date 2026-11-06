@@ -1,0 +1,227 @@
+name: Dev release
+
+# Publishes the binaries that CI built for a push to main as a GitHub release
+# in prefix-dev/pixi-nightly, so dev releases don't build pixi again. The
+# binaries use the `ci` cargo profile; this workflow signs the macOS and
+# Windows ones. The cross-repository token is minted by octo-sts using the
+# pixi-dev-release policy in that repository.
+
+# `workflow_run` lets this workflow read the artifacts of the CI run. It only
+# acts on CI runs triggered by a push to main of this repository, so the
+# artifacts never come from a pull request or a fork.
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TARGET_REPO: prefix-dev/pixi-nightly
+  SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  sign:
+    name: Sign ${{ matrix.target }}
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      # Download the artifacts of the CI run.
+      actions: read
+      # Windows Azure Trusted Signing authenticates via OIDC.
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            artifact: macos-x86_64
+            runner: macos-15
+          - target: aarch64-apple-darwin
+            artifact: macos-aarch64
+            runner: macos-15
+          - target: x86_64-pc-windows-msvc
+            artifact: windows-x86_64
+            runner: windows-latest
+          - target: aarch64-pc-windows-msvc
+            artifact: windows-aarch64
+            runner: windows-latest
+    env:
+      # macOS codesigning / notarization.
+      CODESIGN_CERTIFICATE: ${{ secrets.CODESIGN_CERTIFICATE }}
+      CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.CODESIGN_CERTIFICATE_PASSWORD }}
+      CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+      APPLEID_USERNAME: ${{ secrets.APPLEID_USERNAME }}
+      APPLEID_PASSWORD: ${{ secrets.APPLEID_PASSWORD }}
+      APPLEID_TEAMID: ${{ secrets.APPLEID_TEAMID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Download CI binary
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          name: pixi-${{ matrix.artifact }}-${{ github.event.workflow_run.head_sha }}
+          path: ${{ runner.temp }}/to-sign
+
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        if: runner.os == 'macOS'
+        with:
+          environments: release
+
+      - name: Codesign and notarize macOS binary
+        if: runner.os == 'macOS'
+        run: |
+          chmod +x "${RUNNER_TEMP}/to-sign/pixi"
+          pixi run -e release sign-macos --binary "${RUNNER_TEMP}/to-sign/pixi"
+
+      - name: Azure login (OIDC)
+        if: runner.os == 'Windows'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      # The CI artifact also contains the pixi-build-* backends; only pixi.exe
+      # is published.
+      - name: Remove backends
+        if: runner.os == 'Windows'
+        shell: bash
+        run: find "${RUNNER_TEMP}/to-sign" -type f ! -name pixi.exe -delete
+
+      - name: Sign Windows binary
+        if: runner.os == 'Windows'
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+          files-folder: ${{ runner.temp }}/to-sign
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          # Both Windows targets sign concurrently and share one Actions cache
+          # scope, see azure/trusted-signing-action#146.
+          cache-dependencies: false
+
+      - name: Upload signed binary
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: signed-${{ matrix.artifact }}
+          path: |
+            ${{ runner.temp }}/to-sign/pixi
+            ${{ runner.temp }}/to-sign/pixi.exe
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish dev release
+    needs: sign
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Download the artifacts of the CI run.
+      actions: read
+      # Exchanged for a prefix-dev/pixi-nightly token via octo-sts.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          # Full history and tags for git describe.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # e.g. v0.81.0-65-g619b0a3f6, matching the version CI baked into the
+      # binaries. Only match pixi release tags, not the pixi-build-* tags.
+      - name: Compute tag
+        id: version
+        run: echo "tag=$(git describe --tags --match 'v[0-9]*')" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          pattern: pixi-linux-*-${{ github.event.workflow_run.head_sha }}
+          path: artifacts/
+
+      - name: Download signed binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: signed-*
+          path: artifacts/
+
+      # Archive names match the release assets, so install.sh and install.ps1
+      # work against pixi-nightly.
+      - name: Package binaries
+        run: |
+          mkdir staging
+          package() {
+            local dir="artifacts/$1" target="$2"
+            if [ -f "$dir/pixi.exe" ]; then
+              cp "$dir/pixi.exe" "staging/pixi-$target.exe"
+              (cd "$dir" && zip -q "../../staging/pixi-$target.zip" pixi.exe)
+            else
+              # Artifacts don't preserve file permissions.
+              chmod +x "$dir/pixi"
+              cp "$dir/pixi" "staging/pixi-$target"
+              tar -czf "staging/pixi-$target.tar.gz" -C "$dir" pixi
+            fi
+          }
+          package "pixi-linux-x86_64-${SHA}" x86_64-unknown-linux-musl
+          package "pixi-linux-aarch64-${SHA}" aarch64-unknown-linux-musl
+          package "pixi-linux-riscv64gc-${SHA}" riscv64gc-unknown-linux-gnu
+          package signed-macos-x86_64 x86_64-apple-darwin
+          package signed-macos-aarch64 aarch64-apple-darwin
+          package signed-windows-x86_64 x86_64-pc-windows-msvc
+          package signed-windows-aarch64 aarch64-pc-windows-msvc
+
+      - name: Add installers and checksums
+        working-directory: staging
+        run: |
+          cp ../install/install.sh ../install/install.ps1 .
+          for f in *.tar.gz *.zip; do
+            sha256sum "$f" > "$f.sha256"
+          done
+          cat ./*.sha256 > sha256.sum
+          ls -la
+
+      - name: Get token for pixi-nightly
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ env.TARGET_REPO }}
+          identity: pixi-dev-release
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          if gh release view "$TAG" --repo "$TARGET_REPO" > /dev/null 2>&1; then
+            echo "Release $TAG already exists in $TARGET_REPO, skipping."
+            exit 0
+          fi
+          gh release create "$TAG" staging/* \
+            --repo "$TARGET_REPO" \
+            --title "$TAG" \
+            --notes "Development build of ${GITHUB_REPOSITORY}@${SHA} (main). Built by ${RUN_URL}" \
+            --latest

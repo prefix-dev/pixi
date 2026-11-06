@@ -14,7 +14,7 @@ use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::host::{cli_detector_consent, probe_conda_script, probe_pep723_script};
 
 use pixi_core::{
-    Workspace, WorkspaceLocator,
+    Workspace,
     workspace::{
         Environment,
         virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
@@ -27,7 +27,7 @@ use rattler_conda_types::Subdir;
 use crate::cli_config::{
     LockAndInstallConfig, ScriptWorkspaceConfig, validate_transient_script_lock_file_usage,
 };
-use crate::cli_interface::cli_context;
+use crate::cli_interface::cli_workspace_context;
 use crate::process_exit;
 use crate::run_script::{
     RemoteScriptManifest, RunScriptInput, STDIN_SCRIPT_COMMAND, prepare_remote_script,
@@ -296,7 +296,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 let code = crate::conda_script::execute_run(workspace, entrypoint, args).await?;
                 return Ok(process_exit::exit_code_from_code(code));
             }
-            WorkspaceLocator::for_cli()
+            crate::workspace_locator()
                 .with_global_config_source(global_config_source)
                 .with_search_start(pixi_core::workspace::DiscoveryStart::Script(path))
                 .with_cli_config(cli_config)
@@ -304,7 +304,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 .await?
         }
         None => {
-            WorkspaceLocator::for_cli()
+            crate::workspace_locator()
                 .with_global_config_source(global_config_source)
                 .with_search_start(args.workspace_config.workspace_locator_start())
                 .with_cli_config(cli_config)
@@ -383,7 +383,9 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
             }
         }),
     };
-    let code = cli_context(workspace.clone()).run(options).await?;
+    let code = cli_workspace_context(workspace.clone())
+        .run(options)
+        .await?;
 
     if code == 127 {
         command_not_found(&workspace, explicit_environment);

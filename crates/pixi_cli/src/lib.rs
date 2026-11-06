@@ -49,6 +49,7 @@ mod run_script;
 pub mod search;
 pub mod self_update;
 mod shared;
+pub(crate) use shared::workspace_locator::workspace_locator;
 pub mod shell;
 pub mod shell_hook;
 pub mod task;

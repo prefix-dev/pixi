@@ -2652,7 +2652,7 @@ def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path) -> None:
         [pixi, "global", "tree", "--environment", "nonexistent"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Environment not found",
+        stderr_contains="environment 'nonexistent' doesn't exist",
     )
 
 
@@ -3268,7 +3268,7 @@ dependencies = {{ dummy-a = "*" }}
         [pixi, "global", "sync"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="`date` is neither a valid duration, date",
+        stderr_contains="invalid cutoff `date`",
     )
 
 

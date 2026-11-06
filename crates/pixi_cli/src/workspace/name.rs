@@ -2,9 +2,8 @@ use std::io::Write;
 
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_core::WorkspaceLocator;
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::cli_context};
+use crate::{cli_config::WorkspaceConfig, cli_interface::cli_workspace_context};
 
 /// Commands to manage workspace name.
 #[derive(Parser, Debug)]
@@ -39,13 +38,13 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()
         .await?;
 
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
 
     match args.command {
         Command::Get => pixi_utils::io::ignore_broken_pipe(writeln!(

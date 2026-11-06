@@ -7,9 +7,9 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
+use pixi_core::environment::LockFileUsage;
 use pixi_core::host::{HostProbeError, HostUndetected};
 use pixi_core::workspace::grouped_environment::GroupedEnvironment;
-use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove, PrioritizedChannel,
@@ -25,7 +25,7 @@ use rattler_conda_types::{
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 /// Commands to manage workspace platforms.
@@ -498,7 +498,7 @@ impl Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()
@@ -509,7 +509,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
     )?;
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     // Keep mutation state off the enclosing CLI dispatch futures.
     match args.command {
@@ -627,7 +627,8 @@ async fn execute_add(
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -690,7 +691,8 @@ async fn execute_add_auto_detected(
         .map_err(AutoDetectPlatformError::Platform)?;
     workspace_ctx
         .add_auto_detected_platform(candidate, explicit, no_install, feature, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Merge user-supplied virtual packages over detected ones: a user spec
@@ -764,7 +766,8 @@ async fn execute_edit(
 
     workspace_ctx
         .edit_platform(args.name, edit, args.no_install, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 async fn execute_move(
@@ -782,7 +785,8 @@ async fn execute_move(
 
     workspace_ctx
         .move_platform(args.name, target, args.no_install, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Print every workspace platform in full detail, preceded by the
@@ -912,7 +916,8 @@ async fn execute_remove(
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather

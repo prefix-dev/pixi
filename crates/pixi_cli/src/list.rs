@@ -7,7 +7,6 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_api::workspace::{Package, PackageKind};
 use pixi_consts::consts;
-use pixi_core::WorkspaceLocator;
 use pixi_manifest::PixiPlatformName;
 use rattler_conda_types::Subdir;
 use serde::Serialize;
@@ -16,7 +15,7 @@ use crate::{
     cli_config::{
         LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
     },
-    cli_interface::cli_context,
+    cli_interface::cli_workspace_context,
 };
 
 // an enum to sort by size or name
@@ -208,7 +207,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()
@@ -228,7 +227,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or_else(|| Subdir::current().unwrap_or(Subdir::NoArch).to_string()),
     };
 
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
     let mut packages_to_output = workspace_ctx
         .list_packages(
             args.regex,

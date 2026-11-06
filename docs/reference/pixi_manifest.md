@@ -253,7 +253,7 @@ The table form accepts:
 - `location`: URL or path of a mapping JSON file. Relative paths are resolved against the workspace root.
 - `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
 - `mapping-mode`: `"overlay"` (default) or `"replace"`. With `overlay`, Pixi consults your entries first and falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/) for anything not listed. With `replace`, Pixi uses your mapping instead of the default mapping data for that channel. If no `location` or `mapping` is provided, the project mapping is empty.
-- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and `false` for other channels.
+- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and the conda-pypi channel and `false` for other channels.
 
 A mapping fetched from a `location` URL is cached using standard HTTP cache semantics (honoring the server's `Cache-Control`/`ETag` headers). If a refresh fails (e.g. offline), the previously fetched copy is reused with a warning; if no copy has been fetched yet, the failure is an error.
 
@@ -274,9 +274,9 @@ Lookup behavior depends on where the configuration applies:
 
 | Configuration | Project-defined mapping | prefix.dev fallback | same-name heuristic |
 | --- | --- | --- | --- |
-| unset | no | yes | yes, for conda-forge |
+| unset | no | yes, except for the conda-pypi channel | yes, for conda-forge and the conda-pypi channel |
 | `conda-pypi-map = false` | no | no | no |
-| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge |
+| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge and the conda-pypi channel |
 | `<channel> = false` | no | no | no |
 | `mapping-mode = "overlay"`, package missing | miss | yes | yes, if enabled |
 | `mapping-mode = "replace"`, package missing | miss, or empty mapping | no | yes, if enabled |
@@ -400,6 +400,7 @@ The cutoff may be specified in the following formats:
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
 Both PyPI and conda packages are considered.
+The cutoff also applies to the build and host dependencies when packages of the workspace are built, both as source dependencies and with `pixi publish`.
 
 ```toml
 [workspace]
@@ -415,7 +416,7 @@ Instead of lowering the cutoff for every future release of such a package, exemp
 Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
 An exempted release is never excluded, regardless of its upload time.
 
-The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`.
+The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`, or the `url` of a package archive, optionally with its `md5` or `sha256` but no other field.
 `polars = "==1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
 
 ```toml
@@ -446,7 +447,7 @@ Exemptions take precedence over the channel cutoff, which in turn takes preceden
 
 An exemption without a `cutoff` also lets through matching releases that are published later, e.g. a new build of `polars ==1.43.1`.
 Give an exemption a `cutoff` to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
-The cutoff of an exemption is an RFC 3339 timestamp or a date, durations are not supported.
+The cutoff of an exemption takes the same values as the workspace cutoff, so it can also be a duration such as `"1d"`, which exempts matching releases once they are a day old.
 Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.
 
 Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.

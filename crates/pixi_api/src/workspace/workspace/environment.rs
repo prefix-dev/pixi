@@ -1,11 +1,45 @@
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_core::{
     Workspace,
     workspace::{Environment, WorkspaceMut},
 };
-use pixi_manifest::{EnvironmentName, NewEnvironment};
+use pixi_manifest::{
+    EnvironmentEditError, EnvironmentName, LoadManifestsError, NewEnvironment, TomlError,
+};
+use thiserror::Error;
 
 use crate::Interface;
+use crate::workspace::workspace::{SaveManifestError, save};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum EnvironmentError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadWorkspace(#[from] LoadManifestsError),
+
+    #[error("the environment '{name}' already exists")]
+    AlreadyExists {
+        name: EnvironmentName,
+        #[help]
+        help: Option<String>,
+    },
+
+    // TODO: Add help for names of environments that are close.
+    #[error("environment '{0}' not found")]
+    NotFound(String),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] EnvironmentEditError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
+}
 
 pub async fn list(workspace: &Workspace) -> Vec<Environment<'_>> {
     workspace.environments()
@@ -19,18 +53,14 @@ pub async fn add<I: Interface>(
     solve_group: Option<String>,
     no_default_feature: bool,
     force: bool,
-) -> miette::Result<()> {
+) -> Result<(), EnvironmentError> {
     let environment_exists = workspace.workspace().environment(&name).is_some();
     if environment_exists && !force {
-        if interface.is_cli().await {
-            return Err(miette::miette!(
-                help = "use --force to overwrite the existing environment",
-                "the environment '{}' already exists",
-                name
-            ));
-        } else {
-            return Err(miette::miette!("the environment '{}' already exists", name));
-        }
+        let help = interface
+            .is_cli()
+            .await
+            .then(|| "use --force to overwrite the existing environment".to_string());
+        return Err(EnvironmentError::AlreadyExists { name, help });
     }
 
     // Add the platforms to the lock file
@@ -42,7 +72,7 @@ pub async fn add<I: Interface>(
     )?;
 
     // Save the workspace to disk
-    let _workspace = workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     // Report back to the user
     interface
@@ -64,14 +94,13 @@ pub async fn remove<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
     name: &str,
-) -> miette::Result<()> {
+) -> Result<(), EnvironmentError> {
     // Remove the environment
     if !workspace.manifest().remove_environment(name)? {
-        // TODO: Add help for names of environments that are close.
-        return Err(miette::miette!("Environment {} not found", name));
+        return Err(EnvironmentError::NotFound(name.to_string()));
     }
 
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     interface
         .success(&format!("Removed environment {name}"))

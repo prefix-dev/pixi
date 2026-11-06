@@ -8,7 +8,6 @@ use miette::{IntoDiagnostic, MietteDiagnostic, WrapErr};
 use pep508_rs::Requirement;
 use pixi_config::ConfigCli;
 use pixi_core::{
-    WorkspaceLocator,
     lock_file::UpdateContext,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
@@ -75,7 +74,7 @@ pub struct UpgradeSpecsArgs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())

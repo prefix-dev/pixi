@@ -3,12 +3,11 @@ use std::io::Write;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_api::{WorkspaceContext, workspace::ActivationEntry};
-use pixi_core::WorkspaceLocator;
 use pixi_manifest::{EnvironmentName, FeatureName, HasWorkspaceManifest, TargetSelector};
 
 use crate::{
     cli_config::{WorkspaceConfig, feature_from_flags},
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 /// Commands to manage the activation of environments: the scripts that run
@@ -204,13 +203,13 @@ enum ListMode {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()
         .await?;
 
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
 
     match args.command {
         Command::Script(script_args) => match script_args.command {
@@ -222,7 +221,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
             ScriptCommand::Prepend(args) => {
                 workspace_ctx
@@ -232,7 +231,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
             ScriptCommand::Remove(args) => {
                 workspace_ctx
@@ -241,9 +240,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
-            ScriptCommand::List(args) => list(&workspace_ctx, args, ListMode::Scripts).await,
+            ScriptCommand::List(args) => list(&workspace_ctx, args, ListMode::Scripts).await?,
         },
         Command::Env(env_args) => match env_args.command {
             EnvCommand::Set(args) => {
@@ -253,7 +252,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
             EnvCommand::Remove(args) => {
                 for key in &args.key {
@@ -269,12 +268,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         args.location.target.clone(),
                         args.location.feature_name(),
                     )
-                    .await
+                    .await?;
             }
-            EnvCommand::List(args) => list(&workspace_ctx, args, ListMode::Env).await,
+            EnvCommand::List(args) => list(&workspace_ctx, args, ListMode::Env).await?,
         },
-        Command::List(args) => list(&workspace_ctx, args, ListMode::All).await,
+        Command::List(args) => list(&workspace_ctx, args, ListMode::All).await?,
     }
+    Ok(())
 }
 
 async fn list(

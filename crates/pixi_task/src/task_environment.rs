@@ -19,11 +19,16 @@ pub enum FindTaskSource<'p> {
 
 pub type TaskAndEnvironment<'p> = (Environment<'p>, &'p Task);
 
+/// Why an ambiguous task couldn't be disambiguated, e.g. a failed prompt.
+pub type DisambiguationSource = Box<dyn std::error::Error + Send + Sync>;
+
+/// Picks the environment to run an ambiguous task in. `Ok(None)` leaves the
+/// task ambiguous.
 pub trait TaskDisambiguation<'p> {
     fn disambiguate(
         &self,
         task: &AmbiguousTask<'p>,
-    ) -> impl Future<Output = Option<TaskAndEnvironment<'p>>>;
+    ) -> impl Future<Output = Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource>>;
 }
 
 #[derive(Default)]
@@ -31,15 +36,23 @@ pub struct NoDisambiguation;
 pub struct DisambiguateFn<Fn>(Fn);
 
 impl<'p> TaskDisambiguation<'p> for NoDisambiguation {
-    async fn disambiguate(&self, _task: &AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>> {
-        None
+    async fn disambiguate(
+        &self,
+        _task: &AmbiguousTask<'p>,
+    ) -> Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource> {
+        Ok(None)
     }
 }
 
-impl<'p, F: AsyncFn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>> TaskDisambiguation<'p>
-    for DisambiguateFn<F>
+impl<
+    'p,
+    F: AsyncFn(&AmbiguousTask<'p>) -> Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource>,
+> TaskDisambiguation<'p> for DisambiguateFn<F>
 {
-    async fn disambiguate(&self, task: &AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>> {
+    async fn disambiguate(
+        &self,
+        task: &AmbiguousTask<'p>,
+    ) -> Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource> {
         (self.0)(task).await
     }
 }
@@ -79,6 +92,22 @@ pub enum FindTaskError {
 
     #[error(transparent)]
     AmbiguousTask(AmbiguousTaskError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Disambiguation(DisambiguationError),
+}
+
+/// Choosing the environment to run an ambiguous task in failed.
+#[derive(Debug, Diagnostic, Error)]
+#[error("failed to choose the environment to run the task '{}' in", .ambiguous.task_name)]
+#[diagnostic(forward(ambiguous))]
+pub struct DisambiguationError {
+    /// The task that is left ambiguous, whose help explains how to choose
+    /// the environment instead.
+    pub ambiguous: AmbiguousTaskError,
+    #[source]
+    pub source: DisambiguationSource,
 }
 
 impl<'p> SearchEnvironments<'p, NoDisambiguation> {
@@ -149,7 +178,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
     /// Returns a new `SearchEnvironments` with the given disambiguation
     /// function.
     pub fn with_disambiguate_fn<
-        F: AsyncFn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>,
+        F: AsyncFn(&AmbiguousTask<'p>) -> Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource>,
     >(
         self,
         func: F,
@@ -275,8 +304,12 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                 };
 
                 match self.disambiguate.disambiguate(&ambiguous_task).await {
-                    Some(env) => Ok(env),
-                    None => Err(FindTaskError::AmbiguousTask(ambiguous_task.into())),
+                    Ok(Some(env)) => Ok(env),
+                    Ok(None) => Err(FindTaskError::AmbiguousTask(ambiguous_task.into())),
+                    Err(source) => Err(FindTaskError::Disambiguation(DisambiguationError {
+                        ambiguous: ambiguous_task.into(),
+                        source,
+                    })),
                 }
             }
         }
@@ -409,6 +442,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_failed_disambiguation_is_reported() {
+        let manifest_str = r#"
+            [workspace]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+
+            [feature.a.tasks]
+            hi = "echo a"
+            [feature.b.tasks]
+            hi = "echo b"
+
+            [environments]
+            a = ["a"]
+            b = ["b"]
+        "#;
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let search = SearchEnvironments::from_opt_env(&project, None, None).with_disambiguate_fn(
+            async |_: &AmbiguousTask| Err(std::io::Error::other("no answer").into()),
+        );
+        let result = search
+            .find_task("hi".into(), FindTaskSource::CmdArgs, None)
+            .await;
+        assert!(matches!(result, Err(FindTaskError::Disambiguation(_))));
+    }
+
+    #[tokio::test]
     async fn test_find_non_default_feature_task() {
         let manifest_str = r#"
             [project]
@@ -513,7 +573,8 @@ mod tests {
         // whose task declares a `default-environment` matching the env name.
         let search = SearchEnvironments::from_opt_env(&project, None, None).with_disambiguate_fn(
             async |amb: &AmbiguousTask| {
-                amb.environments
+                Ok(amb
+                    .environments
                     .iter()
                     .find(|(env, task)| {
                         if let Some(default_env_name) = task.default_environment() {
@@ -522,7 +583,7 @@ mod tests {
                             false
                         }
                     })
-                    .cloned()
+                    .cloned())
             },
         );
 

@@ -130,10 +130,12 @@ pub struct ScriptWorkspaceConfig {
 }
 
 impl ScriptManifest {
-    /// Add a PEP 723 metadata block to a new or existing Python script.
+    /// Add a PEP 723 metadata block to a new or existing Python script, with
+    /// `exclude_newer` as the `exclude-newer` of its workspace if given.
     pub fn initialize(
         path: impl AsRef<Path>,
         channels: &[String],
+        exclude_newer: Option<&Value>,
     ) -> Result<Self, ScriptManifestError> {
         let path = std::path::absolute(path)?;
         validate_script_extension(&path)?;
@@ -154,11 +156,16 @@ impl ScriptManifest {
         let mut metadata = "requires-python = \">=3.11\"\ndependencies = []\n"
             .parse::<DocumentMut>()
             .expect("the default script metadata is valid TOML");
-        if !channels.is_empty() {
+        if !channels.is_empty() || exclude_newer.is_some() {
             ensure_metadata_tool_table(&mut metadata)?;
             metadata["tool"]["pixi"] = Item::Table(implicit_table());
             let mut workspace = Table::new();
-            workspace["channels"] = Item::Value(Value::Array(string_array(channels)));
+            if !channels.is_empty() {
+                workspace["channels"] = Item::Value(Value::Array(string_array(channels)));
+            }
+            if let Some(exclude_newer) = exclude_newer {
+                workspace["exclude-newer"] = Item::Value(exclude_newer.clone());
+            }
             metadata["tool"]["pixi"]
                 .as_table_mut()
                 .expect("pixi was initialized as a table")
@@ -786,7 +793,7 @@ mod tests {
     fn initializes_a_script_without_replacing_its_python() {
         let (directory, path) = script("#!/usr/bin/env python\r\nprint('hello')\r\n");
 
-        let script = ScriptManifest::initialize(&path, &["conda-forge".to_owned()]).unwrap();
+        let script = ScriptManifest::initialize(&path, &["conda-forge".to_owned()], None).unwrap();
 
         assert_eq!(script.path(), path);
         let expected = r#"#!/usr/bin/env python
@@ -809,10 +816,35 @@ print('hello')
     }
 
     #[test]
+    fn initializes_a_script_with_exclude_newer() {
+        let (_directory, path) = script("print('hello')\n");
+        let exclude_newer: Value =
+            r#"{ cutoff = "7d", exemptions = { ruff = "*" } }"#.parse().unwrap();
+
+        let script = ScriptManifest::initialize(&path, &[], Some(&exclude_newer)).unwrap();
+
+        assert_eq!(
+            fs_err::read_to_string(&path).unwrap(),
+            r#"# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# exclude-newer = { cutoff = "7d", exemptions = { ruff = "*" } }
+# ///
+
+print('hello')
+"#
+        );
+        let (workspace, _) = script.into_workspace_manifest().unwrap();
+        assert!(workspace.workspace.exclude_newer.cutoff.is_some());
+    }
+
+    #[test]
     fn initializing_preserves_a_utf8_bom_at_the_start_of_the_script() {
         let (_directory, path) = script("\u{feff}print('hello')\r\n");
 
-        ScriptManifest::initialize(&path, &[]).unwrap();
+        ScriptManifest::initialize(&path, &[], None).unwrap();
 
         let contents = fs_err::read_to_string(&path).unwrap();
         assert!(contents.starts_with("\u{feff}# /// script\r\n"));
@@ -821,7 +853,7 @@ print('hello')
         assert!(!contents.replace("\r\n", "").contains('\n'));
 
         assert!(matches!(
-            ScriptManifest::initialize(&path, &[]),
+            ScriptManifest::initialize(&path, &[], None),
             Err(ScriptManifestError::AlreadyInitialized { .. })
         ));
     }
@@ -831,7 +863,7 @@ print('hello')
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("nested/example.py");
 
-        ScriptManifest::initialize(&path, &[]).unwrap();
+        ScriptManifest::initialize(&path, &[], None).unwrap();
 
         assert_eq!(
             fs_err::read_to_string(path).unwrap(),
@@ -852,7 +884,7 @@ print('hello')
         // `pixi init --script github`: must not create a file called `github`.
         let extensionless = directory.path().join("github");
         assert!(matches!(
-            ScriptManifest::initialize(&extensionless, &[]),
+            ScriptManifest::initialize(&extensionless, &[], None),
             Err(ScriptManifestError::NotAPythonScript { .. })
         ));
         assert!(!extensionless.exists());
@@ -861,7 +893,7 @@ print('hello')
         let readme = directory.path().join("README.md");
         fs_err::write(&readme, "# Project\n").unwrap();
         assert!(matches!(
-            ScriptManifest::initialize(&readme, &[]),
+            ScriptManifest::initialize(&readme, &[], None),
             Err(ScriptManifestError::NotAPythonScript { .. })
         ));
         assert_eq!(fs_err::read_to_string(&readme).unwrap(), "# Project\n");
@@ -875,7 +907,7 @@ print('hello')
 
         // `.pyw` scripts stay valid.
         let windowed = directory.path().join("example.pyw");
-        assert!(ScriptManifest::initialize(&windowed, &[]).is_ok());
+        assert!(ScriptManifest::initialize(&windowed, &[], None).is_ok());
     }
 
     #[test]
@@ -883,7 +915,7 @@ print('hello')
         let (_directory, path) = script("# /// script\n# dependencies = []\n# ///\n");
 
         assert!(matches!(
-            ScriptManifest::initialize(&path, &[]),
+            ScriptManifest::initialize(&path, &[], None),
             Err(ScriptManifestError::AlreadyInitialized { .. })
         ));
     }

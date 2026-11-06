@@ -2,11 +2,44 @@
 {%- set library_prefix = "$PREFIX" -%}
 
 mojo --version
+{% if accelerator_variants_enabled %}
+MODULAR_MOJO_MAX_LINKER_DRIVER="$(command -v "$CC")"
+export MODULAR_MOJO_MAX_LINKER_DRIVER
+export MODULAR_HOME="{{ library_prefix }}/share/max"
+export MODULAR_CACHE_DIR="$SRC_DIR/.mojo-cache"
+{% endif %}
 
 {#- Build any binaries -#}
 {% if bins %}
+mkdir -p "{{ library_prefix }}/bin"
+mojo_build_args=()
+{% if accelerator_variants_enabled %}
+{% raw %}
+mojo_build_args=(
+    --target-cpu x86-64-v3
+    --target-features ''
+    -D "mojo_accelerator=${{ mojo_accelerator }}"
+    -Xlinker -rpath-link
+    -Xlinker "$PREFIX/lib"
+)
+
+case "${{ mojo_accelerator }}" in
+    cpu)
+        export ROCR_VISIBLE_DEVICES=-1
+        export HIP_VISIBLE_DEVICES=-1
+        export CUDA_VISIBLE_DEVICES=-1
+        ;;
+    *)
+        mojo_build_args+=(--target-accelerator "${{ mojo_accelerator }}")
+        ;;
+esac
+{% endraw %}
+{% endif %}
 {% for bin in bins %}
-mojo build {{ bin.extra_args | join(" ")  }} "{{ bin.path }}" -o {{ library_prefix }}/bin/{{ bin.name }}
+mojo build "${mojo_build_args[@]}" \
+    {{ bin.extra_args | join(" ") }} \
+    "{{ bin.path }}" \
+    -o "{{ library_prefix }}/bin/{{ bin.name }}"
 {% endfor %}
 {% endif %}
 

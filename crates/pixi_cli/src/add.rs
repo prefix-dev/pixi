@@ -14,7 +14,7 @@ use pixi_api::{
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_core::{
-    DependencyType, Workspace, WorkspaceLocator,
+    DependencyType, Workspace,
     environment::LockFileUsage,
     workspace::{PypiDeps, SkippedPackage},
 };
@@ -26,7 +26,7 @@ use url::Url;
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
     has_specs::HasSpecs,
 };
 
@@ -407,7 +407,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
     args.dependency_config.warn_deprecated_subdir();
 
-    let mut workspace = WorkspaceLocator::for_cli()
+    let mut workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())
@@ -455,7 +455,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
         match args.dependency_config.dependency_type() {

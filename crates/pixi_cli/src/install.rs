@@ -3,7 +3,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
-    UpdateLockFileOptions, WorkspaceLocator,
+    UpdateLockFileOptions,
     environment::{InstallFilter, LockFileSource, get_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
 };
@@ -114,7 +114,7 @@ impl Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
 
-    let mut workspace = WorkspaceLocator::for_cli()
+    let mut workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())

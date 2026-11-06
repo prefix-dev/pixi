@@ -5,13 +5,13 @@ use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
 use pixi_api::workspace::ChannelOptions;
 use pixi_config::ConfigCli;
-use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
+use pixi_core::environment::LockFileUsage;
 use pixi_manifest::{EnvironmentName, FeatureName};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
     cli_config::{LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::cli_context,
+    cli_interface::cli_workspace_context,
 };
 
 /// Commands to manage workspace channels.
@@ -130,7 +130,7 @@ impl Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()
@@ -139,7 +139,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let is_script = args.workspace_config.script.is_some();
     let lock_file_exists = workspace.lock_file_path().is_file();
     let channel_config = workspace.channel_config();
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
 
     match args.command {
         Command::Add(add_args) => {
@@ -148,7 +148,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let mut options: ChannelOptions = (&add_args).try_into()?;
             options.lock_file_usage =
                 channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
-            workspace_ctx.add_channel(options, priority, prepend).await
+            Ok(workspace_ctx
+                .add_channel(options, priority, prepend)
+                .await?)
         }
         Command::List(args) => {
             let environments = workspace_ctx.list_channel().await;
@@ -183,7 +185,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let mut options: ChannelOptions = (&remove_args).try_into()?;
             options.lock_file_usage =
                 channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
-            workspace_ctx.remove_channel(options, priority).await
+            Ok(workspace_ctx.remove_channel(options, priority).await?)
         }
     }
 }

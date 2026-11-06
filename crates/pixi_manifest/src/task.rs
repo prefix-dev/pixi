@@ -579,7 +579,7 @@ impl<'a> TaskRenderContext<'a> {
         );
         pixi_vars.insert(
             "environment".to_string(),
-            minijinja::Value::from_serialize(&env_vars),
+            minijinja::Value::from(minijinja::value::Serde(&env_vars)),
         );
 
         // Add manifest path if available
@@ -605,10 +605,10 @@ impl<'a> TaskRenderContext<'a> {
 
         context_map.insert(
             "pixi".to_string(),
-            minijinja::Value::from_serialize(&pixi_vars),
+            minijinja::Value::from(minijinja::value::Serde(&pixi_vars)),
         );
 
-        minijinja::Value::from_serialize(&context_map)
+        minijinja::Value::from(minijinja::value::Serde(&context_map))
     }
 }
 
@@ -835,45 +835,9 @@ pub struct Alias {
 }
 
 impl Display for Task {
+    /// Shows the task the way the manifest writes it.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Task::Plain(cmd) => {
-                write!(f, "{}", cmd.source())?;
-            }
-            Task::Execute(execute) => match &execute.cmd {
-                CmdArgs::Single(cmd) => write!(f, "{}", cmd.source())?,
-                CmdArgs::Multiple(mult) => {
-                    write!(f, "{}", mult.iter().map(|arg| arg.source()).join(" "))?
-                }
-            },
-            _ => {}
-        };
-
-        let depends_on = self.depends_on();
-        if !depends_on.is_empty() {
-            if depends_on.len() == 1 {
-                write!(f, ", depends-on = '{}'", depends_on[0])?;
-            } else {
-                write!(f, ", depends-on = [{}]", depends_on.iter().format(","))?;
-            }
-        }
-
-        let default_environment = self.default_environment();
-        if let Some(default_environment) = default_environment {
-            write!(f, ", default_environment = {default_environment}")?;
-        }
-        let env = self.env();
-        if let Some(env) = env
-            && !env.is_empty()
-        {
-            write!(f, ", env = {env:?}")?;
-        }
-        let description = self.description();
-        if let Some(description) = description {
-            write!(f, ", description = {description:?}")?;
-        }
-
-        Ok(())
+        write!(f, "{}", Item::from(self.clone()).to_string().trim())
     }
 }
 
@@ -1150,6 +1114,33 @@ mod tests {
     }
 
     #[test]
+    fn test_display() {
+        let alias = Task::Alias(Alias {
+            depends_on: vec![Dependency::new("a", None, None)],
+            description: None,
+            args: None,
+        });
+        assert_snapshot!(alias, @r#"[{ task = "a" }]"#);
+
+        let execute = Task::Execute(Box::new(super::Execute {
+            cmd: super::CmdArgs::Single("echo $A".into()),
+            inputs: None,
+            outputs: None,
+            depends_on: vec![
+                Dependency::new("a", None, None),
+                Dependency::new("b", None, None),
+            ],
+            cwd: Some("sub".into()),
+            env: Some([("A".to_string(), TemplateString::from("1"))].into()),
+            default_environment: None,
+            description: Some("hi".into()),
+            clean_env: true,
+            args: None,
+        }));
+        assert_snapshot!(execute, @r#"{ cmd = "echo $A", depends-on = ["a", "b"], cwd = "sub", env = { A = "1" }, description = "hi", clean-env = true }"#);
+    }
+
+    #[test]
     fn test_template_string_pixi_vars_always_available() {
         // pixi variables should always be available, even without typed args
         let t = TemplateString::from("echo {{ pixi.platform }}");
@@ -1351,7 +1342,7 @@ mod jinja_rendering_tests {
         assert_eq!(render("{{ pixi.is_linux | string }}"), "True");
         assert_eq!(render(r#"{{ "x=" ~ pixi.is_win }}"#), "x=False");
         assert_eq!(render("{{ [pixi.is_linux] }}"), "[True]");
-        assert_eq!(render("{{ {'w': pixi.is_win} }}"), "{\"w\": False}");
+        assert_eq!(render("{{ {'w': pixi.is_win} }}"), "{'w': False}");
         assert_eq!(render("{{ true }}"), "True");
         assert_eq!(render("{{ false }}"), "False");
     }

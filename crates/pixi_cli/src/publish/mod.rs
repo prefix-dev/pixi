@@ -23,9 +23,7 @@ use pixi_command_dispatcher::{
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
 use pixi_config::{ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
-use pixi_core::{
-    Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
-};
+use pixi_core::{Workspace, environment::sanity_check_workspace, workspace::DiscoveryStart};
 use pixi_manifest::platform::host::apply_conda_overrides;
 use pixi_manifest::{FeaturesExt, S3Options};
 use pixi_path::AbsPathBuf;
@@ -566,7 +564,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_locator = determine_discovery_start(&args.path.first().cloned()).await?;
 
-    let mut workspace = WorkspaceLocator::for_cli()
+    let mut workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(workspace_locator.clone())
         .with_closest_package(true)
@@ -684,8 +682,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    // When running `pixi publish`, the exclude_newer config is ignored;
-    // it only matters when using the package as a source dependency.
+    // Build with the `exclude-newer` of the workspace, the same cutoff that
+    // applies when the package is built as a source dependency of the
+    // workspace.
+    let exclude_newer = workspace
+        .default_environment()
+        .exclude_newer_config_resolved(&channel_config)?;
+
     let make_env_ref = |manifest_source: &PinnedSourceSpec| {
         EnvironmentRef::Ephemeral(EphemeralEnv::new(
             manifest_source.to_string(),
@@ -696,7 +699,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     variant_configuration: variant_configuration.clone(),
                     variant_files: variant_files.clone(),
                 },
-                exclude_newer: None,
+                exclude_newer: exclude_newer.clone(),
                 channel_priority: Default::default(),
             },
         ))
@@ -1095,7 +1098,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let build_spec = SourceBuildSpec {
             record: Arc::new(record.into()),
             channels: channels.clone(),
-            exclude_newer: None,
+            exclude_newer: exclude_newer.clone(),
             build_environment: build_environment.clone(),
             build_profile: BuildProfile::Release,
             variant_configuration: Some(variant_configuration.clone()),

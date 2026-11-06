@@ -5,6 +5,141 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.84.1] - 2026-11-04
+#### ✨ Highlights
+
+This patch release fixes a memory-usage regression introduced in v0.82.1,
+alongside some smaller fixes and work towards future features.
+
+
+#### Features
+
+- Integrate conda-pypi wheels using released rattler by @nichmor in [#7392](https://github.com/prefix-dev/pixi/pull/7392)
+- pixi-build-ros: Rtklib by @Timple in [#7461](https://github.com/prefix-dev/pixi/pull/7461)
+
+
+#### Fixes
+
+- cli: Fix multiple reporters problems by @lucascolley in [#7429](https://github.com/prefix-dev/pixi/pull/7429)
+- export: Honour `--ignore-source-errors` in conda explicit export by @lucascolley in [#7425](https://github.com/prefix-dev/pixi/pull/7425)
+- run: Detect only the installed environment's host by @lucascolley in [#7462](https://github.com/prefix-dev/pixi/pull/7462)
+- reporters: Hide the repodata bar on clear with downloads in flight by @lucascolley in [#7459](https://github.com/prefix-dev/pixi/pull/7459)
+
+
+#### Maintenance
+
+- Adapt to new `exclude-newer` design by @lucascolley in [#7470](https://github.com/prefix-dev/pixi/pull/7470)
+- Publish dev release builds of main via octo-sts by @pavelzw in [#7193](https://github.com/prefix-dev/pixi/pull/7193)
+- pixi_api: type the run errors by @lucascolley in [#7463](https://github.com/prefix-dev/pixi/pull/7463)
+
+
+### [0.84.0] - 2026-11-02
+#### ✨ Highlights
+
+`exclude-newer` has been redesigned to support more precise and configurable exclusions.
+The top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables have been deprecated
+in favour of corresponding `[workspace]` sub-tables. These tables can now consist of
+fine-grained `exemptions` to a given `cutoff`, which can be used to, for example, apply
+a blanket exclusion period while exempting vetted security releases.
+New `pixi workspace exclude-newer` and `pixi global exclude-newer` subcommands
+allow configuration via the command line.
+
+TLS options are now available for `pixi self-update`, and TLS configuration is
+inspectable via `pixi info`.
+
+This release includes a `rattler` bugfix which avoids hash collisions for nonequal
+package versions, eliminating a class of false cache-hits.
+Lock files written by older Pixi versions may need to have hashes
+updated by `pixi lock` before they are considered locked (even if no dependencies change).
+If this affects your workspace, it is recommended to have all collaborators on the workspace
+use Pixi>=0.84.0, to achieve lock file stability.
+
+
+#### Breaking changes
+
+Errors are now emitted instead of warnings when a configuration file fails to parse.
+
+- config: Make a config file that fails to parse a hard error by @lucascolley in [#7409](https://github.com/prefix-dev/pixi/pull/7409)
+
+
+#### Features
+
+- self-update: Expose TLS options by @baszalmstra in [#7333](https://github.com/prefix-dev/pixi/pull/7333)
+- lock: Honor exclude-newer exemptions in satisfiability by @pavelzw in [#7247](https://github.com/prefix-dev/pixi/pull/7247)
+- manifest: Deprecate the top-level `exclude-newer` tables by @pavelzw in [#7248](https://github.com/prefix-dev/pixi/pull/7248)
+- global: Use match spec exemptions in `exclude-newer` by @pavelzw in [#7249](https://github.com/prefix-dev/pixi/pull/7249)
+- cli: Add exclude-newer commands for workspaces and pixi global by @pavelzw in [#7356](https://github.com/prefix-dev/pixi/pull/7356)
+- Add cutoffs to exclude-newer exemptions by @pavelzw in [#7363](https://github.com/prefix-dev/pixi/pull/7363)
+- pixi_api: Expose run and shell by @haecker-felix in [#7354](https://github.com/prefix-dev/pixi/pull/7354)
+- Per-index exclude-newer for PyPI extra indexes by @pavelzw in [#7382](https://github.com/prefix-dev/pixi/pull/7382)
+- Add nanobind-dev and python3-typing-extensions as in rosdistro by @EzraBrooks in [#7379](https://github.com/prefix-dev/pixi/pull/7379)
+- info: Show effective TLS root certificates by @baszalmstra in [#7336](https://github.com/prefix-dev/pixi/pull/7336)
+- pixi-build-backend: Let backends generate multi-output recipes by @EzraBrooks in [#7381](https://github.com/prefix-dev/pixi/pull/7381)
+- Add sha256 to workspace explicit export by @bollwyvl in [#7185](https://github.com/prefix-dev/pixi/pull/7185)
+- publish: No `publish = true` required if explicit `--path` option is given by @Timple in [#7355](https://github.com/prefix-dev/pixi/pull/7355)
+- pixi_api: Add GlobalContext with pixi global list by @haecker-felix in [#7387](https://github.com/prefix-dev/pixi/pull/7387)
+- config: Add `exclude-newer` by @pavelzw in [#7385](https://github.com/prefix-dev/pixi/pull/7385)
+- publish: Build with the exclude-newer of the workspace by @pavelzw in [#7386](https://github.com/prefix-dev/pixi/pull/7386)
+
+
+#### Fixes
+
+- Bump webpki-root-certs to 1.0.11 to drop removed eMudhra roots by @baszalmstra in [#7347](https://github.com/prefix-dev/pixi/pull/7347)
+- publish: Keep Artifactory context path when uploading by @wolfv in [#7388](https://github.com/prefix-dev/pixi/pull/7388)
+- Keep PyPI releases without an upload time for exempted packages by @pavelzw in [#7374](https://github.com/prefix-dev/pixi/pull/7374)
+- Reuse the build backend environment with a relative exclude-newer by @pavelzw in [#7384](https://github.com/prefix-dev/pixi/pull/7384)
+- cli: Honour colour settings in help and argument errors by @lucascolley in [#7396](https://github.com/prefix-dev/pixi/pull/7396)
+- cache: Use xxh3 for all on-disk cache names by @lucascolley in [#7408](https://github.com/prefix-dev/pixi/pull/7408)
+- Skip system CA store for pypi mapping middleware client by @r3wretrhy in [#6936](https://github.com/prefix-dev/pixi/pull/6936)
+- global: Remove packages with custom exposed names by @Hofer-Julian in [#7313](https://github.com/prefix-dev/pixi/pull/7313)
+- pixi-build-ros: Support cross-compiling `ament_python` packages by @Timple in [#7345](https://github.com/prefix-dev/pixi/pull/7345)
+- tasks: Fix various bugs by @lucascolley in [#7434](https://github.com/prefix-dev/pixi/pull/7434)
+- exclude-newer: Resolve relative cutoffs once per workspace load by @lucascolley in [#7435](https://github.com/prefix-dev/pixi/pull/7435)
+
+
+#### Documentation
+
+- Document exclude-newer exemptions by @pavelzw in [#7251](https://github.com/prefix-dev/pixi/pull/7251)
+- Add `release` scope to automated release commit messages by @lucascolley in [#7360](https://github.com/prefix-dev/pixi/pull/7360)
+- Adapt vouch request by @Hofer-Julian in [#7403](https://github.com/prefix-dev/pixi/pull/7403)
+- Clarify how to ping us by @Hofer-Julian in [#7404](https://github.com/prefix-dev/pixi/pull/7404)
+- setup-pixi: Mention setup-pixi being pre-v1 by @pavelzw in [#7419](https://github.com/prefix-dev/pixi/pull/7419)
+- setup-pixi: Document configuration input and bump to v0.11.3 by @pavelzw in [#7421](https://github.com/prefix-dev/pixi/pull/7421)
+- Fix PowerShell custom shell example for GitHub Actions by @pavelzw in [#7423](https://github.com/prefix-dev/pixi/pull/7423)
+- setup-pixi: Fix instructions for enabling debug logging by @pavelzw in [#7422](https://github.com/prefix-dev/pixi/pull/7422)
+
+
+#### Maintenance
+
+- release: Provide Cargo through a shared Rust feature by @Hofer-Julian in [#7342](https://github.com/prefix-dev/pixi/pull/7342)
+- core: Add `Cause` wrapper, type the lock-file load, write and prefix errors by @lucascolley in [#7314](https://github.com/prefix-dev/pixi/pull/7314)
+- global: Type the trampoline, install and completions errors by @lucascolley in [#7357](https://github.com/prefix-dev/pixi/pull/7357)
+- global: Type the global directory and conda-meta errors by @lucascolley in [#7359](https://github.com/prefix-dev/pixi/pull/7359)
+- Update rattler and rattler-build crates by @pavelzw in [#7267](https://github.com/prefix-dev/pixi/pull/7267)
+- Add Cargo.lock from pixi-build example by @pavelzw in [#7372](https://github.com/prefix-dev/pixi/pull/7372)
+- Cover cache-name collision for zero-component versions by @lucascolley in [#7373](https://github.com/prefix-dev/pixi/pull/7373)
+- Revamp contributor docs and PR template by @baszalmstra in [#7323](https://github.com/prefix-dev/pixi/pull/7323)
+- global: Type the global manifest errors by @lucascolley in [#7358](https://github.com/prefix-dev/pixi/pull/7358)
+- Enforce vouching for pull requests by @Hofer-Julian in [#7390](https://github.com/prefix-dev/pixi/pull/7390)
+- global: Type the project discovery and list errors by @lucascolley in [#7397](https://github.com/prefix-dev/pixi/pull/7397)
+- global: Type the install and sync errors by @lucascolley in [#7399](https://github.com/prefix-dev/pixi/pull/7399)
+- pixi_api: Type the shell errors by @lucascolley in [#7407](https://github.com/prefix-dev/pixi/pull/7407)
+- api: Type the init errors by @lucascolley in [#7410](https://github.com/prefix-dev/pixi/pull/7410)
+- pixi-build-ros: Add tqdm by @Timple in [#7307](https://github.com/prefix-dev/pixi/pull/7307)
+- Fix missing `InitError::Config` by @lucascolley in [#7413](https://github.com/prefix-dev/pixi/pull/7413)
+- Remove duplicate `InitError::Config` by @lucascolley in [#7415](https://github.com/prefix-dev/pixi/pull/7415)
+- api: Type the workspace setter errors by @lucascolley in [#7414](https://github.com/prefix-dev/pixi/pull/7414)
+- api: Type the add errors by @lucascolley in [#7416](https://github.com/prefix-dev/pixi/pull/7416)
+- Require approval before publishing releases by @wolfv in [#6766](https://github.com/prefix-dev/pixi/pull/6766)
+- api: Type the task errors by @lucascolley in [#7426](https://github.com/prefix-dev/pixi/pull/7426)
+- Add AGENTS.md by @Hofer-Julian in [#7412](https://github.com/prefix-dev/pixi/pull/7412)
+- lock: Never install the conda prefix in the PyPI satisfiability check by @ytausch in [#7427](https://github.com/prefix-dev/pixi/pull/7427)
+
+
+#### New Contributors
+* @r3wretrhy made their first contribution in [#6936](https://github.com/prefix-dev/pixi/pull/6936)
+* @EzraBrooks made their first contribution in [#7381](https://github.com/prefix-dev/pixi/pull/7381)
+
 ### [0.83.0] - 2026-10-22
 #### ✨ Highlights
 

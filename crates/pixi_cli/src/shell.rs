@@ -3,10 +3,9 @@ use std::process::ExitCode;
 use clap::Parser;
 use pixi_api::workspace::ShellOptions;
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
-use pixi_core::WorkspaceLocator;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
-use crate::cli_interface::cli_context;
+use crate::cli_interface::cli_workspace_context;
 
 /// Start a shell in a pixi environment.
 ///
@@ -42,7 +41,7 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         .merge_config(args.prompt_config.into())
         .merge_config(args.config.clone().into());
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(config)
@@ -60,6 +59,6 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         no_install: args.lock_and_install_config.no_install(),
     };
 
-    let code = cli_context(workspace).shell(options).await?;
+    let code = cli_workspace_context(workspace).shell(options).await?;
     Ok(crate::process_exit::exit_code_from_code(code))
 }
