@@ -35,6 +35,7 @@ nav = [
       { "Conda Scripts" = "tutorials/conda_script.md" },
       { "ROS 2" = "tutorials/ros2.md" },
       { "Rust" = "tutorials/rust.md" },
+      { "Virtual Package Detectors" = "tutorials/virtual_package_detectors.md" },
       {
         "Switching From..." = [
           { "uv" = "switching_from/uv.md" },

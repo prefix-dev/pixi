@@ -36,6 +36,7 @@ class DetectorChannel:
     root: Path
     registrations: dict[str, list[str]] = field(default_factory=dict)
     packages: dict[str, dict[str, Any]] = field(default_factory=dict)
+    relations: dict[str, str] = field(default_factory=dict)
 
     @property
     def url(self) -> str:
@@ -127,6 +128,7 @@ class DetectorChannel:
                         "info": {
                             "subdir": subdir,
                             "virtual_package_detectors": self.registrations,
+                            "channel_relations": self.relations,
                         },
                         "packages": self.packages if subdir == "noarch" else {},
                         "packages.conda": {},
@@ -297,6 +299,119 @@ def test_detector_values_reach_consumers_and_platform_selection(
     )
     sandbox.run(unsupported, "run", "check", expected=ExitCode.FAILURE)
     assert not default_env_path(unsupported).exists()
+
+
+@pytest.fixture
+def detector_dependency_channels(
+    detector_sandbox: DetectorSandbox,
+) -> tuple[DetectorChannel, DetectorChannel, Path, Path]:
+    sandbox = detector_sandbox
+    origin = DetectorChannel(sandbox.root / "origin")
+    dependency = DetectorChannel(sandbox.root / "dependency")
+    helper_marker = dependency.root / "helper.runs"
+    dependency.package(
+        "dependency-version",
+        [],
+        {
+            "bin/dependency-version": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(helper_marker))}\necho 3.0\n"
+            ).encode(),
+            "Scripts/dependency-version.bat": (
+                f'@echo off\r\necho run>>"{helper_marker}"\r\necho 3.0\r\n'
+            ).encode(),
+        },
+    )
+    detector = "dependency-detect"
+    origin_marker = origin.root / "detector.runs"
+    report = json.dumps({"version": 1, "virtual_packages": {CAPABILITY: {"version": "%s"}}})
+    origin.registrations[detector] = [CAPABILITY]
+    origin.package(
+        detector,
+        ["dependency-version"],
+        {
+            f"bin/{detector}": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(origin_marker))}\n"
+                "version=$(dependency-version) || exit $?\n"
+                f"printf '{report}\\n' \"$version\"\n"
+            ).encode(),
+            f"Scripts/{detector}.bat": (
+                f'@echo off\r\necho run>>"{origin_marker}"\r\n'
+                "for /f %%v in ('call dependency-version.bat') do "
+                f"echo {report.replace('%s', '%%v')}\r\n"
+            ).encode(),
+        },
+    )
+    origin.consumer("dependency-consumer", CAPABILITY, "==3.0")
+    return origin, dependency, origin_marker, helper_marker
+
+
+def test_unrelated_consumer_channel_cannot_supply_detector_dependencies(
+    detector_sandbox: DetectorSandbox,
+    detector_dependency_channels: tuple[DetectorChannel, DetectorChannel, Path, Path],
+) -> None:
+    sandbox = detector_sandbox
+    origin, dependency, origin_marker, helper_marker = detector_dependency_channels
+    workspace = sandbox.workspace(
+        "unrelated-dependency-channel", [dependency, origin], consumer="dependency-consumer"
+    )
+    sandbox.decision(workspace, origin, "allow")
+
+    info = sandbox.info(workspace)
+    report = next(
+        item
+        for item in info["virtual_package_detectors"]
+        if item["detector"] == "dependency-detect"
+    )
+    assert report["origin"] == origin.url
+    assert report["state"] == "failed"
+    assert "dependency-version" in report["detail"]
+    assert report["virtual_packages"] == []
+    assert CAPABILITY not in versions(info)
+    sandbox.run(workspace, "install", expected=ExitCode.FAILURE)
+    assert not (
+        default_env_path(workspace) / "conda-meta" / "dependency-consumer-1.0-0.json"
+    ).exists()
+    assert not origin_marker.exists()
+    assert not helper_marker.exists()
+
+
+def test_detector_dependencies_follow_relative_relation_without_replacing_origin(
+    detector_sandbox: DetectorSandbox,
+    detector_dependency_channels: tuple[DetectorChannel, DetectorChannel, Path, Path],
+) -> None:
+    sandbox = detector_sandbox
+    origin, dependency, origin_marker, helper_marker = detector_dependency_channels
+    origin.relations["base"] = "../dependency"
+    origin.write_repodata()
+    shadow_marker = dependency.root / "shadow.runs"
+    # The relation's higher-priority channel must not replace the registered detector.
+    dependency.package(
+        "dependency-detect",
+        [],
+        {
+            "bin/dependency-detect": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(shadow_marker))}\nexit 99\n"
+            ).encode(),
+            "Scripts/dependency-detect.bat": (
+                f'@echo off\r\necho run>>"{shadow_marker}"\r\nexit /b 99\r\n'
+            ).encode(),
+        },
+    )
+    workspace = sandbox.workspace(
+        "related-dependency-channel",
+        [origin],
+        capability=CAPABILITY,
+        consumer="dependency-consumer",
+    )
+    sandbox.decision(workspace, origin, "allow")
+
+    sandbox.run(workspace, "install")
+    assert (default_env_path(workspace) / "conda-meta" / "dependency-consumer-1.0-0.json").exists()
+    # Check execution before info's all-mode detection can conceal an install-path failure.
+    assert origin_marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert helper_marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert_report(sandbox.info(workspace), origin, "dependency-detect", CAPABILITY)
+    assert not shadow_marker.exists()
 
 
 @pytest.mark.parametrize("capability", ["__cuda", "__test_detector_capability"])
