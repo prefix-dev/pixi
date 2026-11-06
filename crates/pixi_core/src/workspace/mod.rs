@@ -147,7 +147,28 @@ type HostScopeCache = Vec<(HostScope, Arc<HostDetection>)>;
 
 /// One lazily detected host per environment, so detecting one environment
 /// does not detect the others.
-type EnvironmentHosts = HashMap<EnvironmentName, AsyncCell<Arc<HostDetection>>>;
+type EnvironmentHosts = HashMap<EnvironmentName, EnvironmentHost>;
+
+/// The hosts detected for one environment.
+#[derive(Default)]
+struct EnvironmentHost {
+    /// Detected for a solve, with the names any candidate record references.
+    solve: AsyncCell<Arc<HostDetection>>,
+    /// Detected for an install from the lock file, with only the names the
+    /// locked records reference.
+    ///
+    /// Filled from the first lock file seen and only reset by a manifest
+    /// edit, so a workspace kept across a change to `pixi.lock` alone can
+    /// miss names the new lock requires. One-shot commands never do that.
+    locked: AsyncCell<Arc<HostDetection>>,
+}
+
+impl EnvironmentHost {
+    /// The most complete detection so far.
+    fn get(&self) -> Option<&Arc<HostDetection>> {
+        self.solve.get().or_else(|| self.locked.get())
+    }
+}
 
 /// The pixi workspace, this main struct to interact with a workspace.
 ///
@@ -773,7 +794,7 @@ impl Workspace {
                 .value
                 .environments
                 .iter()
-                .map(|environment| (environment.name.clone(), AsyncCell::new()))
+                .map(|environment| (environment.name.clone(), EnvironmentHost::default()))
                 .collect()
         })
     }
@@ -792,7 +813,10 @@ impl Workspace {
             .map(|environment| {
                 (
                     environment.name().clone(),
-                    AsyncCell::new_with(host.clone()),
+                    EnvironmentHost {
+                        solve: AsyncCell::new_with(host.clone()),
+                        locked: AsyncCell::new(),
+                    },
                 )
             })
             .collect();
@@ -845,28 +869,61 @@ impl Workspace {
         Ok(())
     }
 
-    /// Detects the host of `environment` alone, reusing the detection of any
-    /// environment with the same solve scope. Call it before an install or
-    /// another decision that depends on detector results for this
-    /// environment only: detection queries repodata for the environment's
-    /// dependencies, so detecting environments that aren't used wastes time
-    /// and memory.
+    /// Detects the host of `environment` alone for a solve, reusing the
+    /// detection of any environment with the same solve scope. Call it before
+    /// a decision that depends on detector results for this environment only:
+    /// detection queries repodata for the environment's dependencies, so
+    /// detecting environments that aren't used wastes time and memory.
     pub async fn refresh_environment_host(
         &self,
         environment: &Environment<'_>,
+    ) -> Result<(), HostProbeError> {
+        let Some(host) = self.environment_hosts().get(environment.name()) else {
+            return Ok(());
+        };
+        self.detect_into(&host.solve, || {
+            HostScope::for_environment(&grouped_environment::GroupedEnvironment::from(
+                environment.clone(),
+            ))
+        })
+        .await
+    }
+
+    /// Detects the host of `environment` for installing it from `lock_file`.
+    /// Only the virtual packages its locked records require are detected, so
+    /// no repodata is queried for the dependencies of the environment or of
+    /// its solve group. A host already detected for a solve is reused.
+    pub async fn refresh_locked_environment_host(
+        &self,
+        environment: &Environment<'_>,
+        lock_file: &rattler_lock::LockFile,
+    ) -> Result<(), HostProbeError> {
+        let Some(host) = self.environment_hosts().get(environment.name()) else {
+            return Ok(());
+        };
+        if host.solve.get().is_some() {
+            return Ok(());
+        }
+        self.detect_into(&host.locked, || {
+            HostScope::for_locked_environment(environment, lock_file)
+        })
+        .await
+    }
+
+    /// Fills `cell` with the host detected for the scope `scope` returns,
+    /// reusing an earlier detection of the same scope.
+    async fn detect_into(
+        &self,
+        cell: &AsyncCell<Arc<HostDetection>>,
+        scope: impl FnOnce() -> Result<HostScope, HostProbeError>,
     ) -> Result<(), HostProbeError> {
         let Some(consent) = &self.detector_consent else {
             // Synchronous constructors and explicitly injected hosts never probe.
             return Ok(());
         };
-        let Some(cell) = self.environment_hosts().get(environment.name()) else {
-            return Ok(());
-        };
         // Keep detector futures out of every solve, install and mutation future.
         cell.get_or_try_init(Box::pin(async {
-            let scope = HostScope::for_environment(
-                &grouped_environment::GroupedEnvironment::from(environment.clone()),
-            )?;
+            let scope = scope()?;
             let mut cache = self.environment_host_scopes.lock().await;
             if let Some((_, host)) = cache.iter().find(|(cached, _)| cached == &scope) {
                 return Ok(host.clone());
