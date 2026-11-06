@@ -11,19 +11,33 @@ The example itself is kind of silly.
 The detector `username-length-detect` reports the virtual package `__username_length`, whose version describes the number of characters in your username.
 A second package `long-username` then requires `__username_length >=10`.
 
-## Prepare the example
+## Let's get started
 
-Use a development build of Pixi with virtual package detector support.
-From a checkout of the Pixi repository, enter the example directory:
+We will build two Rust packages, `detector` and `package`, and use them from a separate Pixi workspace, `consumer`.
+All file paths and commands below are relative to the directory containing these three projects.
+Pixi will install the Rust build tools, so you do not need to install Rust separately.
 
-```console
-cd docs/source_files/pixi_workspaces/virtual_package_detector
+The source files have the following layout:
+
+```text
+.
+├── detector
+│   ├── Cargo.toml
+│   ├── pixi.toml
+│   └── src
+│       └── main.rs
+├── package
+│   ├── Cargo.toml
+│   ├── pixi.toml
+│   └── src
+│       └── main.rs
+├── consumer
+│   └── pixi.toml
+└── index-config.toml
 ```
 
-Run the remaining commands from this directory.
-
-The manifests use `linux-64`. On another platform, replace it in `detector/pixi.toml`, `package/pixi.toml`, and `consumer/pixi.toml` with your native platform, such as `linux-aarch64`, `osx-64`, `osx-arm64`, or `win-64`.
-These packages contain native binaries, not `noarch` packages. Build and run the example on the selected platform.
+The manifests below use `linux-64`. On another platform, replace it in `detector/pixi.toml`, `package/pixi.toml`, and `consumer/pixi.toml` with your native platform, such as `linux-aarch64`, `osx-64`, `osx-arm64`, or `win-64`.
+These packages contain native binaries, not `noarch` packages. Build and run the tutorial on the selected platform.
 
 ## The detector
 
@@ -39,11 +53,13 @@ Here, `__username_length` has the username's character count as its version and 
 `cache.watch_env` invalidates the cached report when any username variable changes.
 
 The executable name must match the detector package name, `username-length-detect`.
-The Cargo package name creates the matching binary:
+The Cargo manifest names the binary and declares its `serde_json` dependency:
 
 ```toml title="detector/Cargo.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/detector/Cargo.toml"
 ```
+
+The Pixi manifest configures how the detector is built:
 
 ```toml title="detector/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/detector/pixi.toml"
@@ -65,6 +81,8 @@ The application only prints its name:
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/package/src/main.rs"
 ```
 
+Its Cargo manifest defines the package name and version:
+
 ```toml title="package/Cargo.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/package/Cargo.toml"
 ```
@@ -79,7 +97,7 @@ Its conda runtime dependency, not the Rust code, requires a username of at least
 
 Build both packages into the local channel:
 
-```console
+```nu
 pixi publish --path detector --target-channel channel
 pixi publish --path package --target-channel channel
 ```
@@ -92,14 +110,14 @@ The index configuration registers the detector and the virtual package it provid
 
 Install `rattler-index` and reindex the channel with that configuration:
 
-```console
+```nu
 pixi global install "rattler-index>=0.33.1"
 rattler-index --force --config index-config.toml fs channel
 ```
 
 ## Install the consumer
 
-The consumer declares `__username_length = "10"` for the selected platform:
+The consumer depends on `long-username` and declares `__username_length = "10"` for the selected platform:
 
 ```toml title="consumer/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/consumer/pixi.toml"
@@ -112,7 +130,7 @@ The manifest's virtual package values describe the target platforms when solving
 They do not claim that your machine has those capabilities.
 During installation, Pixi runs the trusted detector and checks its report against the declared requirements.
 
-```console
+```nu
 pixi install --manifest-path consumer
 ```
 
@@ -122,7 +140,7 @@ If your username has fewer than ten characters, the host check rejects the insta
 
 Once installation succeeds, run the application:
 
-```console
+```nu
 pixi run --manifest-path consumer start
 ```
 
@@ -130,17 +148,20 @@ It prints `long-username`.
 
 ## Check both outcomes with overrides
 
-Open a separate terminal session for these checks so the overrides do not affect your normal environment.
-Set the `CONDA_OVERRIDE_USERNAME_LENGTH` environment variable to `12` in that session, then install and run:
+Open a separate terminal session in the tutorial directory for these checks so the overrides do not affect your normal environment.
+The commands below use Nushell.
+Set `CONDA_OVERRIDE_USERNAME_LENGTH` to `12` in that session, then install and run:
 
-```console
+```nu
+$env.CONDA_OVERRIDE_USERNAME_LENGTH = "12"
 pixi install --manifest-path consumer
 pixi run --manifest-path consumer start
 ```
 
 With the lock file in place, change `CONDA_OVERRIDE_USERNAME_LENGTH` to `9`, then run:
 
-```console
+```nu
+$env.CONDA_OVERRIDE_USERNAME_LENGTH = "9"
 pixi install --locked --manifest-path consumer
 ```
 
