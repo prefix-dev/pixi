@@ -23,7 +23,9 @@ pub struct ManifestProvenance {
 #[derive(Debug, Error, Diagnostic)]
 pub enum ProvenanceError {
     /// Returned when the manifest file format is not recognized.
-    #[error("unrecognized manifest file format. Expected either pixi.toml or pyproject.toml.")]
+    #[error(
+        "unrecognized manifest file format. Expected a `.toml` file, for example pixi.toml or pyproject.toml."
+    )]
     UnrecognizedManifestFormat,
 }
 
@@ -98,6 +100,14 @@ impl ManifestKind {
             consts::WORKSPACE_MANIFEST => Some(Self::Pixi),
             consts::PYPROJECT_MANIFEST => Some(Self::Pyproject),
             consts::MOJOPROJECT_MANIFEST => Some(Self::MojoProject),
+            // Any other TOML file is read as a pixi manifest. This is how a
+            // manifest with a custom name is accepted by `--manifest-path`.
+            name if Path::new(name)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("toml")) =>
+            {
+                Some(Self::Pixi)
+            }
             _ => None,
         }
     }
@@ -159,6 +169,44 @@ impl<T> AssociateProvenance for T {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn try_from_path_accepts_any_toml_file_name() {
+        assert_eq!(
+            ManifestKind::try_from_path(Path::new("pixi.toml")),
+            Some(ManifestKind::Pixi)
+        );
+        assert_eq!(
+            ManifestKind::try_from_path(Path::new("some/dir/pyproject.toml")),
+            Some(ManifestKind::Pyproject)
+        );
+        assert_eq!(
+            ManifestKind::try_from_path(Path::new("mojoproject.toml")),
+            Some(ManifestKind::MojoProject)
+        );
+        assert_eq!(
+            ManifestKind::try_from_path(Path::new("tests/custom-pixi.toml")),
+            Some(ManifestKind::Pixi)
+        );
+        assert_eq!(
+            ManifestKind::try_from_path(Path::new("CUSTOM.TOML")),
+            Some(ManifestKind::Pixi)
+        );
+    }
+
+    #[test]
+    fn try_from_path_rejects_other_files() {
+        assert_eq!(ManifestKind::try_from_path(Path::new("pixi.lock")), None);
+        assert_eq!(ManifestKind::try_from_path(Path::new("manifest")), None);
+        assert_eq!(ManifestKind::try_from_path(Path::new("bla.bla")), None);
+        assert_eq!(ManifestKind::try_from_path(Path::new("")), None);
+    }
+
+    #[test]
+    fn from_path_reports_non_toml_files() {
+        let error = ManifestProvenance::from_path(PathBuf::from("bla.bla")).unwrap_err();
+        assert!(error.to_string().contains("`.toml`"), "{error}");
+    }
 
     #[test]
     fn absolute_path_canonicalizes_parent_only() {

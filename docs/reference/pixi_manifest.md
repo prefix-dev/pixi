@@ -46,6 +46,10 @@ The manifest can be found at the following locations.
 !!! note
     If multiple locations exist, the manifest with the highest priority will be used.
 
+`--manifest-path` also accepts a TOML file with any other name, for example `pixi-ci.toml`.
+Pixi reads it as a `pixi.toml` manifest and keeps its lock file next to it, named after the manifest (`pixi-ci.lock`).
+That way several manifests can live in one directory without sharing `pixi.lock`.
+
 
 ## The `workspace` table
 
