@@ -12,11 +12,8 @@ use fancy_display::FancyDisplay;
 use miette::WrapErr;
 use pep508_rs::{ExtraName, MarkerEnvironment, Requirement};
 use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_core::lock_file::{UpdateLockFileOptions, resolve_lock_platform_for};
 use pixi_core::workspace::Environment;
-use pixi_core::{
-    WorkspaceLocator,
-    lock_file::{UpdateLockFileOptions, resolve_lock_platform_for},
-};
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest as _, PixiPlatform, PixiPlatformName};
 use pixi_uv_conversions::to_marker_environment;
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -78,7 +75,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()

@@ -8,6 +8,7 @@ use std::{
 
 use async_trait::async_trait;
 use dialoguer::{Select, theme::ColorfulTheme};
+use itertools::Itertools;
 use pixi_config::{
     DetectorDecision, consent_origin, write_detector_decision, write_repository_detector_decision,
 };
@@ -89,7 +90,7 @@ impl DetectorConsent for InteractiveConsent {
                 (path, Cow::Borrowed("--shared"), saved)
             }
         };
-        match saved.map_err(miette::Report::new) {
+        match saved {
             Ok(()) => eprintln!(
                 "Saved in {}. To remove this decision, run:\n\n\
                  pixi config unset {flag} {}\n",
@@ -97,8 +98,10 @@ impl DetectorConsent for InteractiveConsent {
                 consent_key_argument(origin),
             ),
             Err(error) => tracing::warn!(
-                "Could not save the decision in {}. Pixi will ask again next time: {error:?}",
-                path.display()
+                "Could not save the decision in {}. Pixi will ask again next time: {}",
+                path.display(),
+                std::iter::successors(Some(&error as &dyn std::error::Error), |e| e.source())
+                    .format(": "),
             ),
         }
         decision
