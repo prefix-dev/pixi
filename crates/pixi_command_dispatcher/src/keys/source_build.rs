@@ -6,7 +6,7 @@
 //! sharing the same deps.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     hash::{Hash, Hasher},
     path::PathBuf,
     sync::Arc,
@@ -527,7 +527,7 @@ async fn compute_inner(
     // Find the output matching our (name, variants) pair. Caching this
     // call is future work; see BuildBackendMetadataKey for a shape that
     // could dedup.
-    let output = fetch_matching_output(&backend, &spec, &work_directory).await?;
+    let (output, build_variant) = fetch_matching_output(&backend, &spec, &work_directory).await?;
 
     // Source entries were already built by `recurse_source_deps`; hand
     // their binary records to `install_prefix` so the installer links
@@ -689,7 +689,7 @@ async fn compute_inner(
                     dependencies: host_dependencies,
                     records: host_records,
                 },
-                variant: output.metadata.variant.clone(),
+                variant: build_variant,
                 output_directory: None,
                 package_format: spec.package_format,
             }),
@@ -858,12 +858,19 @@ async fn build_source_deps(
 }
 
 /// Call `conda_outputs` on the backend and pick the one matching this
-/// record's name + variants.
+/// record's name + variants, together with the variant to build it with (see
+/// [`build_variant`]).
 async fn fetch_matching_output(
     backend: &crate::BackendHandle,
     spec: &SourceBuildSpec,
     work_directory: &std::path::Path,
-) -> Result<CondaOutput, SourceBuildError> {
+) -> Result<
+    (
+        CondaOutput,
+        BTreeMap<String, pixi_build_types::VariantValue>,
+    ),
+    SourceBuildError,
+> {
     let variant_config = spec.variant_configuration.as_ref().map(|variants| {
         variants
             .iter()
@@ -911,10 +918,11 @@ async fn fetch_matching_output(
     );
     let matching = outputs
         .outputs
-        .into_iter()
+        .iter()
         .filter(|o| &o.metadata.name == spec.record.name());
     selector
         .find(matching, |o| &o.metadata.variant)
+        .map(|output| (output.clone(), build_variant(output, &outputs.outputs)))
         .ok_or_else(|| SourceBuildError::MissingOutput {
             name: spec.record.name().as_normalized().to_string(),
             variants: spec
@@ -924,6 +932,40 @@ async fn fetch_matching_output(
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
         })
+}
+
+/// The variant to build `output` with: its own variant, plus the variants of
+/// the outputs of the same recipe it exactly pins, transitively.
+///
+/// Backends render the whole recipe with only the variant they are given, so
+/// without these a pinned sibling (recorded in the variant as `<name>` =
+/// `<version> <build>`) would render with a different hash, and so would
+/// `output`.
+fn build_variant(
+    output: &CondaOutput,
+    outputs: &[CondaOutput],
+) -> BTreeMap<String, pixi_build_types::VariantValue> {
+    let mut variant = output.metadata.variant.clone();
+    let mut visited = HashSet::new();
+    let mut pending = vec![output];
+    while let Some(current) = pending.pop() {
+        for (key, value) in &current.metadata.variant {
+            let pinned = outputs.iter().find(|sibling| {
+                sibling.metadata.name.as_normalized() == key
+                    && value.to_string()
+                        == format!("{} {}", sibling.metadata.version, sibling.metadata.build)
+            });
+            if let Some(sibling) = pinned
+                && visited.insert(&sibling.metadata.name)
+            {
+                for (key, value) in &sibling.metadata.variant {
+                    variant.entry(key.clone()).or_insert_with(|| value.clone());
+                }
+                pending.push(sibling);
+            }
+        }
+    }
+    variant
 }
 
 /// Install a build or host environment into `prefix`, returning the
@@ -1456,5 +1498,95 @@ mod tests {
             PrefixRecordOrigin::Solved,
         )
         .expect("a subdir that is not a platform is not checked");
+    }
+
+    fn conda_output(name: &str, build: &str, variant: &[(&str, &str)]) -> CondaOutput {
+        use pixi_build_types::procedures::conda_outputs::{
+            CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+            CondaOutputRunExports,
+        };
+
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::new_unchecked(name),
+                version: "1.0.0".parse::<VersionWithSource>().unwrap(),
+                build: build.parse().unwrap(),
+                build_number: 0,
+                subdir: Subdir::NoArch,
+                license: None,
+                license_family: None,
+                flags: Default::default(),
+                track_features: Default::default(),
+                noarch: rattler_conda_types::NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant: variant
+                    .iter()
+                    .map(|(key, value)| (key.to_string(), value.to_string().into()))
+                    .collect(),
+            },
+            build_dependencies: None,
+            host_dependencies: None,
+            run_dependencies: CondaOutputDependencies {
+                depends: vec![],
+                constraints: vec![],
+            },
+            extra_dependencies: Default::default(),
+            ignore_run_exports: CondaOutputIgnoreRunExports::default(),
+            run_exports: CondaOutputRunExports::default(),
+            input_globs: None,
+            input_glob_sets: None,
+        }
+    }
+
+    fn variant(entries: &[(&str, &str)]) -> BTreeMap<String, pixi_build_types::VariantValue> {
+        entries
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string().into()))
+            .collect()
+    }
+
+    #[test]
+    fn build_variant_includes_variants_of_pinned_siblings() {
+        let libbar = conda_output("libbar", "h1_0", &[("zlib", "1.3")]);
+        let libfoo = conda_output(
+            "libfoo",
+            "h2_0",
+            &[("libbar", "1.0.0 h1_0"), ("python", "3.12")],
+        );
+        let meta = conda_output("foo-meta", "h3_0", &[("libfoo", "1.0.0 h2_0")]);
+        let unrelated = conda_output("baz", "h4_0", &[("numpy", "2")]);
+        let outputs = [libbar, libfoo, meta.clone(), unrelated];
+
+        assert_eq!(
+            build_variant(&meta, &outputs),
+            variant(&[
+                ("libbar", "1.0.0 h1_0"),
+                ("libfoo", "1.0.0 h2_0"),
+                ("python", "3.12"),
+                ("zlib", "1.3"),
+            ])
+        );
+    }
+
+    #[test]
+    fn build_variant_keeps_own_values_and_ignores_other_builds() {
+        let libfoo_312 = conda_output("libfoo", "h1_0", &[("python", "3.12"), ("zlib", "1.3")]);
+        let libfoo_313 = conda_output("libfoo", "h2_0", &[("python", "3.13"), ("zlib", "1.2")]);
+        let meta = conda_output(
+            "foo-meta",
+            "h3_0",
+            &[("libfoo", "1.0.0 h1_0"), ("python", "3.11")],
+        );
+        let outputs = [libfoo_312, libfoo_313, meta.clone()];
+
+        assert_eq!(
+            build_variant(&meta, &outputs),
+            variant(&[
+                ("libfoo", "1.0.0 h1_0"),
+                ("python", "3.11"),
+                ("zlib", "1.3"),
+            ])
+        );
     }
 }
