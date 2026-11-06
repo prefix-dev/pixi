@@ -51,19 +51,19 @@ jobs:
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
       win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
-      # Version baked into binaries built on main, see "Compute dev version".
-      dev_version: ${{ steps.dev_version.outputs.version }}
+      # Version baked into binaries built on main, see "Compute nightly version".
+      nightly_version: ${{ steps.nightly_version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      # Binaries built on main are published as dev releases, so they report
+      # Binaries built on main are published as nightly releases, so they report
       # the git describe version, e.g. 0.81.0-65-g619b0a3f6. Only match pixi
       # release tags, not the pixi-build-* backend tags.
-      - name: Compute dev version
-        id: dev_version
+      - name: Compute nightly version
+        id: nightly_version
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           describe="$(git describe --tags --match 'v[0-9]*')"
@@ -300,12 +300,12 @@ jobs:
         with:
           persist-credentials: false
       # pixi_consts reads PIXI_VERSION at compile time.
-      - name: Set dev version
-        if: needs.determine_changes.outputs.dev_version != ''
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
         shell: bash
-        run: echo "PIXI_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
         env:
-          DEV_VERSION: ${{ needs.determine_changes.outputs.dev_version }}
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
         with:
           cache: rust
@@ -351,12 +351,12 @@ jobs:
         with:
           persist-credentials: false
       # pixi_consts reads PIXI_VERSION at compile time.
-      - name: Set dev version
-        if: needs.determine_changes.outputs.dev_version != ''
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
         shell: bash
-        run: echo "PIXI_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
         env:
-          DEV_VERSION: ${{ needs.determine_changes.outputs.dev_version }}
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - name: "Setup cross-compilation toolchain"
         run: |
           sudo apt update
@@ -391,12 +391,12 @@ jobs:
         with:
           persist-credentials: false
       # pixi_consts reads PIXI_VERSION at compile time.
-      - name: Set dev version
-        if: needs.determine_changes.outputs.dev_version != ''
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
         shell: bash
-        run: echo "PIXI_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
         env:
-          DEV_VERSION: ${{ needs.determine_changes.outputs.dev_version }}
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - uses: rui314/setup-mold@339e96b4ff1f3bd865856ba4cbbe8818a7acb038 # v1
       - name: "Setup cross-compilation toolchain"
         run: |
@@ -434,12 +434,12 @@ jobs:
         with:
           persist-credentials: false
       # pixi_consts reads PIXI_VERSION at compile time.
-      - name: Set dev version
-        if: needs.determine_changes.outputs.dev_version != ''
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
         shell: bash
-        run: echo "PIXI_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
         env:
-          DEV_VERSION: ${{ needs.determine_changes.outputs.dev_version }}
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
         with:
           cache: rust
@@ -478,12 +478,12 @@ jobs:
         with:
           persist-credentials: false
       # pixi_consts reads PIXI_VERSION at compile time.
-      - name: Set dev version
-        if: needs.determine_changes.outputs.dev_version != ''
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
         shell: bash
-        run: echo "PIXI_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
         env:
-          DEV_VERSION: ${{ needs.determine_changes.outputs.dev_version }}
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
         with:
           cache: rust
@@ -519,12 +519,12 @@ jobs:
         with:
           persist-credentials: false
       # pixi_consts reads PIXI_VERSION at compile time.
-      - name: Set dev version
-        if: needs.determine_changes.outputs.dev_version != ''
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
         shell: bash
-        run: echo "PIXI_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
         env:
-          DEV_VERSION: ${{ needs.determine_changes.outputs.dev_version }}
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -566,12 +566,12 @@ jobs:
         with:
           persist-credentials: false
       # pixi_consts reads PIXI_VERSION at compile time.
-      - name: Set dev version
-        if: needs.determine_changes.outputs.dev_version != ''
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
         shell: bash
-        run: echo "PIXI_VERSION=${DEV_VERSION}" >> "$GITHUB_ENV"
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
         env:
-          DEV_VERSION: ${{ needs.determine_changes.outputs.dev_version }}
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
