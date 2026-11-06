@@ -1,3 +1,4 @@
+use serde_json::json;
 use std::{env, process::ExitCode};
 
 fn main() -> ExitCode {
@@ -9,12 +10,11 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let report = serde_json::json!({
+    let report = json!({
         "version": 1,
         "virtual_packages": {
             "__username_length": {
-                "version": username.chars().count().to_string(),
-                "build_string": "0"
+                "version": username.chars().count().to_string()
             }
         },
         "cache": {

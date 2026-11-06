@@ -3,7 +3,7 @@
 Virtual package detectors are external programs that detect hardware capabilities on your system and inject virtual packages based on those findings.
 This example demonstrates the full life cycle of a virtual package detector:
 
-- creating a detector,
+- Creating a detector,
 - publishing it to a channel, and finally
 - depending on it as a consumer.
 
@@ -13,9 +13,8 @@ A second package `long-username` then requires `__username_length >=10`.
 
 ## Let's get started
 
-We will build two Rust packages, `detector` and `package`, and use them from a separate Pixi workspace, `consumer`.
-All file paths and commands below are relative to the directory containing these three projects.
-Pixi will install the Rust build tools, so you do not need to install Rust separately.
+We will build two Rust packages: `username-length-detect` in `detector/` and `long-username` in `package/`.
+We will then use them from a separate Pixi workspace in `consumer/`.
 
 The source files have the following layout:
 
@@ -36,9 +35,6 @@ The source files have the following layout:
 └── index-config.toml
 ```
 
-The manifests below use `linux-64`. On another platform, replace it in `detector/pixi.toml`, `package/pixi.toml`, and `consumer/pixi.toml` with your native platform, such as `linux-aarch64`, `osx-64`, `osx-arm64`, or `win-64`.
-These packages contain native binaries, not `noarch` packages. Build and run the tutorial on the selected platform.
-
 ## The detector
 
 The detector uses `serde_json` to print its JSON report to standard output:
@@ -49,7 +45,7 @@ The detector uses `serde_json` to print its JSON report to standard output:
 
 The outer `version: 1` selects the detector protocol version.
 `virtual_packages` maps names starting with `__` to their detected values.
-Here, `__username_length` has the username's character count as its version and `"0"` as its `build_string`.
+Here, `__username_length` has the username's character count as its version.
 `cache.watch_env` invalidates the cached report when any username variable changes.
 
 The executable name must match the detector package name, `username-length-detect`.
@@ -60,6 +56,10 @@ The Cargo manifest names the binary and declares its `serde_json` dependency:
 ```
 
 The Pixi manifest configures how the detector is built:
+
+!!! warning "Platform"
+    The `pixi.toml` manifests below use `linux-64`.
+    On another platform, replace `linux-64` with your native platform, such as `linux-aarch64`, `osx-arm64`, or `win-64`.
 
 ```toml title="detector/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/detector/pixi.toml"
@@ -108,7 +108,7 @@ The index configuration registers the detector and the virtual package it provid
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/index-config.toml"
 ```
 
-Install `rattler-index` and reindex the channel with that configuration:
+Install `rattler-index` and re-index the channel with that configuration:
 
 ```nu
 pixi global install "rattler-index>=0.33.1"
@@ -123,7 +123,7 @@ The consumer depends on `long-username` and declares `__username_length = "10"` 
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/consumer/pixi.toml"
 ```
 
-The local channel supplies both packages. Neither needs Python or other conda runtime packages.
+The local channel supplies both packages. Neither needs Python nor other conda runtime packages.
 Pixi installs the detector into a separate environment from its registering channel.
 
 The manifest's virtual package values describe the target platforms when solving the lock file.
