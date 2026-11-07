@@ -473,14 +473,18 @@ mod tests {
 
     #[cfg(feature = "rustls")]
     #[test]
+    #[allow(deprecated)]
     fn rustls_system_mode_uses_the_platform_verifier_unless_env_certs_override_it() {
-        assert!(rustls_certificates_for_mode(pixi_config::TlsRootCerts::System, None).is_none());
+        for mode in [
+            pixi_config::TlsRootCerts::System,
+            pixi_config::TlsRootCerts::LegacyNative,
+            pixi_config::TlsRootCerts::All,
+        ] {
+            assert!(rustls_certificates_for_mode(mode, None).is_none());
 
-        let env_certs = Certificates::webpki_roots();
-        assert!(
-            rustls_certificates_for_mode(pixi_config::TlsRootCerts::System, Some(env_certs))
-                .is_some()
-        );
+            let env_certs = Certificates::webpki_roots();
+            assert!(rustls_certificates_for_mode(mode, Some(env_certs)).is_some());
+        }
     }
 
     #[cfg(feature = "rustls")]
