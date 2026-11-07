@@ -111,6 +111,25 @@ workspace is discovered. This defaults to only `conda-forge`.
     workspace. Workspace-independent commands such as `pixi exec` still use `default-channels` when invoked from a
     workspace directory.
 
+### `exclude-newer`
+
+The `exclude-newer` configuration that new manifests start from.
+`pixi init` writes it into the [`exclude-newer`](./pixi_manifest.md#exclude-newer-optional) of a new workspace or script, `pixi global` into the `exclude-newer` of a new global manifest, and `pixi exec` solves its environments with it.
+It takes the same values as `exclude-newer` in a manifest: a cutoff such as `"7d"` or a date, or a table with a `cutoff` and `exemptions`.
+It is shared with other rattler-based tools, so it can also be set in a `rattler` location.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:exclude-newer"
+```
+
+!!! note
+    The `exclude-newer` of the configuration never applies to an existing workspace or global manifest: a workspace solves with the `exclude-newer` of its manifest only, so the lock file doesn't depend on the configuration of whoever runs pixi.
+    A global manifest that pixi creates from an existing installation doesn't get it either, as those environments were installed without a cutoff.
+    To add a cutoff to an existing workspace, use [`pixi workspace exclude-newer set`](./cli/pixi/workspace/exclude-newer/set.md), or set [`exclude-newer`](./pixi_manifest.md#exclude-newer-optional) in its manifest.
+
+    With `pixi config set`, a table is given as JSON, e.g. `pixi config set exclude-newer '{"cutoff": "7d", "exemptions": {"ruff": "*"}}'`.
+    Keys inside it can also be set and unset on their own, e.g. `pixi config set exclude-newer.exemptions.ruff '*'` or `pixi config unset exclude-newer.exemptions.ruff`.
+
 ### `shell`
 
 - `change-ps1`:  When set to `false`, the `(pixi)` prefix in the shell prompt is removed.

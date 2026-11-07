@@ -13,7 +13,8 @@ use super::{Workspace, WorkspaceStorage};
 use crate::{
     environment::LockFileUsage,
     lock_file::{
-        LoadLockFileError, LockFileDerivedData, UpdateLockFileOptions, WriteLockFileError,
+        LoadLockFileError, LockFileDerivedData, UpdateLockFileError, UpdateLockFileOptions,
+        WriteLockFileError,
     },
 };
 
@@ -203,7 +204,7 @@ impl Workspace {
         &self,
         progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
         options: UpdateLockFileOptions,
-    ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
+    ) -> Result<(LockFileDerivedData<'_>, bool), UpdateLockFileError> {
         let WorkspaceStorage::Script(script) = &self.storage else {
             return self.update_lock_file(progress, options).await;
         };
@@ -223,14 +224,9 @@ impl Workspace {
                 LockFileUsage::Update | LockFileUsage::DryRun => unreachable!(),
             };
             if script.lock_file_path().is_none() {
-                return Err(miette::miette!(
-                    "transient scripts cannot use `{option}` because they do not have an adjacent lock file"
-                ));
+                return Err(UpdateLockFileError::TransientScriptWithoutLockFile(option));
             }
-            return Err(miette::miette!(
-                help = "Create one with `pixi lock --script <PATH>`.",
-                "no lock file exists for the script, but `{option}` was requested"
-            ));
+            return Err(UpdateLockFileError::MissingScriptLockFile(option));
         }
 
         let cached = script.load_cached_resolution(self.root()).await;

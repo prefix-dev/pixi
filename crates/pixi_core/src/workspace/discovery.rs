@@ -3,12 +3,11 @@ use std::{
     sync::Arc,
 };
 
-use itertools::Itertools;
-use miette::{Diagnostic, NamedSource, Report};
+use miette::{Diagnostic, NamedSource};
 use pixi_config::{Config, GlobalConfigSource};
 use pixi_consts::consts;
 use pixi_manifest::{
-    ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
+    ExplicitManifestError, LoadManifestsError, Manifests, TomlError, Warning, WarningWithSource,
     WithWarnings, WorkspaceDiscoveryError,
     script::{
         ScriptManifest, ScriptManifestError,
@@ -81,16 +80,41 @@ impl DiscoveryStart {
     }
 }
 
+/// Warnings encountered while locating a workspace.
+#[derive(Debug)]
+pub enum LocatorWarnings {
+    /// Warnings about the workspace manifests, with their source code.
+    Manifest(Vec<WarningWithSource>),
+    /// Warnings about the metadata of a script. Their spans point into the
+    /// parsed metadata rather than the script, so they come without source
+    /// code.
+    Script(Vec<Warning>),
+    /// Inside the pixi shell of the workspace at `shell_manifest`, the
+    /// workspace at `used_manifest` was discovered and is used instead.
+    ShellManifestIgnored {
+        used_manifest: PathBuf,
+        shell_manifest: PathBuf,
+    },
+}
+
+/// Receives the warnings encountered while locating a workspace, for example
+/// to show them to the user.
+pub type WarningHandler = Arc<dyn Fn(LocatorWarnings) + Send + Sync>;
+
 /// A helper struct that helps discover the workspace root and potentially the
 /// "current" package.
 #[derive(Default)]
 pub struct WorkspaceLocator {
     start: DiscoveryStart,
     with_closest_package: bool,
-    emit_warnings: bool,
+    /// Receives the warnings encountered during discovery. Without one, they
+    /// are dropped.
+    warning_handler: Option<WarningHandler>,
     ignore_unused_feature_warnings: bool,
     consider_environment: bool,
     ignore_pixi_version_check: bool,
+    /// Skip config files that fail to load instead of failing.
+    lenient_config: bool,
     /// Source for the global (system + user-level) config layer.
     global_config_source: GlobalConfigSource,
     /// Configuration supplied directly by the caller.
@@ -113,6 +137,10 @@ pub enum WorkspaceLocatorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     HostDetection(#[from] HostProbeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Config(#[from] pixi_config::ConfigError),
 
     /// Failed to determine the current directory.
     #[error("failed to determine the current directory")]
@@ -196,13 +224,31 @@ pub enum WorkspaceLocatorError {
 
 impl WorkspaceLocator {
     /// Constructs a new instance tailored for finding the workspace for CLI
-    /// commands.
+    /// commands. Warnings are only shown with a
+    /// [`WorkspaceLocator::with_warning_handler`].
     pub fn for_cli() -> Self {
         Self {
-            emit_warnings: true,
             consider_environment: true,
             use_cli_detector_consent: true,
             ..Self::default()
+        }
+    }
+
+    /// Skip config files that fail to load instead of failing, so `pixi
+    /// config` can still repair them.
+    pub fn with_lenient_config(self, lenient_config: bool) -> Self {
+        Self {
+            lenient_config,
+            ..self
+        }
+    }
+
+    /// Loads the config of the workspace at `root`.
+    fn load_config(&self, root: &Path) -> Result<Config, pixi_config::ConfigError> {
+        if self.lenient_config {
+            Ok(Config::load_with(root, &self.global_config_source))
+        } else {
+            Config::try_load_with(root, &self.global_config_source)
         }
     }
 
@@ -244,11 +290,11 @@ impl WorkspaceLocator {
         }
     }
 
-    /// Set whether to emit warnings that are encountered during the discovery
-    /// process.
-    pub fn with_emit_warnings(self, emit_warnings: bool) -> Self {
+    /// Pass the warnings that are encountered during the discovery process to
+    /// `handler`.
+    pub fn with_warning_handler(self, handler: WarningHandler) -> Self {
         Self {
-            emit_warnings,
+            warning_handler: Some(handler),
             ..self
         }
     }
@@ -388,8 +434,10 @@ impl WorkspaceLocator {
             && let Some(WithWarnings {
                 value: manifests,
                 warnings: mut env_warnings,
-            }) =
-                Self::apply_environment_overrides(workspace_manifests.take(), self.emit_warnings)?
+            }) = Self::apply_environment_overrides(
+                workspace_manifests.take(),
+                self.warning_handler.as_ref(),
+            )?
         {
             warnings.append(&mut env_warnings);
             workspace_manifests = Some(manifests);
@@ -412,20 +460,14 @@ impl WorkspaceLocator {
             return Err(WorkspaceLocatorError::WorkspaceNotFound(discovery_source));
         };
 
-        // Emit any warnings that were encountered during the discovery process.
+        // Pass on any warnings that were encountered during the discovery process.
         if self.ignore_unused_feature_warnings {
             warnings.retain(|warning| !warning.error.is_unused_feature());
         }
-        if self.emit_warnings && !warnings.is_empty() {
-            tracing::warn!(
-                "Encountered {} warning{} while parsing the manifest:\n{}",
-                warnings.len(),
-                if warnings.len() == 1 { "" } else { "s" },
-                warnings
-                    .into_iter()
-                    .map(Report::from)
-                    .format_with("\n", |w, f| f(&format_args!("{w:?}")))
-            );
+        if let Some(handler) = &self.warning_handler
+            && !warnings.is_empty()
+        {
+            handler(LocatorWarnings::Manifest(warnings));
         }
 
         let root = discovered_manifests
@@ -436,8 +478,7 @@ impl WorkspaceLocator {
             .expect("manifest path should always have a parent")
             .to_owned();
         let detector_consent = self.detector_consent(Some(&root));
-        let config =
-            Config::load_with(&root, &self.global_config_source).merge_config(self.cli_config);
+        let config = self.load_config(&root)?.merge_config(self.cli_config);
         let injected_host = self.host.take();
         let retain_consent = injected_host.is_none();
         let mut workspace = Workspace::from_manifests_with_config(
@@ -466,8 +507,7 @@ impl WorkspaceLocator {
                 .parent()
                 .expect("an absolute script path always has a parent");
             let consent = self.detector_consent(None);
-            let config =
-                Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+            let config = self.load_config(root)?.merge_config(self.cli_config);
             let host = match injected_host {
                 Some(host) => host,
                 None => {
@@ -482,10 +522,10 @@ impl WorkspaceLocator {
                 workspace.retain_script_host(consent);
             }
 
-            if self.emit_warnings {
-                for warning in warnings {
-                    tracing::warn!("{warning}");
-                }
+            if let Some(handler) = &self.warning_handler
+                && !warnings.is_empty()
+            {
+                handler(LocatorWarnings::Script(warnings));
             }
 
             return Ok(workspace);
@@ -508,8 +548,7 @@ impl WorkspaceLocator {
             .parent()
             .expect("an absolute script path always has a parent");
         let consent = self.detector_consent(None);
-        let config =
-            Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+        let config = self.load_config(root)?.merge_config(self.cli_config);
         let host = match injected_host {
             Some(host) => host,
             None => {
@@ -524,10 +563,10 @@ impl WorkspaceLocator {
             workspace.retain_script_host(consent);
         }
 
-        if self.emit_warnings {
-            for warning in warnings {
-                tracing::warn!("{warning}");
-            }
+        if let Some(handler) = &self.warning_handler
+            && !warnings.is_empty()
+        {
+            handler(LocatorWarnings::Script(warnings));
         }
 
         Ok(workspace)
@@ -536,7 +575,7 @@ impl WorkspaceLocator {
     /// Apply any environment overrides to a potentially discovered workspace.
     fn apply_environment_overrides(
         discovered_workspace: Option<Manifests>,
-        emit_warnings: bool,
+        warning_handler: Option<&WarningHandler>,
     ) -> Result<Option<WithWarnings<Manifests, WarningWithSource>>, WorkspaceLocatorError> {
         let env_manifest_path =
             workspace_or_project_env("PIXI_WORKSPACE_MANIFEST", "PIXI_PROJECT_MANIFEST")
@@ -549,13 +588,12 @@ impl WorkspaceLocator {
             if let Some(env_manifest_path) = env_manifest_path
                 && &env_manifest_path != discovered_manifest_path
                 && in_shell
-                && emit_warnings
+                && let Some(handler) = warning_handler
             {
-                tracing::warn!(
-                    "Using local manifest {} rather than {} from environment variable `PIXI_WORKSPACE_MANIFEST`",
-                    discovered_manifest_path.display(),
-                    env_manifest_path.display(),
-                );
+                handler(LocatorWarnings::ShellManifestIgnored {
+                    used_manifest: discovered_manifest_path.clone(),
+                    shell_manifest: env_manifest_path,
+                });
             }
         // Else, if we didn't find a workspace manifest, but we there is an
         // active one set in the environment, we try to use that instead.

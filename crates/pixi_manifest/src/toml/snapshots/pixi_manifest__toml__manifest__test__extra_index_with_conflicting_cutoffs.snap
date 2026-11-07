@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [pypi-options]\n        extra-index-urls = [\"https://internal/simple\"]\n\n        [feature.f.pypi-options]\n        extra-index-urls = [{ url = \"https://internal/simple\", exclude-newer = \"0d\" }]\n\n        [environments]\n        f = [\"f\"]\n        \"#,)"
+---
+  × extra index https://internal/simple is listed with different exclude-newer cutoffs
+    ╭─[pixi.toml:13:13]
+ 12 │         [environments]
+ 13 │         f = ["f"]
+    ·             ──┬──
+    ·               ╰── while resolving pypi options of features defined here
+ 14 │
+    ╰────

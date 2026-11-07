@@ -3,13 +3,13 @@
 pub mod platforms;
 
 pub(crate) mod add;
-pub use add::{DependencyOptions, GitOptions};
+pub use add::{AddError, DependencyOptions, GitOptions};
 
 pub(crate) mod remove;
 pub use remove::RemoveError;
 
 pub(crate) mod init;
-pub use init::{GitAttributes, InitOptions, ManifestFormat};
+pub use init::{GitAttributes, InitError, InitOptions, ManifestFormat};
 
 pub(crate) mod list;
 pub use list::{Package, PackageKind};
@@ -17,11 +17,25 @@ pub use list::{Package, PackageKind};
 pub(crate) mod reinstall;
 pub use reinstall::ReinstallOptions;
 
+pub(crate) mod run;
+pub use run::{RunError, RunOptions, run_future_forwarding_signals};
+
 pub(crate) mod search;
 
+pub(crate) mod shell;
+pub use shell::{ShellError, ShellOptions};
+
 pub(crate) mod task;
+pub use task::TaskError;
 
 #[allow(clippy::module_inception)]
 pub(crate) mod workspace;
-pub use workspace::activation::ActivationEntry;
-pub use workspace::channel::ChannelOptions;
+pub use workspace::SaveManifestError;
+pub use workspace::activation::{ActivationEntry, EditActivationError};
+pub use workspace::channel::{ChannelError, ChannelOptions};
+pub use workspace::description::SetDescriptionError;
+pub use workspace::environment::EnvironmentError;
+pub use workspace::feature::RemoveFeatureError;
+pub use workspace::name::SetNameError;
+pub use workspace::platform::PlatformError;
+pub use workspace::preview::PreviewFlagsError;

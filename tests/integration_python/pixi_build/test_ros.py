@@ -1,9 +1,13 @@
 """Integration tests for the pixi-build-ros backend."""
 
+import json
+import tempfile
 from pathlib import Path
 
 import pytest
+from rattler.package_streaming import extract
 
+from ..common import CURRENT_PLATFORM
 from .common import ExitCode, copytree_with_local_backend, package_files, verify_cli_command
 
 ROS_WORKSPACE_NAME = "ros-workspace"
@@ -173,3 +177,35 @@ def test_ros_python_rebuild_omits_removed_module(
     stale_module.unlink()
     second_package = _publish(pixi, manifest_path, workspace.joinpath("dist-second"))
     assert not [path for path in package_files(second_package) if "stale" in path]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    CURRENT_PLATFORM != "linux-64", reason="cross-compiles from linux-64 to linux-aarch64"
+)
+def test_ros_python_package_cross_compiles(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    workspace = _prepare_ros_workspace(build_data, tmp_pixi_workspace)
+    manifest_path = workspace.joinpath("src", "navigator_py", "pixi.toml")
+    output_dir = workspace.joinpath("dist")
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--target-platform",
+            "linux-aarch64",
+            "--target-dir",
+            str(output_dir),
+            "--path",
+            manifest_path,
+        ],
+    )
+
+    [package] = output_dir.glob("*.conda")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        extract(package, Path(temp_dir))
+        index = json.loads(Path(temp_dir, "info", "index.json").read_text())
+    assert index["subdir"] == "linux-aarch64"
+    assert any(path.endswith("navigator_py/__init__.py") for path in package_files(package))

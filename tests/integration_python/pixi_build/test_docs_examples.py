@@ -27,6 +27,8 @@ class TestPixiBuild:
     excluded_projects: ClassVar[set[str]] = {
         # Requires a ROS setup that is too heavy for this test
         "ros_ws",
+        # Requires linux-64 with an x86-64-v3 CPU
+        "mojo_accelerators",
     }
     # Expected stdout of the 'start' task per workspace directory name
     expected_outputs: ClassVar[dict[str, str]] = {

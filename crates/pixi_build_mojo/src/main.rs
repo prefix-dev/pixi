@@ -1,3 +1,4 @@
+mod accelerator;
 mod build_script;
 mod config;
 
@@ -12,7 +13,7 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
 };
 use rattler_build_jinja::Variable;
-use rattler_build_recipe::stage0::{Script, Value};
+use rattler_build_recipe::stage0::{ConditionalList, Item, Script, SingleOutputRecipe, Value};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
@@ -25,13 +26,14 @@ pub struct MojoGenerator {}
 #[async_trait::async_trait]
 impl GenerateRecipe for MojoGenerator {
     type Config = MojoBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Subdir,
+        host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -74,10 +76,36 @@ impl GenerateRecipe for MojoGenerator {
         let (mut bins, mut pkg) = config.auto_derive(&manifest_root, &cleaned_project_name)?;
         Self::make_paths_absolute(&manifest_root, &mut bins, &mut pkg)?;
 
+        let accelerator_variants_enabled = variants
+            .contains(&NormalizedKey::from(accelerator::VARIANT_KEY))
+            && accelerator::applies(host_platform, bins.as_deref(), pkg.as_ref());
+        if accelerator_variants_enabled {
+            accelerator::configure_recipe(&mut generated_recipe.recipe)?;
+        }
+
+        if host_platform.is_osx() && bins.as_ref().is_some_and(|bins| !bins.is_empty()) {
+            // mojo-compiler bundles libKGENCompilerRTShared.dylib but has no strong run export.
+            // TODO: Adapt the runtime dependency when the Mojo and MAX packages are split up.
+            generated_recipe
+                .recipe
+                .requirements
+                .run
+                .push(Item::Value(accelerator::template(
+                    "${{ pin_compatible('mojo-compiler', exact=True) }}",
+                )?));
+        }
+
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        let compilers = config.compilers.clone().unwrap_or_default();
+        let mut compilers = config.compilers.clone().unwrap_or_default();
+        if accelerator_variants_enabled {
+            for language in ["c", "cxx"] {
+                if !compilers.iter().any(|compiler| compiler == language) {
+                    compilers.push(language.to_string());
+                }
+            }
+        }
 
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
@@ -89,14 +117,28 @@ impl GenerateRecipe for MojoGenerator {
             variants,
         );
 
-        let build_script = BuildScriptContext { bins, pkg }.render();
-
+        let build_script = BuildScriptContext {
+            bins,
+            pkg,
+            accelerator_variants_enabled,
+        }
+        .render();
+        let script = if accelerator_variants_enabled {
+            Script {
+                content: Some(ConditionalList::new(vec![Item::Value(
+                    accelerator::template(build_script)?,
+                )])),
+                ..Default::default()
+            }
+        } else {
+            Script::from_content(build_script)
+        };
         *generated_recipe
             .recipe
             .build
             .plan
             .script_mut()
-            .expect("generated recipes use script mode") = Script::from_content(build_script)
+            .expect("generated recipes use script mode") = script
             .with_env(
                 config
                     .env
@@ -120,6 +162,13 @@ impl GenerateRecipe for MojoGenerator {
         Ok(Self::globs()
             .chain(config.extra_input_globs.clone())
             .collect())
+    }
+
+    fn validate_variants(
+        &self,
+        variants: &BTreeMap<NormalizedKey, Vec<Variable>>,
+    ) -> miette::Result<()> {
+        accelerator::validate_variants(variants)
     }
 
     fn default_variants(
@@ -775,6 +824,88 @@ mod tests {
         assert!(
             compiler_templates.contains(&"${{ compiler('cxx') }}".to_string()),
             "C++ compiler should be in build requirements"
+        );
+    }
+
+    async fn generate_with_variant(
+        key: &str,
+        compilers: Option<Vec<String>>,
+        platform: Subdir,
+    ) -> miette::Result<GeneratedRecipe> {
+        let project_model = project_fixture!({"name": "foobar", "version": "0.1.0"});
+        let temp = tempfile::TempDir::new().unwrap();
+        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
+        MojoGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &MojoBackendConfig {
+                    compilers,
+                    ..Default::default()
+                },
+                temp.path().to_path_buf(),
+                platform,
+                None,
+                &HashSet::from([NormalizedKey::from(key)]),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+    }
+
+    fn compiler_templates(recipe: &GeneratedRecipe) -> Vec<String> {
+        recipe
+            .recipe
+            .requirements
+            .build
+            .iter()
+            .filter_map(|item| match item {
+                Item::Value(v) => v.as_template().map(ToString::to_string),
+                _ => None,
+            })
+            .filter(|s| s.contains("compiler("))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_accelerator_adds_c_and_cxx_without_duplicates() {
+        let recipe =
+            generate_with_variant("mojo_accelerator", Some(vec!["c".into()]), Subdir::Linux64)
+                .await
+                .unwrap();
+        insta::assert_debug_snapshot!(compiler_templates(&recipe), @r#"
+        [
+            "${{ compiler('c') }}",
+            "${{ compiler('cxx') }}",
+        ]
+        "#);
+        assert!(recipe.recipe.build.variant.use_keys.iter().any(|k| matches!(k, Item::Value(v) if v.as_concrete().map(String::as_str) == Some("mojo_accelerator"))));
+    }
+
+    #[tokio::test]
+    async fn test_hyphenated_accelerator_key_is_normalized() {
+        let recipe = generate_with_variant("mojo-accelerator", None, Subdir::Linux64)
+            .await
+            .unwrap();
+        assert_eq!(compiler_templates(&recipe).len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_accelerator_is_ignored_on_osx() {
+        let recipe = generate_with_variant("mojo_accelerator", None, Subdir::OsxArm64)
+            .await
+            .unwrap();
+        assert!(compiler_templates(&recipe).is_empty());
+        assert!(recipe.recipe.build.variant.use_keys.is_empty());
+        assert!(
+            recipe
+                .recipe
+                .build
+                .variant
+                .down_prioritize_variant
+                .is_none()
         );
     }
 }

@@ -59,8 +59,6 @@ pub(crate) enum NeedReinstall {
         required_editable: bool,
         installed_editable: bool,
     },
-    /// Somehow unable to parse the installed dist url
-    UnableToParseInstalledDistUrl { url: String },
     /// Archive is newer than the cache
     ArchiveDistNewerThanCache,
     /// The git archive is still path, could be caused by an old source install
@@ -125,9 +123,6 @@ impl std::fmt::Display for NeedReinstall {
                     f,
                     "Editable status changed, editable status is: {locked_editable} installed editable is: {installed_editable}"
                 )
-            }
-            NeedReinstall::UnableToParseInstalledDistUrl { url } => {
-                write!(f, "Unable to parse installed dist url: {url}")
             }
             NeedReinstall::ArchiveDistNewerThanCache => {
                 write!(f, "Archive dist is newer than the cache")

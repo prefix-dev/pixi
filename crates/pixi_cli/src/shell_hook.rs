@@ -12,7 +12,7 @@ use serde::Serialize;
 use serde_json;
 
 use pixi_core::{
-    UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    UpdateLockFileOptions, Workspace,
     activation::{CurrentEnvVarBehavior, get_activator},
     environment::get_update_lock_file_and_prefix,
     lock_file::{ReinstallPackages, UpdateMode},
@@ -166,7 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .with_cli_config(config)
@@ -213,6 +213,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use pixi_core::WorkspaceLocator;
     use rattler_conda_types::Subdir;
     #[cfg(target_family = "windows")]
     use rattler_shell::shell::CmdExe;

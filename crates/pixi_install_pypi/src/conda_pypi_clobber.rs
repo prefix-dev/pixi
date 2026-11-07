@@ -7,7 +7,7 @@ use std::{
 use pixi_path::normalize_std;
 use rattler_conda_types::PrefixRecord;
 use uv_distribution_types::{CachedDist, Name};
-use uv_python::PythonEnvironment;
+use uv_python_interpreter::PythonEnvironment;
 
 use ahash::AHashMap;
 
@@ -101,7 +101,7 @@ fn parse_wheel_data_path(record_path: &Path) -> Option<(WheelDataScheme, &Path)>
 /// The destinations wheel files are installed to, in prefix-relative form.
 ///
 /// Derived from the same layout that uv's installer writes with
-/// ([`uv_python::Interpreter::layout`]), so the prediction cannot drift from
+/// ([`uv_python_interpreter::Interpreter::layout`]), so the prediction cannot drift from
 /// the actual writes. The absolute layout paths are relative-ized against
 /// the interpreter's own `sys_prefix`: both values come from a single
 /// interpreter probe and therefore cannot disagree about path spelling

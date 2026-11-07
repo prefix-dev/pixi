@@ -130,7 +130,7 @@ mod tests {
     use std::str::FromStr;
 
     use pixi_manifest::{PixiPlatform, PixiPlatformName};
-    use rattler_conda_types::{GenericVirtualPackage, Subdir, Version};
+    use rattler_conda_types::{GenericVirtualPackage, Subdir, Version, package::BuildString};
     use url::Url;
 
     use super::*;
@@ -139,7 +139,7 @@ mod tests {
         GenericVirtualPackage {
             name: name.parse().unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 

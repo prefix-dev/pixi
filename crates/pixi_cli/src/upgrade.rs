@@ -8,7 +8,6 @@ use miette::{IntoDiagnostic, MietteDiagnostic, WrapErr};
 use pep508_rs::Requirement;
 use pixi_config::ConfigCli;
 use pixi_core::{
-    WorkspaceLocator,
     lock_file::UpdateContext,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
@@ -75,7 +74,7 @@ pub struct UpgradeSpecsArgs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())
@@ -275,7 +274,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .workspace()
                 .command_dispatcher_builder(Some(&progress))?
                 .finish();
-            let derived = UpdateContext::builder(workspace.workspace(), dispatcher)?
+            let derived = UpdateContext::builder(workspace.workspace(), dispatcher)
                 .with_lock_file(original_lock_file.clone())
                 .with_no_install(args.no_install_config.no_install || args.dry_run)
                 .finish()
@@ -502,10 +501,8 @@ fn parse_specs(
                 {
                     // If the build contains a wildcard, keep it
                     nameless_match_spec.build = match nameless_match_spec.build {
-                        Some(build @ StringMatcher::Glob(_) | build @ StringMatcher::Regex(_)) => {
-                            Some(build)
-                        }
-                        _ => None,
+                        Some(StringMatcher::Exact(_)) | None => None,
+                        build => build,
                     };
                     nameless_match_spec.build_number = None;
                     nameless_match_spec.md5 = None;

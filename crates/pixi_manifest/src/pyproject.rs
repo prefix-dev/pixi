@@ -221,6 +221,7 @@ impl PyProjectManifest {
                 description: package_defaults.description.clone(),
                 authors: package_defaults.authors.clone(),
                 features: implicit_pypi_features,
+                table_prefix: Some("tool.pixi"),
                 ..Default::default()
             },
             package_defaults,
@@ -729,5 +730,35 @@ mod tests {
         // spellchecker:off
         assert!(rendered.contains("platfroms = []"), "{rendered}");
         // spellchecker:on
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_name_tool_pixi_tables() {
+        let source = r#"
+[project]
+name = "foo"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[tool.pixi.exclude-newer]
+polars = "0d"
+
+[tool.pixi.pypi-exclude-newer]
+boltons = "0d"
+"#;
+        let (_, _, warnings) = PyProjectManifest::from_toml_str(source)
+            .unwrap()
+            .into_workspace_manifest(Path::new(""))
+            .unwrap();
+        insta::assert_snapshot!(
+            warnings
+                .into_iter()
+                .map(|warning| pixi_test_utils::format_parse_error(source, warning))
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        );
     }
 }

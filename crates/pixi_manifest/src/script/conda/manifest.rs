@@ -47,12 +47,14 @@ impl CondaScriptManifest {
     /// Add a `conda-script` block to a new or existing file.
     ///
     /// The block is generated from the language template; `channels`
-    /// overrides the template's channels when non-empty. A freshly created
-    /// file also gets the template's starter program.
+    /// overrides the template's channels when non-empty, and `exclude_newer`
+    /// becomes the `exclude-newer` of its workspace if given. A freshly
+    /// created file also gets the template's starter program.
     pub fn initialize(
         path: impl AsRef<Path>,
         template: &CondaScriptTemplate,
         channels: &[String],
+        exclude_newer: Option<&toml_edit::Value>,
     ) -> Result<Self, CondaScriptError> {
         let path = std::path::absolute(path)?;
         let contents = match fs_err::read(&path) {
@@ -81,6 +83,20 @@ impl CondaScriptManifest {
             dependencies.insert(dependency, toml_edit::value("*"));
         }
         metadata.insert("dependencies", toml_edit::Item::Table(dependencies));
+        if let Some(exclude_newer) = exclude_newer {
+            let mut workspace = toml_edit::Table::new();
+            workspace.insert(
+                "exclude-newer",
+                toml_edit::Item::Value(exclude_newer.clone()),
+            );
+            let mut pixi = toml_edit::Table::new();
+            pixi.set_implicit(true);
+            pixi.insert("workspace", toml_edit::Item::Table(workspace));
+            let mut tool = toml_edit::Table::new();
+            tool.set_implicit(true);
+            tool.insert("pixi", toml_edit::Item::Table(pixi));
+            metadata.insert("tool", toml_edit::Item::Table(tool));
+        }
 
         let line_ending = LineEnding::detect(&contents);
         let (bom, shebang, body) = extract_script_header(&contents)?;
@@ -385,7 +401,10 @@ impl CondaScriptManifest {
 
         let (workspace, package, warnings) = manifest
             .into_workspace_manifest(
-                ExternalWorkspaceProperties::default(),
+                ExternalWorkspaceProperties {
+                    table_prefix: Some("tool.pixi"),
+                    ..ExternalWorkspaceProperties::default()
+                },
                 PackageDefaults::default(),
                 root,
             )
@@ -442,6 +461,29 @@ mod tests {
 
     fn parse_error(contents: &str) -> String {
         format_diagnostic(&parse(contents).unwrap_err())
+    }
+
+    #[test]
+    fn initializes_a_script_with_exclude_newer() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("example.R");
+        let template = super::super::template_for_extension("R").unwrap();
+        let exclude_newer: toml_edit::Value = r#""7d""#.parse().unwrap();
+
+        let manifest =
+            CondaScriptManifest::initialize(&path, template, &[], Some(&exclude_newer)).unwrap();
+
+        assert!(
+            manifest
+                .toml()
+                .contains("\n[tool.pixi.workspace]\nexclude-newer = \"7d\"\n"),
+            "{}",
+            manifest.toml()
+        );
+        let (workspace, _) = manifest
+            .into_workspace_manifest(None, directory.path())
+            .unwrap();
+        assert!(workspace.workspace.exclude_newer.cutoff.is_some());
     }
 
     #[test]
@@ -696,7 +738,7 @@ mod tests {
     }
 
     #[test]
-    fn per_package_exclude_newer_table_still_works() {
+    fn deprecated_exclude_newer_table_still_works_with_a_warning() {
         let manifest = parse(
             r#"# /// conda-script
 # channels = ["conda-forge"]
@@ -713,7 +755,7 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let (workspace, _) = manifest
+        let (workspace, warnings) = manifest
             .into_workspace_manifest(None, manifest.path().parent().unwrap())
             .unwrap();
         assert!(
@@ -721,6 +763,14 @@ mod tests {
                 .workspace
                 .exclude_newer_package_overrides
                 .contains_key(&PackageName::new_unchecked("zlib"))
+        );
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].to_string().contains(
+                "the top-level `[tool.pixi.exclude-newer]` table of per-package cutoffs is deprecated"
+            ),
+            "{}",
+            warnings[0]
         );
     }
 

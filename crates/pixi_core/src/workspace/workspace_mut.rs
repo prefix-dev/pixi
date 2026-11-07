@@ -5,11 +5,14 @@ use std::{
     sync::Arc,
 };
 
-use crate::lock_file::SolveCondaEnvironmentError;
+use crate::lock_file::{
+    LoadLockFileError, SolveCondaEnvironmentError, UpdateLockFileError, UpdatePrefixError,
+    WriteLockFileError,
+};
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic, NamedSource};
+use miette::{Diagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_command_dispatcher::SolvePixiEnvironmentError::MissingChannel;
@@ -36,8 +39,9 @@ use crate::{
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
-        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage, SourceSpecs, UpdateDeps,
-        WorkspaceStorage, grouped_environment::GroupedEnvironment, workspace_script::ScriptSource,
+        CommandDispatcherBuilderError, MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage,
+        SourceSpecs, UpdateDeps, WorkspaceStorage, grouped_environment::GroupedEnvironment,
+        workspace_script::ScriptSource,
     },
 };
 
@@ -52,6 +56,42 @@ pub enum AddSpecsError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     AddDependency(#[from] AddDependencyError),
+}
+
+/// An error that can occur while adding dependencies and updating the lock
+/// file and prefix to match.
+#[derive(Debug, Error, Diagnostic)]
+pub enum UpdateDependenciesError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostProbe(#[from] crate::host::HostProbeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    AddDependency(#[from] AddDependencyError),
+
+    #[error("failed to save the workspace manifest")]
+    SaveManifest(#[source] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadLockFile(#[from] LoadLockFileError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CommandDispatcherBuilder(#[from] CommandDispatcherBuilderError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdateLockFile(#[from] UpdateLockFileError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    WriteLockFile(#[from] WriteLockFileError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdatePrefix(#[from] UpdatePrefixError),
 }
 
 struct OriginalContent {
@@ -313,8 +353,9 @@ impl WorkspaceMut {
     /// without consuming the instance.
     ///
     /// This is useful if an operation needs to save the changes but still needs
-    /// to continue the modification.
-    async fn save_inner(&mut self) -> Result<(), std::io::Error> {
+    /// to continue the modification. The changes are reverted when the
+    /// instance is dropped without calling [`Self::save`].
+    pub async fn save_inner(&mut self) -> Result<(), std::io::Error> {
         let manifest_path = self.workspace().workspace.provenance.path.clone();
         let new_contents = self
             .workspace_manifest_document
@@ -369,11 +410,14 @@ impl WorkspaceMut {
         let mut workspace = self.workspace.take().expect("workspace is not available");
         if let Some(original) = self.original.take() {
             workspace.workspace.value = original.manifest;
-            pixi_utils::atomic_write::atomic_write(
-                &workspace.workspace.provenance.path,
-                original.source,
-            )
-            .await?;
+            // Like `Drop`, only touch the file if the changes were written.
+            if self.modified {
+                pixi_utils::atomic_write::atomic_write(
+                    &workspace.workspace.provenance.path,
+                    original.source,
+                )
+                .await?;
+            }
             workspace.invalidate_environment_hosts();
         }
 
@@ -401,7 +445,7 @@ impl WorkspaceMut {
         editable: bool,
         dry_run: bool,
         overwrite_behavior: DependencyOverwriteBehavior,
-    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), miette::Error> {
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), UpdateDependenciesError> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
         let mut pypi_specs_to_add_constraints_for = IndexMap::new();
         let mut conda_packages = HashSet::new();
@@ -477,7 +521,9 @@ impl WorkspaceMut {
         // Save Python-backed manifests before resolving so tools like `pixi
         // build` and `uv` observe the changes.
         if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
-            self.save_inner().await.into_diagnostic()?;
+            self.save_inner()
+                .await
+                .map_err(UpdateDependenciesError::SaveManifest)?;
         }
 
         if *lock_file_update_config != LockFileUsage::Update {
@@ -573,7 +619,7 @@ impl WorkspaceMut {
             self.workspace()
                 .command_dispatcher_builder(self.progress.as_ref())?
                 .finish(),
-        )?
+        )
         .with_lock_file(unlocked_lock_file)
         .with_no_install(no_install || dry_run)
         .finish()
@@ -581,8 +627,10 @@ impl WorkspaceMut {
         .update()
         .await
         .map_err(|mut e| {
-            if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
-                e.downcast_mut::<SolveCondaEnvironmentError>()
+            if let UpdateLockFileError::SolveConda(SolveCondaEnvironmentError::SolveFailed {
+                source,
+                ..
+            }) = &mut e
                 && let MissingChannel(missing) = source.as_mut()
             {
                 missing.advice = Some(format!(
@@ -620,7 +668,9 @@ impl WorkspaceMut {
 
         // Save Python-backed manifests again after applying resolved constraints.
         if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
-            self.save_inner().await.into_diagnostic()?;
+            self.save_inner()
+                .await
+                .map_err(UpdateDependenciesError::SaveManifest)?;
         }
 
         // Re-wrap the derived data under the longer-lived workspace
@@ -895,5 +945,27 @@ impl Drop for WorkspaceMut {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Reverting changes that were never saved must not write the manifest.
+    #[tokio::test]
+    async fn revert_without_save_leaves_manifest_alone() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("pixi.toml");
+        fs_err::write(
+            &path,
+            "[workspace]\nname = \"test\"\nchannels = []\nplatforms = []\n",
+        )
+        .unwrap();
+        let workspace = Workspace::from_path(&path).unwrap().modify().unwrap();
+
+        fs_err::remove_file(&path).unwrap();
+        workspace.revert().await.unwrap();
+        assert!(!path.exists());
     }
 }

@@ -22,6 +22,7 @@ clap = { workspace = true, features = [
 ] }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
+colorchoice = { workspace = true }
 comfy-table = { workspace = true, features = ["custom_styling"] }
 console = { workspace = true, features = ["windows-console-colors"] }
 console-subscriber = { workspace = true, optional = true }
@@ -71,6 +72,7 @@ pixi_uv_conversions = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
+rattler_config = { workspace = true, features = ["edit"] }
 rattler_index = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
@@ -95,7 +97,6 @@ temp-env = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
-tokio-util = { workspace = true }
 toml_edit = { workspace = true, features = ["parse", "serde"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
@@ -105,7 +106,6 @@ uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-threads = { workspace = true }
-which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
 [dev-dependencies]
@@ -115,7 +115,6 @@ rattler_repodata_gateway = { workspace = true }
 
 [target."cfg(unix)".dependencies]
 libc = { workspace = true, default-features = false }
-pixi_pty = { path = "../pixi_pty" }
 
 [features]
 default = []

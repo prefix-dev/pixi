@@ -395,7 +395,7 @@ mod test {
             cmd = "test"
             depends-on = [{ task = "foo", args = [{ "foo" = "bar" }, { "baz" = "qux" }] }]
         "#
-        ), @"test, depends-on = 'foo with args'");
+        ), @r#"{ cmd = "test", depends-on = [{ task = "foo", args = [{ foo = "bar" }, { baz = "qux" }] }] }"#);
     }
 
     #[test]

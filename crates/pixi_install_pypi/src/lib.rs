@@ -51,7 +51,7 @@ use uv_fs::LockedFileError;
 use uv_install_wheel::LinkMode;
 use uv_installer::{PrepareError, Preparer, SitePackages, UninstallError};
 use uv_normalize::{InvalidNameError, PackageName};
-use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
+use uv_python_interpreter::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::HashStrategy;
 
@@ -370,6 +370,9 @@ pub struct PyPIBuildConfig<'a> {
     pub no_build: &'a NoBuild,
     pub no_binary: &'a NoBinary,
     pub index_strategy: Option<&'a pixi_manifest::pypi::pypi_options::IndexStrategy>,
+    /// The extra indexes of the manifest, which carry the per-index
+    /// `exclude-newer` overrides that the lock file doesn't store.
+    pub extra_index_urls: &'a [pixi_manifest::pypi::pypi_options::PypiExtraIndex],
     pub exclude_newer: &'a ResolvedPypiExcludeNewer,
     pub skip_wheel_filename_check: Option<bool>,
     /// The link mode to use when installing packages.
@@ -612,7 +615,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let index_locations = self
             .context_config
             .pypi_indexes
-            .map(|indexes| locked_indexes_to_index_locations(indexes, self.config.lock_file_dir))
+            .map(|indexes| {
+                locked_indexes_to_index_locations(
+                    indexes,
+                    self.build_config.extra_index_urls,
+                    self.config.lock_file_dir,
+                )
+            })
             .unwrap_or_else(|| Ok(IndexLocations::default()))?;
 
         let build_options =
@@ -1117,7 +1126,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.index_locations,
             &setup.flat_index,
             &setup.dependency_metadata,
-            self.context_config.uv_context.shared_state.fork(),
+            self.context_config
+                .uv_context
+                .shared_state
+                .fork()
+                .into_inner(),
             setup.index_strategy,
             &setup.config_settings,
             &self.context_config.uv_context.package_config_settings,

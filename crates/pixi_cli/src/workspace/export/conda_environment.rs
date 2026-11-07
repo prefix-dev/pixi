@@ -4,7 +4,7 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::{ExtraName, PackageName};
-use pixi_core::{WorkspaceLocator, workspace::Environment};
+use pixi_core::workspace::Environment;
 use pixi_manifest::{
     FeaturesExt, HasWorkspaceManifest, PixiPlatform, pypi::pypi_options::FindLinksUrlOrPath,
 };
@@ -207,7 +207,7 @@ fn build_env_yaml(
         }
         if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
             for extra_index_url in extra_index_urls {
-                pip_dependencies.insert(0, format!("--extra-index-url {extra_index_url}"));
+                pip_dependencies.insert(0, format!("--extra-index-url {}", extra_index_url.url));
             }
         }
         if let Some(ref index_url) = pypi_options.index_url {
@@ -378,7 +378,7 @@ fn build_env_yaml_from_lock_file(
         }
         if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
             for extra_index_url in extra_index_urls {
-                pip_dependencies.insert(0, format!("--extra-index-url {extra_index_url}"));
+                pip_dependencies.insert(0, format!("--extra-index-url {}", extra_index_url.url));
             }
         }
         if let Some(ref index_url) = pypi_options.index_url {
@@ -429,7 +429,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()

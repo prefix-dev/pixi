@@ -3,7 +3,6 @@ pub mod get;
 pub mod set;
 
 use clap::Parser;
-use pixi_core::WorkspaceLocator;
 use rattler_conda_types::VersionBumpType;
 
 use crate::cli_config::WorkspaceConfig;
@@ -37,7 +36,7 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()

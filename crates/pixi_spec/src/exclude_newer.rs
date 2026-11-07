@@ -1,7 +1,12 @@
-use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Utc};
 use rattler_conda_types::{ChannelUrl, MatchSpec, PackageName};
+use rattler_config::config::exclude_newer::{CutoffValue, ExcludeNewerCutoff};
 pub use rattler_solve::InvalidExemptionError;
-use std::{collections::BTreeMap, str::FromStr};
+use std::{
+    collections::BTreeMap,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 /// Specifies how to exclude newer packages from the solve.
 ///
@@ -31,31 +36,85 @@ pub struct ResolvedExcludeNewer {
 
     /// Package-specific cutoff dates that override both [`Self::cutoff`] and
     /// [`Self::channel_cutoffs`] for matching package names.
+    ///
+    /// Deprecated in favor of [`Self::exemptions`]. Only the deprecated
+    /// top-level `[exclude-newer]` manifest table still populates this.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub package_cutoffs: BTreeMap<PackageName, DateTime<Utc>>,
 
-    /// Records matching any of these specs are never excluded, regardless of
-    /// their timestamp. This allows a single vetted release through without
-    /// lowering the cutoff for every future release of the package.
+    /// Records matching any of these exemptions are never excluded, unless
+    /// they are newer than the cutoff of the exemption. This allows a single
+    /// vetted release through without lowering the cutoff for every future
+    /// release of the package.
     ///
     /// Private so that every spec goes through [`validate_exemption`], which
     /// keeps the conversion into a [`rattler_solve::ExcludeNewer`] infallible.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    exemptions: Vec<MatchSpec>,
+    exemptions: Vec<ResolvedExemption>,
 
     /// Whether to include packages that don't have a timestamp.
     pub include_unknown_timestamp: bool,
+
+    /// The cutoffs as configured, before relative cutoffs were resolved
+    /// against the current time. See [`Self::hash_configured`]. Boxed, as only
+    /// cache keys use it.
+    #[serde(skip)]
+    configured: Option<Box<ConfiguredCutoffs>>,
+}
+
+/// The cutoffs of a [`ResolvedExcludeNewer`] as configured, with relative
+/// cutoffs kept as durations.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct ConfiguredCutoffs {
+    /// The configured default cutoff, if any.
+    pub cutoff: Option<ExcludeNewer>,
+
+    /// The configured channel-specific cutoffs.
+    pub channel_cutoffs: BTreeMap<ChannelUrl, ExcludeNewer>,
+
+    /// The configured package-specific cutoffs of the deprecated top-level
+    /// `[exclude-newer]` table.
+    pub package_cutoffs: BTreeMap<PackageName, ExcludeNewer>,
+
+    /// The configured cutoffs of the exemptions, by the spec they exempt.
+    pub exemption_cutoffs: Vec<(MatchSpec, ExcludeNewer)>,
+}
+
+/// Records matching [`Self::spec`] are exempt from the cutoff of a
+/// [`ResolvedExcludeNewer`], up to [`Self::cutoff`] if it is set.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
+pub struct ResolvedExemption {
+    /// The spec the exempt records match.
+    #[serde(serialize_with = "serialize_display")]
+    pub spec: MatchSpec,
+
+    /// Records published after this cutoff are not exempt, even if they
+    /// match [`Self::spec`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cutoff: Option<DateTime<Utc>>,
+}
+
+fn serialize_display<S: serde::Serializer>(
+    value: &impl std::fmt::Display,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.collect_str(value)
 }
 
 impl ExcludeNewer {
     /// Returns the effective cutoff for the current time.
     pub fn cutoff(&self) -> DateTime<Utc> {
+        self.cutoff_at(Utc::now())
+    }
+
+    /// Returns the effective cutoff if the current time were `now`.
+    pub fn cutoff_at(&self, now: DateTime<Utc>) -> DateTime<Utc> {
         match self {
             Self::Timestamp(cutoff) => *cutoff,
             Self::Duration(duration) => {
                 let duration = chrono::Duration::from_std(*duration)
                     .expect("exclude-newer duration is too large");
-                Utc::now() - duration
+                now - duration
             }
         }
     }
@@ -72,6 +131,46 @@ impl ResolvedExcludeNewer {
             // TODO: After https://github.com/conda/ceps/pull/154 we might need to rethink this
             // https://github.com/prefix-dev/pixi/pull/5848/changes#r3051252281
             include_unknown_timestamp: true,
+            configured: None,
+        }
+    }
+
+    /// Records the cutoffs this configuration was resolved from, which
+    /// [`Self::hash_configured`] hashes instead of the resolved cutoffs.
+    pub fn with_configured_cutoffs(mut self, configured: ConfiguredCutoffs) -> Self {
+        self.configured = Some(Box::new(configured));
+        self
+    }
+
+    /// Hashes the configuration as configured instead of as resolved, for
+    /// cache keys that must be stable across invocations.
+    ///
+    /// A relative cutoff such as `14d` resolves to a different time on every
+    /// invocation, so a key that hashes the resolved cutoffs would never hit
+    /// the cache. Falls back to hashing the resolved cutoffs when the
+    /// configured cutoffs are unknown.
+    pub fn hash_configured<H: Hasher>(&self, state: &mut H) {
+        match &self.configured {
+            Some(configured) => {
+                configured.cutoff.hash(state);
+                configured.channel_cutoffs.hash(state);
+                configured.package_cutoffs.hash(state);
+                // The cutoff of an exemption can be relative too.
+                self.exemptions.len().hash(state);
+                for exemption in &self.exemptions {
+                    exemption.spec.hash(state);
+                    match configured
+                        .exemption_cutoffs
+                        .iter()
+                        .find(|(spec, _)| *spec == exemption.spec)
+                    {
+                        Some((_, cutoff)) => Some(*cutoff).hash(state),
+                        None => exemption.cutoff.map(ExcludeNewer::Timestamp).hash(state),
+                    }
+                }
+                self.include_unknown_timestamp.hash(state);
+            }
+            None => self.hash(state),
         }
     }
 
@@ -82,6 +181,11 @@ impl ResolvedExcludeNewer {
     }
 
     /// Adds a package-specific cutoff override.
+    ///
+    /// Deprecated in favor of [`Self::with_exemption`], which allows specific
+    /// vetted releases instead of lowering the cutoff for every release of a
+    /// package.
+    #[deprecated(note = "use `with_exemption` to allow specific vetted releases instead")]
     pub fn with_package_cutoff(mut self, package: PackageName, cutoff: DateTime<Utc>) -> Self {
         self.package_cutoffs.insert(package, cutoff);
         self
@@ -93,17 +197,59 @@ impl ResolvedExcludeNewer {
     /// condition, or a namespace, as those do not select records. The same
     /// validation the solver applies is run here, so converting the resolved
     /// configuration into a [`rattler_solve::ExcludeNewer`] cannot fail.
-    pub fn with_exemption(mut self, spec: MatchSpec) -> Result<Self, InvalidExemptionError> {
+    pub fn with_exemption(self, spec: MatchSpec) -> Result<Self, InvalidExemptionError> {
+        self.with_exemption_until(spec, None)
+    }
+
+    /// Exempts records matching `spec` that were published up to `cutoff`
+    /// from the cutoff, or all of them if `cutoff` is `None`.
+    ///
+    /// The spec is validated like for [`Self::with_exemption`]. Adding an
+    /// exemption for a spec that is already exempt replaces its cutoff.
+    pub fn with_exemption_until(
+        mut self,
+        spec: MatchSpec,
+        cutoff: Option<DateTime<Utc>>,
+    ) -> Result<Self, InvalidExemptionError> {
         validate_exemption(&spec)?;
-        if !self.exemptions.contains(&spec) {
-            self.exemptions.push(spec);
+        match self
+            .exemptions
+            .iter_mut()
+            .find(|exemption| exemption.spec == spec)
+        {
+            Some(exemption) => exemption.cutoff = cutoff,
+            None => self.exemptions.push(ResolvedExemption { spec, cutoff }),
         }
         Ok(self)
     }
 
-    /// Returns the specs of the records that are exempt from the cutoff.
-    pub fn exemptions(&self) -> &[MatchSpec] {
+    /// Returns the exemptions from the cutoff.
+    pub fn exemptions(&self) -> &[ResolvedExemption] {
         &self.exemptions
+    }
+
+    /// Returns the cutoff that applies to `package` from `channel`, the same
+    /// way the solver picks it: the package cutoff, then the channel cutoff,
+    /// then the default cutoff.
+    pub fn cutoff_for(&self, package: &PackageName, channel: &ChannelUrl) -> DateTime<Utc> {
+        self.package_cutoffs
+            .get(package)
+            .or_else(|| self.channel_cutoffs.get(channel))
+            .copied()
+            .unwrap_or(self.cutoff)
+    }
+
+    /// Returns the earliest cutoff that applies to `package` from any channel,
+    /// including the channels without a cutoff of their own.
+    pub fn earliest_cutoff_for(&self, package: &PackageName) -> DateTime<Utc> {
+        match self.package_cutoffs.get(package) {
+            Some(cutoff) => *cutoff,
+            None => self
+                .channel_cutoffs
+                .values()
+                .copied()
+                .fold(self.cutoff, DateTime::min),
+        }
     }
 }
 
@@ -113,6 +259,20 @@ fn validate_exemption(spec: &MatchSpec) -> Result<(), InvalidExemptionError> {
     rattler_solve::ExcludeNewer::from_datetime(jiff::Timestamp::MAX)
         .with_exemption(spec.clone())
         .map(|_| ())
+}
+
+/// Converts a `jiff::Timestamp`, e.g. a cutoff of the shared rattler
+/// configuration, into a chrono [`DateTime<Utc>`]. chrono spans a larger range
+/// than jiff, so every timestamp converts.
+pub fn from_jiff_timestamp(value: jiff::Timestamp) -> DateTime<Utc> {
+    // jiff gives the subsecond nanoseconds the sign of the timestamp, chrono
+    // expects them to be positive.
+    let (seconds, nanoseconds) = match value.subsec_nanosecond() {
+        nanoseconds if nanoseconds < 0 => (value.as_second() - 1, nanoseconds + 1_000_000_000),
+        nanoseconds => (value.as_second(), nanoseconds),
+    };
+    DateTime::from_timestamp(seconds, nanoseconds as u32)
+        .expect("chrono spans every jiff timestamp")
 }
 
 /// Converts a chrono [`DateTime<Utc>`] into the `jiff::Timestamp` that both the
@@ -156,15 +316,21 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
                 .with_channel_cutoff(channel.to_string(), to_saturating_jiff_timestamp(cutoff));
         }
 
+        // The deprecated per-package cutoffs keep working until the
+        // top-level `[exclude-newer]` manifest table is removed.
         #[allow(deprecated)]
         for (package, cutoff) in value.package_cutoffs {
             config = config.with_package_cutoff(package, to_saturating_jiff_timestamp(cutoff));
         }
 
-        for spec in value.exemptions {
-            config = config
-                .with_exemption(spec)
-                .expect("exemptions are validated when they are added");
+        for ResolvedExemption { spec, cutoff } in value.exemptions {
+            config = match cutoff {
+                Some(cutoff) => {
+                    config.with_exemption_until(spec, to_saturating_jiff_timestamp(cutoff))
+                }
+                None => config.with_exemption(spec),
+            }
+            .expect("exemptions are validated when they are added");
         }
 
         config
@@ -223,31 +389,21 @@ impl<'de> serde::Deserialize<'de> for ExcludeNewer {
     }
 }
 
+/// Parses a cutoff with the parser of `rattler_config`, so that the cutoffs of
+/// a manifest and of the configuration accept the same values.
 fn parse_exclude_newer_str(s: &str) -> Result<ExcludeNewer, String> {
-    if let Ok(duration) = s.parse::<humantime::Duration>() {
-        return Ok(ExcludeNewer::Duration(duration.into()));
-    }
+    ExcludeNewerCutoff::from_str(s)
+        .map(|cutoff| cutoff.value().into())
+        .map_err(|err| err.to_string())
+}
 
-    let date_err = match NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        Ok(date) => {
-            let next_midnight = date
-                .checked_add_days(Days::new(1))
-                .expect("valid exclude-newer date should have a following day")
-                .and_time(NaiveTime::MIN)
-                .and_utc();
-            return Ok(ExcludeNewer::Timestamp(next_midnight));
+impl From<CutoffValue> for ExcludeNewer {
+    fn from(value: CutoffValue) -> Self {
+        match value {
+            CutoffValue::Timestamp(cutoff) => Self::Timestamp(from_jiff_timestamp(cutoff)),
+            CutoffValue::Duration(cutoff) => Self::Duration(cutoff),
         }
-        Err(err) => err,
-    };
-
-    let timestamp_err = match DateTime::parse_from_rfc3339(s) {
-        Ok(timestamp) => return Ok(ExcludeNewer::Timestamp(timestamp.with_timezone(&Utc))),
-        Err(err) => err,
-    };
-
-    Err(format!(
-        "`{s}` is neither a valid duration, date ({date_err}), nor timestamp ({timestamp_err})"
-    ))
+    }
 }
 
 #[cfg(test)]
@@ -306,9 +462,10 @@ mod test {
     #[test]
     fn test_from_str_invalid_reports_supported_formats() {
         let err = ExcludeNewer::from_str("date").unwrap_err();
-        assert!(err.contains("valid duration"), "got: {err}");
-        assert!(err.contains("date ("), "got: {err}");
-        assert!(err.contains("timestamp ("), "got: {err}");
+        assert_eq!(
+            err,
+            "invalid cutoff `date`, expected an RFC 3339 timestamp, a date, or a duration (for example, 7d)"
+        );
     }
 
     #[test]
@@ -374,6 +531,7 @@ mod test {
             .unwrap()
             .with_timezone(&Utc);
 
+        #[allow(deprecated)]
         let config: rattler_solve::ExcludeNewer =
             ResolvedExcludeNewer::from_datetime(default_cutoff)
                 .with_channel_cutoff(
@@ -427,6 +585,27 @@ mod test {
         assert!(!config.is_excluded(&uploaded_record("foo", "1.2.3", None)));
         assert!(config.is_excluded(&uploaded_record("foo", "1.2.4", None)));
         assert!(config.is_excluded(&uploaded_record("bar", "1.2.3", None)));
+    }
+
+    #[test]
+    fn test_resolved_into_rattler_solve_preserves_exemption_cutoffs() {
+        use pixi_test_utils::uploaded_record;
+        use rattler_conda_types::ParseStrictness;
+
+        // `uploaded_record` creates records uploaded at 2020-01-01T00:00:00Z.
+        let config = |exemption_cutoff: &str| -> rattler_solve::ExcludeNewer {
+            ResolvedExcludeNewer::from_datetime("2019-01-01T00:00:00Z".parse().unwrap())
+                .with_exemption_until(
+                    MatchSpec::from_str("foo ==1.2.3", ParseStrictness::Strict).unwrap(),
+                    Some(exemption_cutoff.parse().unwrap()),
+                )
+                .unwrap()
+                .into()
+        };
+
+        let record = uploaded_record("foo", "1.2.3", None);
+        assert!(!config("2020-01-01T00:00:00Z").is_excluded(&record));
+        assert!(config("2019-12-31T23:59:59Z").is_excluded(&record));
     }
 
     #[test]

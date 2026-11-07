@@ -16,6 +16,7 @@ minijinja = { workspace = true }
 rattler_build_jinja = { workspace = true }
 rattler_build_types = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_virtual_packages = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

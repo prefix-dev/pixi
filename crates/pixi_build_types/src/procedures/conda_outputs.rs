@@ -9,7 +9,9 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use ordermap::OrderSet;
-use rattler_conda_types::{ChannelUrl, Flag, NoArchType, PackageName, Subdir, VersionWithSource};
+use rattler_conda_types::{
+    ChannelUrl, Flag, NoArchType, PackageName, Subdir, VersionWithSource, package::BuildString,
+};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -153,8 +155,11 @@ pub struct CondaOutputMetadata {
     /// The version of the package.
     pub version: VersionWithSource,
 
-    /// The build hash of the package.
-    pub build: String,
+    /// The build string of the package.
+    ///
+    /// Like rattler's own records, deserializing does not validate the value
+    /// against CEP26; pixi validates it when the backend reply comes in.
+    pub build: BuildString,
 
     /// The build number of the package.
     pub build_number: u64,

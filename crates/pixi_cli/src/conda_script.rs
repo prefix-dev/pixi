@@ -2,9 +2,10 @@ use std::{collections::HashMap, ffi::OsString, path::Path};
 
 use deno_task_shell::KillSignal;
 use miette::{IntoDiagnostic, NamedSource, Report};
+use pixi_api::workspace::run_future_forwarding_signals;
 use pixi_core::{
     Workspace,
-    environment::sanity_check_workspace,
+    environment::{PlatformNotInEnvironmentError, sanity_check_workspace},
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::virtual_packages::{
         EnvironmentRunnability, classify_environment_runnability,
@@ -17,10 +18,7 @@ use pixi_script_shell::{ShellContext, execute_sequence, parse_sequence};
 use pixi_task::get_task_env;
 use tracing::Level;
 
-use crate::{
-    run::{Args, run_future_forwarding_signals},
-    shared::install_platform::resolve_install_platform,
-};
+use crate::{run::Args, shared::install_platform::resolve_install_platform};
 
 /// Reads the `conda-script` block of a local `--script` file.
 ///
@@ -93,11 +91,11 @@ pub(crate) async fn execute_run(
         && best_declared_platform.is_none()
         && let Some(name) = user_platform.as_ref()
     {
-        return Err(miette::miette!(
-            "platform '{}' is not part of environment '{}'",
-            name,
-            environment.name(),
-        ));
+        return Err(PlatformNotInEnvironmentError {
+            platform: name.clone(),
+            environment: environment.name().clone(),
+        }
+        .into());
     }
     if allow_installs {
         environment.emit_emulation_warning();

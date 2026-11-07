@@ -90,7 +90,17 @@ impl Hash for EphemeralEnvSpec {
         dependencies.hash(state);
         constraints.hash(state);
         channels.hash(state);
-        exclude_newer.hash(state);
+        // The prefix is shared across invocations, so hash the cutoffs as
+        // configured: a relative cutoff such as `14d` resolves to a different
+        // time on every invocation and would never hit the cache. A prefix
+        // solved with an earlier resolution still satisfies the cutoff, as
+        // its packages only get older, the same way a prefix solved without
+        // a cutoff is reused when newer packages are published.
+        // Hashed like `Option::hash`, so keys without a cutoff are unchanged.
+        mem::discriminant(exclude_newer).hash(state);
+        if let Some(exclude_newer) = exclude_newer {
+            exclude_newer.hash_configured(state);
+        }
         // Neither SolveStrategy nor ChannelPriority implement Hash;
         // use the enum discriminant (both are C-like enums, so the
         // discriminant fully captures identity).
@@ -137,23 +147,32 @@ impl EphemeralEnvSpec {
 /// Wraps the spec in an [`Arc`] so dedup hits and subscribers clone
 /// cheaply. Construct with [`EphemeralEnvKey::new`].
 #[derive(Clone, Debug)]
-pub struct EphemeralEnvKey(pub Arc<EphemeralEnvSpec>);
+pub struct EphemeralEnvKey {
+    spec: Arc<EphemeralEnvSpec>,
+    /// Describes the environment in progress reports. Not part of the key's
+    /// identity: requests for an equal spec share one environment, labelled
+    /// by whichever request came first.
+    label: Arc<str>,
+}
 
 impl EphemeralEnvKey {
-    pub fn new(spec: EphemeralEnvSpec) -> Self {
-        Self(Arc::new(spec))
+    pub fn new(spec: EphemeralEnvSpec, label: impl Into<Arc<str>>) -> Self {
+        Self {
+            spec: Arc::new(spec),
+            label: label.into(),
+        }
     }
 }
 
 impl Hash for EphemeralEnvKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+        self.spec.hash(state);
     }
 }
 
 impl PartialEq for EphemeralEnvKey {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) || *self.0 == *other.0
+        Arc::ptr_eq(&self.spec, &other.spec) || *self.spec == *other.spec
     }
 }
 
@@ -161,7 +180,7 @@ impl Eq for EphemeralEnvKey {}
 
 impl fmt::Display for EphemeralEnvKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0.cache_key())
+        write!(f, "{}", self.spec.cache_key())
     }
 }
 
@@ -214,7 +233,7 @@ impl Key for EphemeralEnvKey {
     type Value = Result<Arc<InstalledEphemeralEnv>, Arc<EphemeralEnvError>>;
 
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-        let spec: &EphemeralEnvSpec = &self.0;
+        let spec: &EphemeralEnvSpec = &self.spec;
 
         // Cross-process fast path: ephemeral env prefixes are
         // content-addressed by `spec.cache_key()`, so an existing
@@ -272,7 +291,7 @@ impl Key for EphemeralEnvKey {
         .map_err(|err| Arc::new(EphemeralEnvError::CacheIndex(Arc::new(err))))?;
 
         let solve_spec = SolveCondaEnvironmentSpec {
-            name: None,
+            name: Some(self.label.to_string()),
             source_specs: DependencyMap::default(),
             binary_specs,
             constraints: spec.constraints.clone(),
@@ -520,4 +539,66 @@ fn split_into_binary(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use chrono::{DateTime, Utc};
+    use pixi_spec::{ConfiguredCutoffs, ExcludeNewer};
+
+    use super::*;
+
+    fn spec(exclude_newer: Option<ResolvedExcludeNewer>) -> EphemeralEnvSpec {
+        let mut dependencies = DependencyMap::default();
+        dependencies.insert(
+            PackageName::from_str("pixi-build-python").unwrap(),
+            PixiSpec::Version(rattler_conda_types::VersionSpec::Any),
+        );
+        EphemeralEnvSpec {
+            dependencies,
+            constraints: DependencyMap::default(),
+            channels: Vec::new(),
+            exclude_newer,
+            strategy: SolveStrategy::default(),
+            channel_priority: ChannelPriority::default(),
+        }
+    }
+
+    /// `14d` resolved at `now`, as the manifest resolves it.
+    fn relative(now: &str, duration: &str) -> ResolvedExcludeNewer {
+        let cutoff = ExcludeNewer::from_str(duration).unwrap();
+        let now: DateTime<Utc> = now.parse().unwrap();
+        ResolvedExcludeNewer::from_datetime(cutoff.cutoff_at(now)).with_configured_cutoffs(
+            ConfiguredCutoffs {
+                cutoff: Some(cutoff),
+                ..ConfiguredCutoffs::default()
+            },
+        )
+    }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/6617:
+    /// a relative cutoff resolves to a different time on every invocation,
+    /// which must not change the prefix of the backend environment.
+    #[test]
+    fn cache_key_ignores_when_a_relative_cutoff_was_resolved() {
+        let early = spec(Some(relative("2026-10-01T00:00:00Z", "14d")));
+        let late = spec(Some(relative("2026-10-28T12:34:56Z", "14d")));
+        assert_eq!(early.cache_key(), late.cache_key());
+
+        // A different configuration is a different environment.
+        let other = spec(Some(relative("2026-10-01T00:00:00Z", "7d")));
+        assert_ne!(early.cache_key(), other.cache_key());
+        assert_ne!(early.cache_key(), spec(None).cache_key());
+    }
+
+    #[test]
+    fn cache_key_distinguishes_absolute_cutoffs() {
+        let absolute = |cutoff: &str| ResolvedExcludeNewer::from_datetime(cutoff.parse().unwrap());
+        assert_ne!(
+            spec(Some(absolute("2026-10-01T00:00:00Z"))).cache_key(),
+            spec(Some(absolute("2026-10-02T00:00:00Z"))).cache_key()
+        );
+    }
 }

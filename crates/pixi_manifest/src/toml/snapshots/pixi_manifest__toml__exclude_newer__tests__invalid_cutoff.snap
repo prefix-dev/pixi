@@ -2,7 +2,7 @@
 source: crates/pixi_manifest/src/toml/exclude_newer.rs
 expression: "render_error(input, err)"
 ---
-  × `date` is neither a valid duration, date (input contains invalid characters), nor timestamp (premature end of input)
+  × invalid cutoff `date`, expected an RFC 3339 timestamp, a date, or a duration (for example, 7d)
    ╭─[pixi.toml:1:29]
  1 │ exclude-newer = { cutoff = "date" }
    ·                             ────

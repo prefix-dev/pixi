@@ -1,13 +1,13 @@
 use clap::Parser;
-use miette::{IntoDiagnostic, Report, WrapErr};
-use pixi_manifest::PrioritizedChannel;
-use rattler_conda_types::NamedChannelOrUrl;
-use tokio::fs as tokio_fs;
+use miette::Report;
 
-use pixi_global::{EnvironmentName, report::EnvReport};
+use pixi_api::global::EnvironmentName;
+pub(crate) use pixi_api::global::{eventual_environment_channels, revert_environment_after_error};
+use pixi_global::report::EnvReport;
 
 mod add;
 mod edit;
+mod exclude_newer;
 mod expose;
 mod global_specs;
 pub mod install;
@@ -26,6 +26,7 @@ pub enum Command {
     #[clap(visible_alias = "a")]
     Add(add::Args),
     Edit(edit::Args),
+    ExcludeNewer(exclude_newer::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
     Uninstall(uninstall::Args),
@@ -65,6 +66,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Add(args) => add::execute(args).await?,
         Command::Edit(args) => edit::execute(args).await?,
+        Command::ExcludeNewer(args) => exclude_newer::execute(args).await?,
         Command::Install(args) => install::execute(args).await?,
         Command::Uninstall(args) => uninstall::execute(args).await?,
         Command::Remove(args) => remove::execute(args).await?,
@@ -130,149 +132,4 @@ fn report_failed_environments(
     Err(miette::miette!(
         "couldn't {action} {count} environment{plural}"
     ))
-}
-
-/// The channels an environment ends up with once it is set up: an
-/// environment that already exists in the manifest keeps its channels
-/// (unless `--force-reinstall` recreates it), a new one gets the
-/// `--channel` arguments or the config's default channels. Name inference
-/// runs before the manifest is touched and has to solve the build backend
-/// against these same channels.
-fn eventual_environment_channels(
-    project: &pixi_global::Project,
-    environment: Option<&EnvironmentName>,
-    cli_channels: &[NamedChannelOrUrl],
-    force_reinstall: bool,
-) -> Vec<PrioritizedChannel> {
-    if !force_reinstall
-        && let Some(environment) = environment.and_then(|name| project.environment(name))
-    {
-        return environment.prioritized_channels().cloned().collect();
-    }
-    let channels = if cli_channels.is_empty() {
-        project.config().default_channels()
-    } else {
-        cli_channels.to_vec()
-    };
-    channels.into_iter().map(PrioritizedChannel::from).collect()
-}
-
-/// Reverts the changes made to the project for a specific environment after an error occurred.
-async fn revert_environment_after_error(
-    env_name: &EnvironmentName,
-    project_to_revert_to: &pixi_global::Project,
-) -> miette::Result<()> {
-    if project_to_revert_to.environment(env_name).is_some() {
-        // We don't want to report on changes done by the reversion
-        let _ = project_to_revert_to
-            .sync_environment(env_name, None)
-            .await
-            .wrap_err_with(|| format!("Couldn't revert environment {env_name}"))?;
-    } else {
-        // clean up if directory exists for the failed new environment
-        let env_dir_path = project_to_revert_to.env_root_path().join(env_name.as_str());
-        if env_dir_path.exists() {
-            tokio_fs::remove_dir_all(&env_dir_path)
-                .await
-                .into_diagnostic()?;
-            tracing::debug!(
-                "Cleaned up failed environment directory: {}",
-                env_dir_path.display()
-            );
-        }
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-
-    use tempfile::tempdir;
-
-    use super::*;
-
-    /// Create a project in an isolated `PIXI_HOME` so tests never read the
-    /// global manifest of the machine they run on.
-    async fn isolated_project(temp_dir: &std::path::Path) -> pixi_global::Project {
-        let pixi_home_dir = temp_dir.join("pixi-home");
-        temp_env::async_with_vars(
-            [("PIXI_HOME", Some(pixi_home_dir.to_str().unwrap()))],
-            pixi_global::Project::discover_or_create(),
-        )
-        .await
-        .unwrap()
-    }
-
-    #[tokio::test]
-    async fn test_eventual_environment_channels() {
-        let temp_dir = tempdir().unwrap();
-        let mut project = isolated_project(temp_dir.path()).await;
-
-        let existing = EnvironmentName::from_str("existing").unwrap();
-        let missing = EnvironmentName::from_str("missing").unwrap();
-        let env_channel = NamedChannelOrUrl::from_str("env-channel").unwrap();
-        let cli_channel = NamedChannelOrUrl::from_str("cli-channel").unwrap();
-        project
-            .manifest
-            .add_environment(&existing, Some(vec![env_channel.clone()]))
-            .unwrap();
-
-        let defaults = project
-            .config()
-            .default_channels()
-            .into_iter()
-            .map(PrioritizedChannel::from)
-            .collect::<Vec<_>>();
-
-        // No target environment: --channel arguments or the defaults.
-        assert_eq!(
-            eventual_environment_channels(&project, None, &[], false),
-            defaults
-        );
-        assert_eq!(
-            eventual_environment_channels(
-                &project,
-                None,
-                std::slice::from_ref(&cli_channel),
-                false
-            ),
-            vec![PrioritizedChannel::from(cli_channel.clone())]
-        );
-
-        // A named environment that does not exist yet behaves the same.
-        assert_eq!(
-            eventual_environment_channels(
-                &project,
-                Some(&missing),
-                std::slice::from_ref(&cli_channel),
-                false
-            ),
-            vec![PrioritizedChannel::from(cli_channel.clone())]
-        );
-
-        // An existing environment keeps its manifest channels; --channel
-        // arguments are not applied to it.
-        assert_eq!(
-            eventual_environment_channels(
-                &project,
-                Some(&existing),
-                std::slice::from_ref(&cli_channel),
-                false
-            ),
-            vec![PrioritizedChannel::from(env_channel)]
-        );
-
-        // --force-reinstall recreates the environment, so the manifest
-        // channels no longer apply.
-        assert_eq!(
-            eventual_environment_channels(
-                &project,
-                Some(&existing),
-                std::slice::from_ref(&cli_channel),
-                true
-            ),
-            vec![PrioritizedChannel::from(cli_channel)]
-        );
-    }
 }

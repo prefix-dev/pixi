@@ -98,7 +98,7 @@ async fn apply_manifest_changes(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -158,10 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             }
             Err(err) => {
-                if let Err(revert_err) = revert_environment_after_error(env_name, &project).await {
-                    tracing::warn!("Reverting of the operation failed");
-                    tracing::info!("Reversion error: {:?}", revert_err);
-                }
+                revert_environment_after_error(env_name, &project).await;
                 report_failed_environment(env_name);
                 errors.push((env_name.clone(), err));
             }

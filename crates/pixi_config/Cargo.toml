@@ -20,7 +20,7 @@ miette = { workspace = true }
 pixi_consts = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_config = { workspace = true }
+rattler_config = { workspace = true, features = ["edit"] }
 rattler_networking = { workspace = true, features = ["s3"] }
 rattler_redaction = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = ["gateway"] }

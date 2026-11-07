@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.83.0"
+version = "0.84.1"
 authors.workspace = true
 edition.workspace = true
 description = "A package management and workflow tool"
@@ -71,7 +71,7 @@ url = { workspace = true }
 uv-cache = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
-uv-python = { workspace = true }
+uv-python-interpreter = { workspace = true }
 uv-threads = { workspace = true }
 zip = { workspace = true }
 

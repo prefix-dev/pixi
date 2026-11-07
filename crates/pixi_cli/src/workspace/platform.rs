@@ -7,9 +7,9 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
+use pixi_core::environment::LockFileUsage;
 use pixi_core::host::{HostProbeError, HostUndetected};
 use pixi_core::workspace::grouped_environment::GroupedEnvironment;
-use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove, PrioritizedChannel,
@@ -19,13 +19,13 @@ use pixi_manifest::{
     },
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, PackageName, Subdir, Version,
+    GenericVirtualPackage, PackageName, Subdir, Version, package::BuildString,
     virtual_package_detector::VirtualPackageName,
 };
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 /// Commands to manage workspace platforms.
@@ -143,7 +143,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__amdgpu"),
                     version: zero_version(),
-                    build_string: String::new(),
+                    build_string: BuildString::new_unchecked("0"),
                 },
             )?;
         }
@@ -156,7 +156,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__amdgpu_arch"),
                     version,
-                    build_string: String::new(),
+                    build_string: BuildString::new_unchecked("0"),
                 },
             )?;
         }
@@ -164,7 +164,7 @@ impl VirtualPackageArgs {
             if value.is_empty() {
                 miette::bail!("--archspec requires a non-empty microarchitecture string");
             }
-            pixi_manifest::platform::validate_archspec_name(&value)
+            let build_string = pixi_manifest::platform::parse_archspec_build_string(&value)
                 .map_err(|message| miette::miette!("{message}"))?;
             push_unique(
                 &mut specs,
@@ -172,7 +172,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__archspec"),
                     version: zero_version(),
-                    build_string: value,
+                    build_string,
                 },
             )?;
         }
@@ -498,7 +498,7 @@ impl Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()
@@ -509,7 +509,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
     )?;
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     // Keep mutation state off the enclosing CLI dispatch futures.
     match args.command {
@@ -627,7 +627,8 @@ async fn execute_add(
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -690,7 +691,8 @@ async fn execute_add_auto_detected(
         .map_err(AutoDetectPlatformError::Platform)?;
     workspace_ctx
         .add_auto_detected_platform(candidate, explicit, no_install, feature, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Merge user-supplied virtual packages over detected ones: a user spec
@@ -764,7 +766,8 @@ async fn execute_edit(
 
     workspace_ctx
         .edit_platform(args.name, edit, args.no_install, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 async fn execute_move(
@@ -782,7 +785,8 @@ async fn execute_move(
 
     workspace_ctx
         .move_platform(args.name, target, args.no_install, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Print every workspace platform in full detail, preceded by the
@@ -912,7 +916,8 @@ async fn execute_remove(
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
@@ -1414,7 +1419,10 @@ mod tests {
             ..Default::default()
         };
         let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
-        let rendered: Vec<String> = specs.iter().map(ToString::to_string).collect();
+        let rendered: Vec<String> = specs
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
         assert_eq!(rendered, ["__cuda=12.0=h1", "__glibc=2.28"]);
 
         let args = VirtualPackageArgs {
@@ -1430,9 +1438,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
-        let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
-        assert_eq!(package.build_string, "special=build");
+    fn parse_raw_virtual_package_rejects_invalid_build_strings() {
+        for spec in ["__foo=1=special=build", "__foo=1=a-b", "__foo=1="] {
+            let error = parse_raw_virtual_package(spec).unwrap_err();
+            assert!(
+                error.to_string().contains("build string"),
+                "{spec}: {error}"
+            );
+        }
     }
 
     #[test]
@@ -1440,7 +1453,7 @@ mod tests {
         let package = parse_raw_virtual_package("__site_service").unwrap();
         assert_eq!(package.name.as_normalized(), "__site_service");
         assert_eq!(package.version.to_string(), "0");
-        assert!(package.build_string.is_empty());
+        assert_eq!(package.build_string, "0");
     }
 
     #[test]

@@ -752,6 +752,24 @@ def test_frozen_inherited_task_does_not_discover_uninstalled_sibling_channel(
     assert not (workspace / ".pixi" / "envs" / "sibling").exists()
 
 
+def test_frozen_revalidated_prefix_does_not_discover_uninstalled_sibling_channel(
+    detector_sandbox: DetectorSandbox,
+    installed_default_with_http_sibling: tuple[Path, list[str], Path],
+) -> None:
+    workspace, requests, marker = installed_default_with_http_sibling
+    lock = (workspace / "pixi.lock").read_bytes()
+    # Without its environment file the prefix can't be reused as is, so the
+    # run updates it, the way it always does for a local PyPI dependency.
+    (default_env_path(workspace) / "conda-meta" / "pixi").unlink()
+    output = detector_sandbox.run(workspace, "run", "--frozen", "check")
+    assert "default-ready" in output.stdout
+    assert requests == []
+    assert not marker.exists()
+    assert (workspace / "pixi.lock").read_bytes() == lock
+    assert (default_env_path(workspace) / "conda-meta" / "pixi").exists()
+    assert not (workspace / ".pixi" / "envs" / "sibling").exists()
+
+
 def test_frozen_implicit_task_selects_detector_dependent_sibling(
     detector_sandbox: DetectorSandbox,
     installed_default_with_http_sibling: tuple[Path, list[str], Path],

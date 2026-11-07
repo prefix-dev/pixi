@@ -1,12 +1,11 @@
 use clap::Parser;
 use pixi_api::workspace::ReinstallOptions;
 use pixi_config::ConfigCli;
-use pixi_core::WorkspaceLocator;
 use pixi_core::lock_file::{ReinstallEnvironment, ReinstallPackages};
 use pixi_manifest::PixiPlatformName;
 
 use crate::cli_config::WorkspaceConfig;
-use crate::cli_interface::cli_context;
+use crate::cli_interface::cli_workspace_context;
 use crate::shared::install_platform::resolve_install_platform;
 
 /// Re-install an environment.
@@ -54,7 +53,7 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .with_cli_config(args.config.clone())
@@ -84,7 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         target_platform,
     };
 
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
     workspace_ctx.reinstall(options, lock_file_usage).await?;
 
     Ok(())

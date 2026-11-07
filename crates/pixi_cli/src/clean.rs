@@ -4,7 +4,6 @@ use pixi_command_dispatcher::{
 };
 use pixi_consts::consts;
 use pixi_core::Workspace;
-use pixi_core::WorkspaceLocator;
 use pixi_core::WorkspaceLocatorError;
 use pixi_core::host::HostDetection;
 use pixi_core::workspace::WorkspaceRegistry;
@@ -125,7 +124,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // the global (system + user) config when run outside a workspace.
         // Only the configuration is needed here, so the host is not probed:
         // that could run a detector into the very cache about to be cleaned.
-        let config = match WorkspaceLocator::for_cli()
+        let config = match crate::workspace_locator()
             .with_host(HostDetection::from_platform(PixiPlatform::from_subdir(
                 host_subdir(),
             )))
@@ -141,14 +140,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 | WorkspaceLocatorError::MissingWorkspace(_)
                 | WorkspaceLocatorError::MissingWorkspacePath { .. }
                 | WorkspaceLocatorError::MissingRegistry(_),
-            ) => pixi_config::Config::load_global(),
+            ) => pixi_config::Config::try_load_global()?,
             Err(err) => return Err(err.into()),
         };
         clean_cache(cache_args, &config).await?;
         return Ok(());
     }
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_closest_package(false)
         .with_search_start(args.workspace_config.workspace_locator_start())

@@ -9,7 +9,7 @@ use rattler_build_core::{
     tool_configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
-use rattler_build_recipe::variant_render::RenderConfig;
+use rattler_build_recipe::{stage0::Recipe, variant_render::RenderConfig};
 use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::compression_level::CompressionLevel;
@@ -20,7 +20,7 @@ use rattler_conda_types::{
 use url::Url;
 
 use crate::{
-    generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe, v3::generated_recipe_uses_v3,
+    generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe, v3::recipe_uses_v3,
 };
 
 /// A very similar function to `get_build_output` from rattler-build.
@@ -33,7 +33,7 @@ use crate::{
 pub async fn get_build_output(
     backend_name: &'static str,
     backend_version: &'static str,
-    generated_recipe: &GeneratedRecipe,
+    generated_recipe: &GeneratedRecipe<Recipe>,
     tool_config: Arc<tool_configuration::Configuration>,
     target_platform: Subdir,
     host_platform: Subdir,
@@ -53,7 +53,7 @@ pub async fn get_build_output(
         recipe_code.clone(),
     );
 
-    let repodata_revision = if generated_recipe_uses_v3(&generated_recipe.recipe) {
+    let repodata_revision = if recipe_uses_v3(&generated_recipe.recipe) {
         RepodataRevision::V3
     } else {
         RepodataRevision::Legacy

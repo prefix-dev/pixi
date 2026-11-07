@@ -106,17 +106,33 @@ dependencies = { my-tool = "*", polars = "*" }
 exposed = { my-tool = "my-tool" }
 ```
 
-Exemptions use Conda version constraints: `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
-An exemption applies to all builds of matching versions in every environment, including when the package is a transitive dependency.
+Exemptions work the same way as in the [workspace manifest](../reference/pixi_manifest.md#exemptions): `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
+To narrow an exemption further, use a table with the same fields as a dependency, such as `{ version = "==1.43.1", build = "py312*" }`.
+Add a `cutoff` to the table, such as `{ version = "==1.43.1", cutoff = "2026-10-12T08:00:00Z" }`, to only exempt the matching releases that were published up to that point in time.
+An exemption applies in every environment, including when the package is a transitive dependency.
 Approving one version does not pin the dependency to that version.
 
 A channel can override the manifest-wide cutoff with its own `exclude-newer` value, as shown above.
-Version exemptions bypass both the manifest-wide and channel cutoffs.
+Exemptions bypass both the manifest-wide and channel cutoffs.
 Without a manifest-wide policy, channel cutoffs still work on their own.
 
 An environment containing a non-exempt package newer than its cutoff counts as out of sync.
 Tightening the cutoff or removing an exemption re-solves it on the next `pixi global sync`, potentially downgrading packages.
 If no allowed version satisfies the dependencies, the sync fails.
+
+[`pixi global exclude-newer`](../reference/cli/pixi/global/exclude-newer/index.md) edits the cutoff and the exemptions from the command line and syncs the environments afterwards:
+
+```shell
+pixi global exclude-newer set 7d
+pixi global exclude-newer exempt polars==1.43.1 my-tool
+pixi global exclude-newer unexempt my-tool
+pixi global exclude-newer prune
+```
+
+Like `pixi workspace exclude-newer exempt`, an exemption with a version gets the current time as its `cutoff` unless you pass `--cutoff` or `--no-cutoff`.
+`pixi global exclude-newer prune` removes the exemptions whose cutoff the cutoffs of all channels have passed.
+
+An exemption doesn't update the environments to the newer releases on its own, run `pixi global update` to pick them up.
 
 
 ## Dependencies

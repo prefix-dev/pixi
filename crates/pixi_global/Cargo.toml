@@ -10,13 +10,13 @@ license.workspace = true
 
 [dependencies]
 ahash = { workspace = true }
+chrono = { workspace = true }
 console = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
-human_bytes = { workspace = true }
 indexmap = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
@@ -51,6 +51,7 @@ rstest = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
+serde_with = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

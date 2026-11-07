@@ -1,7 +1,6 @@
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_core::{
-    WorkspaceLocator,
     environment::LockFileUsage,
     host::{cli_detector_consent, probe_conda_script},
     lock_file::{LockFileDerivedData, UpdateLockFileOptions},
@@ -55,7 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .parent()
             .expect("an absolute script path always has a parent")
             .to_owned();
-        let config = pixi_config::Config::load_with(&root, &args.config_source.source())
+        let config = pixi_config::Config::try_load_with(&root, &args.config_source.source())?
             .merge_config(args.config.clone().into());
         let host =
             probe_conda_script(&manifest, &root, &config, cli_detector_consent(None)).await?;
@@ -68,7 +67,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         workspace
     } else {
-        WorkspaceLocator::for_cli()
+        crate::workspace_locator()
             .with_global_config_source(args.config_source.source())
             .with_search_start(args.workspace_config.workspace_locator_start())
             .with_cli_config(args.config.clone())

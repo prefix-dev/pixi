@@ -118,6 +118,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             self.prioritized_channels().into_values(),
             channel_config,
             &workspace.exclude_newer_package_overrides,
+            self.workspace_manifest().loaded_at,
         )
     }
 
@@ -128,6 +129,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             &workspace.pypi_exclude_newer,
             workspace.exclude_newer.cutoff,
             &workspace.pypi_exclude_newer_package_overrides,
+            self.workspace_manifest().loaded_at,
         )
     }
 
@@ -368,7 +370,9 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
         // Overlay features on top of the workspace base: features win on
         // single-assignment fields, lists and union-like fields are merged.
+        // Conflicting cutoffs of an extra index are caught at parse time.
         base.overlay(&feature_opts)
+            .expect("merging of pypi-options should already have been checked")
     }
 }
 

@@ -1,6 +1,7 @@
 pub mod atomic_write;
 pub mod cache;
 pub mod conda_environment_file;
+pub mod diagnostic;
 mod environment_fingerprint;
 mod environment_lock;
 pub mod indicatif;

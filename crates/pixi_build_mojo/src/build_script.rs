@@ -8,6 +8,8 @@ pub struct BuildScriptContext {
     pub bins: Option<Vec<MojoBinConfig>>,
     /// Any packages to create.
     pub pkg: Option<MojoPkgConfig>,
+    /// Whether the recipe uses the mojo_accelerator build variant.
+    pub accelerator_variants_enabled: bool,
 }
 
 impl BuildScriptContext {
@@ -18,7 +20,7 @@ impl BuildScriptContext {
             .unwrap();
         // Normalize line endings to Unix-style for consistent output across platforms
         template
-            .render(self)
+            .render(minijinja::value::Serde(self))
             .unwrap()
             .trim()
             .replace("\r\n", "\n")
@@ -39,11 +41,12 @@ mod tests {
                 path: Some(String::from("/src/mylib")),
                 extra_args: None,
             }),
+            accelerator_variants_enabled: false,
         }
         .render();
-
         insta::assert_snapshot!(script, @r#"
         mojo --version
+
         # Mojo v1.0 renamed `mojo package` to `mojo precompile`; probe which subcommand the installed compiler supports
         if mojo precompile --help >/dev/null 2>&1; then
             MOJO_PKG_CMD=precompile

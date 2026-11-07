@@ -6,22 +6,24 @@ use std::{
     str::FromStr,
 };
 
+use chrono::{DateTime, Utc};
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::SourceCode;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    NamedChannelOrUrl, ParseStrictness::Strict, ParseVersionError, ParseVersionSpecError, Subdir,
-    Version, VersionSpec,
+    NamedChannelOrUrl, PackageName, ParseStrictness::Strict, ParseVersionError,
+    ParseVersionSpecError, Subdir, Version, VersionSpec,
 };
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError,
-    KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
-    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
-    Task, TaskName, TomlError, WorkspaceTarget, consts,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerConfig,
+    ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform,
+    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
+    consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, GenericError, UnknownFeature},
@@ -39,7 +41,7 @@ use crate::{
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
 /// describes the part related to the workspace only.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct WorkspaceManifest {
     /// Information about the project
     pub workspace: Workspace,
@@ -55,6 +57,22 @@ pub struct WorkspaceManifest {
 
     /// The solve groups that are part of the project.
     pub solve_groups: SolveGroups,
+
+    /// The time relative `exclude-newer` cutoffs are resolved against, fixed
+    /// at load so that every environment resolves them to the same time.
+    pub loaded_at: DateTime<Utc>,
+}
+
+impl Default for WorkspaceManifest {
+    fn default() -> Self {
+        Self {
+            workspace: Workspace::default(),
+            features: IndexMap::default(),
+            environments: Environments::default(),
+            solve_groups: SolveGroups::default(),
+            loaded_at: Utc::now(),
+        }
+    }
 }
 
 impl WorkspaceManifest {
@@ -213,6 +231,24 @@ impl WorkspaceManifest {
             .flat_map(|target| target.tasks.iter())
             .map(|(name, task)| (name.clone(), task))
             .collect())
+    }
+
+    /// Returns whether the task `name` is declared in the target for
+    /// `platform` itself. Unlike [`Self::tasks`], this ignores the tasks
+    /// inherited from the default target.
+    pub fn declares_task(
+        &self,
+        name: &TaskName,
+        platform: Option<&PixiPlatform>,
+        feature_name: &FeatureName,
+    ) -> Result<bool, GetFeatureError> {
+        Ok(self
+            .features
+            .get(feature_name)
+            .ok_or(GetFeatureError::FeatureDoesNotExist(feature_name.clone()))?
+            .targets
+            .for_opt_target(platform.map(PixiPlatform::as_target_selector).as_ref())
+            .is_some_and(|target| target.tasks.contains_key(name)))
     }
 
     /// Returns a mutable reference to a [`WorkspaceTarget`], creating it if
@@ -385,9 +421,12 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task already exists
-        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
-            && tasks.contains_key(&name)
+        // A task inherited from the default target may be overridden for a
+        // platform. A missing feature is created below.
+        if self
+            .workspace
+            .declares_task(&name, platform, feature_name)
+            .unwrap_or(false)
         {
             return Err(TaskEditError::AlreadyExists(name));
         }
@@ -409,7 +448,7 @@ impl WorkspaceManifestMut<'_> {
         // Add the task to the manifest
         self.workspace
             .get_or_insert_target_mut(
-                platform.map(TargetSelector::from).as_ref(),
+                platform.map(PixiPlatform::as_target_selector).as_ref(),
                 Some(feature_name),
             )
             .tasks
@@ -428,11 +467,9 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task exists
         if !self
             .workspace
-            .tasks(platform, feature_name)?
-            .contains_key(&name)
+            .declares_task(&name, platform, feature_name)?
         {
             return Err(TaskEditError::NotFound(name));
         }
@@ -447,7 +484,7 @@ impl WorkspaceManifestMut<'_> {
             .feature_mut(feature_name)
             .expect("feature existence checked above")
             .targets
-            .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
+            .for_opt_target_mut(platform.map(PixiPlatform::as_target_selector).as_ref())
             .map(|target| target.tasks.remove(&name));
 
         Ok(())
@@ -1949,6 +1986,99 @@ impl WorkspaceManifestMut<'_> {
         };
         Ok(self.document.set_requires_pixi(version)?)
     }
+
+    /// Sets or removes the `exclude-newer` cutoff of the workspace.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Replaces the `exclude-newer` of the workspace with `config`, written
+    /// as `value`, the TOML that `config` was parsed from.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer(
+        &mut self,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.replace(
+            self.document.workspace_table_mut()?,
+            value,
+            config,
+        )
+    }
+
+    /// Exempts the releases of `name` that match the spec of `exemption`
+    /// from the `exclude-newer` cutoff, replacing an existing exemption of the
+    /// package.
+    pub fn add_exclude_newer_exemption(
+        &mut self,
+        name: PackageName,
+        exemption: ExcludeNewerExemption,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.add_exemption(
+            self.document.workspace_table_mut()?,
+            name,
+            exemption,
+        )
+    }
+
+    /// Removes the `exclude-newer` exemption of `name`. Returns false if the
+    /// package was not exempt.
+    pub fn remove_exclude_newer_exemption(
+        &mut self,
+        name: &PackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Sets or removes the `pypi-exclude-newer` cutoff of the workspace.
+    pub fn set_pypi_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Exempts every release of the PyPI package `name` from the
+    /// `pypi-exclude-newer` cutoff.
+    pub fn add_pypi_exclude_newer_exemption(
+        &mut self,
+        name: PypiPackageName,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .add_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Removes the `pypi-exclude-newer` exemption of `name`. Returns false if
+    /// the package was not exempt.
+    pub fn remove_pypi_exclude_newer_exemption(
+        &mut self,
+        name: &PypiPackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
+    }
 }
 
 /// The channel a `channels` array element refers to: either a bare string or
@@ -1985,7 +2115,7 @@ fn duplicate_definition_error(
     } else {
         let vps = customised
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect::<Vec<_>>()
             .join(", ");
         format!("subdir '{}' with virtual packages {vps}", existing.subdir())
@@ -2110,10 +2240,10 @@ pub struct FeatureNotFoundError(pub FeatureName);
 /// [`WorkspaceManifestMut::remove_task`].
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum TaskEditError {
-    #[error("task {0} already exists")]
+    #[error("task '{0}' already exists")]
     AlreadyExists(TaskName),
 
-    #[error("task {0} does not exist")]
+    #[error("task '{0}' does not exist")]
     NotFound(TaskName),
 
     #[error("the environment '{0}' does not exist")]
@@ -2338,6 +2468,7 @@ mod tests {
         MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
         Subdir, Version, VersionSpec,
+        package::BuildString,
     };
     use rstest::rstest;
     use toml_edit::DocumentMut;
@@ -3815,7 +3946,7 @@ platforms = ["linux-64", "osx-64"]
             rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from(name).unwrap(),
                 version: Version::from_str(version).unwrap(),
-                build_string: build.to_string(),
+                build_string: BuildString::new_unchecked(build),
             }
         }
         // `"0"` build strings mirror what rattler's detection emits for
@@ -3861,7 +3992,7 @@ platforms = ["linux-64", "osx-64"]
             let cuda = rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             };
             PixiPlatform::new_with_defaults(
                 PixiPlatformName::try_from(name).unwrap(),
@@ -3894,6 +4025,11 @@ platforms = ["linux-64", "osx-64"]
         assert!(
             help.contains("reuse the existing platform 'gpu-a'"),
             "{help}"
+        );
+        let message = err.to_string();
+        assert!(
+            message.contains("with virtual packages __cuda=12)"),
+            "{message}"
         );
 
         // Re-adding the identical platform (same name + definition) is a no-op.
@@ -6431,6 +6567,138 @@ exemptions = { torch = "*" }
     }
 
     #[test]
+    fn test_deprecated_exclude_newer_tables_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+polars = "0d"
+openssl = "2025-01-01"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_replacement_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "2025-01-01"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_with_date_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2025-01-01"
+
+[exclude-newer]
+polars = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_with_dotted_names_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+"ruamel.yaml" = "0d"
+
+[pypi-exclude-newer]
+"zope.interface" = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_keep_existing_exemptions() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "7d", exemptions = { zlib = "1.3.1", polars = "1.0" } }
+pypi-exclude-newer = { exemptions = { requests = "*" } }
+
+[exclude-newer]
+polars = "0d"
+openssl = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_any_cutoff_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
     fn test_exclude_newer_config_applies_exemptions() {
         let contents = r#"
 [workspace]
@@ -6450,7 +6718,7 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
             resolved
                 .exemptions()
                 .iter()
-                .map(ToString::to_string)
+                .map(|exemption| exemption.spec.to_string())
                 .sorted()
                 .collect::<Vec<_>>(),
             ["numpy *", "polars ==1.43.1"]
@@ -6463,6 +6731,37 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
         assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", None)));
         assert!(!config.is_excluded(&uploaded_record("numpy", "2.0.0", None)));
         assert!(config.is_excluded(&uploaded_record("pandas", "2.0.0", None)));
+    }
+
+    /// Regression test. Every solve resolved a relative cutoff against its
+    /// own `Utc::now()`, so the compute keys carrying the resolved cutoff,
+    /// such as the build backend environment, were never deduplicated.
+    #[test]
+    fn test_relative_exclude_newer_resolves_against_load_time() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "14d"
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let expected = manifest.loaded_at - chrono::Duration::days(14);
+
+        let resolve = || {
+            features
+                .exclude_newer_config_resolved(&default_channel_config())
+                .unwrap()
+                .unwrap()
+        };
+        let first = resolve();
+        assert_eq!(first.cutoff, expected);
+        assert_eq!(first, resolve());
+
+        let pypi = features.pypi_exclude_newer_config_resolved();
+        assert_eq!(pypi.cutoff, Some(expected));
+        assert_eq!(pypi, features.pypi_exclude_newer_config_resolved());
     }
 
     #[test]
@@ -6613,7 +6912,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             vec![rattler_conda_types::GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12.4").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .expect("rich platform with name != subdir");
@@ -6726,7 +7025,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         rattler_conda_types::GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -6886,7 +7185,7 @@ platforms = [
                         rattler_conda_types::GenericVirtualPackage {
                             name: rattler_conda_types::PackageName::try_from("__archspec").unwrap(),
                             version: Version::major(0),
-                            build_string: "x86_64_v3".to_string(),
+                            build_string: BuildString::new_unchecked("x86_64_v3"),
                         },
                     ],
                     ..Default::default()
@@ -7086,6 +7385,9 @@ platforms = [
             [tasks]
             hello = "echo hello"
 
+            [target.linux-64.tasks]
+            lin = "echo lin"
+
             [feature.f1.activation]
             scripts = ["a.sh"]
             env = { FOO = "1" }
@@ -7106,11 +7408,61 @@ platforms = [
             )
             .unwrap_err();
         assert_matches::assert_matches!(&err, TaskEditError::AlreadyExists(name) if *name == hello);
-        assert_eq!(err.to_string(), "task hello already exists");
+        assert_eq!(err.to_string(), "task 'hello' already exists");
         let err = manifest
             .remove_task(TaskName::from("nope"), None, &FeatureName::Default)
             .unwrap_err();
         assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        // A task inherited from the default target is not declared for a
+        // platform.
+        let linux = PixiPlatform::from_subdir(Subdir::Linux64);
+        let err = manifest
+            .remove_task(hello.clone(), Some(&linux), &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        let lin = TaskName::from("lin");
+        manifest
+            .remove_task(lin.clone(), Some(&linux), &FeatureName::Default)
+            .unwrap();
+        assert!(
+            !manifest
+                .workspace
+                .declares_task(&lin, Some(&linux), &FeatureName::Default)
+                .unwrap()
+        );
+        manifest
+            .add_task(
+                lin.clone(),
+                Task::Plain("echo lin".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        assert!(
+            manifest
+                .workspace
+                .declares_task(&lin, Some(&linux), &FeatureName::Default)
+                .unwrap()
+        );
+        // A task from the default target can be overridden for a platform,
+        // but only once.
+        manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        let err = manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::AlreadyExists(_));
         let err = manifest
             .remove_task(hello, None, &FeatureName::from("nosuch"))
             .unwrap_err();

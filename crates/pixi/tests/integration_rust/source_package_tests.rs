@@ -1002,7 +1002,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: Some(target_url.to_string()),
         target_dir: None,
         force: false,
@@ -1145,6 +1145,120 @@ bar = "{override_cutoff}"
     pixi.install()
         .await
         .expect("timestamp-less pixi-build source packages should remain eligible");
+}
+
+/// The build and host environments of a source package are solved with the
+/// workspace's exclude-newer cutoff, so a locked build or host package that
+/// is newer than the cutoff makes the lock file outdated unless it is exempt.
+#[tokio::test]
+async fn test_exclude_newer_exemption_covers_source_package_build_and_host_dependencies() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2026-01-10T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("bar", "1")
+            .with_timestamp("2026-01-10T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+bar = "*"
+
+[package.build-dependencies]
+foo = "*"
+"#,
+    )
+    .unwrap();
+
+    let manifest = |exemptions: &str| {
+        format!(
+            r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+exclude-newer = {{ cutoff = "2025-01-01T00:00:00Z", exemptions = {{ {exemptions} }} }}
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+            channel = channel.url(),
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
+        )
+    };
+
+    pixi.update_manifest(&manifest(r#"foo = "*", bar = "*""#))
+        .unwrap();
+    pixi.update_lock_file()
+        .await
+        .expect("exempt build and host dependencies should lock");
+    let lock = pixi.lock_file().await.unwrap();
+    for name in ["foo", "bar"] {
+        assert!(
+            lock.packages().iter().any(|package| package.name() == name),
+            "the lock file should record the {name} build/host dependency"
+        );
+    }
+
+    // Both locked build/host packages are newer than the cutoff but exempt,
+    // so the lock file stays up to date.
+    pixi.workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("the lock file should be up to date");
+
+    // Dropping the exemption for the host dependency makes the lock file
+    // outdated.
+    pixi.update_manifest(&manifest(r#"foo = "*""#)).unwrap();
+    let outdated = pixi
+        .workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
+        .await
+        .map(|_| ());
+    assert!(
+        outdated.is_err(),
+        "a non-exempt host dependency newer than the cutoff should make the lock file outdated"
+    );
 }
 
 /// Test that demonstrates using PassthroughBackend with PixiControl
@@ -2899,8 +3013,8 @@ async fn verify_locked(pixi: &PixiControl) -> miette::Result<()> {
                 ..UpdateLockFileOptions::default()
             },
         )
-        .await
-        .map(|_| ())
+        .await?;
+    Ok(())
 }
 
 /// `--locked` must succeed without touching the lock file.
@@ -3449,7 +3563,7 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: None,
         force: false,
@@ -3504,7 +3618,7 @@ fn publish_args_for_test(
         build_number: None,
         build_dir: None,
         clean: false,
-        path,
+        path: path.into_iter().collect(),
         target_channel: None,
         target_dir,
         force: false,
@@ -3767,6 +3881,40 @@ async fn test_publish_with_path_rejects_source_dependencies() {
     );
 }
 
+/// `pixi publish --path` accepts several packages: source dependencies
+/// given with `--path` as well satisfy the closure rule, whether or not
+/// they set `publish = true`.
+#[tokio::test]
+async fn test_publish_with_multiple_paths_accepts_given_source_dependencies() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), None, None, None);
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    let mut args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        None,
+        Some(publish_dir.path().to_path_buf()),
+    );
+    // Dependents first: the publish reorders them so `core` goes first.
+    args.path = vec![
+        pixi.workspace_path().join("cpp"),
+        pixi.workspace_path().join("core"),
+    ];
+    publish::execute(args)
+        .await
+        .expect("publishing a package together with its source dependency should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["core", "cpp"],
+        "both packages given with --path should be published"
+    );
+}
+
 /// `pixi publish --path <workspace root>` addresses the package in the root
 /// manifest. The relative path of that manifest to the workspace root is
 /// empty, so the guard error must name the package by its outputs instead.
@@ -3789,8 +3937,8 @@ async fn test_publish_with_workspace_root_path_names_the_package() {
 
     insta::assert_snapshot!(format_diagnostic(err.as_ref()), @"
     × package 'kit' has source run dependencies (cpp) and cannot be published on its own
-    help: A single-package publish must be self-contained. Set `publish = true` in the `[package]` section of the package and its source dependencies, then run `pixi publish` without `--path` to
-          publish them together.
+    help: The published packages must be self-contained. Pass the source dependencies with `--path` as well, or set `publish = true` in the `[package]` section of the package and its source
+          dependencies, then run `pixi publish` without `--path` to publish them together.
     ");
 }
 
@@ -4049,7 +4197,7 @@ backend.version = "0.1.0"
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: None,
         force: false,
@@ -4175,7 +4323,7 @@ host-lib = "*"
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: Some(target_dir.path().to_path_buf()),
         force: false,
@@ -4220,7 +4368,7 @@ host-lib = "*"
     insta::assert_yaml_snapshot!(index_json, {
         ".subdir" => "[SUBDIR]",
     }, @r###"
-    build: ""
+    build: "0"
     build_number: 0
     depends:
       - "host-lib >=2.5,<3.0a0"
