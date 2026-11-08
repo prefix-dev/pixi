@@ -36,18 +36,30 @@ impl Interface for CliInterface {
     }
 
     async fn select(&self, msg: &str, options: &[String]) -> Result<Option<usize>, InterfaceError> {
+        // The prompt draws on stderr, so without a terminal nobody can
+        // answer, and no choice is made.
+        if !console::Term::stderr().is_term() {
+            return Ok(None);
+        }
+
         let theme = dialoguer::theme::ColorfulTheme {
             active_item_style: console::Style::new().for_stderr().magenta(),
             ..dialoguer::theme::ColorfulTheme::default()
         };
 
-        Ok(dialoguer::Select::with_theme(&theme)
+        match dialoguer::Select::with_theme(&theme)
             .with_prompt(msg)
             .report(false)
             .items(options)
             .default(0)
             .interact_opt()
-            .unwrap_or(None))
+        {
+            // Ctrl-C cancels the prompt, like Esc.
+            Err(dialoguer::Error::IO(err)) if err.kind() == std::io::ErrorKind::Interrupted => {
+                Ok(None)
+            }
+            result => result.map_err(InterfaceError::new),
+        }
     }
 
     async fn info(&self, msg: &str) {

@@ -16,13 +16,13 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Subdir};
 
-use crate::global::{GlobalEnvironment, ListError};
+use crate::global::{GlobalEnvironment, InstallError, InstallOptions, ListError, UninstallError};
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
     AddError, ChannelError, ChannelOptions, DependencyOptions, EditActivationError,
     EnvironmentError, InitError, InitOptions, Package, PlatformError, PreviewFlagsError,
-    ReinstallOptions, RemoveError, RemoveFeatureError, RunOptions, SetDescriptionError,
+    ReinstallOptions, RemoveError, RemoveFeatureError, RunError, RunOptions, SetDescriptionError,
     SetNameError, ShellError, ShellOptions, TaskError,
 };
 
@@ -84,6 +84,23 @@ impl<I: Interface> GlobalContext<I> {
         name: &pixi_global::EnvironmentName,
     ) -> Result<GlobalEnvironment, ListError> {
         crate::global::list::get(&self.project, name).await
+    }
+
+    pub async fn install_environment(
+        &mut self,
+        env_name: &pixi_global::EnvironmentName,
+        specs: &[pixi_global::project::GlobalSpec],
+        options: &InstallOptions,
+    ) -> Result<pixi_global::StateChanges, InstallError> {
+        crate::global::install::install_environment(&mut self.project, env_name, specs, options)
+            .await
+    }
+
+    pub async fn uninstall_environment(
+        &mut self,
+        env_name: &pixi_global::EnvironmentName,
+    ) -> Result<pixi_global::StateChanges, UninstallError> {
+        crate::global::uninstall::uninstall_environment(&mut self.project, env_name).await
     }
 }
 
@@ -593,7 +610,7 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn run(&self, options: RunOptions) -> miette::Result<i32> {
+    pub async fn run(&self, options: RunOptions) -> Result<i32, RunError> {
         crate::workspace::run::run(
             &self.interface,
             &self.workspace,

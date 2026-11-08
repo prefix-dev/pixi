@@ -20,7 +20,7 @@ use serde::Serialize;
 use serde_with::serde_as;
 
 use pixi_core::{
-    Workspace, WorkspaceLocator,
+    Workspace,
     workspace::{Environment, EnvironmentFromNameError, virtual_packages::EnvironmentRunnability},
 };
 
@@ -394,7 +394,7 @@ fn print_tasks(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()

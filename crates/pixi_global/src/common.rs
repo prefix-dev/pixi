@@ -403,8 +403,9 @@ impl StateChanges {
             Ok(reports) => reports,
             Err(err) => {
                 tracing::warn!(
-                    "Couldn't describe what changed\n{:?}",
-                    miette::Report::new(err)
+                    "Couldn't describe what changed: {}",
+                    std::iter::successors(Some(&err as &dyn std::error::Error), |e| e.source())
+                        .format(": ")
                 );
                 Vec::new()
             }

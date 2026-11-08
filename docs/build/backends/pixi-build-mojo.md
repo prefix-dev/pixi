@@ -17,6 +17,13 @@ This backend automatically generates conda packages from Mojo projects.
 
 The generated packages can be installed into local envs for development, or packaged for distribution.
 
+On macOS, executable packages include an exact runtime dependency on `mojo-compiler`, which also supplies `libKGENCompilerRTShared.dylib`.
+
+!!! warning "Cross-compilation"
+    Cross-compiling between conda platforms is not supported by `pixi-build-mojo`.
+    The `mojo-compiler` activation script runs `python3` from the environment being activated, which can fail when it targets a different operating system or architecture.
+    Build on a machine matching the package's target platform.
+
 ### Auto-derive of pkg and bin
 
 The Mojo backend includes auto-discovery of your project structure and will derive the following:
@@ -162,7 +169,7 @@ env = { ASSERT = "all" }
 
 #### `debug-dir`
 
-The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; if present, the backend emits a warning to highlight that it no longer has any effect.
+The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored. If present, the backend emits a warning to highlight that it no longer has any effect.
 
 #### `extra-input-globs`
 
@@ -333,6 +340,63 @@ You can override these defaults by explicitly setting variants using [`[workspac
 c_compiler = ["vs2019"]
 cxx_compiler = ["vs2019"]
 ```
+
+## Accelerator variants
+
+Build CPU and AMD GPU variants with `mojo_accelerator`:
+
+```toml
+[workspace]
+platforms = [{ platform = "linux-64", glibc = "2.34", archspec = "x86_64_v3" }]
+preview = ["pixi-build"]
+
+[workspace.build-variants]
+mojo_accelerator = ["cpu", "gfx1103"]
+```
+
+Supported values are `cpu` and the following AMD GPU targets:
+
+- `gfx90a`, `gfx942`, `gfx950`
+- `gfx1030`, `gfx1033`
+- `gfx1100`, `gfx1101`, `gfx1102`, `gfx1103`
+- `gfx1150`, `gfx1151`, `gfx1152`
+- `gfx1200`, `gfx1201`
+
+Accelerator variants apply only to `linux-64` binaries (`bins`).
+The variant is ignored for packages (`pkg`) and other platforms.
+Other GPU targets, including CUDA, are not supported.
+Without this variant, builds are CPU-only.
+
+Both outputs share the package name, version, executable name, and build number.
+The `mojo_accelerator` value changes the [build hash](https://rattler-build.prefix.dev/latest/variants/#package-hash-from-variant).
+
+### Compilation
+
+The backend passes `-D mojo_accelerator=<value>`, where `<value>` is the selected variant.
+Your Mojo source can read this value with `get_defined_string["mojo_accelerator"]()` and use `comptime if` to compile either its CPU or GPU implementation.
+This does not automatically turn CPU code into GPU code or select an accelerator at runtime.
+CPU builds must exclude GPU API calls through a compile-time branch.
+AMD builds also pass `--target-accelerator <value>` to target the selected GPU architecture.
+
+Both builds target x86-64-v3, the [Modular runtime's minimum](https://mojolang.org/docs/requirements/#hardware), without host-specific optimizations.
+Keep binary `extra-args` consistent with the selected target and package requirements.
+
+The backend supplies C/C++ compilers, `patchelf`, and a sysroot matching the declared glibc version.
+No manual compiler paths or sysroot pins are needed.
+Pin `mojo-compiler >=1.2` in `[package.build-dependencies]` to select the compiler version.
+Host and runtime requirements follow that selection.
+
+### Runtime and selection
+
+Both builds require glibc 2.34 or newer, x86-64-v3, and matching `mojo-compiler` and `max-core >=26.7` runtimes.
+AMD builds also require `__amdgpu` and an exact `__amdgpu_arch` match for the selected target.
+For example, `gfx1103` requires `__amdgpu_arch ==11.0.3`, not that architecture or newer.
+The minimum `hip-runtime-amd` version is 7.0 for `gfx950` and 6.3.3 for all other supported AMD targets.
+
+The AMD build is preferred when its requirements are met, with CPU as the fallback.
+Use [rich platforms](../../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) to define AMD and CPU solve targets, with AMD first for automatic selection.
+
+See [Building Mojo CPU and AMD Packages](../mojo_accelerators.md) for a complete example.
 
 ## See Also
 

@@ -23,9 +23,7 @@ use pixi_command_dispatcher::{
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
 use pixi_config::{ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
-use pixi_core::{
-    Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
-};
+use pixi_core::{Workspace, environment::sanity_check_workspace, workspace::DiscoveryStart};
 use pixi_manifest::platform::host::apply_conda_overrides;
 use pixi_manifest::{FeaturesExt, S3Options};
 use pixi_path::AbsPathBuf;
@@ -566,7 +564,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_locator = determine_discovery_start(&args.path.first().cloned()).await?;
 
-    let mut workspace = WorkspaceLocator::for_cli()
+    let mut workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(workspace_locator.clone())
         .with_closest_package(true)

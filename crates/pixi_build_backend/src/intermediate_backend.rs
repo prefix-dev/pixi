@@ -280,6 +280,8 @@ where
             convert_input_variant_configuration(params.variant_configuration.clone())
                 .unwrap_or_default();
         variant_config.variants.append(&mut param_variants);
+        self.generate_recipe
+            .validate_variants(&variant_config.variants)?;
 
         // Construct the intermediate recipe
         let generated_recipe = self
@@ -698,6 +700,7 @@ where
                 )
             })
             .collect();
+        self.generate_recipe.validate_variants(&variants)?;
 
         // Construct the intermediate recipe
         let mut recipe = self

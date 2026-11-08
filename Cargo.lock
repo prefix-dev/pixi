@@ -5997,7 +5997,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pixi"
-version = "0.84.0"
+version = "0.84.1"
 dependencies = [
  "astral-reqwest-middleware",
  "async-trait",
@@ -6099,6 +6099,7 @@ dependencies = [
  "rattler_build_recipe",
  "rattler_build_types",
  "rattler_conda_types",
+ "rattler_virtual_packages",
  "rstest",
  "serde",
  "serde_json",
@@ -6288,6 +6289,7 @@ dependencies = [
  "rstest",
  "same-file",
  "serde",
+ "temp-env",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -6988,6 +6990,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "serde_with",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

@@ -14,7 +14,6 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::{ConfigCliTls, DetectorDecision, consent_origin};
 use pixi_consts::consts;
-use pixi_core::WorkspaceLocator;
 use pixi_core::environment::{PlatformData, RequiredPlatform};
 use pixi_core::host::{
     DenyAll, DetectedValue, DetectionSource, HostDetection, HostDetector, SkipReason, WantedNames,
@@ -659,7 +658,7 @@ async fn detect_host(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let source = args.config_source.source();
     let tls_config = pixi_config::Config::from(args.tls);
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(source.clone())
         .with_search_start(args.project_config.workspace_locator_start())
         .with_cli_config(tls_config.clone())

@@ -18,7 +18,7 @@ pub(crate) mod reinstall;
 pub use reinstall::ReinstallOptions;
 
 pub(crate) mod run;
-pub use run::{RunOptions, run_future_forwarding_signals};
+pub use run::{RunError, RunOptions, run_future_forwarding_signals};
 
 pub(crate) mod search;
 

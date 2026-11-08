@@ -7,9 +7,9 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
+use pixi_core::environment::LockFileUsage;
 use pixi_core::host::{HostProbeError, HostUndetected};
 use pixi_core::workspace::grouped_environment::GroupedEnvironment;
-use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove, PrioritizedChannel,
@@ -498,7 +498,7 @@ impl Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()

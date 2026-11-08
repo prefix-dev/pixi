@@ -15,6 +15,7 @@ use pixi_manifest::{
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
+use serde_with::{DeserializeFromStr, SerializeDisplay};
 use toml_edit::{DocumentMut, Item};
 use toml_span::{DeserError, Value};
 
@@ -730,7 +731,7 @@ impl Manifest {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, SerializeDisplay, DeserializeFromStr)]
 pub struct Mapping {
     exposed_name: ExposedName,
     // The executable_relname is a executable name possibly with a parts of a path in it to match

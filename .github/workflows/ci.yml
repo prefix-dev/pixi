@@ -51,11 +51,23 @@ jobs:
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
       win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
+      # Version baked into binaries built on main, see "Compute nightly version".
+      nightly_version: ${{ steps.nightly_version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # Binaries built on main are published as nightly releases, so they report
+      # the git describe version, e.g. 0.81.0-65-g619b0a3f6. Only match pixi
+      # release tags, not the pixi-build-* backend tags.
+      - name: Compute nightly version
+        id: nightly_version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          describe="$(git describe --tags --match 'v[0-9]*')"
+          echo "version=${describe#v}" >> "$GITHUB_OUTPUT"
 
       - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: changed
@@ -287,6 +299,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
         with:
           cache: rust
@@ -322,15 +341,66 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: cargo sweep --time 7
 
+  build-binary-linux-aarch64:
+    needs: determine_changes
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    name: "build binary | linux aarch64"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
+      # Use the same Zig cross toolchain as release.yml. The Debian
+      # gcc-aarch64-linux-gnu compiles C dependencies against glibc headers,
+      # which leaves glibc-only symbols such as `__fprintf_chk` unresolved when
+      # linking against musl.
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          environments: release
+          activate-environment: true
+      - name: "Install Rust target"
+        run: rustup target add aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: "Build"
+        run: >
+          cargo zigbuild
+          --locked
+          --target aarch64-unknown-linux-musl
+          --profile $CARGO_BUILD_PROFILE
+          --features pixi/self_update
+          --bin pixi
+      - name: "Upload binary"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: pixi-linux-aarch64-${{ github.sha }}
+          path: ./target/aarch64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          retention-days: 14
+
   build-binary-linux-riscv64gc:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     name: "build binary | linux riscv64gc"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - uses: rui314/setup-mold@339e96b4ff1f3bd865856ba4cbbe8818a7acb038 # v1
       - name: "Setup cross-compilation toolchain"
         run: |
@@ -367,6 +437,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
         with:
           cache: rust
@@ -395,15 +472,63 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: cargo sweep --time 7
 
+  build-binary-macos-x86_64:
+    needs: determine_changes
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: namespace-profile-macos-15-arm64-6
+    name: "build binary | macos x86_64"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
+      - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
+        with:
+          cache: rust
+          path: ~/.rustup
+      - name: "Install Rust toolchain"
+        run: rustup target add x86_64-apple-darwin
+      - name: "Build"
+        run: >
+          cargo build
+          --locked
+          --target x86_64-apple-darwin
+          --profile $CARGO_BUILD_PROFILE
+          --features pixi/self_update
+          --bin pixi
+      - name: "Upload binary"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: pixi-macos-x86_64-${{ github.sha }}
+          path: ./target/x86_64-apple-darwin/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          retention-days: 14
+
   build-binary-windows-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     runs-on: namespace-profile-windows-2022-x86-64-8
     name: "build binary | windows x86_64"
+    env:
+      # RUSTFLAGS overrides the target rustflags in .cargo/config.toml, so keep
+      # the statically linked MSVC CRT here. See build_options.py.
+      RUSTFLAGS: "-D warnings -C target-feature=+crt-static"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -432,14 +557,25 @@ jobs:
 
   build-binary-windows-aarch64:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main'  || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
+    if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     # Using windows-latest as it's only run on main, thus speed is not that important
     runs-on: windows-latest
     name: "build binary | windows aarch64"
+    env:
+      # RUSTFLAGS overrides the target rustflags in .cargo/config.toml, so keep
+      # the statically linked MSVC CRT here. See build_options.py.
+      RUSTFLAGS: "-D warnings -C target-feature=+crt-static"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
