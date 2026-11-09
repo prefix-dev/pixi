@@ -35,7 +35,7 @@ pub use activation::Activation;
 pub use build_system::BuildBackend;
 pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
-pub use dependencies::{CondaConstraints, CondaDependencies, PyPiDependencies};
+pub use dependencies::{CondaConstraints, CondaDependencies, PyPiConstraints, PyPiDependencies};
 pub use discovery::{
     DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,

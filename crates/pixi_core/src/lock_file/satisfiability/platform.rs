@@ -609,6 +609,59 @@ async fn resolve_single_dev_dependency(
     Ok(dependencies)
 }
 
+/// Verifies that the locked pypi packages satisfy the `[pypi-constraints]` of
+/// the environment.
+///
+/// Constraints whose markers do not apply to the platform are skipped, and so
+/// are packages locked from a local source tree: their version may be
+/// dynamic, and they are controlled by their path rather than by a version
+/// constraint.
+fn verify_pypi_constraints(
+    ctx: &VerifySatisfiabilityContext<'_>,
+    pixi_platform: Option<&PixiPlatform>,
+    marker_environment: Option<&uv_pep508::MarkerEnvironment>,
+    locked_pypi_records: &LockedPypiRecordsByName,
+) -> Result<(), Box<PlatformUnsat>> {
+    for (name, spec) in ctx
+        .environment
+        .combined_pypi_constraints(pixi_platform)
+        .iter_specs()
+    {
+        let constraint = as_uv_req(spec, name.as_source(), ctx.project_root).map_err(|e| {
+            Box::new(PlatformUnsat::AsPep508Error(
+                name.as_normalized().clone(),
+                e,
+            ))
+        })?;
+        if !constraint.evaluate_markers(marker_environment, &[]) {
+            continue;
+        }
+        let RequirementSource::Registry { specifier, .. } = &constraint.source else {
+            continue;
+        };
+        let Some(idx) = locked_pypi_records.index_by_name(name.as_normalized()) else {
+            continue;
+        };
+        let record = &locked_pypi_records.records[idx];
+        if record.data.as_source().is_some()
+            && matches!(&**record.data.location(), UrlOrPath::Path(_))
+        {
+            continue;
+        }
+        let locked_version = record.locked_version.to_string();
+        let version =
+            uv_pep440::Version::from_str(&locked_version).expect("could not parse version");
+        if !specifier.contains(&version) {
+            return Err(Box::new(PlatformUnsat::PypiConstraintViolated {
+                package: name.as_source().to_string(),
+                locked_version,
+                constraint: specifier.to_string(),
+            }));
+        }
+    }
+    Ok(())
+}
+
 /// Indexes a locked package URL may belong to: the regular `indexes` plus
 /// the URL-based `find-links` entries. Packages from a `find-links` flat
 /// index record the find-links URL as their `index_url` (issue #6265).
@@ -822,6 +875,16 @@ async fn verify_package_platform_satisfiability(
     );
     let (resolved_dev_dependencies, locked_pypi_records) =
         futures::try_join!(resolve_dev_dependencies_future, lock_pypi_packages_future)?;
+
+    // Check that all locked pypi packages satisfy the current pypi constraints.
+    // If a constraint is violated, the lock file needs to be re-solved.
+    verify_pypi_constraints(
+        ctx,
+        pixi_platform,
+        marker_environment.as_ref(),
+        &locked_pypi_records,
+    )
+    .map_err(CommandDispatcherError::Failed)?;
 
     if (environment_dependencies.is_empty() && resolved_dev_dependencies.is_empty())
         && !locked_pixi_records.is_empty()

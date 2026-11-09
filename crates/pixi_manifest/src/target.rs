@@ -18,7 +18,7 @@ use super::error::DependencyError;
 use crate::{
     CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior,
     PackageConstraintSpec, PackageDependencySpec, PixiPlatform, PixiPlatformName, PlatformGlob,
-    PyPiDependencies, SpecType,
+    PyPiConstraints, PyPiDependencies, SpecType,
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
     manifests::PackageManifest,
@@ -57,6 +57,13 @@ pub struct WorkspaceTarget {
     /// explicitly requiring them to be installed. They apply only if the
     /// package is installed as a dependency of another package.
     pub constraints: Option<CondaConstraints>,
+
+    /// PyPI version constraints for this target.
+    ///
+    /// Like [`Self::constraints`], but for PyPI packages: they limit the
+    /// versions of PyPI packages that can be installed without requiring them
+    /// to be installed.
+    pub pypi_constraints: Option<PyPiConstraints>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,

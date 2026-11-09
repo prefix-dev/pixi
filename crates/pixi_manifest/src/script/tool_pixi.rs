@@ -17,6 +17,7 @@ const TOOL_PIXI_KEYS: &[&str] = &[
     "constraints",
     "dependencies",
     "exclude-newer",
+    "pypi-constraints",
     "pypi-dependencies",
     "pypi-exclude-newer",
     "target",
@@ -42,6 +43,7 @@ const TARGET_KEYS: &[&str] = &[
     "activation",
     "constraints",
     "dependencies",
+    "pypi-constraints",
     "pypi-dependencies",
 ];
 
