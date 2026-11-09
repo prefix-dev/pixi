@@ -46,11 +46,11 @@ The detector is a simple Rust application.
 
 First it determines the username by checking a couple of environment variables until it finds one that is set.
 Then it prints a JSON document to standard output.
-The JSON is built-up like that:
+The JSON is built-up like so:
 
 - `version` of the schema (at the time of writing, only `1` exists)
 - `virtual_packages`, reporting the `version` and optional `build_string` of the virtual package `__username_length`
-- `cache`, optionally describing when the detector result is invalidated. If this is not set, the result is cached for 1 hour 
+- `cache`, optionally describing when the detector result is invalidated. If this is not set, the result is cached for 1 hour
 
 The Cargo manifest names the binary and declares its `serde_json` dependency:
 
@@ -64,7 +64,8 @@ The Pixi manifest configures how the detector is built:
     The `pixi.toml` manifests below use `linux-64`.
     On another platform, replace `linux-64` with your native platform, such as `linux-aarch64`, `osx-arm64`, or `win-64`.
 
-    It also uses `pixi-build` which is behind a preview flag, and will change until it is stabilized.
+!!! warning "Preview feature"
+    This tutorial uses `pixi-build`, which is behind a preview flag and will change until it is stabilized.
 
 ```toml title="detector/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/detector/pixi.toml"
@@ -75,9 +76,9 @@ You don't have to worry about the complexity of the rest of the package manifest
 
 ??? note "I want to worry"
 
-    You will notice that the detector package doesn't have any run dependencies.
-    Normally, you don't care about this and simply add a [channel relation](https://github.com/conda/ceps/blob/main/cep-0042.md#channel-references) to your hosted channel that contains these run dependencies.
-    However, that doesn't work with a local file channel that we are going to create later in this tutorial.
+    The `RUSTFLAGS` settings enable static linking so the detector doesn't need shared-library run dependencies.
+    Normally, a hosted channel can declare a [channel relation](https://github.com/conda/ceps/blob/main/cep-0042.md#channel-references) to another channel providing those run dependencies.
+    Channel references must be relative paths, so the local file channel used in this tutorial cannot reference hosted conda-forge this way.
 
 ## The dependent package
 
@@ -105,7 +106,7 @@ This is the interesting part, we set `run-dependencies` of the package so that i
 
 ## Publish and register the detector
 
-With `pixi publish` we build both detector and dependent package and add it to local channel at `./channel`.
+With `pixi publish` we build both the detector and the dependent package and add them to a local channel at `./channel`.
 
 ```bash
 pixi publish --path detector --target-channel ./channel
@@ -113,7 +114,6 @@ pixi publish --path package --target-channel ./channel
 ```
 
 Next, we create a file that registers the detector at the channel.
-Most hosted providers will have a user interface for that, the same applies for [hosted channels on prefix.dev](https://prefix.dev/docs/prefix/virtual_package_detectors)
 
 ```toml title="index-config.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/index-config.toml"
@@ -126,12 +126,12 @@ pixi global install "rattler-index>=0.33.1"
 rattler-index --force --config index-config.toml fs channel
 ```
 
-This step there to allow us to run things fully locally.
-In most cases, you will upload to your detector to a hosted channel like [prefix.dev](https://prefix.dev/docs/prefix/virtual_package_detectors) which is much simpler.
+This step is there to allow us to run things fully locally.
+In most cases, you will upload your detector to a hosted channel like [prefix.dev](https://prefix.dev/docs/prefix/virtual_package_detectors) which is much simpler.
 
 ## Install the consumer
 
-Now we switch to the role of the consumer workspace author, who wants to use the `long-username` package.
+Now we switch to the role of the author of a consumer workspace which wants to use the `long-username` package.
 The workspace author declares the supported platforms so Pixi can lock all environments and their dependencies for those platforms, regardless of the machine generating the lock file.
 When a consumer runs the workspace, Pixi checks whether the host satisfies one of those platforms.
 
@@ -173,7 +173,7 @@ Virtual package detectors can run arbitrary code, so only choose **Trust** if th
 Pixi then asks where to save the decision; **Don't save** keeps it limited to the current invocation.
 After consent, the detector `username-length-detect` runs.
 If it reports that your username has fewer than three characters, the platform isn't selected.
-Since that is the only platform we defined, Pixi will then report that your host isn't supported. 
+Since that is the only platform we defined, Pixi will then report that your host isn't supported.
 
 If the username was long enough, Pixi selects the platform, installs the environment and runs the executable:
 

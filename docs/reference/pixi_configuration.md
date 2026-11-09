@@ -583,7 +583,6 @@ Channels can register virtual package detectors: small packages whose executable
 These identify system capabilities that packages depend on.
 One example for this could be a detector reporting which [MPI](https://en.wikipedia.org/wiki/Message_Passing_Interface) implementation and version you have on your system. 
 
-
 That also means, you run external and potentially untrusted code shortly before installing an environment.
 This is why Pixi asks whether to trust detectors coming from a certain channel.
 Additionally, it allows you to store your decision in your configuration, so you don't have to answer the question with every Pixi command.
@@ -605,7 +604,7 @@ Equivalent URLs, including spellings with or without a trailing slash, share one
 Across configuration layers, a `deny` takes precedence over an `allow`.
 Setting or unsetting a channel's consent key updates all equivalent spellings in the selected file; newly saved keys do not contain credentials.
 
-The detector package comes from its registering channel. Its dependencies resolve from that channel and its channel relations.
+The detector package comes from its registering channel. Its dependencies resolve from that channel and its [channel relations](https://github.com/conda/ceps/blob/main/cep-0042.md#channel-references).
 
 ## Experimental
 
