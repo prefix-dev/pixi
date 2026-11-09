@@ -22,8 +22,8 @@ use crate::{
     Activation, AddDependencyOutcome, CondaConstraints, DependencyOverwriteBehavior,
     ExcludeNewerConfig, ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError,
     KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
-    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
-    Task, TaskName, TomlError, WorkspaceTarget, consts,
+    PlatformMove, Preview, PrioritizedChannel, PyPiConstraints, PypiDependencyLocation, SpecType,
+    TargetSelector, Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, GenericError, UnknownFeature},
@@ -65,6 +65,13 @@ pub struct WorkspaceManifest {
     /// In-memory conda constraints for all environments, including those with
     /// `no-default-feature = true`. Never written to the manifest.
     pub extra_constraints: CondaConstraints,
+
+    /// Additional PyPI constraints that are injected for a single invocation,
+    /// e.g. through `pixi lock --with-pypi-constraint`. Like
+    /// [`Self::extra_constraints`], they behave like entries in the workspace
+    /// `[pypi-constraints]` table that apply to every environment and are
+    /// never written back to the manifest.
+    pub extra_pypi_constraints: PyPiConstraints,
 }
 
 impl Default for WorkspaceManifest {
@@ -76,6 +83,7 @@ impl Default for WorkspaceManifest {
             solve_groups: SolveGroups::default(),
             loaded_at: Utc::now(),
             extra_constraints: CondaConstraints::default(),
+            extra_pypi_constraints: PyPiConstraints::default(),
         }
     }
 }

@@ -92,12 +92,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if !args.json {
         args.constraint_args.print_applied();
     }
-    if !args.constraint_args.constraints.is_empty() {
-        let constraints = args
-            .constraint_args
-            .into_constraints(&workspace.channel_config())?;
-        workspace = workspace.with_extra_constraints(constraints);
-    }
+    let (constraints, pypi_constraints) = args
+        .constraint_args
+        .into_constraints(&workspace.channel_config())?;
+    workspace = workspace
+        .with_extra_constraints(constraints)
+        .with_extra_pypi_constraints(pypi_constraints);
 
     // Update the lock file, and extract it from the derived data to drop additional resources
     // created for the solve.

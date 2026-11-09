@@ -1,11 +1,16 @@
-//! The `--with-constraint` option of `pixi lock`.
+//! The `--with-constraint` and `--with-pypi-constraint` options of `pixi lock`.
 
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::HashSet,
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use clap::Parser;
 use itertools::Itertools;
 use pixi_core::Workspace;
-use pixi_manifest::CondaConstraints;
+use pixi_manifest::{CondaConstraints, PyPiConstraints};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
     ChannelConfig, MatchSpec, PackageName, PackageNameMatcher, ParseMatchSpecError,
@@ -26,13 +31,25 @@ pub struct ConstraintArgs {
     /// manifest. Can be specified multiple times.
     #[clap(long = "with-constraint", value_name = "MATCHSPEC", value_parser = parse_constraint)]
     pub constraints: Vec<MatchSpec>,
+
+    /// Temporarily constrain a PyPI package to the given PEP 508 requirement,
+    /// e.g. `--with-pypi-constraint 'urllib3>=2.2.2'`.
+    ///
+    /// Behaves like an additional entry in the `[pypi-constraints]` table
+    /// that applies to all environments: it restricts the allowed versions of
+    /// a package without adding it as a dependency. Environments whose locked
+    /// packages violate the constraint are re-solved, keeping the other
+    /// locked packages as preferences. The constraint is not written to the
+    /// manifest. Can be specified multiple times.
+    #[clap(long = "with-pypi-constraint", value_name = "REQUIREMENT")]
+    pub pypi_constraints: Vec<PypiConstraint>,
 }
 
 impl ConstraintArgs {
     pub fn into_constraints(
         self,
         channel_config: &ChannelConfig,
-    ) -> Result<CondaConstraints, ConstraintParseError> {
+    ) -> Result<(CondaConstraints, PyPiConstraints), ConstraintParseError> {
         let mut constraints = CondaConstraints::default();
         for spec in self.constraints {
             let (name, nameless) = spec.into_nameless();
@@ -44,19 +61,29 @@ impl ConstraintArgs {
                 PixiSpec::from_nameless_matchspec(nameless, channel_config),
             );
         }
-        Ok(constraints)
+        let mut pypi_constraints = PyPiConstraints::default();
+        for constraint in self.pypi_constraints {
+            pypi_constraints.insert(constraint.name, constraint.spec);
+        }
+        Ok((constraints, pypi_constraints))
     }
 
     /// Prints the temporary constraints to stderr.
     pub fn print_applied(&self) {
-        if self.constraints.is_empty() {
-            return;
+        if !self.constraints.is_empty() {
+            eprintln!(
+                "{}Applying temporary constraints: {}",
+                console::style(console::Emoji("i ", "i ")).blue(),
+                self.constraints.iter().format(", ")
+            );
         }
-        eprintln!(
-            "{}Applying temporary constraints: {}",
-            console::style(console::Emoji("i ", "i ")).blue(),
-            self.constraints.iter().format(", ")
-        );
+        if !self.pypi_constraints.is_empty() {
+            eprintln!(
+                "{}Applying temporary PyPI constraints: {}",
+                console::style(console::Emoji("i ", "i ")).blue(),
+                self.pypi_constraints.iter().format(", ")
+            );
+        }
     }
 }
 
@@ -125,6 +152,14 @@ pub enum ConstraintParseError {
     },
     #[error("constraint '{0}' must specify an exact package name")]
     MissingPackageName(String),
+    #[error("failed to parse pypi constraint '{constraint}'")]
+    InvalidPypiRequirement {
+        constraint: String,
+        #[source]
+        source: Box<pep508_rs::Pep508Error>,
+    },
+    #[error("pypi constraint '{0}' must be a version requirement without a url or extras")]
+    UnsupportedPypiRequirement(String),
 }
 
 fn parse_constraint(constraint: &str) -> Result<MatchSpec, ConstraintParseError> {
@@ -158,6 +193,20 @@ mod tests {
     }
 
     #[test]
+    fn pypi_constraints_only_restrict_versions() {
+        for constraint in [
+            "foo @ https://example.com/foo-1.0.0-py3-none-any.whl",
+            "foo[extra]<2",
+            "foo<<2",
+        ] {
+            let err =
+                ConstraintArgs::try_parse_from(["pixi", "--with-pypi-constraint", constraint])
+                    .unwrap_err();
+            assert_eq!(err.kind(), clap::error::ErrorKind::ValueValidation);
+        }
+    }
+
+    #[test]
     fn unmatched_constraint_warnings_normalize_pypi_names() {
         let conda_names = HashSet::from(["openssl"]);
         let pypi_packages = [
@@ -183,5 +232,61 @@ mod tests {
         the conda package 'zope_interface' is absent from the resulting lock file, but the PyPI package 'zope-interface' is locked: `--with-constraint` only applies to conda packages
         the conda package 'missing' is absent from the resulting lock file
         ");
+    }
+}
+
+/// A parsed `--with-pypi-constraint` argument.
+#[derive(Debug, Clone)]
+pub struct PypiConstraint {
+    name: PypiPackageName,
+    spec: PixiPypiSpec,
+    /// The argument as given, used to report the applied constraint.
+    source: String,
+}
+
+impl Display for PypiConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.source)
+    }
+}
+
+impl FromStr for PypiConstraint {
+    type Err = ConstraintParseError;
+
+    /// Like the `[pypi-constraints]` table, a constraint can only restrict the
+    /// allowed versions, optionally with environment markers.
+    fn from_str(constraint: &str) -> Result<Self, Self::Err> {
+        let requirement = pep508_rs::Requirement::from_str(constraint).map_err(|source| {
+            ConstraintParseError::InvalidPypiRequirement {
+                constraint: constraint.to_owned(),
+                source: Box::new(source),
+            }
+        })?;
+        let version = match requirement.version_or_url {
+            None => VersionOrStar::Star,
+            Some(pep508_rs::VersionOrUrl::VersionSpecifier(version)) => version.into(),
+            Some(pep508_rs::VersionOrUrl::Url(_)) => {
+                return Err(ConstraintParseError::UnsupportedPypiRequirement(
+                    constraint.to_owned(),
+                ));
+            }
+        };
+        if !requirement.extras.is_empty() {
+            return Err(ConstraintParseError::UnsupportedPypiRequirement(
+                constraint.to_owned(),
+            ));
+        }
+        Ok(Self {
+            name: PypiPackageName::from_normalized(requirement.name),
+            spec: PixiPypiSpec::with_extras_and_markers(
+                PixiPypiSource::Registry {
+                    version,
+                    index: None,
+                },
+                Vec::new(),
+                requirement.marker,
+            ),
+            source: constraint.to_owned(),
+        })
     }
 }

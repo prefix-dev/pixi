@@ -50,8 +50,9 @@ use pixi_manifest::script::conda::CondaScriptManifest;
 use pixi_manifest::{
     AssociateProvenance, BuildVariantSource, CondaConstraints, EnvironmentName, Environments,
     FeaturesExt, HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance,
-    Manifests, PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType,
-    WithProvenance, WithWarnings, WorkspaceManifest, script::ScriptManifest,
+    Manifests, PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel,
+    PyPiConstraints, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    script::ScriptManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -1004,6 +1005,12 @@ impl Workspace {
     /// Sets temporary conda constraints for all environments without editing the manifest file.
     pub fn with_extra_constraints(mut self, constraints: CondaConstraints) -> Self {
         self.workspace.value.extra_constraints = constraints;
+        self
+    }
+
+    /// Sets temporary PyPI constraints for all environments without editing the manifest file.
+    pub fn with_extra_pypi_constraints(mut self, constraints: PyPiConstraints) -> Self {
+        self.workspace.value.extra_pypi_constraints = constraints;
         self
     }
 
