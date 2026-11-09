@@ -71,10 +71,13 @@ The Pixi manifest configures how the detector is built:
 ```
 
 `pixi-build-rust` reads the package name and version from `Cargo.toml`.
-The reason we set `RUSTFLAGS` is to make sure that the resulting executable has no dependency on any shared libraries.
+You don't have to worry about the complexity of the rest of the package manifest for now.
 
-In normal circumstances, you don't have to ensure this since you can simply upload your detector that has a [channel relation](https://github.com/conda/ceps/blob/main/cep-0042.md#channel-references) to for example `conda-forge`.
-However, that doesn't work with a local file channel that we are going to create later in this tutorial.
+??? note "I want to worry"
+
+    You will notice that the detector package doesn't have any run dependencies.
+    Normally, you don't care about this and simply add a [channel relation](https://github.com/conda/ceps/blob/main/cep-0042.md#channel-references) to your hosted channel that contains these run dependencies.
+    However, that doesn't work with a local file channel that we are going to create later in this tutorial.
 
 ## The dependent package
 
@@ -122,6 +125,9 @@ Finally, install `rattler-index` and use it to register the detector:
 pixi global install "rattler-index>=0.33.1"
 rattler-index --force --config index-config.toml fs channel
 ```
+
+This step there to allow us to run things fully locally.
+In most cases, you will upload to your detector to a hosted channel like [prefix.dev](https://prefix.dev/docs/prefix/virtual_package_detectors) which is much simpler.
 
 ## Install the consumer
 
