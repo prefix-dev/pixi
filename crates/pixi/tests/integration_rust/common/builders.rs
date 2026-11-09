@@ -691,6 +691,13 @@ impl LockBuilder {
             .push(constraint.into());
         self
     }
+    pub fn with_pypi_constraint(mut self, constraint: impl Into<String>) -> Self {
+        self.args
+            .constraint_args
+            .pypi_constraints
+            .push(constraint.into());
+        self
+    }
 }
 
 impl IntoFuture for LockBuilder {

@@ -354,6 +354,10 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ///
     /// If the `platform` is `None`, no platform specific constraints are taken
     /// into consideration.
+    ///
+    /// Constraints injected at runtime through
+    /// [`crate::WorkspaceManifest::extra_pypi_constraints`] are always
+    /// included.
     fn combined_pypi_constraints<'a>(
         &'a self,
         platform: Option<&'a PixiPlatform>,
@@ -363,7 +367,14 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.pypi_constraints(platform))
             .collect();
-        DependencyMap::merge_all(constraints.iter().map(|d| d.as_ref()))
+        DependencyMap::merge_all(
+            constraints
+                .iter()
+                .map(|d| d.as_ref())
+                .chain(std::iter::once(
+                    &self.workspace_manifest().extra_pypi_constraints,
+                )),
+        )
     }
 
     /// Returns the pypi options for this collection.

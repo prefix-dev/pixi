@@ -3239,3 +3239,122 @@ async fn test_pypi_constraints() {
         "unexpected error: {err:?}"
     );
 }
+
+/// `pixi lock --with-pypi-constraint` re-solves only what violates the
+/// constraint and doesn't touch the manifest.
+#[tokio::test]
+async fn test_lock_with_pypi_constraint() {
+    setup_tracing();
+
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("consumer", "1.0.0").with_requires_dist(["foo>=1"]))
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .with(PyPIPackage::new("foo", "2.0.0"))
+        .with(PyPIPackage::new("bar", "1.0.0"))
+        .with(PyPIPackage::new("bar", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let manifest = |bar: &str| {
+        format!(
+            r#"
+        [workspace]
+        name = "lock-with-pypi-constraint"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        consumer = "*"
+        bar = "{bar}"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        "#,
+            channel_url = channel.url(),
+            index_url = index.index_url(),
+        )
+    };
+
+    // Lock `bar` on an older version, then relax the requirement. The lock
+    // file stays valid, so `bar` keeps its locked version.
+    let pixi = PixiControl::from_manifest(&manifest("==1.0.0")).unwrap();
+    pixi.update_lock_file().await.unwrap();
+    pixi.update_manifest(&manifest("*")).unwrap();
+    pixi.lock().with_check(true).await.unwrap();
+    let manifest_before = pixi.manifest_contents().unwrap();
+
+    // `--check` fails for a violated constraint, and passes for a satisfied
+    // one or one whose markers don't apply.
+    let err = pixi
+        .lock()
+        .with_check(true)
+        .with_pypi_constraint("foo<2")
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("lock file not up-to-date"),
+        "unexpected error: {err:?}"
+    );
+    pixi.lock()
+        .with_check(true)
+        .with_pypi_constraint("foo>=2")
+        .await
+        .unwrap();
+    pixi.lock()
+        .with_check(true)
+        .with_pypi_constraint("foo<2; python_version < '3'")
+        .await
+        .unwrap();
+
+    // `--dry-run` doesn't write the lock file.
+    pixi.lock()
+        .with_dry_run(true)
+        .with_pypi_constraint("foo<2")
+        .await
+        .unwrap();
+    let lock_file = pixi.lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("2.0.0".into())
+    );
+
+    // Locking with the constraint moves `foo`, but keeps `bar` on its locked
+    // version although a newer one exists.
+    pixi.lock().with_pypi_constraint("foo<2").await.unwrap();
+    let lock_file = pixi.lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("1.0.0".into())
+    );
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "bar"),
+        Some("1.0.0".into())
+    );
+    assert_eq!(pixi.manifest_contents().unwrap(), manifest_before);
+
+    // Only version requirements are accepted.
+    for constraint in [
+        "foo @ https://example.com/foo-1.0.0-py3-none-any.whl",
+        "foo[extra]<2",
+        "foo<<2",
+    ] {
+        pixi.lock()
+            .with_pypi_constraint(constraint)
+            .await
+            .expect_err(constraint);
+    }
+}

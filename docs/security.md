@@ -169,6 +169,25 @@ If you want the constraint to keep applying to future solves, add it to the [`[c
     With a looser requirement such as `python = ">=3.11"`, an environment locked on `3.12.15` can move to the newest allowed release, e.g. `3.15.2`.
     Check the diff, or tighten the requirement first, if a minor version change is not acceptable.
 
+### Recommended Workflow For A PyPI Package CVE
+
+The same workflow works for PyPI packages with [`--with-pypi-constraint`](reference/cli/pixi/lock.md#arg---with-pypi-constraint), which takes a [PEP 508](https://peps.python.org/pep-0508/) requirement and acts like a temporary [`[pypi-constraints]`](reference/pixi_manifest.md#pypi-constraints) entry.
+Suppose `urllib3` releases before `2.5.0` are affected:
+
+```shell
+# 1. Check which environments are affected.
+pixi lock --check --with-pypi-constraint 'urllib3>=2.5.0'
+
+# 2. After reviewing the fixed release, let it through the pypi-exclude-newer cutoff.
+pixi workspace exclude-newer exempt --pypi urllib3
+
+# 3. Move the affected environments to a fixed release with the smallest possible lock file change.
+pixi lock --with-pypi-constraint 'urllib3>=2.5.0'
+```
+
+PyPI exemptions only take package names and have no cutoff, so they let every release of the package through, including ones published later.
+Remove the exemption with `pixi workspace exclude-newer unexempt --pypi urllib3` once the fixed release is older than your `pypi-exclude-newer` cutoff.
+
 ## 4. Treat Package Hooks As Code Execution
 
 Treat `pixi shell`, `pixi run`, `pixi shell-hook`, and any automation around them as code execution boundaries, not just environment setup commands. Conda packages can carry executable hooks in addition to files and metadata. Two especially relevant cases are:

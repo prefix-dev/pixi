@@ -1066,6 +1066,11 @@ scoped to a [feature](#the-feature-table), with the same merging rules as [`cons
     If a conda package violates a PyPI constraint, the PyPI solve fails.
     Use [`constraints`](#constraints) to restrict conda packages.
 
+!!! tip "One-off PyPI constraints"
+    To apply a PyPI constraint for a single lock operation without editing the manifest, use
+    [`pixi lock --with-pypi-constraint`](cli/pixi/lock.md#arg---with-pypi-constraint), e.g.
+    `pixi lock --with-pypi-constraint 'urllib3>=2.2.2'`.
+
 !!! tip "PyPI constraints vs dependency overrides"
     [`pypi-options.dependency-overrides`](../advanced/override.md) replace the requirements of all
     packages on the overridden package, so they can force a version that a package's metadata
