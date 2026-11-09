@@ -3,7 +3,7 @@
 Virtual package detectors are external programs that detect hardware capabilities on your system and inject virtual packages based on those findings.
 This example demonstrates the full life cycle of a virtual package detector:
 
-- Creating a detector,
+- creating a detector,
 - publishing it to a channel, and finally
 - depending on it as a consumer.
 
@@ -47,9 +47,9 @@ First it determines the username by checking a couple of environment variables u
 Then it prints a JSON document to standard output.
 The JSON is built-up like that:
 
-- `version` of the schema, at the time of this writing only `1` exists
-- `virtual_packages` reports `version` and optional `build_string` of the virtual package `__username_length`
-- `cache` optionally describes when the detector result is invalidated. If that is not set, the result is cached for 1 hour 
+- `version` of the schema (at the time of writing, only `1` exists)
+- `virtual_packages`, reporting the `version` and optional `build_string` of the virtual package `__username_length`
+- `cache`, optionally describing when the detector result is invalidated. If this is not set, the result is cached for 1 hour 
 
 The Cargo manifest names the binary and declares its `serde_json` dependency:
 
@@ -63,21 +63,23 @@ The Pixi manifest configures how the detector is built:
     The `pixi.toml` manifests below use `linux-64`.
     On another platform, replace `linux-64` with your native platform, such as `linux-aarch64`, `osx-arm64`, or `win-64`.
 
+    It also uses `pixi-build` which is behind a preview flag, and will change until it is stabilized.
+
 ```toml title="detector/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/detector/pixi.toml"
 ```
 
 `pixi-build-rust` reads the package name and version from `Cargo.toml`.
-The reason we limit the compiler to "rust" and set the `RUSTFLAGS` is to make sure that the resulting executable has no dependency on any shared libraries.
+The reason we set `RUSTFLAGS` is to make sure that the resulting executable has no dependency on any shared libraries.
 
 In normal circumstances, you don't have to ensure this since you can simply upload your detector that has a [channel relation](https://github.com/conda/ceps/blob/main/cep-0042.md#channel-references) to for example `conda-forge`.
-However, that doesn't work wit a local file channel that we are going to create later in this tutorial.
+However, that doesn't work with a local file channel that we are going to create later in this tutorial.
 
 ## The dependent package
 
-In most cases, a virtual package is a run dependency of dependent package.
+In most cases, a virtual package is a run dependency of the dependent package.
 That way you can ensure that said dependent package can only be installed if the host machine is suitable.
-So in our case, we have to define a package that can only be installed if the username is `>=3`.
+In our case, we define a package that can only be installed if the detected username length is `>=3`.
 
 The application code is boring, it only prints its name:
 
@@ -106,14 +108,14 @@ pixi publish --path detector --target-channel ./channel
 pixi publish --path package --target-channel ./channel
 ```
 
-Next we create a file that registers the detector at the channel.
-Most hosted providers will have a user interface for that, the same applies for [hosted channels of prefix.dev](https://prefix.dev/docs/prefix/virtual_package_detectors)
+Next, we create a file that registers the detector at the channel.
+Most hosted providers will have a user interface for that, the same applies for [hosted channels on prefix.dev](https://prefix.dev/docs/prefix/virtual_package_detectors)
 
 ```toml title="index-config.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/index-config.toml"
 ```
 
-Next install `rattler-index` and use it to register the detector:
+Finally, install `rattler-index` and use it to register the detector:
 
 ```bash
 pixi global install "rattler-index>=0.33.1"
@@ -126,7 +128,7 @@ Now we jump into the role of the consumer.
 Here, you simply want to use the `long-username` package. 
 Pixi forces you to think about which platforms you want to support beforehand, that way all environments and their dependencies can be stored in the lock file for all platforms, no matter which one you currently use.
 
-In our case we want to support machines with `linux-64` and `__username_length` of `3`.
+In our case we want to support machines with `linux-64` and `__username_length` of at least `3`.
 
 ```toml title="consumer/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/consumer/pixi.toml"
@@ -141,7 +143,7 @@ pixi run --manifest-path consumer start
 ```
 
 First, Pixi checks which platform is suitable for your system.
-We, only defined one platform, so that only has to check that one.
+We only defined one platform, so Pixi only has to check that one.
 Then it notices that `__username_length` is provided by a virtual package detector.
 
 Now Pixi asks whether to trust detectors from your channel, virtual package detectors can run arbitrary code, so make sure you trust the channel before you choose **Trust**.
