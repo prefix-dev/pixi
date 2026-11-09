@@ -9512,8 +9512,10 @@
 <h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">#</a></h2>
 <p>Exempt package releases from the cutoff.</p>
 <p>Exemptions are match specs, a bare package name exempts every release.
-An existing exemption of the same package is replaced, with a warning
-if that moves its cutoff later.</p>
+A package has a single exemption, so to exempt several versions,
+combine them in one spec, e.g. <code>python==3.11.18|==3.12.16</code>. An
+existing exemption of the same package is replaced, with a warning if
+that moves its cutoff later.</p>
 <p>An exemption with a version only exempts the releases that are already
 published, so e.g. a later build of an exempt version is not exempt.</p>
 <p>Example:
