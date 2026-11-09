@@ -24,6 +24,7 @@ pub struct CertEnvSource {
 
 /// A collection of TLS certificates in DER form.
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
 pub struct Certificates(Vec<CertificateDer<'static>>);
 
 impl Certificates {

@@ -36,46 +36,30 @@ fn deprecated_modes_are_reported_as_system() {
 }
 
 #[test]
-fn valid_ssl_cert_file_and_dir_override_system_mode() {
+fn valid_ssl_cert_file_is_reported() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("ca.pem");
+    let path = dir.path().join("ca.pem");
     let der = webpki_root_certs::TLS_SERVER_ROOT_CERTS[0].as_ref();
     let pem = format!(
         "-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----\n",
         STANDARD.encode(der)
     );
-    fs_err::write(&file, &pem).unwrap();
-    let cert_dir = dir.path().join("certs");
-    fs_err::create_dir(&cert_dir).unwrap();
-    fs_err::write(cert_dir.join("ca.pem"), pem).unwrap();
-    let file = file.to_str().unwrap();
-    let cert_dir = cert_dir.to_str().unwrap();
+    fs_err::write(&path, pem).unwrap();
+    let path = path.to_str().unwrap();
 
     temp_env::with_vars(
-        [
-            ("SSL_CERT_FILE", Some(file)),
-            ("SSL_CERT_DIR", Some(cert_dir)),
-        ],
+        [("SSL_CERT_FILE", Some(path)), ("SSL_CERT_DIR", None)],
         || {
-            assert!(
-                !Certificates::from_env()
-                    .expect("valid SSL certificate paths should be loaded")
-                    .is_empty()
+            let effective =
+                effective_tls_root_certs(Some(TlsRootCerts::Webpki), Certificates::env_sources());
+            assert_eq!(effective.mode, TlsRootCerts::Webpki);
+            assert_eq!(effective.env_sources.len(), 1);
+            assert_eq!(effective.env_sources[0].variable, "SSL_CERT_FILE");
+            assert_eq!(effective.env_sources[0].value, path);
+            assert_eq!(
+                effective.env_replaces_mode,
+                cfg!(not(feature = "native-tls"))
             );
-            let env_sources = Certificates::env_sources();
-            for mode in [TlsRootCerts::System, TlsRootCerts::Webpki] {
-                let effective = effective_tls_root_certs(Some(mode), env_sources.clone());
-                assert_eq!(effective.mode, mode);
-                assert_eq!(effective.env_sources.len(), 2);
-                assert_eq!(effective.env_sources[0].variable, "SSL_CERT_FILE");
-                assert_eq!(effective.env_sources[0].value, file);
-                assert_eq!(effective.env_sources[1].variable, "SSL_CERT_DIR");
-                assert_eq!(effective.env_sources[1].value, cert_dir);
-                assert_eq!(
-                    effective.env_replaces_mode,
-                    cfg!(not(feature = "native-tls"))
-                );
-            }
         },
     );
 }

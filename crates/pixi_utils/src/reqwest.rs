@@ -474,25 +474,29 @@ mod tests {
     #[cfg(feature = "rustls")]
     #[test]
     #[allow(deprecated)]
-    fn rustls_system_mode_uses_the_platform_verifier_unless_env_certs_override_it() {
+    fn rustls_root_selection_respects_mode_and_env_override() {
+        let bundled = Certificates::webpki_roots();
+        let mut env_result = rustls_native_certs::CertificateResult::default();
+        env_result
+            .certs
+            .push(webpki_root_certs::TLS_SERVER_ROOT_CERTS[0].clone());
+        let env_certs = Certificates::from(env_result);
         for mode in [
+            pixi_config::TlsRootCerts::Webpki,
             pixi_config::TlsRootCerts::System,
             pixi_config::TlsRootCerts::LegacyNative,
             pixi_config::TlsRootCerts::All,
         ] {
-            assert!(rustls_certificates_for_mode(mode, None).is_none());
-
-            let env_certs = Certificates::webpki_roots();
-            assert!(rustls_certificates_for_mode(mode, Some(env_certs)).is_some());
+            let expected = match mode {
+                pixi_config::TlsRootCerts::Webpki => Some(bundled.clone()),
+                _ => None,
+            };
+            assert_eq!(rustls_certificates_for_mode(mode, None), expected);
+            assert_eq!(
+                rustls_certificates_for_mode(mode, Some(env_certs.clone())),
+                Some(env_certs.clone())
+            );
         }
-    }
-
-    #[cfg(feature = "rustls")]
-    #[test]
-    fn rustls_webpki_mode_uses_bundled_roots_without_env_certs() {
-        let certs = rustls_certificates_for_mode(pixi_config::TlsRootCerts::Webpki, None)
-            .expect("webpki mode should configure explicit roots");
-        assert!(!certs.is_empty());
     }
 
     #[test]
