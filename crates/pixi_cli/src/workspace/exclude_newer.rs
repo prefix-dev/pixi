@@ -123,6 +123,13 @@ pub(crate) enum ExcludeNewerError {
         first: String,
         second: String,
     },
+    #[error("cannot exempt both `{first}` and `{second}`")]
+    #[diagnostic(help("both name the PyPI package `{package}`, so pass only one of them"))]
+    DuplicatePypiExemption {
+        package: String,
+        first: String,
+        second: String,
+    },
 }
 
 /// The cutoff of new exemptions.
@@ -429,15 +436,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if args.cutoff.is_set() {
                 return Err(ExcludeNewerError::PypiExemptionCutoff.into());
             }
-            let mut names = Vec::with_capacity(args.specs.len());
+            // Several spellings of one package are rejected, as for conda.
+            let mut parsed: IndexMap<PypiPackageName, &str> = IndexMap::new();
             for spec in &args.specs {
                 let name = pixi_manifest::parse_pypi_exemption(spec)?;
-                names.push(name.as_source().to_string());
+                if let Some(first) = parsed.get(&name) {
+                    return Err(ExcludeNewerError::DuplicatePypiExemption {
+                        package: name.as_normalized().to_string(),
+                        first: first.to_string(),
+                        second: spec.clone(),
+                    }
+                    .into());
+                }
+                parsed.insert(name, spec);
+            }
+            let names = parsed.values().join(", ");
+            for name in parsed.into_keys() {
                 workspace
                     .manifest()
                     .add_pypi_exclude_newer_exemption(name)?;
             }
-            format!("Exempted {} from {target}.", names.join(", "))
+            format!("Exempted {names} from {target}.")
         }
         Command::Exempt(args) => add_exemptions(
             &args.specs,

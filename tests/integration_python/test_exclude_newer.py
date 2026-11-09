@@ -336,6 +336,13 @@ platforms = ["{CURRENT_PLATFORM}"]
         ExitCode.FAILURE,
         stderr_contains="can only name a package",
     )
+    # Two spellings of one package are rejected, as for conda
+    verify_cli_command(
+        [pixi, "workspace", "exclude-newer", "exempt", "numpy", "Foo_Bar", "foo-bar", *flags],
+        ExitCode.FAILURE,
+        stderr_contains="cannot exempt both `Foo_Bar` and `foo-bar`",
+    )
+    assert exclude_newer(manifest, "pypi-exclude-newer") is None
     verify_cli_command([pixi, "workspace", "exclude-newer", "exempt", "Torch", *flags])
     assert exclude_newer(manifest, "pypi-exclude-newer") == {"exemptions": {"Torch": "*"}}
 
