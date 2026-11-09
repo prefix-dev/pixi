@@ -604,6 +604,8 @@ Equivalent URLs, including spellings with or without a trailing slash, share one
 Across configuration layers, a `deny` takes precedence over an `allow`.
 Setting or unsetting a channel's consent key updates all equivalent spellings in the selected file; newly saved keys do not contain credentials.
 
+The detector package comes from its registering channel. Its dependencies resolve from that channel and its [channel relations](https://github.com/conda/ceps/blob/main/cep-0042.md#channel-references).
+
 ## Experimental
 
 This allows the user to set specific experimental features that are not yet stable.

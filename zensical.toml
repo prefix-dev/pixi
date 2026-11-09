@@ -160,6 +160,7 @@ nav = [
       { "Dependency Overrides" = "advanced/override.md" },
       { "Shebang" = "advanced/shebang.md" },
       { "Shell" = "advanced/pixi_shell.md" },
+      { "Virtual Package Detectors" = "advanced/virtual_package_detectors.md" },
     ]
   },
   {
