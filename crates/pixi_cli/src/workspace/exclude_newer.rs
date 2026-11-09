@@ -114,11 +114,9 @@ pub(crate) enum ExcludeNewerError {
     #[error("PyPI exemptions do not support a cutoff")]
     #[diagnostic(help("remove `--cutoff` and `--no-cutoff`"))]
     PypiExemptionCutoff,
-    #[error(
-        "cannot exempt both `{first}` and `{second}`, as {package} can only have one exemption"
-    )]
+    #[error("cannot exempt both `{first}` and `{second}`")]
     #[diagnostic(help(
-        "pass a single spec for {package}, e.g. combine the versions with `|` as in `{package}==1.0|==2.0`"
+        "a package has a single exemption, so pass one spec for `{package}`, e.g. `{package}==1.0|==2.0` to exempt several versions"
     ))]
     DuplicateExemption {
         package: String,
@@ -219,14 +217,14 @@ pub(crate) fn add_exemptions(
     channel_config: &ChannelConfig,
     mut add: impl FnMut(PackageName, ExcludeNewerExemption) -> miette::Result<()>,
 ) -> miette::Result<String> {
-    // Parse every spec before adding any, so a rejected call leaves the
-    // manifest untouched.
+    // Parse every spec before adding any, so a duplicate is rejected before
+    // any exemption is added.
     let mut parsed: IndexMap<PackageName, (&str, BinarySpec)> = IndexMap::new();
     for spec in specs {
         let (name, binary) = pixi_manifest::parse_conda_exemption(spec, channel_config)?;
         if let Some((first, _)) = parsed.get(&name) {
             return Err(ExcludeNewerError::DuplicateExemption {
-                package: name.as_source().to_string(),
+                package: name.as_normalized().to_string(),
                 first: first.to_string(),
                 second: spec.clone(),
             }
