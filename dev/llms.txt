@@ -108,6 +108,7 @@ for further details on how to use the software.
 - [pyproject.toml](https://pixi.prefix.dev/latest/advanced/override/)
 - [on WSL - the `wsl.exe` somehow takes over `stdin` and prevents `pixi shell` from succeeding](https://pixi.prefix.dev/latest/advanced/pixi_shell/)
 - [Shebang](https://pixi.prefix.dev/latest/advanced/shebang/)
+- [Channel-provided virtual package detectors](https://pixi.prefix.dev/latest/advanced/virtual_package_detectors/)
 
 ## Reference documentation
 

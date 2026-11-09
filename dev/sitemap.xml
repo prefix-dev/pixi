@@ -22,6 +22,9 @@
         <loc>https://pixi.prefix.dev/latest/advanced/shebang/</loc>
       </url>
       <url>
+        <loc>https://pixi.prefix.dev/latest/advanced/virtual_package_detectors/</loc>
+      </url>
+      <url>
         <loc>https://pixi.prefix.dev/latest/build/advanced_cpp/</loc>
       </url>
       <url>
