@@ -126,6 +126,14 @@ pub const RELEASES_API_BY_TAG: &str = "https://api.github.com/repos/prefix-dev/p
 pub const RELEASES_API_LATEST: &str =
     "https://api.github.com/repos/prefix-dev/pixi/releases/latest";
 
+// Development builds of `main`, published by `.github/workflows/dev-release.yml`.
+// Note: no trailing slash!
+pub const NIGHTLY_RELEASES_URL: &str = "https://github.com/prefix-dev/pixi-nightly/releases";
+pub const NIGHTLY_RELEASES_API_BY_TAG: &str =
+    "https://api.github.com/repos/prefix-dev/pixi-nightly/releases/tags";
+pub const NIGHTLY_RELEASES_API_LATEST: &str =
+    "https://api.github.com/repos/prefix-dev/pixi-nightly/releases/latest";
+
 /// Endpoint for the anonymous installation/update ping, sent by
 /// `pixi __install-ping` (called from the install scripts) and `pixi self-update`.
 pub const INSTALL_PING_URL: &str = "https://installation-ping.prefix.dev/a.png";
