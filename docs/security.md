@@ -158,6 +158,7 @@ If you want the constraint to keep applying to future solves, add it to the [`[c
     pixi lock --with-constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
     ```
 
+    A package has a single exemption, so all fixed releases go into one spec: `exempt` rejects several specs of the same package.
     In the constraint, `,` binds tighter than `|`, so each `>=fix,<next-branch` pair allows the fixed releases of one branch.
 
     An environment stays on its branch only if something keeps it there, typically a requirement like `python = "3.12.*"`.
