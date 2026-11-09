@@ -1,6 +1,6 @@
 [package]
 name = "pixi-build-ros"
-version = "0.7.6"
+version = "0.7.7"
 edition.workspace = true
 description = "ROS build backend for Pixi"
 repository.workspace = true
