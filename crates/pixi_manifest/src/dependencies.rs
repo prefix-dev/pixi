@@ -7,3 +7,4 @@ pub type PyPiDependencies = DependencyMap<PypiPackageName, PixiPypiSpec>;
 pub type CondaDependencies = DependencyMap<PackageName, PixiSpec>;
 pub type CondaDevDependencies = DependencyMap<PackageName, SourceLocationSpec>;
 pub type CondaConstraints = DependencyMap<PackageName, PixiSpec>;
+pub type PyPiConstraints = DependencyMap<PypiPackageName, PixiPypiSpec>;
