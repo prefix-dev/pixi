@@ -1,7 +1,8 @@
 # Channel-provided virtual package detectors
 
-Virtual package detectors are external programs that detect hardware capabilities on your system and inject virtual packages based on those findings.
-This example demonstrates the full life cycle of a virtual package detector:
+Virtual package detectors are external programs that detect host properties and report them as virtual packages.
+This tutorial is for package and channel authors who want to make packages depend on those properties.
+It demonstrates the full life cycle of a virtual package detector:
 
 - creating a detector,
 - publishing it to a channel, and finally
@@ -124,15 +125,20 @@ rattler-index --force --config index-config.toml fs channel
 
 ## Install the consumer
 
-Now we jump into the role of the consumer.
-Here, you simply want to use the `long-username` package. 
-Pixi forces you to think about which platforms you want to support beforehand, that way all environments and their dependencies can be stored in the lock file for all platforms, no matter which one you currently use.
+Now we switch to the role of the consumer workspace author, who wants to use the `long-username` package.
+The workspace author declares the supported platforms so Pixi can lock all environments and their dependencies for those platforms, regardless of the machine generating the lock file.
+When a consumer runs the workspace, Pixi checks whether the host satisfies one of those platforms.
 
-In our case we want to support machines with `linux-64` and `__username_length` of at least `3`.
+Here, the workspace author supports `linux-64` machines with `__username_length` of at least `3`.
 
 ```toml title="consumer/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/consumer/pixi.toml"
 ```
+
+In `workspace.platforms`, `__username_length = "3"` declares version `3` for the solver.
+The host check accepts a detected version of `3` or newer, so this platform supports usernames with at least three characters.
+This is a version declaration, not a dependency constraint like `__username_length = ">=3"` in `package.run-dependencies`.
+See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for the platform syntax.
 
 The local channel supplies `long-username` and the detector, while conda-forge supplies the application's runtime dependencies.
 
@@ -146,10 +152,28 @@ First, Pixi checks which platform is suitable for your system.
 We only defined one platform, so Pixi only has to check that one.
 Then it notices that `__username_length` is provided by a virtual package detector.
 
-Now Pixi asks whether to trust detectors from your channel, virtual package detectors can run arbitrary code, so make sure you trust the channel before you choose **Trust**.
-Then the detector `username-length-detect` runs.
+In an interactive terminal, Pixi asks whether to trust detectors from the channel.
+The absolute channel path depends on where the example is saved:
+
+```text
+Detectors inspect your system to identify capabilities that packages depend on, and run code on your machine.
+Trust applies to current and future detectors from this channel.
+? Trust detectors from file:///path/to/example/channel/? ›
+❯ Don't trust
+  Trust
+```
+
+Virtual package detectors can run arbitrary code, so only choose **Trust** if the channel is trusted.
+Pixi then asks where to save the decision; **Don't save** keeps it limited to the current invocation.
+After consent, the detector `username-length-detect` runs.
 If it reports that your username has fewer than three characters, the platform isn't selected.
 Since that is the only platform we defined, Pixi will then report that your host isn't supported. 
 
-If your username was long enough though, it will select the platform, install the environment and run the executable.
-Which then prints "long-username".
+If the username was long enough, Pixi selects the platform, installs the environment and runs the executable:
+
+```text
+✨ Pixi task (start): long-username
+long-username
+```
+
+The same mechanism lets packages require arbitrary host properties reported by a detector, without those properties being built into Pixi.
