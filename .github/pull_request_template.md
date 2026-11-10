@@ -6,13 +6,17 @@ Fixes #{issue}
 
 ---
 
-<!--- Please include a human-written summary of the change and which issue is fixed, with relevant motivation and context. See {the golden rule} of CONTRIBUTING.md--->
+<!--- Write a brief summary without using AI: what changes, why, and which issue it fixes. Keep it outside the collapsed section below. See "The Golden Rule" in CONTRIBUTING.md. --->
 
-Summary: 
+<!--- Optional: add visual representation of the effect of the change when possible, e.g. before and after screenshots, code snippets, etc. --->
 
-<!--- Add visual representation of the effect of the change when possible, e.g. before and after screenshots, code snippets, etc. --->
+<!--- Optional: put AI-generated implementation notes and verification details in this collapsed section. Replace the summary with the model name and effort level, if known. Remove the section if unused. --->
+<details>
+<summary>AI-generated details (model name)</summary>
 
+<!--- Add AI-generated details here. --->
 
+</details>
 
 ### Checklist:
 - [ ] I've discussed the proposed changes with a maintainer.
