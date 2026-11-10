@@ -16,10 +16,10 @@
 //!
 //! On disk, `pixi.lock` carries the manifest names verbatim (explicit or
 //! synthesized), so external tools can look up a platform under the same name
-//! the manifest uses. Older pixi versions wrote rich platforms under short
-//! `p1`, `p2`, ... aliases instead; because this pass matches by identity
-//! rather than name, those legacy aliases map back to the manifest names on
-//! load and disappear the next time the lock file is written.
+//! the manifest uses. Older pixi versions wrote platforms with custom virtual
+//! packages under short `p1`, `p2`, ... aliases instead; because this pass matches
+//! by identity rather than name, those legacy aliases map back to the manifest
+//! names on load and disappear the next time the lock file is written.
 use std::{collections::HashMap, path::Path};
 
 use pixi_manifest::{
@@ -269,10 +269,10 @@ mod tests {
         builder.finish()
     }
 
-    /// Older pixi versions wrote rich platforms to disk under short `p1`,
-    /// `p2`, ... aliases in workspace declaration order. The identity-based
-    /// load pass maps those legacy aliases back to the manifest names, so
-    /// such lock files keep working without a re-solve and pick up the real
+    /// Older pixi versions wrote platforms with custom virtual packages to disk
+    /// under short `p1`, `p2`, ... aliases in workspace declaration order. The
+    /// identity-based load pass maps those legacy aliases back to the manifest
+    /// names, so such lock files keep working without a re-solve and pick up the real
     /// names on their next write.
     #[test]
     fn legacy_pn_aliases_align_to_manifest_names() {

@@ -1321,7 +1321,7 @@ mod tests {
         assert!(!selector.matches(&PixiPlatform::from_subdir(Subdir::Win64)));
     }
 
-    /// A glob target applies to every matching rich platform, and a more
+    /// A glob target applies to every matching platform, and a more
     /// specific exact selector defined *after* it wins by insertion order.
     #[test]
     fn glob_target_applies_with_insertion_order_precedence() {

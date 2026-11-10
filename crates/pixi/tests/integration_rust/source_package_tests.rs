@@ -3427,15 +3427,15 @@ boost-check = {{ git = "{url}", subdirectory = "boost-check" }}
 }
 
 /// A changed source package must be rebuilt by quick-validating commands
-/// (`pixi run` / `pixi shell`) when the workspace declares a rich platform
-/// (e.g. one with CUDA virtual packages). The lock file keys such a platform
+/// (`pixi run` / `pixi shell`) when the workspace declares a platform
+/// with custom virtual packages (e.g. CUDA). The lock file keys such a platform
 /// by its custom name, and the [`UpdateMode::QuickValidate`] guard that
 /// disables the lock-file-hash short-circuit for source packages used to look
 /// the row up by the bare subdir name, silently turning itself off.
-/// Linux-only: the rich platform declares a `__linux` kernel floor.
+/// Linux-only: the platform declares a `__linux` kernel floor.
 #[cfg(target_os = "linux")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn quick_validate_rebuilds_changed_source_package_on_rich_platform() {
+async fn quick_validate_rebuilds_changed_source_package_on_platform_with_virtual_packages() {
     use pixi_core::{
         InstallFilter, UpdateLockFileOptions,
         lock_file::{ReinstallPackages, UpdateMode},

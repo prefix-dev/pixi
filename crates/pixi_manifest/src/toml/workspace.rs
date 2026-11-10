@@ -591,7 +591,7 @@ mod test {
                 "__glibc=2.28".to_string(),
                 "__archspec=0=x86_64".to_string(),
             ],
-            "rich platforms materialise the subdir defaults alongside the declared __cuda; \
+            "platforms materialise the subdir defaults alongside the declared __cuda; \
              the default build `0` is omitted",
         );
 
