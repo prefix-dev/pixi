@@ -1,4 +1,6 @@
-//! The `--with-constraint` option shared by `pixi lock` and `pixi update`.
+//! The `--with-constraint` option of `pixi lock`.
+
+use std::collections::HashSet;
 
 use clap::Parser;
 use pixi_core::Workspace;
@@ -7,6 +9,7 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{
     ChannelConfig, MatchSpec, ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
 };
+use rattler_lock::LockFile;
 
 /// Temporary conda constraints that apply to a single invocation.
 #[derive(Parser, Debug, Default, Clone)]
@@ -14,8 +17,8 @@ pub struct ConstraintArgs {
     /// Temporarily constrain a conda package to the given match spec, e.g.
     /// `--with-constraint 'openssl>=3.5.4'`.
     ///
-    /// Behaves like an additional entry in the `[constraints]` table that
-    /// applies to all environments: it restricts the allowed versions of a
+    /// Behaves like an additional `[constraints]` entry in every feature, so
+    /// it applies to all environments: it restricts the allowed versions of a
     /// package without adding it as a dependency. Environments whose locked
     /// packages violate the constraint are re-solved, keeping the other
     /// locked packages as preferences. The constraint is not written to the
@@ -48,6 +51,46 @@ impl ConstraintArgs {
             console::style(console::Emoji("i ", "i ")).blue(),
             self.constraints.join(", ")
         );
+    }
+}
+
+/// Warns about temporary constraints that don't match any conda package in
+/// the lock file. Such a constraint has no effect, which usually means that
+/// the package name is misspelled or that the package comes from PyPI.
+pub fn warn_unmatched_constraints(workspace: &Workspace, lock_file: &LockFile) {
+    let constraints = &workspace.workspace.value.extra_constraints;
+    if constraints.is_empty() {
+        return;
+    }
+
+    let mut conda_names = HashSet::new();
+    let mut pypi_names = HashSet::new();
+    for (_, environment) in lock_file.environments() {
+        for (_, packages) in environment.packages_by_platform() {
+            for package in packages {
+                if let Some(conda) = package.as_conda() {
+                    conda_names.insert(conda.name().as_normalized().to_string());
+                } else if let Some(pypi) = package.as_pypi() {
+                    pypi_names.insert(pypi.name().as_ref().to_string());
+                }
+            }
+        }
+    }
+
+    for name in constraints.names() {
+        let name = name.as_normalized();
+        if conda_names.contains(name) {
+            continue;
+        }
+        if pypi_names.contains(name) {
+            tracing::warn!(
+                "constraint on '{name}' has no effect: '{name}' is only locked as a PyPI package, and `--with-constraint` only applies to conda packages"
+            );
+        } else {
+            tracing::warn!(
+                "constraint on '{name}' has no effect: no environment contains the conda package '{name}'"
+            );
+        }
     }
 }
 

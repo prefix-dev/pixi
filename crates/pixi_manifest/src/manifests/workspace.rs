@@ -64,9 +64,9 @@ pub struct WorkspaceManifest {
 
     /// Additional conda constraints that are not part of the manifest on
     /// disk but were injected for a single invocation, e.g. through
-    /// `pixi lock --with-constraint`. They behave like entries in the workspace
-    /// `[constraints]` table but apply to every environment (including
-    /// environments that opt out of the default feature) and are never
+    /// `pixi lock --with-constraint`. They behave like a `[constraints]` entry
+    /// in every feature, so they apply to every environment (including
+    /// environments that opt out of the default feature), and are never
     /// written back to the manifest.
     pub extra_constraints: CondaConstraints,
 }

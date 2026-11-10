@@ -9,7 +9,7 @@ use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 
 use crate::cli_config::NoInstallConfig;
 use crate::cli_config::ScriptWorkspaceConfig;
-use crate::constraint_args::ConstraintArgs;
+use crate::constraint_args::{ConstraintArgs, warn_unmatched_constraints};
 
 /// Solve environments and update the lock file without installing the
 /// environments.
@@ -123,6 +123,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
     drop(clear_progress);
+
+    // A constraint that matches no locked conda package has no effect, which
+    // usually points to a misspelled name or a PyPI package.
+    warn_unmatched_constraints(&workspace, &lock_file);
 
     // Determine the diff between the old and new lock file.
     let diff = LockFileDiff::from_lock_files(&original_lock_file, &lock_file);

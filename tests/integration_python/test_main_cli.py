@@ -1120,10 +1120,13 @@ package = "*"
     # The constraint is not written to the manifest
     assert manifest_path.read_text() == manifest
 
+    # A constraint that matches no locked conda package has no effect
+    # spellchecker:off
     verify_cli_command(
-        [pixi, "update", "--with-constraint", "package<0.2", *flags],
-        stderr_contains="Applying temporary constraints: package<0.2",
+        [pixi, "lock", "--check", "--with-constraint", "pakage<0.2", *flags],
+        stderr_contains="constraint on 'pakage' has no effect",
     )
+    # spellchecker:on
 
 
 @pytest.mark.extra_slow
