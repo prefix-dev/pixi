@@ -134,14 +134,14 @@ def test_run_wildcard_target_selector_resolves_per_platform(
     the host subdir -- one named `gpu-<host>` (matched by `gpu-*`) and the bare
     `<host>` (not matched) -- so both are runnable on this machine and the
     resolved task body differs by `--platform`."""
-    rich = f"gpu-{CURRENT_PLATFORM}"
+    gpu_platform = f"gpu-{CURRENT_PLATFORM}"
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(
         f"""
 [workspace]
 name = "glob-target-test"
 channels = []
-platforms = ["{CURRENT_PLATFORM}", {{ name = "{rich}", platform = "{CURRENT_PLATFORM}" }}]
+platforms = ["{CURRENT_PLATFORM}", {{ name = "{gpu_platform}", platform = "{CURRENT_PLATFORM}" }}]
 
 [tasks]
 hello = "echo default-task"
@@ -153,7 +153,7 @@ hello = "echo glob-task"
 
     # The glob matches `gpu-<host>` -> the wildcard target's body wins.
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--platform", rich, "hello"],
+        [pixi, "run", "--manifest-path", manifest, "--platform", gpu_platform, "hello"],
         stdout_contains="glob-task",
         stdout_excludes="default-task",
     )

@@ -805,14 +805,14 @@ mod tests {
     }
 
     /// Regression for prefix-dev/pixi#6493: a workspace declaring both a bare
-    /// subdir platform and a custom rich variant of the same subdir
+    /// subdir platform and a platform with custom virtual packages for the same subdir
     /// (`linux-64` plus `linux-64-cuda`) must not assign the cuda variant to
     /// an environment whose feature pins the bare `linux-64`. The bare-subdir
     /// shorthand in `PixiPlatform::matches_reference` otherwise drags every
     /// same-subdir variant into the environment, producing spurious cuda
     /// entries in the lock file for cpu-only environments.
     #[test]
-    fn test_bare_subdir_feature_excludes_custom_rich_platform() {
+    fn test_bare_subdir_feature_excludes_platform_with_custom_virtual_packages() {
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"

@@ -763,8 +763,8 @@ fn migrate_system_requirements_to_platforms(
     // of a non-subdir platform will commit the migration to pixi.toml.
     workspace.must_migrate = all_simple_subdir && has_any_sysreqs;
 
-    // Subdir-only declarations let environments combine the per-feature rich
-    // platforms by subdir; custom rich platforms are matched by name.
+    // Subdir-only declarations let environments combine the per-feature
+    // platforms by subdir; inline-table platform entries are matched by name.
     workspace.use_platform_composition = all_simple_subdir;
 
     if all_simple_subdir {
@@ -1440,7 +1440,7 @@ mod test {
     }
 
     #[test]
-    fn test_system_requirements_migration_rejects_rich_workspace_platform() {
+    fn test_system_requirements_migration_rejects_inline_table_workspace_platform() {
         let result = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
             [workspace]
@@ -1456,7 +1456,7 @@ mod test {
             "#,
             Path::new(""),
         );
-        let err = result.expect_err("rich platform + sysreqs must error");
+        let err = result.expect_err("inline-table platform entry + sysreqs must error");
         assert!(
             err.error
                 .to_string()
@@ -1466,8 +1466,8 @@ mod test {
     }
 
     #[test]
-    fn test_system_requirements_migration_rejects_rich_workspace_platform_same_name() {
-        // Regression: rich `name == platform` entries used to be silently
+    fn test_system_requirements_migration_rejects_inline_table_workspace_platform_same_name() {
+        // Regression: inline-table `name == platform` entries used to be silently
         // demoted to bare subdirs and lose their VPs to [system-requirements].
         let result = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
@@ -1481,7 +1481,7 @@ mod test {
             "#,
             Path::new(""),
         );
-        let err = result.expect_err("rich platform + sysreqs must error");
+        let err = result.expect_err("inline-table platform entry + sysreqs must error");
         let msg = err.error.to_string();
         assert!(
             msg.contains("special subdir platform"),

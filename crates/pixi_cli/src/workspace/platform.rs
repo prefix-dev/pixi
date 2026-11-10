@@ -602,7 +602,7 @@ async fn execute_add(
     let mut platforms: Vec<PixiPlatform> = Vec::with_capacity(parsed.len());
     if virtual_packages_present {
         let (name, subdir) = parsed.into_iter().next().expect("len checked above");
-        // Virtual packages attach to "rich" platforms only. A bare subdir
+        // Virtual packages cannot be attached to subdir platforms. A string
         // entry like `linux-64` is locked to mirror the underlying conda
         // subdir exactly; the model rejects mutations on these, so reject at
         // parse time before we go through any solve.

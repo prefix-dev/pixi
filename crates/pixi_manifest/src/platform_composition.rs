@@ -1,9 +1,9 @@
 //! Per-environment platform composition.
 //!
 //! On the subdir-only `[system-requirements]` path each feature references the
-//! rich platforms its system requirements synthesised (e.g. `linux-64-cuda-13-0`),
+//! platforms its system requirements synthesised (e.g. `linux-64-cuda-13-0`),
 //! all registered on the workspace. An environment that combines such features
-//! must solve for a single platform per subdir: when its features pin one rich
+//! must solve for a single platform per subdir: when its features pin one
 //! platform for a subdir that platform is reused, and when they pin several the
 //! environment combines them into one carrying the union of their virtual
 //! packages. Shared by the parse-time registration pass and

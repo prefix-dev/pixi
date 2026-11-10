@@ -12,7 +12,7 @@
 The `[system-requirements]` table told the solver which [virtual
 packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html)
 (`__cuda`, `__glibc`, `__osx`, `__linux`, `__archspec`) to assume were available
-on the host. The same information now lives on the platform itself, declared as
+on the solve target. The same information now lives on the platform itself, declared as
 an inline-table entry on `workspace.platforms`. This page shows the equivalent
 forms for the patterns that used to live under `[system-requirements]`.
 
@@ -23,7 +23,7 @@ Putting the constraints on the platform makes the data flow obvious:
 - The solver knows up-front which virtual packages apply to which conda subdir,
   so the same workspace can mix CUDA-enabled and CUDA-free builds for the same
   subdir without juggling features.
-- Features bind to a rich platform by *name* rather than by replaying the same
+- Features bind to a platform by *name* rather than by replaying the same
   set of virtual packages. Two features that pick the same platform can never
   declare conflicting versions of `__cuda`.
 - The CLI ([`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md))
@@ -104,51 +104,16 @@ The recognised friendly keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`,
 | `pixi workspace system-requirements list` | `pixi workspace platform list` |
 
 The `pixi workspace platform` subcommand keeps `pixi.lock` in sync when it
-mutates a rich entry.
+edits a platform.
 
 ## Default declared virtual packages
 
-When you write a bare-string entry like `"linux-64"`, Pixi uses these defaults
-(matching what `[system-requirements]` used to default to):
-
-=== "Linux"
-    `__linux = "4.18"`, `__glibc = "2.28"`
-=== "Linux (riscv64)"
-    `__linux = "4.18"`, `__glibc = "2.39"`
-=== "Windows"
-    No defaults.
-=== "macOS (x86_64)"
-    `__osx = "13.0"`
-=== "macOS (arm64)"
-    `__osx = "13.0"`
-
-Override them by switching to an inline-table entry with the relevant keys.
+See [Default declared virtual packages](./multi_platform_configuration.md#default-declared-virtual-packages) for the defaults applied to bare subdirs and inline-table entries.
 
 ## Environment-variable overrides
 
-These overrides come from conda itself and apply regardless of how the platform
-is declared in `pixi.toml`. Use them when you need to install in an environment
-that doesn't match the declared virtual packages (for example a CPU-only CI
-runner solving a CUDA-enabled lock file).
-
-- `CONDA_OVERRIDE_CUDA` sets the `__cuda` version. Example: `CONDA_OVERRIDE_CUDA=11`.
-- `CONDA_OVERRIDE_CUDA_ARCH` sets the `__cuda_arch` compute capability, formatted as `{major}.{minor}`. Example: `CONDA_OVERRIDE_CUDA_ARCH=8.6`.
-- `CONDA_OVERRIDE_AMDGPU` declares an AMD GPU (`__amdgpu`). Its only valid version is `0`. Example: `CONDA_OVERRIDE_AMDGPU=0`.
-- `CONDA_OVERRIDE_AMDGPU_ARCH` sets the `__amdgpu_arch` AMDGPU ISA version, formatted as `{major}.{minor}.{stepping}`. Example: `CONDA_OVERRIDE_AMDGPU_ARCH=11.0.0`.
-- `CONDA_OVERRIDE_GLIBC` sets the `__glibc` version. Example: `CONDA_OVERRIDE_GLIBC=2.28`.
-- `CONDA_OVERRIDE_OSX` sets the `__osx` version. Example: `CONDA_OVERRIDE_OSX=13.0`.
-- `CONDA_OVERRIDE_LINUX` sets the `__linux` version. Example: `CONDA_OVERRIDE_LINUX=4.18`.
-- `CONDA_OVERRIDE_WIN` sets the `__win` version. Example: `CONDA_OVERRIDE_WIN=0`.
-- `CONDA_OVERRIDE_ARCHSPEC` sets the `__archspec` CPU microarchitecture name. Example: `CONDA_OVERRIDE_ARCHSPEC=skylake`. Set it to `0` to mark the microarchitecture as unknown.
-
-On a machine without an AMD GPU, set both `CONDA_OVERRIDE_AMDGPU=0` and
-`CONDA_OVERRIDE_AMDGPU_ARCH=<major.minor.stepping>` to mock an architecture.
-The architecture override is ignored when `__amdgpu` is absent. Unsupported
-platform errors include the required assignments in their override hints.
-
-Setting any of these to an empty string (for example `CONDA_OVERRIDE_CUDA=""`)
-disables the corresponding virtual package instead of setting a version, which
-is useful for solving a lock file as if the feature were absent.
+See [Environment-variable overrides](./multi_platform_configuration.md#environment-variable-overrides) for built-in and detector overrides.
+Overrides change the host view used for compatibility checks, not the solve inputs of a declared workspace target.
 
 ## Additional resources
 

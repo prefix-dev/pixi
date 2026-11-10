@@ -56,8 +56,8 @@ def supports_current_platform(workspace: Workspace) -> bool:
         if platform == current:
             return True
         if isinstance(platform, dict):
-            rich_platform = cast(dict[str, object], platform)
-            if rich_platform.get("name") == current or rich_platform.get("platform") == current:
+            platform_entry = cast(dict[str, object], platform)
+            if platform_entry.get("name") == current or platform_entry.get("platform") == current:
                 return True
 
     return False

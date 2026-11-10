@@ -136,14 +136,15 @@ Common virtual packages:
 | `__cuda`        | NVIDIA driver's CUDA capability |
 | `__archspec`    | CPU microarchitecture (e.g. `x86_64_v3`) |
 
-When a package depends on `__cuda >= 12`, the solver will only
-select it if the system provides a `__cuda` virtual package with
-version 12 or higher. This is how the ecosystem prevents installing
-GPU-accelerated packages on machines without a compatible GPU driver.
+When a package depends on `__cuda >=12`, the solver will only
+select it if the solve provides a `__cuda` virtual package with
+version 12 or higher. This is how the ecosystem keeps GPU-accelerated
+packages off machines without a compatible GPU driver.
 
-Pixi detects your system's virtual packages automatically. You
-can also declare them explicitly per platform — for example, to
-tell the solver that your `linux-64` deployment target has CUDA 12:
+In a Pixi workspace, each platform declares the virtual packages its
+solve uses, so you can lock for a CUDA machine without having one.
+For example, this tells the solver that your `linux-64` deployment
+target has CUDA 12:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -155,9 +156,12 @@ platforms = [
 See [Declaring virtual packages per platform](workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform)
 for the full inline-table syntax (friendly keys for `cuda`, `glibc`,
 `macos`, …, raw `__name` escape hatch, naming entries to bind them to
-features). Environment-variable overrides like `CONDA_OVERRIDE_CUDA`
-are listed on the
-[Migrating from `[system-requirements]`](workspace/system_requirements.md#environment-variable-overrides) page.
+features). When installing, Pixi compares built-in declarations and locked
+package requirements with the virtual packages detected on your machine.
+See [Which platform gets installed?](workspace/multi_platform_configuration.md#which-platform-gets-installed)
+for the selection rules.
+Environment-variable overrides like `CONDA_OVERRIDE_CUDA` are listed under
+[Environment-variable overrides](workspace/multi_platform_configuration.md#environment-variable-overrides).
 
 ## Environments and prefixes
 

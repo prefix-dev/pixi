@@ -136,10 +136,10 @@ pub struct Workspace {
     pub must_migrate: bool,
 
     /// Set during parsing when the declared platforms were all plain subdirs,
-    /// so environments combine the per-feature rich platforms that share a
+    /// so environments combine the per-feature platforms that share a
     /// subdir into one platform carrying the union of their virtual packages.
-    /// Cleared for workspaces that declare custom rich platforms, which are
-    /// matched by name instead.
+    /// Cleared for workspaces that declare inline-table platform entries, which
+    /// are matched by name instead.
     pub use_platform_composition: bool,
 }
 
@@ -151,7 +151,7 @@ impl Workspace {
 
     /// Returns the [`TargetSelector`] used to key the target table for a
     /// platform name, matching how the platform is declared in the workspace
-    /// (`Subdir` for bare subdir platforms, `Subdir` for richer ones).
+    /// (`Subdir` for subdir platforms, `Platform` for other platforms).
     pub fn target_selector_for_platform(&self, name: &PixiPlatformName) -> TargetSelector {
         self.platform_by_name(name)
             .map(PixiPlatform::as_target_selector)

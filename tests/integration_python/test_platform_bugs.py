@@ -1,4 +1,4 @@
-"""Regression tests for the richer-platform / system-requirement model.
+"""Regression tests for the platform / system-requirement model.
 
 Each test pins one behaviour of that model at the CLI boundary, on the corners
 where declared platforms, detected virtual packages and subdir overrides meet.
@@ -257,7 +257,7 @@ def test_run_without_environment_flag_does_not_leak_base_platform(
     installed, its ``conda-meta/pixi`` marker records the bare-subdir resolved
     platform. Running a task that lives in a *different* environment then pinned
     that bare subdir as the global target platform for every prefix install. The
-    ``gpu`` environment only declares the rich ``<subdir>-cuda-13`` platform, so
+    ``gpu`` environment only declares the ``<subdir>-cuda-13`` platform, so
     the bare subdir is not one of its platforms and the install aborted with
     "no platform supported by it matches the current system" -- even though the
     (cuda-capable) host can run it. Running the same task with ``-e gpu`` always
@@ -297,7 +297,7 @@ gpu = {{ features = ["gpu"], no-default-feature = true }}
     )
 
     # Without `-e`, running the gpu task must still install and run it via the
-    # gpu environment's own (rich) platform, not the leaked bare subdir.
+    # gpu environment's own platform with CUDA, not the leaked bare subdir.
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "gpu-task"],
         ExitCode.SUCCESS,

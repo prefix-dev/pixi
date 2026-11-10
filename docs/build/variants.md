@@ -93,7 +93,7 @@ python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
 ## Variants Pixi Sets for You
 
 Not every variant has to be spelled out in `[workspace.build-variants]`.
-When you build a package, Pixi fills in a few variants automatically based on the platform you build for and its [system requirements](../workspace/system_requirements.md).
+When you build a package, Pixi fills in a few variants automatically based on the platform you build for and its [declared virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform).
 An explicit `[workspace.build-variants]` entry always wins over a value Pixi derives, so you can override any of these by hand.
 
 ### `target_platform`
@@ -111,7 +111,7 @@ Rather than making you repeat this in `[workspace.build-variants]`, Pixi derives
 | `osx-*`   | `__osx`         | `macosx_deployment_target` | the `__osx` version    |
 | `linux-*` | `__glibc`       | `sysroot`                  | the `__glibc` version  |
 
-Platforms declared as a bare subdir string carry Pixi's [portable defaults](../workspace/system_requirements.md#default-declared-virtual-packages) (`__glibc = "2.28"`, except `2.39` on `linux-riscv64`, and `__osx = "13.0"`), so the derivation works even when you don't declare system requirements explicitly.
+Platforms declared as a bare subdir string carry Pixi's [portable defaults](../workspace/multi_platform_configuration.md#default-declared-virtual-packages) (`__glibc = "2.28"`, except `2.39` on `linux-riscv64`, and `__osx = "13.0"`), so the derivation works even when you don't declare system requirements explicitly.
 
 The providers `macosx_deployment_target` and `sysroot` are conda-forge packages, so this derivation only applies when one of your channels is conda-forge.
 It is skipped on Windows (which has no meaningful stdlib version), and musl (`__musl`) and CUDA (`__cuda`) are not derived yet.
