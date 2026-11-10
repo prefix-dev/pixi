@@ -1,0 +1,17 @@
+# --8<-- [start:use-envs]
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pytorch-conda-forge"
+platforms = [
+  # The CUDA platform is listed first, so it wins platform selection on a machine with a CUDA driver.
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "linux-64-cpu", platform = "linux-64" },
+]
+
+[target.linux-64-cuda.dependencies]
+cuda-version = "12.6.*"
+pytorch-gpu = "*"
+
+[target.linux-64-cpu.dependencies]
+pytorch-cpu = "*"
+# --8<-- [end:use-envs]

@@ -1,0 +1,6 @@
+[package.build.backend]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi-build-ros"
+
+[package.build.config]
+distro = "jazzy"

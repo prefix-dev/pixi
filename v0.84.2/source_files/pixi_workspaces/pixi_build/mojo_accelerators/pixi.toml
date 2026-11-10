@@ -1,0 +1,12 @@
+[workspace]
+channels = ["./channel", "https://conda.modular.com/max", "https://prefix.dev/conda-forge"]
+platforms = [
+  { name = "amd", platform = "linux-64", glibc = "2.34", archspec = "x86_64_v3", amdgpu = "gfx1103" },
+  { name = "cpu", platform = "linux-64", glibc = "2.34", archspec = "x86_64_v3" },
+]
+
+[dependencies]
+mojo-matmul = "*"
+
+[tasks]
+matmul = "matmul"
