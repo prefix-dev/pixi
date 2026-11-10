@@ -76,7 +76,7 @@ pub fn verify_current_platform_can_run_environment(
             let host = if unknown == UnknownNames::Unchecked {
                 environment.host_for_cached_run()
             } else {
-                Cow::Borrowed(environment.host())
+                environment.host()
             };
             validate_system_meets_environment_requirements(
                 lock_file,
@@ -131,7 +131,7 @@ pub fn minimum_compatible_declared_platform<'p>(
     let host = if installed {
         environment.host_for_cached_run()
     } else {
-        Cow::Borrowed(environment.host())
+        environment.host()
     };
     let current = host.subdir();
     let system_virtual_packages = host.capabilities();
@@ -684,7 +684,8 @@ mod tests {
                     }],
                 )
                 .unwrap(),
-            );
+            )
+            .into();
             let environment = workspace.default_environment();
             for declared in [false, true] {
                 for recorded in [false, true] {

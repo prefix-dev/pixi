@@ -1218,7 +1218,9 @@ impl<'p> LockFileDerivedData<'p> {
             }
         }
 
-        self.workspace.refresh_environment_host(environment).await?;
+        self.workspace
+            .refresh_locked_environment_host(environment, &self.lock_file)
+            .await?;
 
         // A current prefix hash says nothing about this machine's capabilities.
         // Validate locked requirements before either the cached or install path.
@@ -1253,7 +1255,7 @@ impl<'p> LockFileDerivedData<'p> {
             let host = if cached.is_some() {
                 environment.host_for_cached_run()
             } else {
-                std::borrow::Cow::Borrowed(environment.host())
+                environment.host()
             };
             validate_system_meets_environment_requirements(
                 &self.lock_file,
