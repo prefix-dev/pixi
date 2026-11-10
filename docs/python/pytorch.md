@@ -8,7 +8,7 @@ This guide explains how to integrate PyTorch with `pixi`, it supports multiple w
 With these options you can choose the best way to install PyTorch based on your requirements.
 
 ## Declaring CUDA on a platform
-PyTorch packages depend on the `__cuda` [virtual package](../conda_ecosystem.md#virtual-packages-describing-the-host-system), so the solver needs to know that CUDA is available on the platforms you target. You declare that by writing an inline-table entry in `workspace.platforms`:
+CUDA builds of PyTorch depend on the `__cuda` [virtual package](../conda_ecosystem.md#virtual-packages-describing-the-host-system), so the solver needs to know which CUDA driver capability the platforms you target provide. You declare that with an inline-table entry in `workspace.platforms`:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -17,9 +17,10 @@ platforms = [
 ]
 ```
 
-The `cuda = "12.0"` shortcut tells the solver to treat `__cuda` version `12.0` as available on `linux-64`, so packages constrained with `__cuda >= 12` resolve. Without that declaration Pixi defaults to the **CPU-only** builds of PyTorch and its dependencies.
-
-The full rich-platform syntax, including naming a platform, mixing CPU-only and CUDA-enabled entries, and targeting dependencies at a specific one, is documented under [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform).
+`cuda = "12.0"` solves `linux-64` as if the machine had a driver for CUDA 12.0, even when you lock on a machine without a GPU.
+The run dependencies of the CUDA packages, such as `__cuda >=12` from `cuda-version`, decide which builds fit that.
+Without a CUDA declaration, the solver can't pick packages that require `__cuda`; to get the CPU-only build on purpose, depend on `pytorch-cpu`.
+See [Declared, detected, and required virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) for details.
 
 !!! info "Migrating from `[system-requirements]`"
     The older `[system-requirements]` table is still parsed but deprecated; see the [migration page](../workspace/system_requirements.md) for the equivalents.
@@ -65,7 +66,9 @@ This does not need separate environments: declare one platform per variant and p
     ```
 
 Both platforms belong to the same `default` environment but are solved separately, so the lock file holds a CUDA and a CPU-only package set.
-Because `linux-64-cuda` is declared first, Pixi selects it on a machine that reports a CUDA driver and falls back to `linux-64-cpu` everywhere else.
+On a `linux-64` machine, Pixi tries `linux-64-cuda` first if its CUDA declaration matches the driver.
+It selects the CUDA set only if its locked packages fit the machine; otherwise it tries `linux-64-cpu`.
+See [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the details.
 
 !!! warning "Give both variants a name"
     A bare `"linux-64"` entry combined with `[target.linux-64.dependencies]` would match *every* platform with the `linux-64` subdir, including `linux-64-cuda`.
@@ -77,6 +80,10 @@ To check a specific platform instead of the one selected for your machine, pass 
 pixi run --platform linux-64-cpu python -c "import torch; print(torch.cuda.is_available())"
 pixi run --platform linux-64-cuda python -c "import torch; print(torch.cuda.is_available())"
 ```
+
+`--platform` skips the host checks, so `linux-64-cuda` installs on a machine without a driver and prints `False`.
+Later `pixi run` calls keep the platform installed last, but check it against the machine again, so a CUDA environment then fails on a machine without a driver.
+Run `pixi install` to select the platform for your machine again.
 
 Now you should be able to extend that with your dependencies and tasks.
 

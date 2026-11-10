@@ -55,14 +55,14 @@ As an environment goes beyond just `dependencies`, both environments and feature
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
 - `activation`: The activation information for the environment
-- `platforms`: The names of the platforms (declared on `workspace.platforms`) the environment can run on. Use [rich-platform entries](./multi_platform_configuration.md#declaring-virtual-packages-per-platform) on the workspace to pin per-platform virtual packages (CUDA, glibc, macOS, …) the solver should treat as available.
+- `platforms`: The names of the platforms (declared on `workspace.platforms`) the environment can run on. Use [inline-table entries](./multi_platform_configuration.md#declaring-virtual-packages-per-platform) on the workspace to pin per-platform virtual packages (CUDA, glibc, macOS, …) the solver should treat as available.
 - `channels`: The channels used to create the environment. Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
 
 ```toml title="Default features"
 [workspace]
-# A rich entry declares __glibc 2.33 as available on linux-64.
+# This platform declares __glibc 2.33 as available on linux-64.
 platforms = [{ platform = "linux-64", glibc = "2.33" }]
 
 [dependencies] # short for [feature.default.dependencies]
@@ -95,7 +95,7 @@ platforms = [
 [feature.cuda]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "1.9.0"}
-# Reference the rich workspace platform by name; bare `osx-arm64` is also fine.
+# Reference the workspace platform by name; bare `osx-arm64` is also fine.
 platforms = ["linux-64-cuda", "osx-arm64"]
 activation = {scripts = ["cuda_activation.sh"], env = {CUDA_HOME = "$CONDA_PREFIX"}}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
@@ -439,7 +439,7 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     authors = ["Your Name <your.name@gmail.com>"]
     channels = ["conda-forge", "pytorch"]
     # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
-    # Rich entries pin per-platform virtual packages (CUDA, macOS version, …) the solver should treat as available.
+    # Inline-table entries pin per-platform virtual packages (CUDA, macOS version, …) the solver should treat as available.
     platforms = [
       "win-64",
       "linux-64",
