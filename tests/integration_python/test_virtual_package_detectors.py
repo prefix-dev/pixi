@@ -7,6 +7,7 @@ import http.server
 import io
 import json
 import os
+import platform
 import shlex
 import shutil
 import tarfile
@@ -43,17 +44,27 @@ class DetectorChannel:
     def url(self) -> str:
         return self.root.resolve().as_uri() + "/"
 
-    def package(self, name: str, depends: list[str], files: dict[str, bytes] | None = None) -> None:
+    def package(
+        self,
+        name: str,
+        depends: list[str],
+        files: dict[str, bytes] | None = None,
+        *,
+        constrains: list[str] | None = None,
+        version: str = "1.0",
+    ) -> None:
         files = files or {}
         index = {
             "name": name,
-            "version": "1.0",
+            "version": version,
             "build": "0",
             "build_number": 0,
             "subdir": "noarch",
             "noarch": "generic",
             "depends": depends,
         }
+        if constrains is not None:
+            index["constrains"] = constrains
         paths = {
             "paths_version": 1,
             "paths": [
@@ -74,7 +85,7 @@ class DetectorChannel:
         }
         noarch = self.root / "noarch"
         noarch.mkdir(parents=True, exist_ok=True)
-        filename = f"{name}-1.0-0.tar.bz2"
+        filename = f"{name}-{version}-0.tar.bz2"
         archive = noarch / filename
         with tarfile.open(archive, "w:bz2") as package:
             for path, content in members.items():
@@ -230,6 +241,15 @@ def detector_sandbox(pixi: Path, tmp_pixi_workspace: Path) -> DetectorSandbox:
     return DetectorSandbox(pixi.resolve(), root, env)
 
 
+@pytest.fixture
+def native_glibc_at_least_2_35() -> None:
+    if not CURRENT_PLATFORM.startswith("linux-"):
+        pytest.skip("requires native Linux glibc")
+    family, version = platform.libc_ver()
+    if family != "glibc" or tuple(map(int, version.split("."))) < (2, 35):
+        pytest.skip("requires native glibc >=2.35 to reject the detector-only upper bound")
+
+
 def versions(info: dict[str, Any]) -> dict[str, str]:
     return {
         parts[0]: parts[1]
@@ -300,6 +320,48 @@ def test_detector_values_reach_consumers_and_platform_selection(
     )
     sandbox.run(unsupported, "run", "check", expected=ExitCode.FAILURE)
     assert not default_env_path(unsupported).exists()
+
+
+@pytest.mark.parametrize("declared", ["1.0", "99.0"])
+def test_custom_declarations_leave_selection_to_locked_requirements(
+    detector_sandbox: DetectorSandbox, declared: str
+) -> None:
+    sandbox = detector_sandbox
+    channel = DetectorChannel(sandbox.root / "channel")
+    channel.detector("username-detect", "__username_length", "3.0")
+    channel.consumer("username-consumer", "__username_length", ">=3")
+    workspace = sandbox.workspace("custom-selection", [channel])
+    (workspace / "pixi.toml").write_text(
+        f"""
+[workspace]
+name = "custom-selection"
+channels = ["{channel.url}"]
+platforms = [
+    {{ name = "first", platform = "{CURRENT_PLATFORM}", __username_length = "{declared}" }},
+    {{ name = "second", platform = "{CURRENT_PLATFORM}", __username_length = "3.0" }},
+]
+
+[dependencies]
+username-consumer = "*"
+
+[tasks]
+check = "echo selected-second"
+
+[target.first.tasks]
+check = "echo selected-first"
+""",
+        encoding="utf-8",
+    )
+    sandbox.decision(workspace, channel, "allow")
+    # Solve with a satisfying value, then retain the lock while changing only
+    # the custom declaration. The package requirement stays authoritative.
+    manifest = workspace / "pixi.toml"
+    contents = manifest.read_text()
+    manifest.write_text(contents.replace(f'= "{declared}"', '= "3.0"'))
+    sandbox.run(workspace, "lock")
+    manifest.write_text(contents)
+    result = sandbox.run(workspace, "run", "--frozen", "check")
+    assert "selected-first" in result.stdout
 
 
 @pytest.fixture
@@ -577,6 +639,34 @@ def test_locked_install_checks_custom_package_upper_bound_on_fresh_and_existing_
     assert record_path.read_bytes() == record
     assert (workspace / "pixi.lock").read_bytes() == lock
     assert marker.read_text(encoding="utf-8").splitlines() == ["run"]
+
+
+def test_frozen_bare_platform_detects_builtin_before_checking_locked_constraint(
+    detector_sandbox: DetectorSandbox,
+    native_glibc_at_least_2_35: None,
+) -> None:
+    sandbox = detector_sandbox
+    channel = DetectorChannel(sandbox.root / "channel")
+    marker = channel.detector("glibc-detect", "__glibc", "2.28")
+    channel.package("bounded-consumer", [], constrains=["__glibc <2.35"])
+    workspace = sandbox.workspace("bare-glibc-bound", [channel], consumer="bounded-consumer")
+    sandbox.decision(workspace, channel, "allow")
+    sandbox.run(workspace, "lock")
+    lock = (workspace / "pixi.lock").read_bytes()
+    assert not default_env_path(workspace).exists()
+    marker.unlink(missing_ok=True)
+    sandbox.env["PIXI_CACHE_DIR"] = str(sandbox.root / "run-cache")
+
+    output = sandbox.run(workspace, "run", "--frozen", "echo", "bounded-consumer-ready")
+    assert "bounded-consumer-ready" in output.stdout
+    assert marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    record = json.loads(
+        (default_env_path(workspace) / "conda-meta" / "bounded-consumer-1.0-0.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert record["constrains"] == ["__glibc <2.35"]
+    assert (workspace / "pixi.lock").read_bytes() == lock
 
 
 def test_locked_run_keeps_the_installed_alias_until_it_is_reinstalled(
@@ -1014,6 +1104,76 @@ def test_frozen_cross_environment_task_detects_only_when_dependency_is_reached(
     assert (workspace / "pixi.lock").read_bytes() == lock
 
 
+def test_frozen_cross_environment_task_uses_detector_selected_builtin_platform(
+    detector_sandbox: DetectorSandbox,
+    native_glibc_at_least_2_35: None,
+) -> None:
+    sandbox = detector_sandbox
+    base = DetectorChannel(sandbox.root / "base-channel")
+    base.package("base-package", [])
+    sibling = DetectorChannel(sandbox.root / "sibling-channel")
+    marker = sibling.detector("glibc-detect", "__glibc", "2.32")
+    sibling.consumer("preferred-consumer", "__glibc", ">=2.30,<2.35")
+    sibling.package("fallback-consumer", [])
+    workspace = sandbox.workspace("builtin-task-selection", [base])
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "builtin-task-selection"\n'
+        f"channels = {json.dumps([base.url])}\n"
+        "platforms = [\n"
+        f'  "{CURRENT_PLATFORM}",\n'
+        f'  {{ name = "preferred", platform = "{CURRENT_PLATFORM}", glibc = "2.30" }},\n'
+        f'  {{ name = "fallback", platform = "{CURRENT_PLATFORM}" }},\n'
+        "]\n"
+        '\n[dependencies]\nbase-package = "*"\n'
+        "\n[tasks]\n"
+        'workflow = { cmd = "echo workflow-ready", '
+        'depends-on = [{ task = "child", environment = "sibling" }] }\n'
+        "\n[feature.sibling]\n"
+        f"channels = {json.dumps([sibling.url])}\n"
+        'platforms = ["preferred", "fallback"]\n'
+        "\n[feature.sibling.target.preferred.dependencies]\n"
+        'preferred-consumer = "*"\n'
+        "\n[feature.sibling.target.fallback.dependencies]\n"
+        'fallback-consumer = "*"\n'
+        "\n[feature.sibling.target.preferred.tasks]\n"
+        'child = "echo preferred-task-$SELECTION"\n'
+        "\n[feature.sibling.target.fallback.tasks]\n"
+        'child = "echo fallback-task-$SELECTION"\n'
+        "\n[feature.sibling.target.preferred.activation.env]\n"
+        'SELECTION = "preferred-activation"\n'
+        "\n[feature.sibling.target.fallback.activation.env]\n"
+        'SELECTION = "fallback-activation"\n'
+        "\n[environments]\n"
+        f'default = {{ features = [], platforms = ["{CURRENT_PLATFORM}"] }}\n'
+        'sibling = { features = ["sibling"], no-default-feature = true }\n',
+        encoding="utf-8",
+    )
+    sandbox.decision(workspace, sibling, "allow")
+    sandbox.run(workspace, "lock")
+    sandbox.run(workspace, "install", "--locked", "-e", "default")
+    lock = (workspace / "pixi.lock").read_bytes()
+    sibling_prefix = workspace / ".pixi" / "envs" / "sibling"
+    assert not sibling_prefix.exists()
+    marker.unlink(missing_ok=True)
+    sandbox.env["PIXI_CACHE_DIR"] = str(sandbox.root / "run-cache")
+
+    output = sandbox.run(workspace, "run", "--frozen", "workflow")
+    assert "preferred-task-preferred-activation" in output.stdout
+    assert "fallback-task" not in output.stdout
+    assert "fallback-activation" not in output.stdout
+    assert "workflow-ready" in output.stdout
+    assert marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert (sibling_prefix / "conda-meta" / "preferred-consumer-1.0-0.json").exists()
+    assert not (sibling_prefix / "conda-meta" / "fallback-consumer-1.0-0.json").exists()
+    installed = json.loads((sibling_prefix / "conda-meta" / "pixi").read_text(encoding="utf-8"))
+    assert any(
+        value.startswith("__glibc=2.30=")
+        for value in installed["resolved_platform"]["virtual_packages"]
+    )
+    assert (default_env_path(workspace) / "conda-meta" / "base-package-1.0-0.json").exists()
+    assert (workspace / "pixi.lock").read_bytes() == lock
+
+
 def info_workspace(sandbox: DetectorSandbox, channel: DetectorChannel, scope: str) -> Path:
     workspace = sandbox.workspace("info-scope", [channel] if scope == "default" else [])
     (workspace / "pixi.toml").write_text(
@@ -1062,9 +1222,8 @@ def test_info_uses_effective_environment_detection_once(
     info = sandbox.info(workspace)
     assert_selected(environment_info(info, "site"), "capable")
     assert_selected(environment_info(info, "site-copy"), "capable")
-    expected_default = "capable" if scope == "default" else "fallback"
-    assert_selected(environment_info(info, "default"), expected_default)
-    assert_selected(environment_info(info, "mirror"), expected_default)
+    assert_selected(environment_info(info, "default"), "capable")
+    assert_selected(environment_info(info, "mirror"), "capable")
     assert marker.read_text(encoding="utf-8").splitlines() == ["run"]
     if scope == "default":
         assert versions(info)[CAPABILITY] == "3.0"
@@ -1088,7 +1247,7 @@ def test_info_detection_errors_remain_inline(detector_sandbox: DetectorSandbox, 
 
     info = sandbox.info(workspace, overrides=overrides)
     assert "virtual_package_detection_error" in environment_info(info, "site")
-    assert_selected(environment_info(info, "site"), "fallback")
+    assert_selected(environment_info(info, "site"), "capable")
     if scope == "default":
         assert "virtual_package_detection_error" in info
     else:

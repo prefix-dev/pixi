@@ -90,12 +90,13 @@ use crate::{
     },
     workspace::{
         CommandDispatcherBuilderError, Environment, EnvironmentVars, HasWorkspaceRef,
+        PlatformSelection,
         errors::{UnsupportedPlatformError, VariantsError},
         get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
         virtual_packages::{
             VerifyCurrentPlatformError, environment_has_dependencies_for_platform,
-            minimum_compatible_declared_platform, verify_current_platform_can_run_environment,
+            verify_current_platform_can_run_environment,
         },
     },
 };
@@ -1111,73 +1112,47 @@ impl<'p> LockFileDerivedData<'p> {
         &self.lock_file
     }
 
-    fn locked_environment_hash(
-        &self,
-        environment: &Environment<'p>,
-    ) -> Result<LockedEnvironmentHash, UpdatePrefixError> {
-        let locked_environment = self.locked_env(environment)?;
-        Ok(LockedEnvironmentHash::from_environment(
-            locked_environment,
-            environment.named_or_best_declared_platform(
-                self.target_platform.as_ref().map(InstallTarget::name),
-            ),
-        ))
-    }
-
-    /// The explicitly selected or installed platform, or the best declared
-    /// platform. Without a selection, fall back to a declared platform whose
-    /// lock-resolved requirements this machine meets.
+    /// Explicit target, declaration match, installed platform, then locked-only fallback.
     fn install_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
-        let target_override = self.target_platform.as_ref().map(InstallTarget::name);
+        if let Some(target) = self.target_platform.as_ref() {
+            return environment
+                .named_or_selected_platform(Some(target.name()), Some(&self.lock_file));
+        }
+        let selection = environment
+            .select_platform(&environment.host(), Some(&self.lock_file))
+            .ok();
+        if let Some(PlatformSelection::Declared { platform, .. }) = selection {
+            return Some(platform);
+        }
         environment
-            .named_or_best_declared_platform(target_override)
-            .or_else(|| {
-                if target_override.is_some() {
-                    return None;
-                }
-                if let Some(installed) = environment.installed_resolved_platform().filter(|p| {
-                    let declared = environment.platforms();
-                    declared.is_empty() || declared.contains(p.name())
-                }) {
-                    return Some(installed);
-                }
-                let fallback =
-                    minimum_compatible_declared_platform(environment, &self.lock_file).ok();
-                if let Some(platform) = fallback {
-                    tracing::debug!(
-                        "no declared platform of environment '{}' matches this machine; \
-                         installing minimum-compatible platform '{}'",
-                        environment.name(),
-                        platform.name(),
-                    );
-                }
-                fallback
+            .installed_resolved_platform()
+            .filter(|platform| {
+                let declared = environment.platforms();
+                declared.is_empty() || declared.contains(platform.name())
             })
+            .or_else(|| selection.map(|selection| selection.platform()))
     }
 
     /// The platform data recorded in the `conda-meta/pixi` marker file for the
     /// installed prefix.
-    /// `None` when no declared platform runs on this machine.
     fn installed_platform_data(
         &self,
         environment: &Environment<'p>,
-    ) -> Option<(PlatformData, RequiredPlatform)> {
-        let resolved = self.install_platform(environment)?;
+        resolved: &PixiPlatform,
+    ) -> (PlatformData, RequiredPlatform) {
         let requirements = compute_required_virtual_package_specs(
             &self.lock_file,
             environment.name(),
             &[resolved],
-        );
-        // A subdir whose lock entry has no conda packages is absent from the
-        // map; the minimum is then the subdir with no requirements at all.
+        )
+        .remove(&resolved.subdir())
+        .unwrap_or_default();
         let minimum = RequiredPlatform::new(
             resolved.subdir(),
-            requirements
-                .get(&resolved.subdir())
-                .cloned()
-                .unwrap_or_default(),
+            requirements.depends,
+            requirements.constrains,
         );
-        Some((PlatformData::from(resolved), minimum))
+        (PlatformData::from(resolved), minimum)
     }
 
     /// Returns the up-to-date prefix for the given environment.
@@ -1236,7 +1211,10 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
-        let hash = self.locked_environment_hash(environment)?;
+        let hash = LockedEnvironmentHash::from_environment(
+            self.locked_env(environment)?,
+            Some(selected_platform),
+        );
         let cached = (update_mode == UpdateMode::QuickValidate)
             .then(|| self.cached_prefix(environment, selected_platform, &hash))
             .flatten();
@@ -1289,7 +1267,7 @@ impl<'p> LockFileDerivedData<'p> {
         // Save an environment file to the environment directory after the update.
         // Avoiding writing the cache away before the update is done.
         let (resolved_platform, minimum_supported_platform) =
-            self.installed_platform_data(environment).unzip();
+            self.installed_platform_data(environment, selected_platform);
         write_environment_file(
             &environment.dir(),
             EnvironmentFile {
@@ -1297,8 +1275,8 @@ impl<'p> LockFileDerivedData<'p> {
                 environment_name: environment.name().to_string(),
                 pixi_version: consts::PIXI_VERSION.to_string(),
                 environment_lock_file_hash: hash,
-                resolved_platform,
-                minimum_supported_platform,
+                resolved_platform: Some(resolved_platform),
+                minimum_supported_platform: Some(minimum_supported_platform),
                 detector_virtual_packages: environment.host().detector_virtual_packages(),
                 source_fingerprints: Default::default(),
             },
@@ -1337,7 +1315,7 @@ impl<'p> LockFileDerivedData<'p> {
     /// the host: the selected platform, or the one it was installed for.
     fn reusable_prefix_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
         match self.target_platform.as_ref().map(InstallTarget::name) {
-            Some(name) => environment.named_or_best_declared_platform(Some(name)),
+            Some(name) => environment.named_or_selected_platform(Some(name), Some(&self.lock_file)),
             None => environment
                 .installed_resolved_platform()
                 .filter(|platform| {

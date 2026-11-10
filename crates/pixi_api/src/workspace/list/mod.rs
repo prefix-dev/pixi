@@ -74,7 +74,7 @@ pub async fn list(
     let platform = match resolved_platform.as_ref() {
         Some(p) => p,
         None => environment
-            .installed_or_best_declared_platform()
+            .installed_or_selected_platform(Some(&lock_file))
             .ok_or_else(|| {
                 miette::miette!(
                     "no platform supported by environment '{}' matches the current system",

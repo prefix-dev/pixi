@@ -908,13 +908,34 @@ pub fn candidate_subdirs(current: Subdir) -> Vec<Subdir> {
     candidate_subdirs
 }
 
+/// Virtual packages whose meaning Pixi defines and compares with the host
+/// before checking locked requirements.
+pub fn is_builtin_virtual_package(name: &str) -> bool {
+    matches!(
+        name,
+        "__unix"
+            | "__linux"
+            | "__osx"
+            | "__win"
+            | "__ios"
+            | "__android"
+            | "__glibc"
+            | "__musl"
+            | "__eglibc"
+            | "__cuda"
+            | "__cuda_arch"
+            | "__amdgpu"
+            | "__amdgpu_arch"
+            | "__archspec"
+    )
+}
+
 /// Returns `true` when `system` provides the capability `required` names.
 ///
 /// Versioned virtual packages are satisfied by the same name and build string
 /// at a version at least as high. An empty build string, which only appears
-/// in data written before CEP26, is the same default build as `"0"`. `__amdgpu_arch` requires an exact version because AMD GPU
-/// code objects are architecture-specific. `__archspec` compares
-/// microarchitectures through the archspec database.
+/// in data written before CEP26, is the same default build as `"0"`.
+/// `__archspec` compares microarchitectures through the archspec database.
 pub fn capability_satisfied_by(
     required: &GenericVirtualPackage,
     system: &[GenericVirtualPackage],
@@ -924,11 +945,7 @@ pub fn capability_satisfied_by(
     }
     system.iter().any(|provided| {
         provided.name == required.name
-            && if required.name.as_normalized() == "__amdgpu_arch" {
-                provided.version == required.version
-            } else {
-                provided.version >= required.version
-            }
+            && provided.version >= required.version
             && (provided.build_string == required.build_string
                 || is_default_build_string(provided.build_string.as_str())
                     && is_default_build_string(required.build_string.as_str()))
@@ -1322,16 +1339,18 @@ mod tests {
     }
 
     #[test]
-    fn amdgpu_arch_capability_requires_exact_isa_version() {
+    fn amdgpu_arch_capability_is_a_lower_bound() {
         let required = gvp("__amdgpu_arch", "9.0.10");
-        assert!(capability_satisfied_by(
-            &required,
-            &[gvp("__amdgpu_arch", "9.0.10")]
-        ));
-        for version in ["8.0.10", "10.0.10", "9.1.10", "9.0.9", "9.0.11"] {
+        for version in ["9.0.10", "10.0.10", "9.1.10", "9.0.11"] {
+            assert!(
+                capability_satisfied_by(&required, &[gvp("__amdgpu_arch", version)]),
+                "ISA version {version} must satisfy {required}"
+            );
+        }
+        for version in ["8.0.10", "9.0.9"] {
             assert!(
                 !capability_satisfied_by(&required, &[gvp("__amdgpu_arch", version)]),
-                "a different ISA version {version} must not satisfy {required}"
+                "ISA version {version} must not satisfy {required}"
             );
         }
         assert!(!capability_satisfied_by(&required, &[]));
@@ -1770,16 +1789,6 @@ mod tests {
         assert!(capability_satisfied_by(
             &required_default,
             &[provided_default]
-        ));
-
-        let required_arch = gvp("__amdgpu_arch", "9.0.10");
-        assert!(capability_satisfied_by(
-            &required_arch,
-            &[gvp("__amdgpu_arch", "9.0.10")]
-        ));
-        assert!(!capability_satisfied_by(
-            &required_arch,
-            &[gvp("__amdgpu_arch", "11.0.0")]
         ));
     }
 

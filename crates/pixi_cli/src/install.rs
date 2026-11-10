@@ -25,6 +25,8 @@ use pixi_manifest::platform::host::host_baseline;
 /// environment will be installed.
 ///
 /// If you want to install all environments, you can use the `--all` flag.
+/// Unless `--platform` is specified, environments incompatible with this
+/// machine are skipped using the lock file.
 ///
 /// Running `pixi install` is not required before running other commands like
 /// `pixi run` or `pixi shell`. These commands will automatically install the
@@ -156,14 +158,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
         .collect::<Result<Vec<_>, _>>()?;
 
-    // When installing all environments, silently skip any that don't support
-    // the current platform. When the user explicitly asks for an environment
-    // (or the default), we still want to surface the platform error.
-    if args.all {
+    // Scripts resolve against their adjacent lock file or cached resolution;
+    // other workspaces update their persistent lock file.
+    let update_lock_file_options = UpdateLockFileOptions {
+        lock_file_usage: args.lock_file_usage.to_usage(),
+        no_install: false,
+        max_concurrent_solves: workspace.config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    let mut lock_file_source = if args.workspace_config.script.is_some() {
+        LockFileSource::Resolve(update_lock_file_options)
+    } else {
+        LockFileSource::Update(update_lock_file_options)
+    };
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+
+    // Resolve before selecting: a stale lock can exclude newly added or newly
+    // compatible environments, and an empty lock misses package requirements.
+    // Explicit targets bypass host selection and retain membership validation.
+    if args.all && target_platform.is_none() {
         workspace.refresh_environment_hosts().await?;
-        let (supported, skipped): (Vec<_>, Vec<_>) = environments
-            .into_iter()
-            .partition(|env| env.best_declared_platform().is_some());
+        let lock_file = {
+            let _clear_progress =
+                pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+            lock_file_source
+                .prepare(&workspace, Some(progress.clone()))
+                .await?
+        };
+        let (supported, skipped): (Vec<_>, Vec<_>) = environments.into_iter().partition(|env| {
+            env.select_platform(&env.host(), Some(&lock_file.lock_file))
+                .is_ok()
+        });
 
         if !skipped.is_empty() {
             tracing::warn!(
@@ -176,6 +201,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         environments = supported;
+        if environments.is_empty() {
+            return Ok(());
+        }
+        lock_file_source = LockFileSource::Prepared(Box::new(lock_file));
     }
 
     // Build the install filter from CLI args
@@ -184,25 +213,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
         .target_packages(args.only.clone().unwrap_or_default());
 
-    // Resolve the lock data and install the selected prefixes. Scripts use an
-    // adjacent lock file when one exists. Otherwise, they use the cached
-    // resolution. Other workspaces update their persistent lock file.
-    let update_lock_file_options = UpdateLockFileOptions {
-        lock_file_usage: args.lock_file_usage.to_usage(),
-        no_install: false,
-        max_concurrent_solves: workspace.config().max_concurrent_solves(),
-        ..Default::default()
-    };
     let (LockFileDerivedData { lock_file, .. }, prefixes) = get_lock_file_and_prefixes(
         &environments,
         target_platform.as_ref(),
-        Some(pixi_reporters::TopLevelProgress::from_global()),
+        Some(progress),
         UpdateMode::Revalidate,
-        if args.workspace_config.script.is_some() {
-            LockFileSource::Resolve(update_lock_file_options)
-        } else {
-            LockFileSource::Update(update_lock_file_options)
-        },
+        lock_file_source,
         ReinstallPackages::default(),
         &filter,
     )
@@ -229,13 +245,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         if skip_opts {
-            // Use the platform the install actually targeted (honoring a
-            // `--platform` override), falling back to the host subdir. Unlike
-            // `best_declared_platform()`, this never panics when the chosen platform is
-            // not runnable on the current host (e.g. a cross-target install).
+            // Honor an explicit target and otherwise keep the installed platform.
             let host_platform = host_baseline();
+            let installed_platform = environment.installed_resolved_platform_name();
             let platform = environment
-                .named_or_best_declared_platform(target_platform.as_ref())
+                .named_or_selected_platform(
+                    target_platform.as_ref().or(installed_platform.as_ref()),
+                    Some(&lock_file),
+                )
                 .unwrap_or(&host_platform);
             let locked_env = lock_file
                 .environment(environment.name().as_str())

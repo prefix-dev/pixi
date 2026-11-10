@@ -695,6 +695,62 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_custom_declarations_do_not_filter_platforms() {
+        use rattler_conda_types::{GenericVirtualPackage, Subdir};
+
+        let input = r#"
+        channels = []
+        platforms = [
+          { name = "first", platform = "linux-64", __username_length = "10" },
+          { name = "second", platform = "linux-64", __username_length = "3" },
+          { name = "gpu", platform = "linux-64", cuda = "12" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+        let env_platforms = workspace
+            .platforms
+            .iter()
+            .map(|platform| platform.name().clone())
+            .collect();
+
+        for host in [
+            vec![],
+            vec![GenericVirtualPackage {
+                name: "__username_length".parse().unwrap(),
+                version: "3".parse().unwrap(),
+                build_string: BuildString::new_unchecked("0"),
+            }],
+        ] {
+            let candidates = workspace.possible_pixi_platforms(Subdir::Linux64, &host);
+            assert_eq!(
+                candidates
+                    .iter()
+                    .map(|p| p.name().as_str())
+                    .collect::<Vec<_>>(),
+                ["first", "second"]
+            );
+            let diagnostics =
+                workspace.platform_match_diagnostics(Subdir::Linux64, &host, &env_platforms);
+            assert!(diagnostics[0].matches_host());
+            assert!(diagnostics[1].matches_host());
+            assert!(!diagnostics[2].matches_host());
+            let requirements =
+                workspace.unsatisfied_platform_requirements(Subdir::Linux64, &host, &env_platforms);
+            assert_eq!(
+                requirements
+                    .iter()
+                    .map(crate::platform::format_virtual_package)
+                    .collect::<Vec<_>>(),
+                ["__cuda=12"]
+            );
+        }
+    }
+
     /// Two platform entries that resolve to the same name must be rejected,
     /// not silently collapsed to the first (`PixiPlatform` is keyed by name).
     #[test]

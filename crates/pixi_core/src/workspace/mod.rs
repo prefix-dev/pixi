@@ -34,7 +34,7 @@ pub use conda_pypi_map::CondaPypiMapError;
 pub use discovery::{
     DiscoveryStart, LocatorWarnings, WarningHandler, WorkspaceLocator, WorkspaceLocatorError,
 };
-pub use environment::Environment;
+pub use environment::{Environment, PlatformSelection};
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::{Equivalent, IndexSet};
 use miette::Diagnostic;

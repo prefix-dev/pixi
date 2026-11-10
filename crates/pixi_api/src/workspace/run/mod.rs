@@ -38,6 +38,7 @@ use pixi_task::{
     FailedToParseShellScript, InputHashesError, InvalidWorkingDirectory, PreferExecutable,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, TaskGraphError, get_task_env,
 };
+use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
@@ -180,13 +181,6 @@ pub async fn run<I: Interface>(
     // Sanity check of prefix location
     sanity_check_workspace(workspace).await?;
 
-    // Detect the host, the virtual packages this machine provides, only for the
-    // environment this command targets. Other environments are detected when a
-    // task runs in them.
-    workspace
-        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
-        .await?;
-
     // `--platform` pins which declared platform the environment is installed
     // and activated for. Without it we auto-upgrade to the platform the
     // environment was last installed for (so users need not repeat
@@ -196,12 +190,12 @@ pub async fn run<I: Interface>(
     let run_platform = user_platform
         .clone()
         .or_else(|| environment.installed_resolved_platform_name());
-    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
+    let selected_platform = environment.named_or_selected_platform(run_platform.as_ref(), None);
 
     // A `--platform` the environment doesn't list is a membership error. With
-    // no platform requested, defer to the install path's minimum fallback.
+    // no platform requested, defer to the install path's locked selection.
     if allow_installs
-        && best_declared_platform.is_none()
+        && selected_platform.is_none()
         && let Some(name) = user_platform.as_ref()
     {
         return Err(PlatformNotInEnvironmentError {
@@ -232,9 +226,9 @@ pub async fn run<I: Interface>(
         .await?
         .0;
 
-    // Only an explicit `--platform` pins the global target; the implicit
-    // auto-upgrade is resolved per-environment in the loop below, since a
-    // global pin broke sibling environments with a different platform.
+    // Only an explicit `--platform` pins the global target. Task graph
+    // construction detects each relevant environment's host before selecting
+    // its platform and resolving platform-specific task definitions.
     lock_file.set_explicit_target_platform(user_platform.clone());
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
@@ -245,7 +239,14 @@ pub async fn run<I: Interface>(
     });
 
     // Construct a task graph from the input arguments.
-    let task_graph = build_task_graph(interface, workspace, explicit_environment, &options).await?;
+    let task_graph = build_task_graph(
+        interface,
+        workspace,
+        explicit_environment,
+        &options,
+        lock_file.as_lock_file(),
+    )
+    .await?;
     tracing::debug!("Task graph: {}", task_graph);
 
     if options.dry_run {
@@ -275,14 +276,6 @@ pub async fn run<I: Interface>(
         // don't instantiate a prefix for an alias.
         if !executable_task.task().is_executable() {
             continue;
-        }
-
-        if allow_installs {
-            workspace
-                .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(
-                    &executable_task.run_environment,
-                ))
-                .await?;
         }
 
         // Classify how this machine runs the task's environment. A `--platform`
@@ -488,6 +481,7 @@ async fn build_task_graph<'p, I: Interface>(
     workspace: &'p Workspace,
     explicit_environment: Option<Environment<'p>>,
     options: &RunOptions,
+    lock_file: &LockFile,
 ) -> Result<TaskGraph<'p>, TaskGraphError> {
     // Pin the search only to an explicit `--platform`; otherwise each
     // environment resolves its own platform, so foreign-platform tasks are found.
@@ -503,6 +497,7 @@ async fn build_task_graph<'p, I: Interface>(
     };
     let search_environment =
         SearchEnvironments::from_opt_env(workspace, explicit_environment, search_platform)
+            .with_lock_file(lock_file)
             .with_disambiguate_fn(async |problem: &AmbiguousTask<'p>| {
                 disambiguate_task_interactive(interface, problem).await
             });

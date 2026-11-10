@@ -107,7 +107,7 @@ pub async fn feature_by_task(
     environment: &EnvironmentName,
 ) -> Option<FeatureName> {
     let environment = workspace.environment(environment)?;
-    let feature_tasks = environment.feature_tasks();
+    let feature_tasks = environment.feature_tasks(environment.best_declared_platform());
 
     for (feature_name, tasks) in feature_tasks {
         if tasks.contains_key(task) {

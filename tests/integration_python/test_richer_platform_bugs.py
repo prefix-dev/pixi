@@ -12,14 +12,17 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from .common import CURRENT_PLATFORM, ExitCode, Output, verify_cli_command
+from .test_virtual_package_detectors import DetectorChannel
 
 # The virtual_packages channel only ships the cuda package for these subdirs.
 CUDA_CHANNEL_SUBDIRS = {"linux-64", "win-64"}
@@ -675,3 +678,201 @@ packages: []
             ExitCode.SUCCESS,
             stdout_contains="TASK-RAN",
         )
+
+
+@requires_cuda_channel
+def test_locked_cuda_requirement_skips_declared_match(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    channel = DetectorChannel(tmp_pixi_workspace / "channel")
+    channel.package("gpu", ["__cuda >=12"])
+    channel.package("cpu", [])
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "locked-selection"
+channels = ["{channel.url}"]
+platforms = [
+    {{ name = "gpu", platform = "{CURRENT_PLATFORM}", cuda = "12.0" }},
+    {{ name = "cpu", platform = "{CURRENT_PLATFORM}" }},
+]
+
+[target.gpu.dependencies]
+gpu = "*"
+
+[target.cpu.dependencies]
+cpu = "*"
+
+[tasks]
+hello = "echo selected-cpu"
+
+[target.gpu.tasks]
+hello = "echo selected-gpu"
+""",
+    )
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+    lock = tmp_pixi_workspace / "pixi.lock"
+    lock.write_text(lock.read_text().replace("__cuda >=12", "__cuda >=12.4"))
+    verify_cli_command(
+        [pixi, "-v", "run", "--frozen", "--manifest-path", manifest, "hello"],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "12.2"},
+        stdout_contains="selected-cpu",
+        stderr_contains=["skipping platform 'gpu'", "__cuda >=12.4"],
+    )
+
+
+@requires_cuda_channel
+@pytest.mark.parametrize("cpu", [True, False])
+def test_high_cuda_declaration_prefers_cpu_or_warns_for_locked_only(
+    pixi: Path, tmp_pixi_workspace: Path, cpu: bool
+) -> None:
+    channel = DetectorChannel(tmp_pixi_workspace / "channel")
+    channel.package("gpu", ["__cuda >=12"])
+    cpu_platform = f', {{ name = "cpu", platform = "{CURRENT_PLATFORM}" }}' if cpu else ""
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "high-declaration"
+channels = ["{channel.url}"]
+platforms = [
+    {{ name = "gpu", platform = "{CURRENT_PLATFORM}", cuda = "12.8" }}{cpu_platform},
+]
+
+[target.gpu.dependencies]
+gpu = "*"
+
+[tasks]
+hello = "echo selected-cpu"
+
+[target.gpu.tasks]
+hello = "echo selected-gpu"
+""",
+    )
+    output = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        env={"CONDA_OVERRIDE_CUDA": "12.6"},
+        stdout_contains="selected-cpu" if cpu else "selected-gpu",
+    )
+    assert output.stderr.count("environment still runs") == (0 if cpu else 1)
+    repeated = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        env={"CONDA_OVERRIDE_CUDA": "12.6"},
+        stdout_contains="selected-cpu" if cpu else "selected-gpu",
+    )
+    assert "environment still runs" not in repeated.stderr
+
+
+@requires_cuda_channel
+@pytest.mark.parametrize("cuda", ["", "11.8", "12.2"])
+def test_optional_cuda_constraint_at_install_and_run(
+    pixi: Path, tmp_pixi_workspace: Path, cuda: str
+) -> None:
+    channel = DetectorChannel(tmp_pixi_workspace / "channel")
+    channel.package("cuda-constraint", [], constrains=["__cuda >=12"])
+    manifest = _bare_manifest(tmp_pixi_workspace, channel.url, deps='cuda-constraint = "*"')
+    _install(pixi, manifest, env={"CONDA_OVERRIDE_CUDA": ""})
+    marker = _read_marker(tmp_pixi_workspace)
+    assert marker["minimum_supported_platform"]["constrains"] == ["__cuda >=12"]
+    _run(
+        pixi,
+        manifest,
+        ExitCode.FAILURE if cuda == "11.8" else ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": cuda},
+        **(
+            {"stderr_contains": "__cuda >=12"}
+            if cuda == "11.8"
+            else {"stdout_contains": "TASK-RAN"}
+        ),
+    )
+    shutil.rmtree(tmp_pixi_workspace / ".pixi" / "envs")
+    verify_cli_command(
+        [pixi, "install", "--frozen", "--manifest-path", manifest],
+        ExitCode.FAILURE if cuda == "11.8" else ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": cuda},
+    )
+
+
+@pytest.mark.skipif(CURRENT_PLATFORM != "linux-64", reason="AMD detection requires linux-64")
+@pytest.mark.parametrize("architecture,selected", [("11.5.0", "cpu"), ("11.0.3", "amd")])
+def test_locked_amd_exact_architecture_selects_fallback(
+    pixi: Path, tmp_pixi_workspace: Path, architecture: str, selected: str
+) -> None:
+    channel = DetectorChannel(tmp_pixi_workspace / "channel")
+    channel.package("amd", ["__amdgpu_arch ==11.0.3"])
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "amd-selection"
+channels = ["{channel.url}"]
+platforms = [
+    {{ name = "amd", platform = "linux-64", amdgpu = "gfx1103" }},
+    {{ name = "cpu", platform = "linux-64" }},
+]
+
+[target.amd.dependencies]
+amd = "*"
+
+[tasks]
+hello = "echo selected-cpu"
+
+[target.amd.tasks]
+hello = "echo selected-amd"
+""",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        env={"CONDA_OVERRIDE_AMDGPU": "0", "CONDA_OVERRIDE_AMDGPU_ARCH": architecture},
+        stdout_contains=f"selected-{selected}",
+    )
+
+
+@pytest.mark.skipif(CURRENT_PLATFORM != "linux-64", reason="uses linux wheel tags")
+def test_incompatible_locked_wheel_skips_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    channel = DetectorChannel(tmp_pixi_workspace / "channel")
+    channel.package("python", [], version="3.11.0")
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "wheel-selection"
+channels = ["{channel.url}"]
+platforms = [
+    {{ name = "wheel", platform = "linux-64" }},
+    {{ name = "fallback", platform = "linux-64" }},
+]
+
+[target.wheel.dependencies]
+python = "3.11.*"
+
+[tasks]
+hello = "echo selected-fallback"
+
+[target.wheel.tasks]
+hello = "echo selected-wheel"
+""",
+    )
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+    lock_path = tmp_pixi_workspace / "pixi.lock"
+    lock = yaml.safe_load(lock_path.read_text())
+    wheel = (tmp_pixi_workspace / "incompatible-1.0-cp311-cp311-win_amd64.whl").as_uri()
+    lock["environments"]["default"]["packages"]["wheel"].append({"pypi": wheel})
+    lock["packages"].append({"pypi": wheel, "name": "incompatible", "version": "1.0"})
+    lock_path.write_text(yaml.safe_dump(lock))
+    verify_cli_command(
+        [pixi, "-v", "run", "--frozen", "--manifest-path", manifest, "hello"],
+        stdout_contains="selected-fallback",
+        stderr_contains="skipping platform 'wheel'",
+    )
+
+
+def test_marker_without_constrains_still_runs(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    channel = DetectorChannel(tmp_pixi_workspace / "channel")
+    channel.package("no-deps", [])
+    manifest = _bare_manifest(tmp_pixi_workspace, channel.url)
+    _install(pixi, manifest)
+    marker = _read_marker(tmp_pixi_workspace)
+    marker["minimum_supported_platform"].pop("constrains", None)
+    _marker(tmp_pixi_workspace).write_text(json.dumps(marker))
+    _run(pixi, manifest, ExitCode.SUCCESS, stdout_contains="TASK-RAN")

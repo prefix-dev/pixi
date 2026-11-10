@@ -86,9 +86,9 @@ pub(crate) async fn execute_run(
     let run_platform = user_platform
         .clone()
         .or_else(|| environment.installed_resolved_platform_name());
-    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
+    let selected_platform = environment.named_or_selected_platform(run_platform.as_ref(), None);
     if allow_installs
-        && best_declared_platform.is_none()
+        && selected_platform.is_none()
         && let Some(name) = user_platform.as_ref()
     {
         return Err(PlatformNotInEnvironmentError {
@@ -101,21 +101,29 @@ pub(crate) async fn execute_run(
         environment.emit_emulation_warning();
     }
 
-    // Select and parse the entrypoint before solving, so a syntax error or a
-    // missing platform key surfaces without waiting for the environment.
-    let activation_platform = best_declared_platform
-        .cloned()
-        .unwrap_or_else(|| environment.activation_platform());
-    let subdir = activation_platform.subdir();
-    let Some(command) = entrypoint.select(subdir) else {
-        return Err(miette::miette!(
-            help = "add a matching key to the `entrypoint` table, for example `unix`, `win` or the exact platform",
-            "the entrypoint has no command for platform '{subdir}'"
-        ));
+    let parse_entrypoint = |subdir| -> miette::Result<_> {
+        let Some(command) = entrypoint.select(subdir) else {
+            return Err(miette::miette!(
+                help = "add a matching key to the `entrypoint` table, for example `unix`, `win` or the exact platform",
+                "the entrypoint has no command for platform '{subdir}'"
+            ));
+        };
+        let sequence = parse_sequence(command).map_err(|error| {
+            Report::new(error).with_source_code(NamedSource::new("entrypoint", command.to_owned()))
+        })?;
+        Ok((command, sequence))
     };
-    let sequence = parse_sequence(command).map_err(|error| {
-        Report::new(error).with_source_code(NamedSource::new("entrypoint", command.to_owned()))
-    })?;
+    // Report syntax errors early only when resolving cannot change the command.
+    let parsed_entrypoint = if matches!(entrypoint, Entrypoint::Uniform(_))
+        || (run_platform.is_some() && selected_platform.is_some())
+    {
+        let platform = selected_platform
+            .cloned()
+            .unwrap_or_else(|| environment.activation_platform());
+        Some(parse_entrypoint(platform.subdir())?)
+    } else {
+        None
+    };
 
     let progress = pixi_reporters::TopLevelProgress::from_global();
     let mut lock_file = workspace
@@ -130,6 +138,19 @@ pub(crate) async fn execute_run(
         )
         .await?
         .0;
+    if allow_installs
+        && user_platform.is_none()
+        && environment.installed_resolved_platform().is_none()
+    {
+        workspace
+            .refresh_locked_environment_host(&environment, lock_file.as_lock_file())
+            .await?;
+    }
+
+    let activation_platform = environment
+        .named_or_selected_platform(run_platform.as_ref(), Some(lock_file.as_lock_file()))
+        .cloned()
+        .unwrap_or_else(|| environment.activation_platform());
     if user_platform.is_some() {
         lock_file.set_explicit_target_platform(user_platform.clone());
     } else {
@@ -151,6 +172,11 @@ pub(crate) async fn execute_run(
             );
         }
     }
+
+    let (command, sequence) = match parsed_entrypoint {
+        Some(parsed) => parsed,
+        None => parse_entrypoint(activation_platform.subdir())?,
+    };
 
     let print_command = |command: &str| {
         if tracing::enabled!(Level::WARN) {

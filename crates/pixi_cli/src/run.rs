@@ -397,12 +397,12 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
 fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
-            explicit_environment.get_filtered_tasks()
+            explicit_environment.get_filtered_tasks(explicit_environment.best_declared_platform())
         } else {
             workspace
                 .environments()
                 .into_iter()
-                .flat_map(|env| env.get_filtered_tasks())
+                .flat_map(|env| env.get_filtered_tasks(env.best_declared_platform()))
                 .collect()
         };
 

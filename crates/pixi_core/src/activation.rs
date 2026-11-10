@@ -817,7 +817,7 @@ mod tests {
         let activate_for = async |name: &str| {
             let name = name.parse().unwrap();
             let platform = default_env
-                .named_or_best_declared_platform(Some(&name))
+                .named_or_selected_platform(Some(&name), None)
                 .unwrap();
             run_activation(
                 &default_env,

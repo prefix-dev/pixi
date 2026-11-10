@@ -19,7 +19,9 @@ use pixi_core::host::{
     DenyAll, DetectedValue, DetectionSource, HostDetection, HostDetector, SkipReason, WantedNames,
     consent_key_argument,
 };
-use pixi_core::workspace::grouped_environment::GroupedEnvironment;
+use pixi_core::workspace::{
+    PlatformSelection, errors::SkippedPlatform, grouped_environment::GroupedEnvironment,
+};
 use pixi_global::{BinDir, EnvRoot};
 use pixi_manifest::platform::subdir_default_virtual_packages;
 use pixi_manifest::toml::inline_virtual_package_specs;
@@ -79,6 +81,8 @@ pub struct PlatformInfo {
     subdir: String,
     /// Friendly `key=value` form, used for both text and `--json`.
     virtual_packages: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    constrains: Vec<String>,
 }
 
 /// Render `declared` in the friendly `key=value` form, optionally filtering
@@ -103,6 +107,7 @@ impl From<&pixi_manifest::PixiPlatform> for PlatformInfo {
                 platform.manifest_virtual_package_records().as_ref(),
                 Some(&subdir_default_virtual_packages(platform.subdir())),
             ),
+            constrains: Vec::new(),
         }
     }
 }
@@ -113,6 +118,7 @@ impl From<&PlatformData> for PlatformInfo {
             name: data.subdir().into(),
             subdir: data.subdir().to_string(),
             virtual_packages: friendly_virtual_packages(data.virtual_packages(), None),
+            constrains: Vec::new(),
         }
     }
 }
@@ -126,18 +132,24 @@ impl From<&RequiredPlatform> for PlatformInfo {
             name: data.subdir().into(),
             subdir: data.subdir().to_string(),
             virtual_packages: data.requirement_strings(),
+            constrains: data.constrain_strings(),
         }
     }
 }
 
 /// Human-readable representation of a platform entry in the `pixi info`
-/// output: bare name when it carries no customised VPs, otherwise
-/// `<name> (vp1, vp2, ...)` in friendly form.
+/// output, with optional virtual packages and conditional constraints.
 fn format_platform(info: &PlatformInfo) -> String {
-    if info.virtual_packages.is_empty() {
-        info.name.to_string()
-    } else {
-        format!("{} ({})", info.name, info.virtual_packages.join(", "))
+    match (info.virtual_packages.is_empty(), info.constrains.is_empty()) {
+        (true, true) => info.name.to_string(),
+        (false, true) => format!("{} ({})", info.name, info.virtual_packages.join(", ")),
+        (true, false) => format!("{} (constrains: {})", info.name, info.constrains.join(", ")),
+        (false, false) => format!(
+            "{} ({}; constrains: {})",
+            info.name,
+            info.virtual_packages.join(", "),
+            info.constrains.join(", ")
+        ),
     }
 }
 
@@ -150,6 +162,8 @@ pub struct EnvironmentInfo {
     dependencies: Vec<String>,
     pypi_dependencies: Vec<String>,
     platforms: Vec<PlatformInfo>,
+    selected_platform: Option<PlatformInfo>,
+    skipped_platforms: Vec<SkippedPlatform>,
     resolved_platform: Option<PlatformInfo>,
     minimum_supported_platform: Option<PlatformInfo>,
     tasks: Vec<TaskName>,
@@ -237,6 +251,24 @@ impl Display for EnvironmentInfo {
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Target platforms"),
                 platform_list
+            )?;
+        }
+
+        if let Some(selected) = &self.selected_platform {
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Selected platform"),
+                format_platform(selected)
+            )?;
+        }
+        for skipped in &self.skipped_platforms {
+            writeln!(
+                f,
+                "{:>WIDTH$}: {} ({})",
+                bold.apply_to("Skipped platform"),
+                skipped.platform,
+                skipped.reason
             )?;
         }
 
@@ -733,6 +765,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     });
     let mut environments_info = Vec::new();
     if let Some(ws) = &workspace {
+        let lock = if ws
+            .persistent_lock_file_path()
+            .is_some_and(|path| path.is_file())
+        {
+            ws.load_lock_file()
+                .await
+                .ok()
+                .and_then(|lock| lock.into_lock_file().ok())
+        } else {
+            None
+        };
         let mut detected_scopes = HashMap::new();
         for env in ws.environments() {
             let channels = GroupedEnvironment::from(env.clone()).channel_urls(&ws.channel_config());
@@ -774,7 +817,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if let Err(error) = environment_host.platform() {
                 detection_error.get_or_insert_with(|| error.to_string());
             }
-            let best = env.best_declared_platform_with_host(&environment_host);
+            let (best, skipped_platforms) =
+                match env.select_platform(&environment_host, lock.as_ref()) {
+                    Ok(PlatformSelection::Declared { platform, skipped })
+                    | Ok(PlatformSelection::LockedOnly { platform, skipped }) => {
+                        (Some(platform), skipped)
+                    }
+                    Err(error) => (None, error.skipped_platforms),
+                };
             let tasks = env
                 .tasks(best)
                 .ok()
@@ -814,6 +864,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(PlatformInfo::from)
                     })
                     .collect(),
+                selected_platform: best.map(PlatformInfo::from),
+                skipped_platforms,
                 resolved_platform: resolved_platform.as_ref().map(PlatformInfo::from),
                 minimum_supported_platform: minimum_supported_platform
                     .as_ref()
@@ -881,4 +933,62 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn environment_platform_selection_output() {
+        let platform = |name: &str, virtual_packages: Vec<String>| PlatformInfo {
+            name: PixiPlatformName::try_from(name).unwrap(),
+            subdir: "linux-64".to_string(),
+            virtual_packages,
+            constrains: Vec::new(),
+        };
+        let minimum: RequiredPlatform = serde_json::from_value(serde_json::json!({
+            "subdir": "linux-64",
+            "requirements": ["__glibc >=2.17"],
+            "constrains": ["__cuda >=12"]
+        }))
+        .unwrap();
+        let info = EnvironmentInfo {
+            name: EnvironmentName::Default,
+            features: vec![FeatureName::Default],
+            solve_group: None,
+            environment_size: None,
+            dependencies: Vec::new(),
+            pypi_dependencies: Vec::new(),
+            platforms: vec![
+                platform("cuda", vec!["cuda=12.0".to_string()]),
+                platform("cpu", Vec::new()),
+            ],
+            selected_platform: Some(platform("cpu", Vec::new())),
+            skipped_platforms: vec![SkippedPlatform {
+                platform: PixiPlatformName::try_from("cuda").unwrap(),
+                reason: "requires __cuda >=12.4, but the host provides __cuda=12.2=0".to_string(),
+            }],
+            resolved_platform: Some(platform("linux-64", Vec::new())),
+            minimum_supported_platform: Some(PlatformInfo::from(&minimum)),
+            tasks: Vec::new(),
+            channels: Vec::new(),
+            prefix: PathBuf::from("prefix"),
+            virtual_package_detection_error: None,
+        };
+
+        let rendered = info.to_string();
+        let rendered = console::strip_ansi_codes(&rendered);
+        insta::assert_snapshot!(rendered.lines().map(str::trim_start).join("\n"), @"
+        Environment: default
+        Features: default
+        Dependency count: 0
+        Target platforms: cuda (cuda=12.0), cpu
+        Selected platform: cpu
+        Skipped platform: cuda (requires __cuda >=12.4, but the host provides __cuda=12.2=0)
+        Resolved platform: linux-64
+        Minimum platform: linux-64 (__glibc >=2.17; constrains: __cuda >=12)
+        Prefix location: prefix
+        ");
+    }
 }

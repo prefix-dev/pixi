@@ -724,9 +724,9 @@ group-allowed = {{ features = ["allowed"], no-default-feature = true, solve-grou
         .environment(&EnvironmentName::Named("group-allowed".into()))
         .unwrap();
     assert!(allowed.best_declared_platform().is_some());
-    assert!(reversed.best_declared_platform().is_none());
-    assert!(group_denied.best_declared_platform().is_none());
-    assert!(group_allowed.best_declared_platform().is_none());
+    assert!(reversed.best_declared_platform().is_some());
+    assert!(group_denied.best_declared_platform().is_some());
+    assert!(group_allowed.best_declared_platform().is_some());
     assert!(Arc::ptr_eq(&allowed.host(), &twin.host()));
     assert!(Arc::ptr_eq(&group_denied.host(), &group_allowed.host()));
     assert_eq!(

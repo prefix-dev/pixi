@@ -44,6 +44,7 @@ use crate::{
     lock_file::{
         LockFileDerivedData, ReinstallPackages, UpdateLockFileError, UpdateLockFileOptions,
         UpdateMode, UpdatePrefixError, resolve_lock_platform_for,
+        virtual_packages::{unmet_constrains, unmet_requirements},
     },
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
@@ -445,21 +446,23 @@ fn write_platform(
 }
 
 /// The requirements the installed packages place on the machine: the conda
-/// subdir plus the virtual-package specs some resolved dependency depends on.
+/// subdir plus the virtual-package dependencies and constraints.
 #[derive(Serialize, Deserialize)]
 #[serde(from = "RequiredPlatformRaw", into = "RequiredPlatformRaw")]
 #[derive(Clone)]
 pub struct RequiredPlatform {
     subdir: Subdir,
     requirements: Vec<MatchSpec>,
+    constrains: Vec<MatchSpec>,
 }
 
 impl RequiredPlatform {
-    /// A requirement set from a subdir and the specs resolved dependencies
-    pub fn new(subdir: Subdir, requirements: Vec<MatchSpec>) -> Self {
+    /// A requirement set from a subdir and the resolved packages' specs.
+    pub fn new(subdir: Subdir, requirements: Vec<MatchSpec>, constrains: Vec<MatchSpec>) -> Self {
         Self {
             subdir,
             requirements,
+            constrains,
         }
     }
 
@@ -473,9 +476,21 @@ impl RequiredPlatform {
         &self.requirements
     }
 
+    /// Virtual-package constraints that apply only when the package is present.
+    pub fn constrains(&self) -> &[MatchSpec] {
+        &self.constrains
+    }
+
+    pub(crate) fn unmet_requirements(&self, system: &[GenericVirtualPackage]) -> Vec<MatchSpec> {
+        let mut unmet = unmet_requirements(&self.requirements, system);
+        unmet.extend(unmet_constrains(&self.constrains, system));
+        unmet
+    }
+
     /// Keeps only requirements whose values are known for cached-run validation.
-    pub(crate) fn retain_requirements(&mut self, keep: impl FnMut(&MatchSpec) -> bool) {
-        self.requirements.retain(keep);
+    pub(crate) fn retain_requirements(&mut self, mut keep: impl FnMut(&MatchSpec) -> bool) {
+        self.requirements.retain(&mut keep);
+        self.constrains.retain(keep);
     }
 
     /// The requirements as conda match-spec strings: how they are written to the
@@ -483,11 +498,20 @@ impl RequiredPlatform {
     pub fn requirement_strings(&self) -> Vec<String> {
         self.requirements.iter().map(ToString::to_string).collect()
     }
+
+    /// Optional constraints as conda match-spec strings.
+    pub fn constrain_strings(&self) -> Vec<String> {
+        self.constrains.iter().map(ToString::to_string).collect()
+    }
 }
 
 impl Display for RequiredPlatform {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write_platform(f, self.subdir, &self.requirements)
+        write_platform(f, self.subdir, &self.requirements)?;
+        if !self.constrains.is_empty() {
+            write!(f, " (constrains: {})", self.constrain_strings().join(", "))?;
+        }
+        Ok(())
     }
 }
 
@@ -498,6 +522,8 @@ struct RequiredPlatformRaw {
     subdir: Subdir,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     requirements: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    constrains: Vec<String>,
     /// Written by pixi versions that recorded requirements as concrete virtual
     /// packages. Read for migration, never written.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -509,6 +535,7 @@ impl From<RequiredPlatform> for RequiredPlatformRaw {
         Self {
             subdir: platform.subdir,
             requirements: platform.requirement_strings(),
+            constrains: platform.constrain_strings(),
             virtual_packages: Vec::new(),
         }
     }
@@ -517,20 +544,23 @@ impl From<RequiredPlatform> for RequiredPlatformRaw {
 impl From<RequiredPlatformRaw> for RequiredPlatform {
     /// Read what can be read and drop the rest, loudly.
     fn from(raw: RequiredPlatformRaw) -> Self {
-        let mut requirements: Vec<MatchSpec> = raw
-            .requirements
-            .iter()
-            .filter_map(|spec| {
-                MatchSpec::from_str(spec, ParseStrictness::Lenient)
-                    .inspect_err(|error| {
-                        tracing::warn!(
-                            "Ignoring unreadable requirement '{spec}' recorded in {}: {error}",
-                            consts::ENVIRONMENT_FILE_NAME
-                        );
-                    })
-                    .ok()
-            })
-            .collect();
+        let parse_specs = |specs: Vec<String>| {
+            specs
+                .iter()
+                .filter_map(|spec| {
+                    MatchSpec::from_str(spec, ParseStrictness::Lenient)
+                        .inspect_err(|error| {
+                            tracing::warn!(
+                                "ignoring unreadable requirement '{spec}' recorded in {}: {error}",
+                                consts::ENVIRONMENT_FILE_NAME
+                            );
+                        })
+                        .ok()
+                })
+                .collect::<Vec<MatchSpec>>()
+        };
+        let mut requirements = parse_specs(raw.requirements);
+        let constrains = parse_specs(raw.constrains);
         // Migrate a marker written before requirements were specs.
         requirements.extend(raw.virtual_packages.iter().filter_map(|entry| {
             let package = pixi_manifest::platform::parse_locked_virtual_package(entry);
@@ -542,7 +572,7 @@ impl From<RequiredPlatformRaw> for RequiredPlatform {
             }
             package.as_ref().map(legacy_requirement)
         }));
-        Self::new(raw.subdir, requirements)
+        Self::new(raw.subdir, requirements, constrains)
     }
 }
 
@@ -944,11 +974,40 @@ pub enum LockFileAndPrefixesError {
 }
 
 /// Chooses how installation obtains lock data.
-pub enum LockFileSource {
+pub enum LockFileSource<'env> {
     /// Updates the workspace's persistent lock file.
     Update(UpdateLockFileOptions),
     /// Uses storage-aware operational resolution, including the script cache.
     Resolve(UpdateLockFileOptions),
+    /// Installs from lock data already prepared for this workspace.
+    Prepared(Box<LockFileDerivedData<'env>>),
+}
+
+impl<'env> LockFileSource<'env> {
+    /// Prepares lock data and its installation prerequisites without installing prefixes.
+    pub async fn prepare(
+        self,
+        workspace: &'env Workspace,
+        progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
+    ) -> Result<LockFileDerivedData<'env>, LockFileAndPrefixesError> {
+        let (options, persist) = match self {
+            Self::Update(options) => (options, true),
+            Self::Resolve(options) => (options, false),
+            Self::Prepared(lock_file) => return Ok(*lock_file),
+        };
+
+        sanity_check_workspace(workspace).await?;
+        let requirements = extract_git_requirements_from_workspace(workspace);
+        store_credentials_from_requirements(requirements);
+
+        // Keep lock resolution from enlarging every caller's async state machine.
+        let (lock_file, _) = if persist {
+            Box::pin(workspace.update_lock_file(progress, options)).await?
+        } else {
+            Box::pin(workspace.resolve_lock_file(progress, options)).await?
+        };
+        Ok(lock_file)
+    }
 }
 
 /// Update all the specified prefixes if it doesn't exist or if it is not
@@ -964,7 +1023,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
     target_platform: Option<&PixiPlatformName>,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     update_mode: UpdateMode,
-    lock_file_source: LockFileSource,
+    lock_file_source: LockFileSource<'env>,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
 ) -> Result<(LockFileDerivedData<'env>, Vec<Prefix>), LockFileAndPrefixesError> {
@@ -979,13 +1038,14 @@ pub async fn get_lock_file_and_prefixes<'env>(
 
     let no_install = match &lock_file_source {
         LockFileSource::Update(options) | LockFileSource::Resolve(options) => options.no_install,
+        LockFileSource::Prepared(_) => false,
     };
     for env in environments {
         // A `--platform` the environment doesn't list is a membership error.
         // With no platform requested, defer to the install path's minimum fallback.
         if !no_install
             && env
-                .named_or_best_declared_platform(target_platform)
+                .named_or_selected_platform(target_platform, None)
                 .is_none()
             && let Some(name) = target_platform
         {
@@ -1005,7 +1065,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
     // now -- after the clear membership error, never before it.
     if !no_install
         && target_platform.is_some()
-        && let Some(platform) = environments[0].named_or_best_declared_platform(target_platform)
+        && let Some(platform) = environments[0].named_or_selected_platform(target_platform, None)
     {
         let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let subdir = platform.subdir();
@@ -1023,27 +1083,10 @@ pub async fn get_lock_file_and_prefixes<'env>(
     // written over bars that have finished but are still rendered.
     let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(progress.as_ref());
 
-    // Make sure the project is in a sane state
-    sanity_check_workspace(workspace).await?;
-
-    // Store the git credentials from the git requirements
-    let requirements = extract_git_requirements_from_workspace(workspace);
-    store_credentials_from_requirements(requirements);
-
-    // Ensure that the lock file is up-to-date
-    let mut lock_file = match lock_file_source {
-        LockFileSource::Update(options) => {
-            workspace
-                .update_lock_file(progress.clone(), options)
-                .await?
-        }
-        LockFileSource::Resolve(options) => {
-            workspace
-                .resolve_lock_file(progress.clone(), options)
-                .await?
-        }
-    }
-    .0;
+    // Ensure that the lock file is up-to-date.
+    let mut lock_file = lock_file_source
+        .prepare(workspace, progress.clone())
+        .await?;
     // Pin the override so the downstream prefix helpers see it without a
     // fresh parameter on every call.
     lock_file.set_explicit_target_platform(target_platform.cloned());
@@ -1312,13 +1355,49 @@ mod tests {
     }
 
     #[test]
+    fn required_platform_constraints_survive_markers_and_bind_only_present_packages() {
+        let constraint = MatchSpec::from_str("__cuda >=12", ParseStrictness::Lenient).unwrap();
+        let platform = RequiredPlatform::new(Subdir::Linux64, Vec::new(), vec![constraint.clone()]);
+        let json = serde_json::to_string(&platform).unwrap();
+        let mut restored: RequiredPlatform = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.constrains(), &[constraint]);
+        assert!(restored.unmet_requirements(&[]).is_empty());
+        for (version, compatible) in [("11.8", false), ("12.4", true)] {
+            let cuda = GenericVirtualPackage {
+                name: "__cuda".parse().unwrap(),
+                version: version.parse().unwrap(),
+                build_string: "0".parse().unwrap(),
+            };
+            assert_eq!(
+                restored.unmet_requirements(&[cuda]).is_empty(),
+                compatible,
+                "{version}",
+            );
+        }
+        restored
+            .retain_requirements(|spec| spec.name.as_exact().unwrap().as_normalized() != "__cuda");
+        assert!(restored.constrains().is_empty());
+        assert!(restored.unmet_requirements(&[]).is_empty());
+    }
+
+    #[test]
+    fn required_platform_reads_markers_without_constraints() {
+        let restored: RequiredPlatform =
+            serde_json::from_str(r#"{"subdir":"linux-64","requirements":["__cuda >=12"]}"#)
+                .unwrap();
+        assert!(restored.constrains().is_empty());
+        assert_eq!(restored.requirement_strings(), ["__cuda >=12"]);
+        assert_eq!(restored.unmet_requirements(&[]), restored.requirements());
+    }
+
+    #[test]
     fn required_platform_round_trips_pattern_requirements() {
         let archspec = "__archspec[version='1.*', build='^(x86_64_v3|haswell|skylake)$']";
         let requirements = vec![
             MatchSpec::from_str(archspec, ParseStrictness::Lenient).unwrap(),
             MatchSpec::from_str("__glibc >=2.17", ParseStrictness::Lenient).unwrap(),
         ];
-        let platform = RequiredPlatform::new(Subdir::Linux64, requirements);
+        let platform = RequiredPlatform::new(Subdir::Linux64, requirements, Vec::new());
 
         let json = serde_json::to_string(&platform).unwrap();
         // Stored as strings, like the concrete virtual packages beside them,
@@ -1439,7 +1518,7 @@ mod tests {
             "__archspec 1.* ^(x86_64_v3|haswell|skylake)$",
         ] {
             let spec = MatchSpec::from_str(raw, ParseStrictness::Lenient).unwrap();
-            let platform = RequiredPlatform::new(Subdir::Linux64, vec![spec.clone()]);
+            let platform = RequiredPlatform::new(Subdir::Linux64, vec![spec.clone()], Vec::new());
             let json = serde_json::to_string(&platform).unwrap();
             let restored: RequiredPlatform = serde_json::from_str(&json)
                 .unwrap_or_else(|e| panic!("'{raw}' did not survive the round trip: {e}"));

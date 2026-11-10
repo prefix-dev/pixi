@@ -438,6 +438,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     workspace
         .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
         .await?;
+    let lock_file = if args.from_lock_file {
+        let lock_file_path = workspace.lock_file_path();
+        if !lock_file_path.is_file() {
+            miette::bail!(
+                help = "Run `pixi lock` (or another command that updates the lock file) first.",
+                "no lock file found at '{}'",
+                lock_file_path.display(),
+            );
+        }
+        Some(
+            LockFile::from_path(&lock_file_path)
+                .into_diagnostic()
+                .with_context(|| {
+                    format!("failed to read lock file at '{}'", lock_file_path.display())
+                })?,
+        )
+    } else {
+        None
+    };
+    let selection_lock_file = if args.from_lock_file {
+        None
+    } else {
+        LockFile::from_path(&workspace.lock_file_path()).ok()
+    };
     let workspace_platforms = (&workspace)
         .workspace_manifest()
         .workspace
@@ -452,7 +476,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 miette::miette!("workspace does not define a platform with subdir '{subdir}'")
             })?,
         None => environment
-            .installed_or_best_declared_platform()
+            .installed_or_selected_platform(lock_file.as_ref().or(selection_lock_file.as_ref()))
             .cloned()
             .ok_or_else(|| {
                 miette::miette!(
@@ -466,20 +490,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .name
         .unwrap_or_else(|| environment.name().as_str().to_string());
 
-    let env_yaml = if args.from_lock_file {
-        let lock_file_path = workspace.lock_file_path();
-        if !lock_file_path.is_file() {
-            miette::bail!(
-                help = "Run `pixi lock` (or another command that updates the lock file) first.",
-                "no lock file found at '{}'",
-                lock_file_path.display(),
-            );
-        }
-        let lock_file = LockFile::from_path(&lock_file_path)
-            .into_diagnostic()
-            .with_context(|| {
-                format!("failed to read lock file at '{}'", lock_file_path.display())
-            })?;
+    let env_yaml = if let Some(lock_file) = lock_file {
         build_env_yaml_from_lock_file(&platform, &environment, &lock_file, name, !args.no_pypi)?
     } else {
         build_env_yaml(
@@ -522,7 +533,7 @@ mod tests {
                 .cloned()
                 .expect("test workspace must declare the requested platform"),
             None => environment
-                .best_declared_platform()
+                .installed_or_selected_platform(None)
                 .cloned()
                 .expect("environment must support the current system"),
         }
