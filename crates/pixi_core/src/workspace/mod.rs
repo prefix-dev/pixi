@@ -143,8 +143,8 @@ const NON_SEMVER_PACKAGES: [&str; 11] = [
 
 type HostScopeCache = Vec<(HostScope, Arc<HostDetection>)>;
 
-/// One lazily detected host per environment, so detecting one environment
-/// does not detect the others.
+/// Per-environment host detection state, initialized on demand.
+/// Detection results are shared between environments with identical scopes.
 type EnvironmentHosts = HashMap<EnvironmentName, EnvironmentHost>;
 
 /// The hosts detected for one environment.
