@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.84.2] - 2026-11-10
+#### ✨ Highlights
+
+This patch release fixes a memory usage regression from version 0.82.1
+and introduces support for building AMD GPU variants with pixi-build-mojo.
+
+It also introduces the `pixi self-update --nightly` command,
+which can be used to install `pixi` from a recent build of its
+development branch.
+
+
+#### Features
+
+- pixi_api: Add global install and uninstall to GlobalContext by @haecker-felix in [#7447](https://github.com/prefix-dev/pixi/pull/7447)
+- Derive PyPI purls for the conda-pypi channel by @nichtmacho in [#7477](https://github.com/prefix-dev/pixi/pull/7477)
+- pixi-build-mojo: Add explicit CPU and AMD GPU variants by @Hofer-Julian in [#7431](https://github.com/prefix-dev/pixi/pull/7431)
+- Add `pixi self-update --nightly` by @pavelzw in [#7473](https://github.com/prefix-dev/pixi/pull/7473)
+
+
+#### Fixes
+
+- cli: Reject several exclude-newer exemption specs of one package by @pavelzw in [#7467](https://github.com/prefix-dev/pixi/pull/7467)
+- run: Detect the host from the locked records when installing by @lucascolley in [#7476](https://github.com/prefix-dev/pixi/pull/7476)
+
+
+#### Documentation
+
+- Add CPU and AMD GPU Mojo package tutorial by @Hofer-Julian in [#7432](https://github.com/prefix-dev/pixi/pull/7432)
+- Added documentation for publishing to Artifactory by @lldash in [#7481](https://github.com/prefix-dev/pixi/pull/7481)
+- Add a virtual package detector example by @Hofer-Julian in [#7428](https://github.com/prefix-dev/pixi/pull/7428)
+
+
+#### Maintenance
+
+- Keep miette reports out of library crates by @lucascolley in [#7465](https://github.com/prefix-dev/pixi/pull/7465)
+- Publish nightly releases from CI build artifacts by @pavelzw in [#7474](https://github.com/prefix-dev/pixi/pull/7474)
+- Cross-compile the linux aarch64 build with cargo-zigbuild by @pavelzw in [#7482](https://github.com/prefix-dev/pixi/pull/7482)
+- release: Bump backend versions by @lucascolley in [#7485](https://github.com/prefix-dev/pixi/pull/7485)
+- Add details section to PR template by @Hofer-Julian in [#7499](https://github.com/prefix-dev/pixi/pull/7499)
+
+
+#### New Contributors
+* @lldash made their first contribution in [#7481](https://github.com/prefix-dev/pixi/pull/7481)
+
 ### [0.84.1] - 2026-11-04
 #### ✨ Highlights
 
