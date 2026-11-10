@@ -42,7 +42,9 @@ use pixi_core::host::{
     DetectorConsent, HostDetectError, HostDetection, HostDetector, HostUndetected,
     cli_detector_consent,
 };
-use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
+use pixi_core::lock_file::virtual_packages::{
+    VirtualPackageRequirements, required_virtual_package_specs,
+};
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
 use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
@@ -1299,13 +1301,24 @@ impl Project {
             }
         }
 
-        // The minimum platform the installed packages actually require: the
-        // subdir plus only the virtual packages some resolved dependency depends
-        // on. Collected before the records are consumed by the installer.
-        let resolved_depends: Vec<String> = pixi_records
+        let depends: Vec<&str> = pixi_records
             .iter()
-            .flat_map(|record| record.package_record().depends.iter().cloned())
+            .flat_map(|record| record.package_record().depends.iter().map(String::as_str))
             .collect();
+        let constrains: Vec<&str> = pixi_records
+            .iter()
+            .flat_map(|record| {
+                record
+                    .package_record()
+                    .constrains
+                    .iter()
+                    .map(String::as_str)
+            })
+            .collect();
+        let requirements = VirtualPackageRequirements {
+            depends: required_virtual_package_specs(&depends),
+            constrains: required_virtual_package_specs(&constrains),
+        };
 
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
@@ -1335,7 +1348,7 @@ impl Project {
             env_name,
             &prefix,
             &host,
-            &resolved_depends,
+            requirements,
             source_fingerprints_for_environment(environment),
         )?;
 
@@ -1351,13 +1364,12 @@ impl Project {
         env_name: &EnvironmentName,
         prefix: &Prefix,
         host: &HostDetection,
-        resolved_depends: &[String],
+        requirements: VirtualPackageRequirements,
         source_fingerprints: BTreeMap<String, u64>,
     ) -> Result<(), EnvironmentFileError> {
         let resolved_platform = PlatformData::new(host.subdir(), host.capabilities().into_owned());
-        let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
         let minimum_supported_platform =
-            RequiredPlatform::new(host.subdir(), required_virtual_package_specs(&depends));
+            RequiredPlatform::new(host.subdir(), requirements.depends, requirements.constrains);
 
         write_environment_file(
             prefix.root(),

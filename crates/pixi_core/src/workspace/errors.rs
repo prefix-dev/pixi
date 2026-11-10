@@ -15,6 +15,13 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use thiserror::Error;
 
+/// A candidate rejected by its locked requirements.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SkippedPlatform {
+    pub platform: PixiPlatformName,
+    pub reason: String,
+}
+
 /// An error that occurs when data is requested for a platform that is not supported.
 #[derive(Debug, Clone)]
 pub struct UnsupportedPlatformError {
@@ -53,6 +60,8 @@ pub struct UnsupportedPlatformError {
     /// breakdown is available (e.g. an explicit `--platform` the environment
     /// doesn't declare).
     pub platform_diagnostics: Vec<PlatformMatchDiagnosis>,
+
+    pub skipped_platforms: Vec<SkippedPlatform>,
 }
 
 impl Error for UnsupportedPlatformError {}
@@ -80,6 +89,7 @@ impl Display for UnsupportedPlatformError {
         if breakdown.is_empty()
             && self.unsatisfied_requirements.is_empty()
             && self.unmet_requirements.is_empty()
+            && self.skipped_platforms.is_empty()
         {
             return match &self.environment {
                 EnvironmentName::Default => write!(
@@ -93,13 +103,13 @@ impl Display for UnsupportedPlatformError {
 
         write!(f, "{lead} on this machine.")?;
 
-        if breakdown.is_empty() {
+        if breakdown.is_empty() && self.skipped_platforms.is_empty() {
             // No per-platform breakdown available; fall back to the aggregate line.
             write!(
                 f,
                 "\nNo declared platform's virtual packages are satisfied here."
             )?;
-        } else {
+        } else if !breakdown.is_empty() {
             write!(f, "\n\nDeclared platforms and why none runs here:")?;
             for diagnosis in breakdown {
                 write!(f, "\n  - {}", format_platform_diagnosis(diagnosis))?;
@@ -122,16 +132,26 @@ impl Display for UnsupportedPlatformError {
             )?;
         }
 
+        if !self.skipped_platforms.is_empty() {
+            write!(
+                f,
+                "\n\nPlatforms skipped because their locked packages don't fit:"
+            )?;
+            for skipped in &self.skipped_platforms {
+                write!(f, "\n  - {}: {}", skipped.platform, skipped.reason)?;
+            }
+        }
+
         // Adding the host platform to the workspace is the primary remedy for
         // the default environment; named environments get their platform list
         // from features, where the workspace-level hint may not apply.
         match &self.environment {
-            EnvironmentName::Default => write!(
+            EnvironmentName::Default if self.skipped_platforms.is_empty() => write!(
                 f,
                 "\n\nAdd it with 'pixi workspace platform add {}'.",
                 self.platform,
             )?,
-            EnvironmentName::Named(_) => {}
+            _ => {}
         }
         Ok(())
     }
@@ -223,11 +243,7 @@ impl Diagnostic for UnsupportedPlatformError {
 fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
     reqs.iter()
         .map(|r| {
-            // Concrete AMDGPU architectures are exact targets, including zero.
-            // For other packages, version 0 encodes a version-less requirement.
-            let requirement = if r.name.as_normalized() == "__amdgpu_arch" {
-                format!("{} == {}", r.name.as_normalized(), r.version)
-            } else if r.version == Version::major(0) {
+            let requirement = if r.version == Version::major(0) {
                 format!("{} (any version)", r.name.as_normalized())
             } else {
                 format!("{} >= {}", r.name.as_normalized(), r.version)
@@ -392,6 +408,7 @@ mod tests {
             unsatisfied_requirements: unsatisfied,
             unmet_requirements: vec![],
             platform_diagnostics: vec![],
+            skipped_platforms: vec![],
         }
     }
 
@@ -415,6 +432,21 @@ mod tests {
             }
         }
         (presence, arch)
+    }
+
+    #[test]
+    fn skipped_platforms_are_listed_without_add_platform_hint() {
+        let mut error = err(vec![]);
+        error.skipped_platforms = vec![SkippedPlatform {
+            platform: PixiPlatformName::from_str("gpu").unwrap(),
+            reason: "missing __cuda >=12.4".to_string(),
+        }];
+        insta::assert_snapshot!(error.to_string(), @r"
+        The workspace does not support 'linux-64' on this machine.
+
+        Platforms skipped because their locked packages don't fit:
+          - gpu: missing __cuda >=12.4
+        ");
     }
 
     #[test]
@@ -462,16 +494,6 @@ mod tests {
                 conda_override_hint("__amdgpu_arch", Some(&requested), Subdir::Linux64).is_none(),
                 "{raw}"
             );
-        }
-    }
-
-    #[test]
-    fn declared_amdgpu_arch_diagnostic_describes_exact_compatibility() {
-        for (requested, other) in [("9.0.10", "11.0.0"), ("0", "1")] {
-            let rendered = format_requirements(&[vp("__amdgpu_arch", requested)]);
-            let constraint = spec(&rendered).version.unwrap();
-            assert!(constraint.matches(&Version::from_str(requested).unwrap()));
-            assert!(!constraint.matches(&Version::from_str(other).unwrap()));
         }
     }
 

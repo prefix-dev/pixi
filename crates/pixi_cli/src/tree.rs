@@ -123,7 +123,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .next()
             .expect("resolve_platforms preserves length"),
         None => environment
-            .installed_or_best_declared_platform()
+            .installed_or_selected_platform(Some(&lock_file))
             .cloned()
             .ok_or_else(|| {
                 miette::miette!(

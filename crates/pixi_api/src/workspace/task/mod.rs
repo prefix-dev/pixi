@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    error::Error,
-};
+use std::{collections::HashMap, error::Error};
 
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
@@ -109,8 +106,7 @@ pub async fn list_tasks<I: Interface>(
         })
         .transpose()?;
 
-    // The lock file only refines the runnability of environments the machine
-    // doesn't declare, so a broken one shouldn't stop the listing.
+    // A broken lock file shouldn't stop task listing; it only refines runnability.
     let lock_file = match workspace.load_lock_file().await {
         Ok(result) => Some(result.into_lock_file_or_empty_with_warning()),
         Err(err) => {
@@ -125,13 +121,25 @@ pub async fn list_tasks<I: Interface>(
         }
     };
 
-    let env_task_map: HashMap<Environment, (EnvironmentRunnability, HashSet<TaskName>)> =
+    let tasks_for = |env: &Environment<'_>| {
+        let platform = env.installed_or_selected_platform(lock_file.as_ref());
+        let task_names = env.get_filtered_tasks(platform);
+        task_names
+            .into_iter()
+            .flat_map(|task_name| {
+                env.task(&task_name, platform)
+                    .ok()
+                    .map(|task| (task_name, task.clone()))
+            })
+            .collect::<HashMap<_, _>>()
+    };
+    let env_task_map: HashMap<Environment, (EnvironmentRunnability, HashMap<TaskName, Task>)> =
         if let Some(explicit_environment) = explicit_environment {
             let runnability =
                 classify_environment_runnability(&explicit_environment, lock_file.as_ref());
             HashMap::from([(
                 explicit_environment.clone(),
-                (runnability, explicit_environment.get_filtered_tasks()),
+                (runnability, tasks_for(&explicit_environment)),
             )])
         } else {
             workspace
@@ -139,26 +147,14 @@ pub async fn list_tasks<I: Interface>(
                 .iter()
                 .map(|env| {
                     let runnability = classify_environment_runnability(env, lock_file.as_ref());
-                    (env.clone(), (runnability, env.get_filtered_tasks()))
+                    (env.clone(), (runnability, tasks_for(env)))
                 })
                 .collect()
         };
 
     Ok(env_task_map
         .into_iter()
-        .map(|(env, (runnability, task_names))| {
-            let env_name = env.name().clone();
-            let best_declared_platform = env.best_declared_platform();
-            let task_map = task_names
-                .into_iter()
-                .flat_map(|task_name| {
-                    env.task(&task_name, best_declared_platform)
-                        .ok()
-                        .map(|task| (task_name, task.clone()))
-                })
-                .collect();
-            (env_name, (runnability, task_map))
-        })
+        .map(|(env, entry)| (env.name().clone(), entry))
         .collect())
 }
 

@@ -18,7 +18,9 @@ use super::pypi::pypi_options::PypiOptions;
 use crate::{
     ExcludeNewerConfig, PixiPlatform, PixiPlatformName, PrioritizedChannel, PypiExcludeNewerConfig,
     S3Options, TargetSelector, Targets,
-    platform::{candidate_subdirs, capability_satisfied_by, is_subdir_default},
+    platform::{
+        candidate_subdirs, capability_satisfied_by, is_builtin_virtual_package, is_subdir_default,
+    },
     preview::Preview,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
@@ -163,9 +165,9 @@ impl Workspace {
     /// workspace declaration order (so a custom-named variant declared after
     /// the bare subdir-bound platform comes second).
     ///
-    /// Platforms whose declared virtual packages are not satisfied by
-    /// `system_virtual_packages` are filtered out -- e.g. a `__cuda`-requiring
-    /// platform is dropped on a system that does not provide CUDA.
+    /// Platforms whose built-in virtual package declarations are not satisfied
+    /// by `system_virtual_packages` are filtered out. Custom names are checked
+    /// only through locked requirements.
     pub fn possible_pixi_platforms(
         &self,
         current: Subdir,
@@ -177,12 +179,13 @@ impl Workspace {
         // the target subdir, not a host requirement -- a `win-64` entry's
         // materialised `__win` would otherwise rule out matching when this
         // process happens to run on linux (cross-platform `pixi info`,
-        // CI on a different host, etc.). Only the user-customised VPs
+        // CI on a different host, etc.). Only user-customised built-in VPs
         // need to be satisfied by the host.
         let satisfies_system = |p: &&PixiPlatform| {
             p.manifest_virtual_package_records()
                 .iter()
                 .filter(|declared| !is_subdir_default(declared, p.subdir()))
+                .filter(|declared| is_builtin_virtual_package(declared.name.as_normalized()))
                 .all(|declared| capability_satisfied_by(declared, system_virtual_packages))
         };
 
@@ -210,7 +213,7 @@ impl Workspace {
         result
     }
 
-    /// Declared virtual packages from `env_platforms` whose host subdir
+    /// Built-in virtual package declarations from `env_platforms` whose host subdir
     /// matches `current` but whose requirement is not provided by
     /// `system_virtual_packages`. Powers the
     /// [`Self::possible_pixi_platforms`]-returns-nothing diagnostic, so the
@@ -241,9 +244,9 @@ impl Workspace {
 
     /// Explain, for each platform an environment declares, why it does or
     /// does not run on the current host: whether its subdir is runnable here
-    /// and which declared virtual packages the host fails to provide. Subdir
-    /// defaults never count as unsatisfied (they're pixi's baseline, not a
-    /// host requirement, see [`Self::possible_pixi_platforms`]).
+    /// and which built-in virtual package declarations the host fails to provide.
+    /// Subdir defaults never count as unsatisfied (they're pixi's baseline,
+    /// not a host requirement, see [`Self::possible_pixi_platforms`]).
     ///
     /// Platforms are returned in workspace declaration order.
     pub fn platform_match_diagnostics(
@@ -262,6 +265,7 @@ impl Workspace {
                     .manifest_virtual_package_records()
                     .iter()
                     .filter(|declared| !is_subdir_default(declared, subdir))
+                    .filter(|declared| is_builtin_virtual_package(declared.name.as_normalized()))
                     .filter(|declared| !capability_satisfied_by(declared, system_virtual_packages))
                     .cloned()
                     .collect();

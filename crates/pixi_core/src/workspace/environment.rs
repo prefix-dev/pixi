@@ -6,13 +6,20 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use itertools::{Either, Itertools};
+use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
     HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task, TaskName, WorkspaceManifest,
 };
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Subdir};
+use rattler_lock::LockFile;
+
+use super::errors::SkippedPlatform;
+use crate::lock_file::virtual_packages::{
+    UnknownNames, compute_required_virtual_package_specs, unmet_constrains, unmet_requirements,
+    validate_system_meets_environment_requirements,
+};
 
 use super::{
     SolveGroup,
@@ -41,6 +48,27 @@ pub struct Environment<'p> {
 
     /// The environment that this environment is based on.
     pub(super) environment: &'p manifest::Environment,
+}
+
+/// Whether declarations or only locked requirements fit the host.
+#[derive(Debug)]
+pub enum PlatformSelection<'p> {
+    Declared {
+        platform: &'p PixiPlatform,
+        skipped: Vec<SkippedPlatform>,
+    },
+    LockedOnly {
+        platform: &'p PixiPlatform,
+        skipped: Vec<SkippedPlatform>,
+    },
+}
+
+impl<'p> PlatformSelection<'p> {
+    pub fn platform(&self) -> &'p PixiPlatform {
+        match self {
+            Self::Declared { platform, .. } | Self::LockedOnly { platform, .. } => platform,
+        }
+    }
 }
 
 impl Debug for Environment<'_> {
@@ -109,7 +137,9 @@ impl<'p> Environment<'p> {
                 .chain(
                     file.minimum_supported_platform
                         .iter()
-                        .flat_map(|platform| platform.requirements())
+                        .flat_map(|platform| {
+                            platform.requirements().iter().chain(platform.constrains())
+                        })
                         .filter_map(|spec| spec.name.as_exact()),
                 ),
         );
@@ -194,83 +224,111 @@ impl<'p> Environment<'p> {
             .join(self.activation_cache_name())
     }
 
-    /// Returns the platform that pixi will install/activate this environment
-    /// for on the current system, or `None` if none of the platforms supported
-    /// by this environment can run here.
-    ///
-    /// The candidate list comes from
-    /// [`manifest::Workspace::possible_pixi_platforms`], which applies the current
-    /// system's subdir (honoring `PIXI_OVERRIDE_PLATFORM`), the standard
-    /// architecture fallbacks (osx-arm64 → osx-64, win-arm64 → win-64,
-    /// win-64 → win-32, single-WASM workspace), and virtual-package
-    /// compatibility with this machine. We then keep only those candidates
-    /// the environment itself declares support for, and return the most
-    /// preferred one.
+    /// Preselects a platform from built-in declarations without a lock file.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        self.best_declared_platform_with_host(&self.host())
+        self.select_platform(&self.host(), None)
+            .ok()
+            .map(|selection| selection.platform())
     }
 
-    /// Selects the best declared platform using an independently detected host.
-    pub fn best_declared_platform_with_host(
+    /// Tries declaration matches first, then remaining runnable platforms.
+    pub fn select_platform(
         &self,
         host: &HostDetection,
-    ) -> Option<&'p PixiPlatform> {
-        let current = host.subdir();
-        let system_virtual_packages = host.capabilities();
+        lock_file: Option<&LockFile>,
+    ) -> Result<PlatformSelection<'p>, Box<UnsupportedPlatformError>> {
+        let workspace = &self.workspace_manifest().workspace;
         let env_platforms = self.platforms();
-
-        // The candidates are the workspace platforms whose subdir matches this
-        // host and whose declared virtual packages the host satisfies; the
-        // selection is the first that the environment itself declares.
-        let candidates = self
-            .workspace_manifest()
-            .workspace
-            .possible_pixi_platforms(current, &system_virtual_packages);
-        let selected = candidates
+        let capabilities = host.capabilities();
+        let declared = workspace
+            .possible_pixi_platforms(host.subdir(), &capabilities)
+            .into_iter()
+            .filter(|platform| env_platforms.contains(platform.name()))
+            .collect::<Vec<_>>();
+        let lock_file = lock_file.filter(|lock_file| {
+            !pixi_manifest::platform::host::platform_override_is_foreign()
+                && lock_file.environment(self.name().as_str()).is_some()
+        });
+        let Some(lock_file) = lock_file else {
+            return declared
+                .first()
+                .map(|platform| PlatformSelection::Declared {
+                    platform,
+                    skipped: Vec::new(),
+                })
+                .ok_or_else(|| Box::new(self.unsupported_platform_error_with_host(host)));
+        };
+        let subdirs = pixi_manifest::platform::candidate_subdirs(host.subdir());
+        let remaining = subdirs.iter().flat_map(|subdir| {
+            workspace.platforms.iter().filter(|platform| {
+                platform.subdir() == *subdir
+                    && env_platforms.contains(platform.name())
+                    && !declared
+                        .iter()
+                        .any(|candidate| candidate.name() == platform.name())
+            })
+        });
+        let candidates = declared
             .iter()
             .copied()
-            .find(|p| env_platforms.contains(p.name()));
-
-        if tracing::enabled!(tracing::Level::DEBUG) {
-            let mut declared: Vec<&str> = env_platforms.iter().map(|p| p.as_str()).collect();
-            declared.sort_unstable();
-            tracing::debug!(
-                "selecting best platform for environment '{}' on host subdir '{}' \
-                 (host virtual packages: [{}]); environment declares [{}]; \
-                 host-runnable candidates [{}]; selected {}",
+            .map(|platform| (platform, true))
+            .chain(remaining.map(|platform| (platform, false)));
+        let mut skipped = Vec::new();
+        for (platform, matches_declaration) in candidates {
+            if let Err(error) = validate_system_meets_environment_requirements(
+                lock_file,
+                platform,
                 self.name(),
-                current,
-                system_virtual_packages
-                    .iter()
-                    // Render the build string too: `__archspec` matches by the
-                    // microarchitecture it carries there, not by its version.
-                    .map(ToString::to_string)
-                    .format(", "),
-                declared.iter().format(", "),
-                candidates.iter().map(|p| p.name().as_str()).format(", "),
-                match selected {
-                    Some(p) => format!("'{}'", p.name().as_str()),
-                    None => "<none>: no host-runnable candidate is declared by this environment"
-                        .to_string(),
-                },
-            );
+                host,
+                UnknownNames::Absent,
+            ) {
+                if matches_declaration {
+                    tracing::info!(
+                        "skipping platform '{}' for environment '{}': {}",
+                        platform.name(),
+                        self.name(),
+                        error,
+                    );
+                }
+                skipped.push(SkippedPlatform {
+                    platform: platform.name().clone(),
+                    reason: error.to_string(),
+                });
+                continue;
+            }
+            return Ok(if matches_declaration {
+                PlatformSelection::Declared { platform, skipped }
+            } else {
+                PlatformSelection::LockedOnly { platform, skipped }
+            });
         }
-
-        selected
+        let mut error = self.unsupported_platform_error_with_host(host);
+        if let Some(first) = skipped.first()
+            && let Some(platform) = workspace.platform_by_name(&first.platform)
+            && let Some(requirements) =
+                compute_required_virtual_package_specs(lock_file, self.name(), &[platform])
+                    .remove(&platform.subdir())
+        {
+            error.unmet_requirements = unmet_requirements(&requirements.depends, &capabilities);
+            error
+                .unmet_requirements
+                .extend(unmet_constrains(&requirements.constrains, &capabilities));
+        }
+        error.skipped_platforms = skipped;
+        Err(Box::new(error))
     }
 
-    /// Picks the workspace platform install/solve should target, with
-    /// `override_platform` skipping [`Self::best_declared_platform`]'s host-VP
-    /// filter so `pixi install --platform <name>` can target a subdir
-    /// the local machine can't satisfy. Returns `None` if the override
-    /// names a platform the environment doesn't list; falls through to
-    /// [`Self::best_declared_platform`] when the override is `None`.
-    pub fn named_or_best_declared_platform(
+    /// Uses an explicit target without host validation, otherwise selects for this host.
+    pub fn named_or_selected_platform(
         &self,
         override_platform: Option<&PixiPlatformName>,
+        lock_file: Option<&LockFile>,
     ) -> Option<&'p PixiPlatform> {
         let Some(name) = override_platform else {
-            return self.best_declared_platform();
+            return self
+                .select_platform(&self.host(), lock_file)
+                .ok()
+                .map(|selection| selection.platform());
         };
         let env_platforms = self.platforms();
         if !env_platforms.is_empty() && !env_platforms.contains(name) {
@@ -279,17 +337,18 @@ impl<'p> Environment<'p> {
         self.workspace_manifest().workspace.platform_by_name(name)
     }
 
-    /// The platform this environment was last installed for, if it still
-    /// declares it, otherwise the best declared platform. Keeps runs
-    /// consistent with the prefix on disk.
-    pub fn installed_or_best_declared_platform(&self) -> Option<&'p PixiPlatform> {
+    /// Keeps the installed platform while it remains declared.
+    pub fn installed_or_selected_platform(
+        &self,
+        lock_file: Option<&LockFile>,
+    ) -> Option<&'p PixiPlatform> {
         if let Some(installed) = self.installed_resolved_platform() {
             let env_platforms = self.platforms();
             if env_platforms.is_empty() || env_platforms.contains(installed.name()) {
                 return Some(installed);
             }
         }
-        self.best_declared_platform()
+        self.named_or_selected_platform(None, lock_file)
     }
 
     /// The platform to activate this environment for when the caller has none
@@ -299,17 +358,20 @@ impl<'p> Environment<'p> {
     /// usable (e.g. `platforms = []`), so activation still works. Enforcing
     /// declared-platform support is the lock-file path's job.
     pub fn activation_platform(&self) -> PixiPlatform {
-        self.installed_or_best_declared_platform()
+        self.installed_or_selected_platform(None)
             .cloned()
             .unwrap_or_else(host_baseline)
     }
 
-    /// Builds an [`UnsupportedPlatformError`] for the case where
-    /// [`Self::best_declared_platform`] has just returned `None`, diagnosing which
-    /// virtual packages declared by the workspace's host-subdir platforms
-    /// this machine doesn't provide so the user can see what to mock.
+    /// Explains which declared platforms cannot run on the host.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
-        let host = self.host();
+        self.unsupported_platform_error_with_host(&self.host())
+    }
+
+    fn unsupported_platform_error_with_host(
+        &self,
+        host: &HostDetection,
+    ) -> UnsupportedPlatformError {
         let current = host.subdir();
         let system_virtual_packages = host.capabilities();
         let env_platforms = self.platforms();
@@ -330,6 +392,7 @@ impl<'p> Environment<'p> {
             // this diagnosis only knows the declared platforms.
             unmet_requirements: Vec::new(),
             platform_diagnostics,
+            skipped_platforms: Vec::new(),
         }
     }
 
@@ -419,8 +482,8 @@ impl<'p> Environment<'p> {
 
     /// Return all tasks available for the given environment
     /// This will not return task prefixed with _
-    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
-        self.tasks(self.best_declared_platform())
+    pub fn get_filtered_tasks(&self, platform: Option<&'p PixiPlatform>) -> HashSet<TaskName> {
+        self.tasks(platform)
             .into_iter()
             .flat_map(|tasks| {
                 tasks.into_iter().filter_map(|(key, _)| {
@@ -455,15 +518,17 @@ impl<'p> Environment<'p> {
     /// Returns a map of all the features and their tasks for this environment.
     ///
     /// Resolves for the best platform target.
-    pub fn feature_tasks(&self) -> HashMap<&'p FeatureName, HashMap<&'p TaskName, &'p Task>> {
-        let best = self.best_declared_platform();
+    pub fn feature_tasks(
+        &self,
+        platform: Option<&'p PixiPlatform>,
+    ) -> HashMap<&'p FeatureName, HashMap<&'p TaskName, &'p Task>> {
         self.features()
             .map(|feature| {
                 (
                     &feature.name,
                     feature
                         .targets
-                        .resolve(best)
+                        .resolve(platform)
                         .flat_map(|target| target.tasks.iter())
                         .collect::<HashMap<_, _>>(),
                 )
@@ -515,6 +580,7 @@ impl<'p> Environment<'p> {
                 unsatisfied_requirements: Vec::new(),
                 unmet_requirements: Vec::new(),
                 platform_diagnostics: Vec::new(),
+                skipped_platforms: Vec::new(),
             }));
         }
 
@@ -846,7 +912,10 @@ mod tests {
         )
         .unwrap();
 
-        let task = manifest.default_environment().get_filtered_tasks();
+        let task = {
+            let environment = manifest.default_environment();
+            environment.get_filtered_tasks(environment.best_declared_platform())
+        };
 
         assert_eq!(task.len(), 1);
         assert!(task.contains(&"foo".into()));
