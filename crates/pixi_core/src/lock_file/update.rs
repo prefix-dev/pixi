@@ -1274,7 +1274,7 @@ impl<'p> LockFileDerivedData<'p> {
             let host = if cached.is_some() {
                 environment.host_for_cached_run()
             } else {
-                std::borrow::Cow::Borrowed(environment.host())
+                environment.host()
             };
             validate_system_meets_environment_requirements(
                 &self.lock_file,

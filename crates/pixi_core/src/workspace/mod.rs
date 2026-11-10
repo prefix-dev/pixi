@@ -21,7 +21,7 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use crate::{
@@ -152,19 +152,20 @@ type EnvironmentHosts = HashMap<EnvironmentName, EnvironmentHost>;
 struct EnvironmentHost {
     /// Detected for a solve, with the names any candidate record references.
     solve: AsyncCell<Arc<HostDetection>>,
-    /// Detected for an install from the lock file, with only the names the
-    /// locked records reference.
-    ///
-    /// Filled from the first lock file seen and only reset by a manifest
-    /// edit, so a workspace kept across a change to `pixi.lock` alone can
-    /// miss names the new lock requires. One-shot commands never do that.
-    locked: AsyncCell<Arc<HostDetection>>,
+    /// The latest lock-scoped detection. Refreshes select an exact scope from
+    /// the shared cache, so changing locked requirements cannot reuse a stale host.
+    locked: RwLock<Option<Arc<HostDetection>>>,
 }
 
 impl EnvironmentHost {
     /// The most complete detection so far.
-    fn get(&self) -> Option<&Arc<HostDetection>> {
-        self.solve.get().or_else(|| self.locked.get())
+    fn get(&self) -> Option<Arc<HostDetection>> {
+        self.solve.get().cloned().or_else(|| {
+            self.locked
+                .read()
+                .expect("host detection lock poisoned")
+                .clone()
+        })
     }
 }
 
@@ -226,7 +227,7 @@ pub struct Workspace {
     backend_override: Option<BackendOverride>,
 
     /// The host supplied to synchronous constructors and script workspaces.
-    host: HostDetection,
+    host: Arc<HostDetection>,
 
     /// The consent policy used by discovery, including this process's decisions.
     detector_consent: Option<Arc<dyn DetectorConsent>>,
@@ -236,7 +237,7 @@ pub struct Workspace {
     /// manifest even when invalidated before an edit.
     environment_hosts: Arc<OnceCell<EnvironmentHosts>>,
 
-    /// Detections retained across manifest edits for unchanged solve scopes.
+    /// Detections retained across manifest and lock edits for unchanged scopes.
     environment_host_scopes: Arc<Mutex<HostScopeCache>>,
 }
 
@@ -532,7 +533,7 @@ impl Workspace {
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
-            host,
+            host: Arc::new(host),
             detector_consent: None,
             environment_hosts: Arc::default(),
             environment_host_scopes: Arc::new(Mutex::new(Vec::new())),
@@ -797,14 +798,14 @@ impl Workspace {
         })
     }
 
-    /// What this machine provides for the default environment's solve channels.
-    pub fn host(&self) -> &HostDetection {
+    /// A shared snapshot of the default environment's host capabilities.
+    pub fn host(&self) -> Arc<HostDetection> {
         self.default_environment().host()
     }
 
     /// Retains a script's discovery policy and already-probed host.
     fn retain_script_host(&mut self, consent: Arc<dyn DetectorConsent>) {
-        let host = Arc::new(self.host.clone());
+        let host = self.host.clone();
         let hosts = self
             .environments()
             .into_iter()
@@ -813,7 +814,7 @@ impl Workspace {
                     environment.name().clone(),
                     EnvironmentHost {
                         solve: AsyncCell::new_with(host.clone()),
-                        locked: AsyncCell::new(),
+                        locked: RwLock::default(),
                     },
                 )
             })
@@ -902,10 +903,13 @@ impl Workspace {
         if host.solve.get().is_some() {
             return Ok(());
         }
-        self.detect_into(&host.locked, || {
-            HostScope::for_locked_environment(environment, lock_file)
-        })
-        .await
+        let Some(consent) = &self.detector_consent else {
+            return Ok(());
+        };
+        let scope = HostScope::for_locked_environment(environment, lock_file)?;
+        let detected = Box::pin(self.detect_host_for_scope(scope, consent)).await?;
+        *host.locked.write().expect("host detection lock poisoned") = Some(detected);
+        Ok(())
     }
 
     /// Fills `cell` with the host detected for the scope `scope` returns,
@@ -922,17 +926,25 @@ impl Workspace {
         // Keep detector futures out of every solve, install and mutation future.
         cell.get_or_try_init(Box::pin(async {
             let scope = scope()?;
-            let mut cache = self.environment_host_scopes.lock().await;
-            if let Some((_, host)) = cache.iter().find(|(cached, _)| cached == &scope) {
-                return Ok(host.clone());
-            }
-            let detector = self.host_detector(consent.clone())?;
-            let host = Arc::new(scope.detect(&detector).await?);
-            cache.push((scope, host.clone()));
-            Ok::<_, HostProbeError>(host)
+            self.detect_host_for_scope(scope, consent).await
         }))
         .await?;
         Ok(())
+    }
+
+    async fn detect_host_for_scope(
+        &self,
+        scope: HostScope,
+        consent: &Arc<dyn DetectorConsent>,
+    ) -> Result<Arc<HostDetection>, HostProbeError> {
+        let mut cache = self.environment_host_scopes.lock().await;
+        if let Some((_, host)) = cache.iter().find(|(cached, _)| cached == &scope) {
+            return Ok(host.clone());
+        }
+        let detector = self.host_detector(consent.clone())?;
+        let host = Arc::new(scope.detect(&detector).await?);
+        cache.push((scope, host.clone()));
+        Ok(host)
     }
 
     fn host_detector(
@@ -1864,8 +1876,8 @@ mod tests {
             .unwrap();
 
         let extra = modified.workspace().environment("extra").unwrap();
-        assert!(std::ptr::eq(extra.host(), host.as_ref()));
-        assert!(std::ptr::eq(modified.workspace().host(), workspace.host()));
+        assert!(Arc::ptr_eq(&extra.host(), &host));
+        assert!(Arc::ptr_eq(&modified.workspace().host(), &workspace.host()));
         assert!(workspace.environment("extra").is_none());
         assert_eq!(workspace.environment_host_scopes.lock().await.len(), 1);
     }
