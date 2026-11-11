@@ -1,0 +1,82 @@
+---
+source: crates/pixi_cli/src/shared/tree.rs
+expression: render(&tree)
+---
+
+b 1.0 
+└── a 1.0 
+    └── c 1.0 
+        ├── a 1.0  (*)
+        ├── b 1.0  (*)
+        └── d 1.0 
+
+c 1.0  (*)
+
+[
+  {
+    "name": "b",
+    "version": "1.0",
+    "kind": "conda",
+    "is_explicit": true,
+    "via_extras": [],
+    "is_deduplicated": false,
+    "required_by": [
+      {
+        "name": "a",
+        "version": "1.0",
+        "kind": "conda",
+        "is_explicit": true,
+        "via_extras": [],
+        "is_deduplicated": false,
+        "required_by": [
+          {
+            "name": "c",
+            "version": "1.0",
+            "kind": "conda",
+            "is_explicit": false,
+            "via_extras": [],
+            "is_deduplicated": false,
+            "required_by": [
+              {
+                "name": "a",
+                "version": "1.0",
+                "kind": "conda",
+                "is_explicit": true,
+                "via_extras": [],
+                "is_deduplicated": true,
+                "required_by": []
+              },
+              {
+                "name": "b",
+                "version": "1.0",
+                "kind": "conda",
+                "is_explicit": true,
+                "via_extras": [],
+                "is_deduplicated": true,
+                "required_by": []
+              },
+              {
+                "name": "d",
+                "version": "1.0",
+                "kind": "pypi",
+                "is_explicit": true,
+                "via_extras": [],
+                "is_deduplicated": false,
+                "required_by": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "c",
+    "version": "1.0",
+    "kind": "conda",
+    "is_explicit": false,
+    "via_extras": [],
+    "is_deduplicated": true,
+    "required_by": []
+  }
+]

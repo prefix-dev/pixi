@@ -23,6 +23,8 @@ pixi global tree [OPTIONS] --environment <ENVIRONMENT> [REGEX]
 <br>**required**: `true`
 - <a id="arg---invert" href="#arg---invert">`--invert (-i)`</a>
 :  Invert tree and show what depends on a given package in the regex argument
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Output the dependency tree as JSON
 
 ## Description
 Show a tree of a global environment dependencies
