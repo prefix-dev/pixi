@@ -9818,7 +9818,7 @@
 <h1 id="package-specifications">Package Specifications<a class="headerlink" href="#package-specifications" title="Permanent link">#</a></h1>
 <p>When adding packages to your Pixi workspace or global environment, you can use various specifications to control exactly which package version and build you want.
 This is particularly important when packages have multiple builds for different hardware configurations (like CPU vs GPU).
-For the conda packages Pixi uses the <a href="https://rattler.prefix.dev/py-rattler/match_spec#matchspec">MatchSpec</a> format to specify package requirements.
+For the conda packages Pixi uses the <a href="https://rattler.prefix.dev/py-rattler/latest/match_spec/#matchspec">MatchSpec</a> format to specify package requirements.
 For PyPI packages, Pixi uses the standard <a href="https://peps.python.org/pep-0440/">PEP440 version specifiers</a>.</p>
 <h2 id="quick-examples">Quick Examples<a class="headerlink" href="#quick-examples" title="Permanent link">#</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Add</label><label for="__tabbed_1_2">Global</label><label for="__tabbed_1_3">Exec</label></div>
@@ -9883,7 +9883,7 @@ For PyPI packages, Pixi uses the standard <a href="https://peps.python.org/pep-0
 </div>
 </div>
 <h2 id="basic-version-specifications">Basic Version Specifications<a class="headerlink" href="#basic-version-specifications" title="Permanent link">#</a></h2>
-<p>Pixi uses the <a href="https://rattler.prefix.dev/py-rattler/match_spec#matchspec"><strong>conda MatchSpec</strong></a> format for specifying package requirements.
+<p>Pixi uses the <a href="https://rattler.prefix.dev/py-rattler/latest/match_spec/#matchspec"><strong>conda MatchSpec</strong></a> format for specifying package requirements.
 A MatchSpec allows you to precisely define which package version, build, and channel you want.</p>
 <p>The simplest way to specify a package is by name and <a href="#version-operators">optional version operators</a>:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[dependencies]</span>
@@ -9897,7 +9897,7 @@ A MatchSpec allows you to precisely define which package version, build, and cha
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">pandas</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"3.11.*"</span>
 </span></code></pre></div>
 <h2 id="full-matchspec-syntax">Full MatchSpec Syntax<a class="headerlink" href="#full-matchspec-syntax" title="Permanent link">#</a></h2>
-<p>Beyond simple version specifications, you can use the full <a href="https://rattler.prefix.dev/py-rattler/match_spec#matchspec">MatchSpec</a> syntax to precisely control which package variant you want.</p>
+<p>Beyond simple version specifications, you can use the full <a href="https://rattler.prefix.dev/py-rattler/latest/match_spec/#matchspec">MatchSpec</a> syntax to precisely control which package variant you want.</p>
 <h3 id="command-line-syntax">Command Line Syntax<a class="headerlink" href="#command-line-syntax" title="Permanent link">#</a></h3>
 <p>Pixi supports two syntaxes on the command line:</p>
 <p><strong>1. Equals syntax (compact):</strong>
