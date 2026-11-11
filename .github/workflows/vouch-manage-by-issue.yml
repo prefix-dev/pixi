@@ -2,8 +2,12 @@ name: Vouch Manage
 
 # The registry's Octo STS policy authorizes this workflow by its file name
 # on the default branch.
-on:
+# Both comment events run only default-branch code, never pull request code.
+on: # zizmor: ignore[dangerous-triggers]
   discussion_comment:
+    types:
+      - created
+  issue_comment:
     types:
       - created
 
@@ -15,7 +19,10 @@ jobs:
       github.repository == 'prefix-dev/pixi' &&
       github.event.comment.user.type == 'User' &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
-      github.event.discussion.category.slug == 'vouch-request' &&
+      ((github.event_name == 'discussion_comment' &&
+        github.event.discussion.category.slug == 'vouch-request') ||
+       (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request)) &&
       (contains(github.event.comment.body, 'vouch') ||
        contains(github.event.comment.body, 'denounce'))
     runs-on: ubuntu-latest
@@ -27,6 +34,7 @@ jobs:
     permissions:
       contents: read
       discussions: write
+      pull-requests: write
       id-token: write # Octo STS
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -54,7 +62,8 @@ jobs:
           path: vouched
           token: ${{ steps.octo-sts.outputs.token }}
           persist-credentials: true
-      - name: Manage contributor
+      - name: Manage contributor from discussion
+        if: github.event_name == 'discussion_comment'
         working-directory: vouched
         env:
           DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
@@ -63,4 +72,15 @@ jobs:
           pixi run --locked --manifest-path "$GITHUB_WORKSPACE/pixi/pixi.toml" \
             --environment vouch vouch gh-manage-by-discussion \
             "$DISCUSSION_NUMBER" "$COMMENT_NODE_ID" \
+            --repo "$GITHUB_REPOSITORY" --vouched-file VOUCHED.td --dry-run=false
+      - name: Manage contributor from pull request
+        if: github.event_name == 'issue_comment'
+        working-directory: vouched
+        env:
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          pixi run --locked --manifest-path "$GITHUB_WORKSPACE/pixi/pixi.toml" \
+            --environment vouch vouch gh-manage-by-issue \
+            "$PR_NUMBER" "$COMMENT_ID" \
             --repo "$GITHUB_REPOSITORY" --vouched-file VOUCHED.td --dry-run=false
