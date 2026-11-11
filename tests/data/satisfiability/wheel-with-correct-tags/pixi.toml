@@ -1,0 +1,17 @@
+[workspace]
+authors = ["Tobias Hunger <tobias@prefix.dev>"]
+channels = ["conda-forge"]
+name = "pixi-test"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.14.2,<3.15"
+
+[pypi-dependencies]
+cryptography = ">=46.0.3, <47"
+
+[system-requirements]
+libc = "2.17"

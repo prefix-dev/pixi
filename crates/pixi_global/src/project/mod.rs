@@ -1,0 +1,2809 @@
+use std::{
+    collections::{BTreeMap, HashSet},
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
+
+pub use environment::EnvironmentName;
+use environment::ParseEnvironmentNameError;
+use fancy_display::FancyDisplay;
+use fs::tokio as tokio_fs;
+use fs_err as fs;
+use futures::stream::StreamExt;
+use indexmap::{IndexMap, IndexSet};
+use is_executable::IsExecutable;
+use itertools::{Either, Itertools};
+pub use manifest::{ExposedType, Manifest, ManifestError, Mapping};
+use miette::Diagnostic;
+use once_cell::sync::OnceCell;
+pub use parsed_manifest::{
+    ExposedName, ExposedNameError, ManifestParseError, ParsedEnvironment, ParsedManifest,
+};
+use pixi_build_discovery::DiscoveryError;
+use pixi_build_frontend::BackendOverride;
+use pixi_command_dispatcher::{
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
+    CommandDispatcherError as DispatcherError, ComputeResultExt, EnvironmentRef, EnvironmentSpec,
+    EphemeralEnv, InlinePackage, InstallPixiEnvironmentError, InstallPixiEnvironmentSpec, Limits,
+    SolvePixiEnvironmentError, SourceCheckoutExt,
+    keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
+};
+use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
+use pixi_consts::consts::{self};
+use pixi_core::environment::{
+    EnvironmentFile, EnvironmentFileError, LockedEnvironmentHash, PlatformData, RequiredPlatform,
+    write_environment_file,
+};
+use pixi_core::host::{
+    DetectorConsent, HostDetectError, HostDetection, HostDetector, HostUndetected,
+    cli_detector_consent,
+};
+use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
+use pixi_core::repodata::Repodata;
+use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
+use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
+use pixi_manifest::{
+    ExcludeNewerConfig, ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel,
+    WorkspaceManifest, resolve_exclude_newer, stale_exemptions,
+};
+use pixi_path::AbsPathBuf;
+use pixi_reporters::TopLevelProgress;
+use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer, SpecConversionError};
+use pixi_spec_containers::DependencyMap;
+use pixi_utils::diagnostic::Cause;
+use pixi_utils::variants::VariantConfig;
+use pixi_utils::{
+    executable_from_path,
+    prefix::{Executable, Prefix, PrefixError},
+    rlimit::try_increase_rlimit_to_sensible,
+};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
+    PrefixRecord, Subdir, menuinst::MenuMode, package::CondaArchiveIdentifier,
+};
+use rattler_menuinst::MenuInstError;
+use rattler_networking::LazyClient;
+use rattler_repodata_gateway::Gateway;
+use tokio::sync::Semaphore;
+use toml_edit::DocumentMut;
+use xxhash_rust::xxh3::Xxh3;
+
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline, TrampolineError};
+use super::{
+    BinDir, EnvRoot, StateChange, StateChanges,
+    common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
+    install::find_binary_by_name,
+    trampoline::{self, GlobalExecutable},
+};
+#[cfg(unix)]
+use crate::completions::CompletionsError;
+use crate::{
+    EnvDir,
+    common::{
+        CondaMetaError, GlobalDirError, ParseChannelUrlError, UnavailableShortcutsError,
+        channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
+    },
+    find_executables, find_executables_for_many_records,
+    install::{
+        CreateTrampolinesError, ExecutableNotFoundError, create_executable_trampolines,
+        script_exec_mapping,
+    },
+    project::environment::environment_specs_in_sync,
+};
+
+mod environment;
+mod global_spec;
+mod manifest;
+mod parsed_manifest;
+pub use global_spec::{
+    FromMatchSpecError, GlobalSpec, InlinePackageValue, InlinePackageValueError,
+};
+use pixi_utils::reqwest::{LazyReqwestClient, ReqwestClientError, build_lazy_reqwest_clients};
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum CommandDispatcherError {
+    #[error("could not determine cache directory")]
+    CacheDirectory(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to initialize repodata gateway")]
+    RepodataGateway(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to initialize authenticated client")]
+    AuthenticatedClient(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to parse backend override from environment")]
+    BackendOverride(#[source] Box<dyn Diagnostic + Send + Sync>),
+}
+
+/// The directory of the global manifest could not be canonicalized.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to canonicalize the global manifest directory '{}'", .path.display())]
+pub struct CanonicalizeManifestDirError {
+    path: PathBuf,
+    #[source]
+    source: std::io::Error,
+}
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum InferPackageNameError {
+    #[error("only source specifications are supported")]
+    UnsupportedSpecType,
+    #[error("failed to get command dispatcher")]
+    CommandDispatcher(#[from] CommandDispatcherError),
+    #[error("failed to get build backend metadata for package name inference")]
+    BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
+    #[error("no package outputs found in the specified path/repository")]
+    NoPackageOutputs,
+    #[error("multiple package outputs found: {}", .package_names.join(", "))]
+    #[diagnostic(help(
+        "Specify which package(s) to install by naming them explicitly, e.g. `pixi global install {} ...`",
+        .package_names.first().map(String::as_str).unwrap_or_default()
+    ))]
+    MultiplePackageOutputs { package_names: Vec<String> },
+}
+
+/// No directory to put the global manifest in could be determined.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("couldn't determine the global manifest directory")]
+pub struct ManifestDirError;
+
+/// An error from discovering or creating the global project.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum DiscoverProjectError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ManifestDir(#[from] ManifestDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error("failed to create the global manifest from the existing installation")]
+    #[diagnostic(forward(0))]
+    Migrate(#[source] Cause<MigrateInstallationError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CanonicalizeManifestDir(#[from] CanonicalizeManifestDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ConfiguredExcludeNewer(#[from] Box<AddConfiguredExcludeNewerError>),
+}
+
+/// An error from adding the `exclude-newer` of the configuration to a new
+/// global manifest.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum AddConfiguredExcludeNewerError {
+    #[error("invalid `exclude-newer` in the pixi configuration")]
+    Invalid(#[source] pixi_manifest::ConfiguredExcludeNewerError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] pixi_manifest::ExcludeNewerEditError),
+}
+
+/// An error from creating the global manifest from an existing installation.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum MigrateInstallationError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error("failed to serialize the global manifest")]
+    Serialize(#[source] toml_edit::ser::Error),
+
+    #[error("failed to parse the serialized global manifest")]
+    Parse(#[source] toml_edit::TomlError),
+
+    #[error(transparent)]
+    Write(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+}
+
+/// An error from reading the metadata of an exposed executable while
+/// migrating an old installation.
+///
+/// Logged with `{e}`, so wrapped errors stay transparent to keep their
+/// detail on the one line.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+enum ExposedDataError {
+    #[error(transparent)]
+    Trampoline(#[from] TrampolineError),
+
+    #[error("couldn't find the environment directory of '{}' in '{}'", .executable.display(), .env_root.display())]
+    MissingEnvDir {
+        executable: PathBuf,
+        env_root: PathBuf,
+    },
+
+    #[error("environment directory '{}' has no valid name", .0.display())]
+    InvalidEnvDir(PathBuf),
+
+    #[error(transparent)]
+    EnvironmentName(#[from] ParseEnvironmentNameError),
+
+    #[error(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    CondaMeta(#[from] CondaMetaError),
+
+    #[error(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    ParseChannelUrl(#[from] ParseChannelUrlError),
+
+    #[error("prefix record of '{}' has no channel", .0.as_normalized())]
+    MissingChannel(PackageName),
+
+    #[error("no package in '{}' provides '{executable}'", .conda_meta.display())]
+    ExecutableNotFound {
+        executable: String,
+        conda_meta: PathBuf,
+    },
+}
+
+/// An error from removing broken exposed executables.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveBrokenFilesError {
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trampoline(#[from] TrampolineError),
+}
+
+/// An error from installing a global environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum InstallEnvironmentError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    Channel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
+
+    #[error("can't build source dependency '{}' of environment '{environment}' for '{platform}' on '{current}'", .package.as_normalized())]
+    #[diagnostic(help(
+        "Cross-platform source builds are not supported. Remove `platform = \"{platform}\"` from the environment, or install the package from a channel instead of from source."
+    ))]
+    CrossPlatformSource {
+        environment: EnvironmentName,
+        package: PackageName,
+        platform: Subdir,
+        current: Subdir,
+    },
+
+    #[error(transparent)]
+    SpecConversion(#[from] SpecConversionError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Client(#[from] ReqwestClientError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostDetect(#[from] HostDetectError),
+
+    #[error(transparent)]
+    Host(#[from] HostUndetected),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CommandDispatcher(#[from] CommandDispatcherError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Solve(Box<SolveEnvironmentError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error("failed to clear the source build cache of '{}'", .package.as_normalized())]
+    ClearSourceBuildCache {
+        package: PackageName,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error(transparent)]
+    CreatePrefix(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Install(Box<InstallPackagesError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    EnvironmentFile(#[from] EnvironmentFileError),
+}
+
+/// A failed solve of a global environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to solve environment '{environment}'")]
+pub struct SolveEnvironmentError {
+    environment: EnvironmentName,
+    #[source]
+    #[diagnostic_source]
+    source: DispatcherError<SolvePixiEnvironmentError>,
+    /// Set when a source dependency without an inline package definition
+    /// has no manifest that backend discovery can use.
+    #[help]
+    help: Option<&'static str>,
+}
+
+/// A failed installation of the packages of a global environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to install environment '{environment}'")]
+pub struct InstallPackagesError {
+    environment: EnvironmentName,
+    #[source]
+    #[diagnostic_source]
+    source: DispatcherError<InstallPixiEnvironmentError>,
+}
+
+/// An error from checking whether an environment is in sync with the
+/// manifest.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum EnvironmentInSyncError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    SpecConversion(#[from] SpecConversionError),
+
+    #[error("couldn't convert the spec of '{}' to a match spec", .0.as_normalized())]
+    NotABinarySpec(PackageName),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnavailableShortcuts(#[from] UnavailableShortcutsError),
+}
+
+/// An error from finding or exposing the executables of an environment, or
+/// from syncing its completions.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ExposeError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trampoline(#[from] TrampolineError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExposedName(#[from] ExposedNameError),
+
+    #[error("failed to add the executables of environment '{environment}'")]
+    #[diagnostic(forward(source))]
+    ExecutableNotFound {
+        environment: EnvironmentName,
+        #[source]
+        source: Cause<ExecutableNotFoundError>,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CreateTrampolines(#[from] CreateTrampolinesError),
+
+    #[cfg(unix)]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Completions(#[from] CompletionsError),
+}
+
+/// An error from installing or removing the shortcuts of an environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ShortcutsError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnavailableShortcuts(#[from] UnavailableShortcutsError),
+
+    #[error("failed to install the shortcuts of '{}'", .package.as_normalized())]
+    Install {
+        package: PackageName,
+        #[source]
+        source: MenuInstError,
+    },
+
+    #[error("failed to remove the shortcuts of '{}'", .package.as_normalized())]
+    Remove {
+        package: PackageName,
+        #[source]
+        source: MenuInstError,
+    },
+}
+
+/// An error from removing an environment from the manifest or the
+/// installation.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveEnvironmentError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Shortcuts(#[from] ShortcutsError),
+
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trampoline(#[from] TrampolineError),
+
+    #[cfg(unix)]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Completions(#[from] CompletionsError),
+}
+
+/// An error from syncing an environment with the manifest.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum SyncEnvironmentError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InSync(#[from] EnvironmentInSyncError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Install(#[from] InstallEnvironmentError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Expose(#[from] ExposeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Shortcuts(#[from] ShortcutsError),
+}
+
+pub(crate) const MANIFESTS_DIR: &str = "manifests";
+
+/// The pixi global project, this main struct to interact with the pixi global
+/// project. This struct holds the `Manifest` and has functions to modify
+/// or request information from it. This allows in the future to have multiple
+/// manifests linked to a pixi global project.
+#[derive(Clone)]
+pub struct Project {
+    /// Root folder of the project
+    pub root: PathBuf,
+    /// The manifest for the project
+    pub manifest: Manifest,
+    /// The global configuration as loaded from the config file(s)
+    pub config: Config,
+    /// Root directory of the global environments
+    pub(crate) env_root: EnvRoot,
+    /// Binary directory
+    pub(crate) bin_dir: BinDir,
+    /// Reqwest client shared for this project.
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    client: OnceCell<(LazyReqwestClient, rattler_networking::LazyClient)>,
+    /// The repodata gateway to use for answering queries about repodata.
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    repodata_gateway: OnceCell<Gateway>,
+    /// The concurrent request semaphore
+    concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
+    /// The command dispatcher for solving environments
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    command_dispatcher: OnceCell<CommandDispatcher>,
+    /// Top-level progress reporter, paired with `command_dispatcher` so
+    /// callers can wipe progress between phases without reaching back
+    /// through the dispatcher.
+    top_level_progress: OnceCell<Arc<pixi_reporters::TopLevelProgress>>,
+    /// Optional backend override for testing purposes
+    backend_override: Option<BackendOverride>,
+    /// What this machine provides, detected on first use.
+    host: OnceCell<HostDetection>,
+    /// Decides on virtual package detectors without a stored decision.
+    detector_consent: Arc<dyn DetectorConsent>,
+}
+
+impl Debug for Project {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Global Project")
+            .field("root", &self.root)
+            .field("manifest", &self.manifest)
+            .finish()
+    }
+}
+
+/// Intermediate struct to store all the binaries that are exposed.
+#[derive(Debug)]
+struct ExposedData {
+    env_name: EnvironmentName,
+    platform: Option<Subdir>,
+    channels: Vec<PrioritizedChannel>,
+    package: PackageName,
+    exposed: ExposedName,
+    executable_name: String,
+}
+
+impl ExposedData {
+    /// Constructs an `ExposedData` instance from a exposed `script` or
+    /// `trampoline` path.
+    ///
+    /// This function extracts metadata from the exposed script path, including
+    /// the environment name, platform, channel, and package information, by
+    /// reading the associated `conda-meta` directory.
+    /// or it looks into the trampoline manifest to extract the metadata.
+    pub async fn from_exposed_path(
+        bin: &GlobalExecutable,
+        env_root: &EnvRoot,
+        channel_config: &ChannelConfig,
+    ) -> Result<Self, ExposedDataError> {
+        let exposed = bin.exposed_name();
+        let executable_path = bin.executable().await?;
+
+        let executable = executable_from_path(&executable_path);
+        let env_path = determine_env_path(&executable_path, env_root.path())?;
+        let env_name = env_path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .ok_or_else(|| ExposedDataError::InvalidEnvDir(env_path.clone()))
+            .and_then(|env| Ok(EnvironmentName::from_str(env)?))?;
+
+        let conda_meta = env_path.join(consts::CONDA_META_DIR);
+        let env_dir = EnvDir::from_env_root(env_root.clone(), &env_name).await?;
+        let prefix = Prefix::new(env_dir.path());
+
+        let (platform, channel, package) =
+            package_from_conda_meta(&conda_meta, &executable, &prefix, channel_config).await?;
+
+        let mut channels = vec![channel];
+
+        // Find all channels used to create the environment
+        let all_channels = prefix
+            .find_installed_packages()?
+            .iter()
+            .map(|prefix_record| prefix_record.repodata_record.channel.clone())
+            .collect::<HashSet<_>>();
+
+        for channel in all_channels.into_iter().flatten() {
+            tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
+            channels.push(channel_url_to_prioritized_channel(
+                &channel,
+                channel_config,
+            )?);
+        }
+
+        Ok(ExposedData {
+            env_name,
+            platform,
+            channels,
+            package,
+            executable_name: executable,
+            exposed,
+        })
+    }
+}
+
+fn determine_env_path(
+    executable_path: &Path,
+    env_root: &Path,
+) -> Result<PathBuf, ExposedDataError> {
+    let mut current_path = executable_path;
+
+    while let Some(parent) = current_path.parent() {
+        if parent == env_root {
+            return Ok(current_path.to_owned());
+        }
+        current_path = parent;
+    }
+
+    Err(ExposedDataError::MissingEnvDir {
+        executable: executable_path.to_owned(),
+        env_root: env_root.to_owned(),
+    })
+}
+
+/// Converts a `PrefixRecord` into package metadata, including platform,
+/// channel, and package name.
+fn convert_record_to_metadata(
+    prefix_record: &PrefixRecord,
+    channel_config: &ChannelConfig,
+) -> Result<(Option<Subdir>, PrioritizedChannel, PackageName), ExposedDataError> {
+    let platform = match Subdir::from_str(&prefix_record.repodata_record.package_record.subdir) {
+        Ok(Subdir::NoArch) => None,
+        Ok(platform) if platform == host_subdir() => None,
+        Err(_) => None,
+        Ok(p) => Some(p),
+    };
+
+    let package_name = prefix_record.repodata_record.package_record.name.clone();
+
+    let Some(channel_str) = prefix_record.repodata_record.channel.as_deref() else {
+        return Err(ExposedDataError::MissingChannel(package_name));
+    };
+
+    let channel = channel_url_to_prioritized_channel(channel_str, channel_config)?;
+
+    Ok((platform, channel, package_name))
+}
+
+/// Extracts package metadata from the `conda-meta` directory for a given
+/// executable.
+///
+/// This function reads the `conda-meta` directory to find the package metadata
+/// associated with the specified executable. It returns the platform, channel,
+/// and package name of the executable.
+async fn package_from_conda_meta(
+    conda_meta: &Path,
+    executable: &str,
+    prefix: &Prefix,
+    channel_config: &ChannelConfig,
+) -> Result<(Option<Subdir>, PrioritizedChannel, PackageName), ExposedDataError> {
+    let records = find_package_records(conda_meta).await?;
+
+    for prefix_record in records {
+        if find_executables(prefix, &prefix_record)
+            .iter()
+            .any(|exe_path| executable_from_path(exe_path) == executable)
+        {
+            return convert_record_to_metadata(&prefix_record, channel_config);
+        }
+    }
+
+    Err(ExposedDataError::ExecutableNotFound {
+        executable: executable.to_owned(),
+        conda_meta: conda_meta.to_owned(),
+    })
+}
+
+impl Project {
+    /// Constructs a new instance from an internal manifest representation
+    pub(crate) fn from_manifest(
+        manifest: Manifest,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> Result<Self, ManifestError> {
+        let root = manifest
+            .path
+            .parent()
+            .expect("manifest path should always have a parent")
+            .to_owned();
+
+        // Load the global config and ensure
+        // that the root_dir is relative to the manifest directory
+        let mut config = Config::try_load_global()?;
+        config.channel_config.root_dir = root.clone();
+
+        let client = OnceCell::new();
+        let repodata_gateway = OnceCell::new();
+        Ok(Self {
+            root,
+            manifest,
+            config,
+            env_root,
+            bin_dir,
+            client,
+            repodata_gateway,
+            concurrent_downloads_semaphore: OnceCell::new(),
+            command_dispatcher: OnceCell::new(),
+            top_level_progress: OnceCell::new(),
+            backend_override: None,
+            host: OnceCell::new(),
+            detector_consent: cli_detector_consent(None),
+        })
+    }
+
+    /// Constructs a project from a manifest.
+    pub(crate) fn from_str(
+        manifest_path: &Path,
+        content: &str,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> Result<Self, ManifestError> {
+        let manifest = Manifest::from_str(manifest_path, content)?;
+        Self::from_manifest(manifest, env_root, bin_dir)
+    }
+
+    /// Discovers the project manifest file in path at
+    /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
+    /// yet, and the function will try to create one from the existing
+    /// installation. If that one fails, an empty one will be created.
+    pub async fn discover_or_create() -> Result<Self, DiscoverProjectError> {
+        let manifest_dir = Self::manifest_dir()?;
+        let manifest_path = Self::default_manifest_path()?;
+        // Prompt user if the manifest is empty and the user wants to create one
+
+        let bin_dir = BinDir::from_env().await?;
+        let env_root = EnvRoot::from_env().await?;
+
+        if !manifest_path.exists() {
+            tracing::debug!(
+                "Global manifest {} doesn't exist yet. Creating a new one.",
+                manifest_path.display()
+            );
+            tokio_fs::create_dir_all(&manifest_dir)
+                .await
+                .map_err(DiscoverProjectError::Io)?;
+
+            if !env_root.directories().await?.is_empty() {
+                tracing::debug!(
+                    "Existing installation found. Creating global manifest from that information."
+                );
+                return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
+                    .await
+                    .map_err(|e| DiscoverProjectError::Migrate(Cause::new(e)));
+            } else {
+                tracing::debug!("Create an empty global manifest.");
+                // Nothing is written before the `exclude-newer` of the
+                // configuration is converted, so an invalid configuration
+                // doesn't leave behind a manifest that never gets it.
+                // Canonicalized like `from_path` does, so that paths relative
+                // to the manifest resolve the same once it is read back.
+                let manifest_path = dunce::canonicalize(&manifest_dir)
+                    .map_err(|source| CanonicalizeManifestDirError {
+                        path: manifest_dir.clone(),
+                        source,
+                    })?
+                    .join(
+                        manifest_path
+                            .file_name()
+                            .expect("the manifest path has a file name"),
+                    );
+                let mut project = Self::from_str(&manifest_path, "", env_root, bin_dir)?;
+                if project.add_configured_exclude_newer().map_err(Box::new)? {
+                    project.manifest.save().await?;
+                } else {
+                    tokio_fs::File::create(&manifest_path)
+                        .await
+                        .map_err(DiscoverProjectError::Io)?;
+                }
+                return Ok(project);
+            }
+        }
+
+        Ok(Self::from_path(&manifest_path, env_root, bin_dir)?)
+    }
+
+    /// Adds the `exclude-newer` of the configuration to the `exclude-newer`
+    /// of a new manifest, without saving it. Returns whether it is set.
+    ///
+    /// A manifest created from an existing installation doesn't get it, as its
+    /// environments were installed without the cutoff.
+    fn add_configured_exclude_newer(&mut self) -> Result<bool, AddConfiguredExcludeNewerError> {
+        let Some(configured) = self.config.exclude_newer.clone() else {
+            return Ok(false);
+        };
+        let value = pixi_config::exclude_newer_to_toml(&configured);
+        let exclude_newer = ExcludeNewerConfig::try_from(&configured)
+            .map_err(AddConfiguredExcludeNewerError::Invalid)?;
+
+        self.manifest.set_exclude_newer(&value, exclude_newer)?;
+        Ok(true)
+    }
+
+    async fn try_from_existing_installation(
+        manifest_path: &Path,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> Result<Self, MigrateInstallationError> {
+        let config = Config::try_load(env_root.path()).map_err(ManifestError::from)?;
+
+        let exposed_binaries: Vec<ExposedData> = bin_dir
+            .executables()
+            .await?
+            .into_iter()
+            .map(|bin| {
+                let env_root = env_root.clone();
+                let config = config.clone();
+                async move {
+                    ExposedData::from_exposed_path(&bin, &env_root, config.global_channel_config())
+                        .await
+                }
+            })
+            .collect::<futures::stream::FuturesOrdered<_>>()
+            .filter_map(|result| async {
+                match result {
+                    Ok(data) => Some(data),
+                    Err(e) => {
+                        tracing::warn!("{e}");
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
+
+        let parsed_manifest = ParsedManifest::from(exposed_binaries);
+        let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest)
+            .map_err(MigrateInstallationError::Serialize)?;
+        let mut document: DocumentMut = toml_pretty
+            .parse()
+            .map_err(MigrateInstallationError::Parse)?;
+
+        // Ensure that the manifest uses inline tables for "dependencies" and "exposed"
+        if let Some(envs) = document
+            .get_mut("envs")
+            .and_then(|item| item.as_table_mut())
+        {
+            for (_, env_table) in envs.iter_mut() {
+                let Some(env_table) = env_table.as_table_mut() else {
+                    continue;
+                };
+
+                for entry in ["dependencies", "exposed"] {
+                    if let Some(table) = env_table.get(entry).and_then(|item| item.as_table()) {
+                        env_table
+                            .insert(entry, toml_edit::value(table.clone().into_inline_table()));
+                    }
+                }
+            }
+        }
+        let toml = document.to_string();
+        tokio_fs::write(&manifest_path, &toml)
+            .await
+            .map_err(MigrateInstallationError::Write)?;
+        Ok(Self::from_str(manifest_path, &toml, env_root, bin_dir)?)
+    }
+
+    /// Get default dir for the pixi global manifest
+    pub fn manifest_dir() -> Result<PathBuf, ManifestDirError> {
+        // Potential directories, with the highest priority coming first
+        let potential_dirs = [
+            pixi_home(),
+            dirs::config_dir().map(|dir| dir.join(consts::CONFIG_DIR)),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|dir| dir.join(MANIFESTS_DIR))
+        .collect_vec();
+
+        // First, check if a `pixi-global.toml` already exists
+        for dir in &potential_dirs {
+            if dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME).is_file() {
+                return Ok(dir.clone());
+            }
+        }
+
+        // If not, return the first option
+        potential_dirs.first().cloned().ok_or(ManifestDirError)
+    }
+
+    /// Get the default path to the global manifest file
+    pub fn default_manifest_path() -> Result<PathBuf, ManifestDirError> {
+        Self::manifest_dir().map(|dir| dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME))
+    }
+
+    /// Loads a project from manifest file.
+    pub(crate) fn from_path(
+        manifest_path: &Path,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> Result<Self, ManifestError> {
+        let manifest = Manifest::from_path(manifest_path)?;
+        Project::from_manifest(manifest, env_root, bin_dir)
+    }
+
+    /// Merge config with existing config project
+    pub fn with_cli_config<C>(mut self, config: C) -> Self
+    where
+        C: Into<Config>,
+    {
+        self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// What this machine provides, with pixi's built-in detection. Detectors
+    /// registered by an environment's channels run when it is installed.
+    pub fn host(&self) -> &HostDetection {
+        self.host.get_or_init(HostDetection::builtin)
+    }
+
+    /// Decide on virtual package detectors without a stored decision with
+    /// `consent`, for example by asking the user.
+    pub fn with_detector_consent(mut self, consent: Arc<dyn DetectorConsent>) -> Self {
+        self.detector_consent = consent;
+        self
+    }
+
+    /// Set the backend override for this project (primarily for testing)
+    pub fn with_backend_override(mut self, backend_override: BackendOverride) -> Self {
+        self.backend_override = Some(backend_override);
+        // Clear the command dispatcher so it will be re-initialized with the new backend override
+        self.command_dispatcher = OnceCell::new();
+        self.top_level_progress = OnceCell::new();
+        self
+    }
+
+    /// Clear any active progress bars without tearing down the reporter.
+    ///
+    /// Installing draws into a shared progress reporter; callers invoke this
+    /// once they are done installing so the bars don't linger.
+    pub fn clear_progress(&self) {
+        if let Some(progress) = self.top_level_progress.get() {
+            progress.on_clear();
+        }
+    }
+
+    /// Returns the environments in this project.
+    pub fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
+        &self.manifest.parsed.envs
+    }
+
+    /// Return the environment with the given name.
+    pub fn environment(&self, name: &EnvironmentName) -> Option<&ParsedEnvironment> {
+        self.manifest.parsed.envs.get(name)
+    }
+
+    /// Returns the path to the environment root directory.
+    pub fn env_root_path(&self) -> &Path {
+        self.env_root.path()
+    }
+
+    /// Returns the EnvDir with the environment name.
+    pub async fn environment_dir(&self, name: &EnvironmentName) -> Result<EnvDir, GlobalDirError> {
+        EnvDir::from_env_root(self.env_root.clone(), name).await
+    }
+
+    /// Returns the prefix of the environment with the given name.
+    pub async fn environment_prefix(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<Prefix, GlobalDirError> {
+        Ok(Prefix::new(self.environment_dir(env_name).await?.path()))
+    }
+
+    /// Create an authenticated reqwest client for this project
+    /// use authentication from `rattler_networking`
+    pub fn authenticated_client(&self) -> Result<&LazyClient, ReqwestClientError> {
+        Ok(&self.lazy_client_and_authenticated_client()?.1)
+    }
+
+    fn lazy_client_and_authenticated_client(
+        &self,
+    ) -> Result<&(LazyReqwestClient, rattler_networking::LazyClient), ReqwestClientError> {
+        self.client
+            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn global_channel_config(&self) -> &ChannelConfig {
+        self.config.global_channel_config()
+    }
+
+    /// Resolves the manifest's `exclude-newer` cutoff together with the
+    /// overrides of the given channels and the exemptions into absolute
+    /// cutoffs.
+    fn resolved_exclude_newer<'a>(
+        &'a self,
+        channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
+    ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
+        resolve_exclude_newer(
+            &self.manifest.parsed.exclude_newer,
+            channels,
+            self.global_channel_config(),
+            std::iter::empty(),
+            chrono::Utc::now(),
+        )
+    }
+
+    /// Returns the exemptions of `exclude-newer` that are stale at `now` for
+    /// every environment.
+    pub fn stale_exclude_newer_exemptions(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<PackageName>, ExcludeNewerError> {
+        stale_exemptions(
+            &self.manifest.parsed.exclude_newer,
+            self.environments()
+                .values()
+                .map(|environment| &environment.channels),
+            self.global_channel_config(),
+            std::iter::empty(),
+            now,
+        )
+    }
+
+    /// The build variants to build source packages with for `platform`.
+    ///
+    /// A workspace derives `c_stdlib`/`c_stdlib_version` build variants from
+    /// its system requirements so that `stdlib('c')` recipes pin a
+    /// minimum OS/libc target (e.g. `macosx_deployment_target 13.*`).
+    /// `pixi global` has no system-requirements table, so we derive the same
+    /// pair from the device's detected virtual packages (`virtual_packages`,
+    /// e.g. the host's `__osx`/`__glibc`). Unlike the workspace flow, we pass
+    /// [`StdlibVersionPin::AtMost`]: a global install is local to this machine,
+    /// so the target is bound with `<=` the device's exact version and the
+    /// solve picks the highest published provider candidate it can build
+    /// against. (The workspace flow keeps an exact pin to preserve build hashes
+    /// and lock-file stability; that constraint doesn't apply here.)
+    fn build_variants(
+        platform: Subdir,
+        virtual_packages: &[GenericVirtualPackage],
+        channels: &[ChannelUrl],
+    ) -> VariantConfig {
+        let device_platform = platform_from_detected(platform, virtual_packages.to_vec())
+            .unwrap_or_else(|_| PixiPlatform::from_subdir(platform));
+        let variant_configuration =
+            derive_stdlib_variants(&device_platform, channels, StdlibVersionPin::AtMost)
+                .into_iter()
+                .map(|(key, value)| (key, vec![value]))
+                .collect();
+        VariantConfig {
+            variant_configuration,
+            variant_files: Vec::new(),
+        }
+    }
+
+    pub async fn install_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<EnvironmentUpdate, InstallEnvironmentError> {
+        self.install_environment_with_options(env_name, false).await
+    }
+
+    /// Builds the [`InlinePackage`] to thread through the command dispatcher
+    /// for a CLI-supplied inline package definition, before the definition is
+    /// recorded in the manifest (e.g. for package name inference). The
+    /// synthesized workspace manifest carries the channels the backend's
+    /// dependencies fall back to.
+    fn inline_package_for_channels(
+        &self,
+        inline: &InlinePackageManifest,
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
+    ) -> InlinePackage {
+        InlinePackage {
+            manifest: Arc::new(inline.manifest.clone()),
+            workspace: Arc::new(workspace_manifest_with_channels(channels)),
+            content_hash: inline.content_hash,
+        }
+    }
+
+    pub async fn install_environment_with_options(
+        &self,
+        env_name: &EnvironmentName,
+        force_reinstall: bool,
+    ) -> Result<EnvironmentUpdate, InstallEnvironmentError> {
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+        let channels = environment
+            .channels()
+            .into_iter()
+            .map(|channel| {
+                channel
+                    .clone()
+                    .into_channel(self.config.global_channel_config())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let exclude_newer = self.resolved_exclude_newer(&environment.channels)?;
+
+        let platform = environment.platform.unwrap_or_else(host_subdir);
+
+        // Source dependencies are built on this machine, so they can only
+        // target the platform we are running on.
+        if platform != Subdir::current().unwrap_or(Subdir::NoArch)
+            && let Some(source_package) = environment
+                .dependencies
+                .specs
+                .iter()
+                .find(|(_, spec)| spec.is_source())
+                .map(|(name, _)| name)
+        {
+            return Err(InstallEnvironmentError::CrossPlatformSource {
+                environment: env_name.clone(),
+                package: source_package.clone(),
+                platform,
+                current: Subdir::current().unwrap_or(Subdir::NoArch),
+            });
+        }
+
+        // Discover registrations for the target, honoring overrides without
+        // executing detectors on a foreign platform.
+        let channel_config = self.config.global_channel_config();
+        let mut specs = Vec::new();
+        for (name, spec) in &environment.dependencies.specs {
+            if let Some(nameless) = spec.clone().try_into_nameless_match_spec(channel_config)? {
+                specs.push(MatchSpec::from_nameless(nameless, name.clone().into()));
+            }
+        }
+        let channel_urls: Vec<ChannelUrl> = channels
+            .iter()
+            .map(|channel| channel.base_url.clone())
+            .collect();
+        let host = HostDetector::with_gateway(
+            self.config.clone(),
+            self.detector_consent.clone(),
+            self.authenticated_client()?.clone(),
+            self.repodata_gateway()?.clone(),
+        )
+        .detect_for_specs(&channel_urls, platform, &specs)
+        .await?;
+        let solve_virtual_packages = host.platform()?.solver_virtual_package_records();
+
+        // Convert dependency specs to binary specs for CommandDispatcher
+        let mut pixi_specs = DependencyMap::default();
+        let mut dependencies_names = Vec::new();
+
+        for (name, spec) in &environment.dependencies.specs {
+            pixi_specs.insert(name.clone(), spec.clone());
+            dependencies_names.push(name.clone());
+        }
+
+        let command_dispatcher = self.command_dispatcher()?;
+
+        let channels = channels
+            .into_iter()
+            .map(|channel| channel.base_url.clone())
+            .collect::<Vec<_>>();
+
+        let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.to_vec());
+
+        // Derive the `c_stdlib` build variants for source builds, mirroring what
+        // a workspace does, so `stdlib('c')` recipes pin a deployment target that
+        // matches the device this install targets (see `build_variants`).
+        let variant_config = Self::build_variants(platform, &solve_virtual_packages, &channels);
+
+        // Inline package definitions from the manifest, threaded into the
+        // solve and install so backend discovery uses them instead of reading
+        // a manifest from the source checkout.
+        let inline_packages = inline_packages_for_environment(environment);
+
+        // Create solve spec (compute-engine keys path).
+        let solve_spec = SolvePixiEnvironmentSpec {
+            dependencies: pixi_specs,
+            constraints: DependencyMap::default(),
+            dev_sources: ordermap::OrderMap::new(),
+            installed: Arc::from([]),
+            installed_source_hints: Default::default(),
+            strategy: Default::default(),
+            preferred_build_source: Arc::new(BTreeMap::new()),
+            env_ref: EnvironmentRef::Ephemeral(EphemeralEnv::new(
+                env_name.to_string(),
+                EnvironmentSpec {
+                    channels: channels.clone(),
+                    build_environment: build_environment.clone(),
+                    variants: variant_config.clone(),
+                    exclude_newer: exclude_newer.clone(),
+                    channel_priority: Default::default(),
+                },
+            )),
+            inline_packages: Arc::new(inline_packages.clone()),
+        };
+
+        // Solve via SolvePixiEnvironmentKey (new keys path).
+        //
+        // A source dependency without an inline package definition relies on
+        // the source providing its own manifest. When it doesn't, backend
+        // discovery fails; point the user at `--build-backend` in that case,
+        // but not for unrelated solve errors (unsatisfiable specs, network
+        // failures, ...).
+        let has_source_without_inline =
+            environment.dependencies.specs.iter().any(|(name, spec)| {
+                spec.is_source() && !environment.inline_packages.contains_key(name)
+            });
+        let records_arc = command_dispatcher
+            .engine()
+            .compute(&SolvePixiEnvironmentKey::new(solve_spec))
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
+            .map_err(|err| {
+                // A missing or package-less manifest is the case
+                // `--build-backend` exists for; other discovery failures
+                // (disabled protocols, invalid manifests, ...) are not.
+                let missing_manifest = matches!(
+                    &err,
+                    DispatcherError::Failed(solve_err) if matches!(
+                        solve_err.discovery_error(),
+                        Some(
+                            DiscoveryError::FailedToDiscover { .. }
+                                | DiscoveryError::NotAPackage(_)
+                        )
+                    )
+                );
+                InstallEnvironmentError::Solve(Box::new(SolveEnvironmentError {
+                    environment: env_name.clone(),
+                    source: err,
+                    help: (has_source_without_inline && missing_manifest).then_some(
+                        "If the source doesn't provide a pixi package manifest, specify how to build it with `--build-backend`, e.g. `--build-backend pixi-build-rust`.",
+                    ),
+                }))
+            })?;
+        let pixi_records: Vec<_> = (*records_arc).clone();
+
+        // Move this to a separate function to avoid code duplication
+        try_increase_rlimit_to_sensible();
+
+        let prefix = self.environment_prefix(env_name).await?;
+
+        let force_reinstall_packages = if force_reinstall {
+            dependencies_names.iter().cloned().collect()
+        } else {
+            Default::default()
+        };
+
+        // Force-reinstall also invalidates the source-build caches for
+        // every package the user named. The prefix installer handles
+        // binary reinstalls on its own; source-package rebuilds need
+        // their artifact + workspace entries wiped so SourceBuildKey
+        // sees a cache miss.
+        if force_reinstall {
+            for name in &dependencies_names {
+                command_dispatcher
+                    .clear_source_build_cache(name)
+                    .map_err(|source| InstallEnvironmentError::ClearSourceBuildCache {
+                        package: name.clone(),
+                        source,
+                    })?;
+            }
+        }
+
+        // The minimum platform the installed packages actually require: the
+        // subdir plus only the virtual packages some resolved dependency depends
+        // on. Collected before the records are consumed by the installer.
+        let resolved_depends: Vec<String> = pixi_records
+            .iter()
+            .flat_map(|record| record.package_record().depends.iter().cloned())
+            .collect();
+
+        let result = command_dispatcher
+            .install_pixi_environment(InstallPixiEnvironmentSpec {
+                name: env_name.to_string(),
+                records: pixi_records.into_iter().map(Into::into).collect(),
+                prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
+                    .map_err(InstallEnvironmentError::CreatePrefix)?,
+                build_environment,
+                exclude_newer,
+                channels,
+                installed: None,
+                ignore_packages: None,
+                force_reinstall: force_reinstall_packages,
+                variant_configuration: Some(variant_config.variant_configuration),
+                variant_files: Some(variant_config.variant_files),
+                inline_packages: inline_packages.into_iter().collect(),
+            })
+            .await
+            .map_err(|source| {
+                InstallEnvironmentError::Install(Box::new(InstallPackagesError {
+                    environment: env_name.clone(),
+                    source,
+                }))
+            })?;
+
+        self.write_environment_file(
+            env_name,
+            &prefix,
+            &host,
+            &resolved_depends,
+            source_fingerprints_for_environment(environment),
+        )?;
+
+        let install_changes = get_install_changes(result.transaction);
+        Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
+    }
+
+    /// Record the resolved platform and the installed packages' requirements in
+    /// the environment's `conda-meta/pixi` marker file, mirroring what non-global
+    /// environments write.
+    fn write_environment_file(
+        &self,
+        env_name: &EnvironmentName,
+        prefix: &Prefix,
+        host: &HostDetection,
+        resolved_depends: &[String],
+        source_fingerprints: BTreeMap<String, u64>,
+    ) -> Result<(), EnvironmentFileError> {
+        let resolved_platform = PlatformData::new(host.subdir(), host.capabilities().into_owned());
+        let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
+        let minimum_supported_platform =
+            RequiredPlatform::new(host.subdir(), required_virtual_package_specs(&depends));
+
+        write_environment_file(
+            prefix.root(),
+            EnvironmentFile {
+                manifest_path: self.manifest.path.clone(),
+                environment_name: env_name.to_string(),
+                pixi_version: consts::PIXI_VERSION.to_string(),
+                // Global environments aren't validated against a workspace lock
+                // file, so this hash is never read back; record a placeholder.
+                environment_lock_file_hash: LockedEnvironmentHash::invalid(),
+                resolved_platform: Some(resolved_platform),
+                minimum_supported_platform: Some(minimum_supported_platform),
+                detector_virtual_packages: host.detector_virtual_packages(),
+                source_fingerprints,
+            },
+        )?;
+        Ok(())
+    }
+
+    /// Remove an environment from the manifest and the global installation.
+    pub async fn remove_environment(
+        &mut self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, RemoveEnvironmentError> {
+        // Check if the environment exists in the manifest first, before creating any
+        // directories
+        if !self.manifest.parsed.envs.contains_key(env_name) {
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()).into());
+        }
+
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
+
+        // Remove all shortcuts, using the information still available in the
+        // environment
+        state_changes |= self.remove_shortcuts(env_name).await?;
+
+        // Remove the environment from the manifest, if it exists, otherwise ignore
+        // error.
+        self.manifest.remove_environment(env_name)?;
+
+        // Remove the environment
+        tokio_fs::remove_dir_all(env_dir.path())
+            .await
+            .map_err(RemoveEnvironmentError::Io)?;
+
+        // Get all removable binaries related to the environment
+        let (to_remove, _to_add) =
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &IndexSet::new()).await?;
+
+        // Remove all removable binaries
+        for binary_path in to_remove {
+            binary_path.remove().await?;
+            state_changes.insert_change(
+                env_name,
+                StateChange::RemovedExposed(binary_path.exposed_name()),
+            );
+        }
+
+        #[cfg(unix)] // Completions are only supported on unix-like systems
+        {
+            // Prune old completions
+            let completions_dir = super::completions::CompletionsDir::from_env().await?;
+            completions_dir.prune_old_completions()?;
+        }
+
+        state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
+
+        Ok(state_changes)
+    }
+
+    /// Find all binaries related to the environment and remove those that are
+    /// not listed as exposed.
+    pub async fn prune_exposed(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, ExposeError> {
+        let mut state_changes = StateChanges::default();
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+
+        // Get all removable binaries related to the environment
+        let (to_remove, _to_add) =
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
+
+        // Remove all removable binaries
+        for exposed_path in to_remove {
+            state_changes.insert_change(
+                env_name,
+                StateChange::RemovedExposed(exposed_path.exposed_name()),
+            );
+            exposed_path.remove().await?;
+        }
+
+        Ok(state_changes)
+    }
+
+    /// Gets all installed executables of a specific environment.
+    pub async fn executables_of_all_dependencies(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<Vec<Executable>, ExposeError> {
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        let prefix = Prefix::new(env_dir.path());
+
+        let prefix_records = &prefix.find_installed_packages()?;
+
+        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
+
+        Ok(all_executables)
+    }
+
+    /// Get installed executables of direct dependencies of a specific
+    /// environment.
+    pub async fn executables_of_direct_dependencies(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<IndexMap<PackageName, Vec<Executable>>, ExposeError> {
+        let parsed_env = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        let package_names: Vec<_> = parsed_env.dependencies.specs.keys().cloned().collect();
+
+        let mut executables_for_package = IndexMap::new();
+
+        for package_name in &package_names {
+            let prefix = self.environment_prefix(env_name).await?;
+            let prefix_package = prefix.find_designated_package(package_name).await?;
+            let mut package_executables = prefix.find_executables(&[prefix_package]);
+
+            // Sometimes the package don't ship executables on their own.
+            // We need to search for it in different packages.
+            if !package_executables
+                .iter()
+                .any(|executable| executable.name.as_str() == package_name.as_normalized())
+                && let Some(exec) = find_binary_by_name(&prefix, package_name).await?
+            {
+                package_executables.push(exec);
+            }
+
+            executables_for_package.insert(package_name.clone(), package_executables);
+        }
+        Ok(executables_for_package)
+    }
+
+    /// Sync the `exposed` field in manifest based on the executables in the
+    /// environment and the expose type. Expose type can be either:
+    /// * If the user initially chooses to auto-expose everything, we will add
+    ///   new binaries that are not exposed in the `exposed` field.
+    ///
+    /// * If the use chose to expose only a subset of binaries, we will remove
+    ///   the binaries that are not anymore present in the environment and will
+    ///   not expose the new ones
+    pub async fn sync_exposed_names(
+        &mut self,
+        env_name: &EnvironmentName,
+        expose_type: ExposedType,
+    ) -> Result<(), ExposeError> {
+        // Get env executables
+        let execs_all = self.executables_of_all_dependencies(env_name).await?;
+
+        // Get the parsed environment
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        // Find the exposed names that are no longer there and remove them
+        let to_remove = environment
+            .exposed
+            .iter()
+            .filter_map(|mapping| {
+                // If the executable isn't requested, remove the mapping
+                // Use file name of executable relname here for custom exposed path.
+                // `exposed = {dotnet = 'dotnet\dotnet' }`, file_name will be `dotnet`, eg.
+                let executable_file_name = PathBuf::from(mapping.executable_relname())
+                    .file_name()?
+                    .to_string_lossy()
+                    .to_string();
+                if execs_all.iter().all(|executable| {
+                    executable_from_path(&executable.path) != executable_file_name
+                }) {
+                    Some(mapping.exposed_name().clone())
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+
+        // Removed the removable exposed names from the manifest
+        for exposed_name in &to_remove {
+            self.manifest.remove_exposed_name(env_name, exposed_name)?;
+        }
+
+        let execs_direct_deps = self.executables_of_direct_dependencies(env_name).await?;
+
+        match expose_type {
+            ExposedType::All => {
+                // Add new binaries that are not yet exposed
+                let executable_names = execs_direct_deps
+                    .into_iter()
+                    .flat_map(|(_, executables)| executables)
+                    .map(|executable| executable.name);
+                for executable_name in executable_names {
+                    let mapping = Mapping::new(
+                        ExposedName::from_str(&executable_name)?,
+                        executable_name.to_string(),
+                    );
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
+            ExposedType::Nothing => {}
+            ExposedType::Ignore(ignore) => {
+                // Add new binaries that are not yet exposed and that don't come from one of the
+                // packages we ignore
+                let executable_names = execs_direct_deps
+                    .into_iter()
+                    .filter_map(|(package_name, executable)| {
+                        if ignore.contains(&package_name) {
+                            None
+                        } else {
+                            Some(executable)
+                        }
+                    })
+                    .flatten()
+                    .map(|executable| executable.name);
+
+                for executable_name in executable_names {
+                    let mapping = Mapping::new(
+                        ExposedName::from_str(&executable_name)?,
+                        executable_name.to_string(),
+                    );
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
+            ExposedType::Mappings(mapping) => {
+                // Expose only the requested binaries
+                for mapping in mapping {
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if the environment is in sync with the manifest
+    ///
+    /// Validated the specs in the installed environment.
+    /// And verifies only and all required exposed binaries are in the bin dir.
+    pub async fn environment_in_sync(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<bool, EnvironmentInSyncError> {
+        self.environment_in_sync_internal(env_name, false).await
+    }
+
+    /// Internal method to check environment sync with update operation control
+    pub async fn environment_in_sync_internal(
+        &self,
+        env_name: &EnvironmentName,
+        is_update_operation: bool,
+    ) -> Result<bool, EnvironmentInSyncError> {
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        // Split the environment into source and binary requirements
+        let (source_specs, binary_specs) = environment.split_into_source_and_binary_requirements();
+        // Convert binary specs to MatchSpec, these can be matched against the prefix
+        // directly
+        let specs = binary_specs
+            .into_iter()
+            .map(|(name, spec)| {
+                let match_spec = MatchSpec::from_nameless(
+                    spec.clone()
+                        .try_into_nameless_match_spec(&default_channel_config())?
+                        .ok_or_else(|| EnvironmentInSyncError::NotABinarySpec(name.clone()))?,
+                    name.clone().into(),
+                );
+                Ok(match_spec)
+            })
+            .collect::<Result<IndexSet<MatchSpec>, EnvironmentInSyncError>>()?;
+
+        let source_package_names = source_specs.specs.keys().cloned().collect::<HashSet<_>>();
+
+        // For update operations, always consider environments with source dependencies
+        // as out of sync
+        if is_update_operation && !source_package_names.is_empty() {
+            tracing::debug!(
+                "Update operation: Environment {} has source dependencies, considering out of sync",
+                env_name.fancy_display()
+            );
+            tracing::debug!(
+                "Environment out of sync because update operation has source dependencies"
+            );
+            return Ok(false);
+        }
+
+        let env_dir =
+            EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
+
+        // Source dependencies are matched by name against the prefix, so an
+        // edit to a source spec (git rev, path, inline `package.*` table)
+        // wouldn't otherwise register as out of sync. Compare the fingerprints
+        // recorded at install time against the ones the current manifest
+        // implies. A missing record (older pixi, or never installed) counts as
+        // out of sync, which triggers a one-time rebuild.
+        if !source_package_names.is_empty() {
+            let expected_fingerprints = source_fingerprints_for_environment(environment);
+            let recorded_fingerprints = match pixi_core::environment::read_environment_file(
+                env_dir.path(),
+            ) {
+                Ok(env_file) => env_file
+                    .map(|env_file| env_file.source_fingerprints)
+                    .unwrap_or_default(),
+                Err(e) => {
+                    tracing::debug!(
+                        "Failed to read environment file of environment {}, treating source dependency fingerprints as missing: {e}",
+                        env_name.fancy_display()
+                    );
+                    Default::default()
+                }
+            };
+
+            if expected_fingerprints != recorded_fingerprints {
+                tracing::debug!(
+                    "Environment {} out of sync because source dependency fingerprints changed",
+                    env_name.fancy_display()
+                );
+                return Ok(false);
+            }
+        }
+
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+
+        // Installed packages that the current cutoff would exclude mark the
+        // environment out of sync, so tightening `exclude-newer` triggers a
+        // re-solve on the next sync.
+        if let Some(exclude_newer) = self.resolved_exclude_newer(&environment.channels)? {
+            let exclude_newer = rattler_solve::ExcludeNewer::from(exclude_newer);
+            for record in &prefix_records {
+                let package = &record.repodata_record.package_record;
+                let channel = record.repodata_record.channel.as_deref();
+
+                // A package built on this machine records its build time as
+                // timestamp, while the solve only ever sees metadata that
+                // carries none and therefore never excludes it. Such a record
+                // has no channel, and so does a binary package pinned by url,
+                // which the solve does apply the cutoff to. Only an
+                // environment without source dependencies rules the first case
+                // out.
+                if channel.is_none() && !source_package_names.is_empty() {
+                    continue;
+                }
+
+                if exclude_newer.is_excluded(&record.repodata_record) {
+                    tracing::debug!(
+                        "Environment {} out of sync because {} is newer than the exclude-newer cutoff",
+                        env_name.fancy_display(),
+                        package.name.as_source()
+                    );
+                    return Ok(false);
+                }
+            }
+        }
+
+        let specs_in_sync = environment_specs_in_sync(
+            &prefix_records,
+            &specs,
+            &source_package_names,
+            environment.platform,
+        );
+        if !specs_in_sync {
+            tracing::debug!("Environment out of sync because package specifications don't match");
+            return Ok(false);
+        }
+
+        tracing::debug!("Verify that the binaries are in sync with the environment");
+        let (exec_to_remove, exec_to_add) =
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
+        if !exec_to_remove.is_empty() || !exec_to_add.is_empty() {
+            tracing::debug!(
+                "Environment {} binaries are not in sync: to_remove: {:?}, to_add: {:?}",
+                env_name.fancy_display(),
+                exec_to_remove,
+                exec_to_add
+            );
+            tracing::debug!("Environment out of sync because binaries need to be updated");
+            return Ok(false);
+        }
+
+        tracing::debug!("Verify that the shortcuts are in sync with the environment");
+        let shortcuts = environment.shortcuts.clone().unwrap_or_default();
+        let (shortcuts_to_remove, shortcuts_to_add) =
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
+        if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
+            tracing::debug!(
+                "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
+                env_name.fancy_display(),
+                shortcuts_to_remove
+                    .iter()
+                    .map(|s| s.repodata_record.package_record.name.as_normalized())
+                    .join(", "),
+                shortcuts_to_add
+                    .iter()
+                    .map(|s| s.repodata_record.package_record.name.as_normalized())
+                    .join(", ")
+            );
+            tracing::debug!("Environment out of sync because shortcuts need to be updated");
+            return Ok(false);
+        }
+
+        tracing::debug!("Environment is in sync");
+        Ok(true)
+    }
+
+    /// Check if all environments are in sync with the manifest
+    pub async fn environments_in_sync(&self) -> Result<bool, EnvironmentInSyncError> {
+        let mut in_sync = true;
+        for (env_name, _parsed_environment) in self.environments() {
+            if !self.environment_in_sync(env_name).await? {
+                tracing::debug!(
+                    "Environment {} not up to date with the manifest",
+                    env_name.fancy_display()
+                );
+                in_sync = false;
+            }
+        }
+        Ok(in_sync)
+    }
+
+    /// Expose executables from the environment to the global bin directory.
+    ///
+    /// This function will first remove all binaries that are not listed as
+    /// exposed. It will then create an activation script for the shell and
+    /// create the scripts.
+    pub async fn expose_executables_from_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, ExposeError> {
+        let mut state_changes = StateChanges::default();
+
+        // First clean up binaries that are not listed as exposed
+        state_changes |= self.prune_exposed(env_name).await?;
+
+        let all_executables = self.executables_of_all_dependencies(env_name).await?;
+
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        let prefix = Prefix::new(env_dir.path());
+
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        let exposed: HashSet<&str> = environment
+            .exposed
+            .iter()
+            .map(|map| map.executable_name())
+            .collect();
+
+        let exposed_executables: Vec<_> = all_executables
+            .iter()
+            .filter(|executable| exposed.contains(executable.name.as_str()))
+            .cloned()
+            .collect();
+
+        let script_mapping = environment
+            .exposed
+            .iter()
+            .map(|mapping| {
+                script_exec_mapping(
+                    mapping.exposed_name(),
+                    mapping.executable_name(),
+                    exposed_executables.iter(),
+                    &self.bin_dir,
+                    &env_dir,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|source| ExposeError::ExecutableNotFound {
+                environment: env_name.clone(),
+                source: Cause::new(source),
+            })?;
+
+        tracing::debug!(
+            "Exposing executables for environment {}",
+            env_name.fancy_display()
+        );
+
+        state_changes |= create_executable_trampolines(&script_mapping, &prefix, env_name).await?;
+
+        Ok(state_changes)
+    }
+
+    /// Syncs the parsed environment with the installation.
+    /// Returns the state_changes if it succeeded, or an error if it didn't.
+    pub async fn sync_environment(
+        &self,
+        env_name: &EnvironmentName,
+        removed_packages: Option<Vec<PackageName>>,
+    ) -> Result<StateChanges, SyncEnvironmentError> {
+        let mut state_changes = self
+            .sync_environment_install(env_name, removed_packages)
+            .await?;
+        state_changes |= self.sync_environment_expose(env_name).await?;
+        Ok(state_changes)
+    }
+
+    /// Install phase of [`Self::sync_environment`]: bring the environment's
+    /// installation in line with the manifest.
+    ///
+    /// Safe to run concurrently for multiple environments: it only touches the
+    /// environment's own prefix and the shared, concurrency-safe command
+    /// dispatcher.
+    pub async fn sync_environment_install(
+        &self,
+        env_name: &EnvironmentName,
+        removed_packages: Option<Vec<PackageName>>,
+    ) -> Result<StateChanges, SyncEnvironmentError> {
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
+        if self.environment_in_sync(env_name).await? {
+            tracing::debug!(
+                "Environment {} specs already up to date with global manifest",
+                env_name.fancy_display()
+            );
+        } else {
+            // Creating an environment reads as an install rather than an
+            // update, whether it was `install` or a `sync` acting on a manifest
+            // entry whose prefix is missing.
+            if !self
+                .env_root
+                .path()
+                .join(env_name.as_str())
+                .join(consts::CONDA_META_DIR)
+                .exists()
+            {
+                state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+            }
+            tracing::debug!(
+                "Environment {} specs not up to date with global manifest",
+                env_name.fancy_display()
+            );
+            let mut environment_update = self.install_environment(env_name).await?;
+
+            if let Some(removed_packages) = removed_packages {
+                environment_update.add_removed_packages(removed_packages.to_vec());
+            };
+
+            state_changes.insert_change(
+                env_name,
+                StateChange::UpdatedEnvironment(environment_update),
+            );
+        }
+        Ok(state_changes)
+    }
+
+    /// Expose phase of [`Self::sync_environment`]: link executables, shortcuts
+    /// and completions for the environment.
+    ///
+    /// Must run sequentially across environments: these write into directories
+    /// shared by all environments (the binary, shortcut and completion dirs).
+    pub async fn sync_environment_expose(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, SyncEnvironmentError> {
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
+
+        // Expose executables
+        state_changes |= self.expose_executables_from_environment(env_name).await?;
+
+        // Sync shortcuts
+        state_changes |= self.sync_shortcuts(env_name).await?;
+
+        // Sync completions
+        state_changes |= self.sync_completions(env_name).await?;
+
+        Ok(state_changes)
+    }
+
+    /// Delete scripts in the bin folder that are broken
+    pub async fn remove_broken_files(&self) -> Result<(), RemoveBrokenFilesError> {
+        // Get all the files in the global binary directory
+        // If there's a trampoline that couldn't be correctly parsed, remove it
+        let root_path = self.bin_dir.path();
+        let mut entries = tokio_fs::read_dir(&root_path)
+            .await
+            .map_err(RemoveBrokenFilesError::Io)?;
+
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(RemoveBrokenFilesError::Io)?
+        {
+            let path = entry.path();
+            if path.is_file() && path.is_executable() && Trampoline::is_trampoline(&path).await? {
+                let exposed_name = Trampoline::name(&path)?;
+                match Configuration::from_root_path(root_path, &exposed_name).await {
+                    Ok(_) => (),
+                    Err(ConfigurationParseError::ReadError(config_path, err)) => {
+                        tracing::warn!("Couldn't read {}\n{err}", config_path.display());
+                        tracing::warn!("Removing the trampoline at {}", path.display());
+                        tokio_fs::remove_file(path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
+                    }
+                    Err(ConfigurationParseError::ParseError(config_path, err)) => {
+                        tracing::warn!("Couldn't parse {}\n{err}", config_path.display());
+                        tracing::warn!(
+                            "Removing the trampoline at {} and configuration at {}",
+                            path.display(),
+                            config_path.display()
+                        );
+                        tokio_fs::remove_file(path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
+                        tokio_fs::remove_file(config_path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Delete all non required environments
+    pub async fn prune_old_environments(&self) -> Result<StateChanges, RemoveEnvironmentError> {
+        let env_set: HashSet<&EnvironmentName> = self.environments().keys().collect();
+
+        let mut state_changes = StateChanges::default();
+        for env_path in self.env_root.directories().await? {
+            let Some(Ok(env_name)) = env_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(EnvironmentName::from_str)
+            else {
+                continue;
+            };
+
+            if !env_set.contains(&env_name) {
+                // Test if the environment directory is a conda environment
+                if let Ok(true) = env_path.join(consts::CONDA_META_DIR).try_exists() {
+                    // Remove all shortcuts, using the information still available in the
+                    // environment
+                    state_changes |= self.remove_shortcuts(&env_name).await?;
+
+                    // Remove the conda environment
+                    tokio_fs::remove_dir_all(&env_path)
+                        .await
+                        .map_err(RemoveEnvironmentError::Io)?;
+                    // Get all removable binaries related to the environment
+                    let (to_remove, _to_add) = expose_scripts_sync_status(
+                        &self.bin_dir,
+                        &EnvDir::from_path(env_path.clone()),
+                        &IndexSet::new(),
+                    )
+                    .await?;
+
+                    // Remove all removable binaries
+                    for binary_path in to_remove {
+                        binary_path.remove().await?;
+                    }
+                    state_changes.insert_change(&env_name, StateChange::RemovedEnvironment);
+                }
+            }
+        }
+        Ok(state_changes)
+    }
+
+    /// Install shortcuts of a specific environment
+    pub async fn sync_shortcuts(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, ShortcutsError> {
+        let mut state_changes = StateChanges::default();
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+
+        let shortcuts = environment.shortcuts.clone().unwrap_or_default();
+        let (records_to_install, records_to_uninstall) =
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
+
+        for record in records_to_install {
+            tracing::debug!(
+                "Installing menuitems for record: {}",
+                record.name().as_normalized()
+            );
+            rattler_menuinst::install_menuitems_for_record(
+                prefix.root(),
+                &record,
+                environment
+                    .platform
+                    .or(Subdir::current())
+                    .unwrap_or(Subdir::NoArch),
+                MenuMode::User,
+            )
+            .map_err(|source| ShortcutsError::Install {
+                package: record.name().clone(),
+                source,
+            })?;
+
+            state_changes.insert_change(
+                env_name,
+                StateChange::InstalledShortcut(
+                    record
+                        .repodata_record
+                        .package_record
+                        .name
+                        .as_normalized()
+                        .to_owned(),
+                ),
+            );
+        }
+
+        for record in records_to_uninstall {
+            tracing::debug!(
+                "Uninstalling menuitems for record: {}",
+                record.name().as_normalized()
+            );
+            rattler_menuinst::remove_menuitems_for_record(prefix.root(), record.clone()).map_err(
+                |source| ShortcutsError::Remove {
+                    package: record.name().clone(),
+                    source,
+                },
+            )?;
+
+            state_changes.insert_change(
+                env_name,
+                StateChange::UninstalledShortcut(
+                    record
+                        .repodata_record
+                        .package_record
+                        .name
+                        .as_normalized()
+                        .to_owned(),
+                ),
+            );
+        }
+
+        Ok(state_changes)
+    }
+
+    /// Remove the shortcuts from the system coming from a specific environment
+    pub async fn remove_shortcuts(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, ShortcutsError> {
+        let mut state_changes = StateChanges::default();
+
+        // Find menu items in the prefix
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+
+        // Remove menu items
+        for record in prefix_records {
+            rattler_menuinst::remove_menu_items(&record.installed_system_menus).map_err(
+                |source| ShortcutsError::Remove {
+                    package: record.name().clone(),
+                    source,
+                },
+            )?;
+            tracing::info!("Uninstalled menu items for: '{}'", record.file_name());
+            state_changes.insert_change(
+                env_name,
+                StateChange::UninstalledShortcut(record.file_name().to_string()),
+            );
+        }
+        Ok(state_changes)
+    }
+
+    #[cfg(unix)] // Completions are only supported on unix like systems
+    pub async fn sync_completions(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, ExposeError> {
+        let mut state_changes = StateChanges::default();
+
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+        let prefix = self.environment_prefix(env_name).await?;
+        let execs_all = self
+            .executables_of_all_dependencies(env_name)
+            .await?
+            .into_iter()
+            .map(|exec| exec.name)
+            .collect();
+
+        let completions_dir = crate::completions::CompletionsDir::from_env().await?;
+        let (completions_to_remove, completions_to_add) =
+            super::completions::completions_sync_status(
+                environment.exposed.clone(),
+                execs_all,
+                prefix.root(),
+                &completions_dir,
+            )
+            .await;
+
+        for completion_to_remove in completions_to_remove {
+            let state_change = completion_to_remove.remove().await?;
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        for completion_to_add in completions_to_add {
+            let Some(state_change) = completion_to_add.install().await? else {
+                continue;
+            };
+
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        Ok(state_changes)
+    }
+
+    #[cfg(not(unix))]
+    pub async fn sync_completions(
+        &self,
+        _env_name: &EnvironmentName,
+    ) -> Result<StateChanges, ExposeError> {
+        let state_changes = StateChanges::default();
+        Ok(state_changes)
+    }
+
+    /// Returns a semaphore than can be used to limit the number of concurrent
+    /// according to the user configuration.
+    fn concurrent_downloads_semaphore(&self) -> Arc<Semaphore> {
+        self.concurrent_downloads_semaphore
+            .get_or_init(|| {
+                let max_concurrent_downloads = self.config().max_concurrent_downloads();
+                Arc::new(Semaphore::new(max_concurrent_downloads))
+            })
+            .clone()
+    }
+
+    /// Returns the top-level progress reporter for this project.
+    fn top_level_progress(&self) -> &Arc<TopLevelProgress> {
+        self.top_level_progress
+            .get_or_init(TopLevelProgress::from_global)
+    }
+
+    /// Returns the command dispatcher for this project.
+    fn command_dispatcher(&self) -> Result<&CommandDispatcher, CommandDispatcherError> {
+        const BUILD_DIR: &str = "bld";
+
+        self.command_dispatcher.get_or_try_init(|| {
+            let cache_dir_path = pixi_config::get_cache_dir()
+                .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?;
+            let cache_dir = AbsPathBuf::new(cache_dir_path)
+                .expect("cache dir is not absolute")
+                .into_assume_dir();
+            // Root the dispatcher at the shared cache directory, so global
+            // environments use the same package and build-backend caches as
+            // every other command; a package cached by a workspace install
+            // counts as locally available for an offline global solve. The
+            // workspace-scoped caches (source builds and their metadata) have
+            // no workspace to live in here and stay under `bld`.
+            let build_dir = cache_dir.join(BUILD_DIR).into_assume_dir();
+            let cache_dirs =
+                pixi_command_dispatcher::CacheDirs::new(cache_dir).with_workspace(build_dir);
+
+            let root_dir = AbsPathBuf::new(self.root.clone())
+                .expect("root dir is not absolute")
+                .into_assume_dir();
+
+            Ok(self
+                .top_level_progress()
+                .clone()
+                .register_with(
+                    pixi_command_dispatcher::CommandDispatcher::builder()
+                        .with_gateway(
+                            self.repodata_gateway()
+                                .map_err(|e| CommandDispatcherError::RepodataGateway(e.into()))?
+                                .clone(),
+                        )
+                        .with_cache_dirs(cache_dirs)
+                        .with_root_dir(root_dir)
+                        .with_download_client(
+                            self.authenticated_client()
+                                .map_err(|e| CommandDispatcherError::AuthenticatedClient(e.into()))?
+                                .clone(),
+                        )
+                        .with_max_download_concurrency(self.concurrent_downloads_semaphore())
+                        .with_limits(Limits {
+                            max_concurrent_solves: self.config().max_concurrent_solves().into(),
+                            ..Limits::default()
+                        })
+                        .with_backend_overrides(self.backend_override.clone().unwrap_or_else(
+                            || {
+                                BackendOverride::from_env()
+                                    .ok()
+                                    .flatten()
+                                    .unwrap_or_default()
+                            },
+                        ))
+                        .with_channel_config(self.global_channel_config().clone())
+                        .with_allow_symbolic_links(self.config.allow_symbolic_links)
+                        .with_allow_hard_links(self.config.allow_hard_links)
+                        .with_allow_ref_links(self.config.allow_ref_links)
+                        .with_offline(self.config.offline())
+                        .execute_link_scripts(match self.config.run_post_link_scripts() {
+                            RunPostLinkScripts::Insecure => true,
+                            RunPostLinkScripts::False => false,
+                        }),
+                )
+                .finish())
+        })
+    }
+
+    /// Infer the package name from a SourceSpec by examining build outputs.
+    /// When `inline` is set, backend discovery uses the inline package
+    /// definition instead of reading a manifest from the checkout.
+    /// `channels` are the channels of the environment the package is
+    /// destined for; the backend and its dependencies are solved against
+    /// them, subject to the manifest's `exclude-newer` cutoff and the
+    /// channel overrides.
+    async fn infer_package_name_from_source_spec(
+        &self,
+        source_spec: pixi_spec::SourceSpec,
+        inline: Option<InlinePackage>,
+        channels: &[PrioritizedChannel],
+    ) -> Result<PackageName, InferPackageNameError> {
+        let exclude_newer = self.resolved_exclude_newer(channels)?;
+        let command_dispatcher = self.command_dispatcher()?;
+        let checkout = command_dispatcher
+            .engine()
+            .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec.location).await)
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
+            .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
+
+        let pinned_source_spec = checkout.pinned;
+
+        // Create the metadata spec
+        let channels = channels
+            .iter()
+            .filter_map(|c| {
+                c.channel
+                    .clone()
+                    .into_base_url(self.global_channel_config())
+                    .ok()
+            })
+            .collect();
+        let metadata_spec = BuildBackendMetadataSpec {
+            manifest_source: pinned_source_spec.clone(),
+            preferred_build_source: None,
+            env_ref: EnvironmentRef::Ephemeral(EphemeralEnv::new(
+                pinned_source_spec.to_string(),
+                EnvironmentSpec {
+                    channels,
+                    build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
+                    variants: VariantConfig::default(),
+                    exclude_newer,
+                    channel_priority: Default::default(),
+                },
+            )),
+            build_string_prefix: None,
+            build_number: None,
+            inline,
+        };
+
+        // Get the metadata using the command dispatcher
+        let command_dispatcher = self.command_dispatcher()?;
+        let metadata = command_dispatcher
+            .build_backend_metadata(metadata_spec)
+            .await
+            .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
+
+        // Get the available output names. Several outputs may share one name
+        // (e.g. variant builds of the same package); those describe a single
+        // package, so dedupe before deciding whether the source is ambiguous.
+        let packages: IndexSet<PackageName> =
+            metadata.metadata.output_names().into_iter().collect();
+
+        match packages.len() {
+            0 => Err(InferPackageNameError::NoPackageOutputs),
+            1 => Ok(packages[0].clone()),
+            _ => Err(InferPackageNameError::MultiplePackageOutputs {
+                package_names: packages.iter().map(|p| p.as_source().to_string()).collect(),
+            }),
+        }
+    }
+
+    /// Infer the package name from a PixiSpec (path or git) by examining build
+    /// outputs. When `inline` carries an inline package definition, backend
+    /// discovery uses it instead of reading a manifest from the source
+    /// checkout. `channels` are the channels of the environment the package
+    /// is destined for.
+    pub async fn infer_package_name_from_spec(
+        &self,
+        pixi_spec: &pixi_spec::PixiSpec,
+        inline: Option<&InlinePackageManifest>,
+        channels: &[PrioritizedChannel],
+    ) -> Result<PackageName, InferPackageNameError> {
+        match pixi_spec.clone().into_source_or_binary() {
+            Either::Left(source_spec) => {
+                let inline = inline
+                    .map(|inline| self.inline_package_for_channels(inline, channels.to_vec()));
+                self.infer_package_name_from_source_spec(source_spec, inline, channels)
+                    .await
+            }
+            Either::Right(binary_spec) => match binary_spec {
+                BinarySpec::Path(PathBinarySpec { path }) => path
+                    .file_name()
+                    .and_then(CondaArchiveIdentifier::try_from_filename)
+                    .and_then(|iden| PackageName::from_str(&iden.identifier.name).ok())
+                    .ok_or(InferPackageNameError::UnsupportedSpecType),
+                _ => Err(InferPackageNameError::UnsupportedSpecType),
+            },
+        }
+    }
+}
+
+/// Synthesizes the minimal [`WorkspaceManifest`] that inline package
+/// definitions need: there is no real workspace behind a global environment,
+/// and backend discovery only consults the workspace's channels (as the
+/// fallback for the build backend's own dependencies when the definition
+/// doesn't pin `build.backend.channels`).
+fn workspace_manifest_with_channels(
+    channels: impl IntoIterator<Item = PrioritizedChannel>,
+) -> WorkspaceManifest {
+    let mut workspace_manifest = WorkspaceManifest::default();
+    workspace_manifest.workspace.channels = channels.into_iter().collect();
+    workspace_manifest
+}
+
+/// Computes a fingerprint for each source dependency in the environment: a
+/// hash of the source spec together with any inline package definition's
+/// content hash. `pixi global sync` compares these against the ones recorded
+/// at install time to detect when a source dependency's *specification*
+/// changed (e.g. an edited git `rev` or inline `package.*` table). Binary
+/// dependencies are matched against the prefix directly and are not included.
+fn source_fingerprints_for_environment(environment: &ParsedEnvironment) -> BTreeMap<String, u64> {
+    environment
+        .dependencies
+        .specs
+        .iter()
+        .filter(|(_, spec)| spec.is_source())
+        .map(|(name, spec)| {
+            let mut hasher = Xxh3::new();
+            // The source spec's TOML form is a stable, complete rendering of
+            // the source location (git url + rev, path, ...).
+            spec.to_toml_value().to_string().hash(&mut hasher);
+            // Fold in the inline package definition, if any, via its content
+            // hash so edits to `package.*` invalidate the fingerprint.
+            if let Some(inline) = environment.inline_packages.get(name) {
+                inline.content_hash.as_u64().hash(&mut hasher);
+            }
+            (name.as_normalized().to_string(), hasher.finish())
+        })
+        .collect()
+}
+
+/// Converts an environment's inline package definitions into the
+/// [`InlinePackage`]s the command dispatcher threads through solve, metadata
+/// and build keys.
+fn inline_packages_for_environment(
+    environment: &ParsedEnvironment,
+) -> BTreeMap<PackageName, InlinePackage> {
+    if environment.inline_packages.is_empty() {
+        return BTreeMap::new();
+    }
+    let workspace = Arc::new(workspace_manifest_with_channels(
+        environment.channels.iter().cloned(),
+    ));
+    environment
+        .inline_packages
+        .iter()
+        .map(|(name, inline)| {
+            (
+                name.clone(),
+                InlinePackage {
+                    manifest: Arc::new(inline.manifest.clone()),
+                    workspace: workspace.clone(),
+                    content_hash: inline.content_hash,
+                },
+            )
+        })
+        .collect()
+}
+
+impl Repodata for Project {
+    /// Returns the [`Gateway`] used by this project.
+    fn repodata_gateway(&self) -> Result<&Gateway, ReqwestClientError> {
+        self.repodata_gateway.get_or_try_init(|| {
+            let client = self.authenticated_client()?.clone();
+            let concurrent_downloads = self.concurrent_downloads_semaphore();
+            Ok(self
+                .config()
+                .gateway()
+                .with_client(client)
+                .with_max_concurrent_requests(concurrent_downloads)
+                .finish())
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, io::Write};
+
+    use itertools::Itertools;
+    use pixi_utils::variants::VariantValue;
+    use rattler_conda_types::{
+        NamedChannelOrUrl, PackageRecord, RepoDataRecord, Subdir, VersionWithSource,
+        package::BuildString, package::DistArchiveIdentifier,
+    };
+    use tempfile::tempdir;
+    use url::Url;
+
+    use super::*;
+    use crate::trampoline::{Configuration, Trampoline};
+
+    const SIMPLE_MANIFEST: &str = r#"
+        [envs.python]
+        channels = ["dummy-channel"]
+        [envs.python.dependencies]
+        dummy = "3.11.*"
+        [envs.python.exposed]
+        dummy = "dummy"
+        "#;
+
+    #[tokio::test]
+    async fn test_project_from_str() {
+        // Use a deterministic path with a parent. `FilePath().fake()` from
+        // the `fake` crate occasionally produces "/" (no parent), which
+        // panics `from_manifest`'s `expect("manifest path should always
+        // have a parent")` and made this test flake under nextest.
+        let manifest_path = PathBuf::from("/fake/pixi-global.toml");
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
+
+        let project =
+            Project::from_str(&manifest_path, SIMPLE_MANIFEST, env_root, bin_dir).unwrap();
+        assert_eq!(project.root, manifest_path.parent().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_project_from_path() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let manifest_path = tempdir.path().join(consts::GLOBAL_MANIFEST_DEFAULT_NAME);
+
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
+
+        // Create and write global manifest
+        let mut file = fs::File::create(&manifest_path).unwrap();
+        file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
+        let project = Project::from_path(&manifest_path, env_root, bin_dir).unwrap();
+
+        // Canonicalize both paths
+        let canonical_root = project.root.canonicalize().unwrap();
+        let canonical_manifest_parent = manifest_path.parent().unwrap().canonicalize().unwrap();
+
+        assert_eq!(canonical_root, canonical_manifest_parent);
+    }
+
+    #[tokio::test]
+    async fn test_project_from_manifest() {
+        let manifest_path = PathBuf::from("/fake/pixi-global.toml");
+
+        let env_root = EnvRoot::from_env().await.unwrap();
+        let bin_dir = BinDir::from_env().await.unwrap();
+
+        let manifest = Manifest::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
+        let project = Project::from_manifest(manifest, env_root, bin_dir).unwrap();
+        assert_eq!(project.root, manifest_path.parent().unwrap());
+    }
+
+    #[test]
+    fn test_project_manifest_dir() {
+        Project::manifest_dir().unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_prune_exposed() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let project = Project::from_str(
+            &PathBuf::from("dummy"),
+            r#"
+            [envs.test]
+            channels = ["conda-forge"]
+            [envs.test.dependencies]
+            python = "*"
+            [envs.test.exposed]
+            python = "python"
+            "#,
+            EnvRoot::new(tempdir.path().to_path_buf()).unwrap(),
+            BinDir::new(tempdir.path().to_path_buf()).unwrap(),
+        )
+        .unwrap();
+
+        let env_name = "test".parse().unwrap();
+
+        // Create non-exposed but related binary
+        let non_exposed_name = ExposedName::from_str("not-python").unwrap();
+
+        let non_exposed_env_path = if cfg!(windows) {
+            project.env_root.path().join("test/bin/not-python.exe")
+        } else {
+            project.env_root.path().join("test/bin/not-python")
+        };
+
+        tokio_fs::create_dir_all(non_exposed_env_path.parent().unwrap())
+            .await
+            .unwrap();
+        tokio_fs::File::create(&non_exposed_env_path).await.unwrap();
+
+        let non_exposed_manifest =
+            Configuration::new(non_exposed_env_path, String::new(), HashMap::new());
+        let non_exposed_trampoline = Trampoline::new(
+            non_exposed_name.clone(),
+            project.bin_dir.path().to_path_buf(),
+            non_exposed_manifest,
+        );
+
+        // write it's trampoline and manifest
+        non_exposed_trampoline.save().await.unwrap();
+
+        // Create exposed binary
+        let python = ExposedName::from_str("python").unwrap();
+        let python_exposed_env_path = if cfg!(windows) {
+            project.env_root.path().join("test/bin/python.exe")
+        } else {
+            project.env_root.path().join("test/bin/python")
+        };
+
+        tokio_fs::create_dir_all(python_exposed_env_path.parent().unwrap())
+            .await
+            .unwrap();
+        tokio_fs::File::create(&python_exposed_env_path)
+            .await
+            .unwrap();
+
+        let exposed_manifest =
+            Configuration::new(python_exposed_env_path, String::new(), HashMap::new());
+        let exposed_trampoline = Trampoline::new(
+            python,
+            project.bin_dir.path().to_path_buf(),
+            exposed_manifest,
+        );
+
+        exposed_trampoline.save().await.unwrap();
+
+        // Create unrelated file
+        let unrelated = project.bin_dir.path().join("unrelated");
+        fs::File::create(&unrelated).unwrap();
+
+        // Remove exposed
+        let state_changes = project.prune_exposed(&env_name).await.unwrap();
+        assert_eq!(
+            state_changes.changes(),
+            std::collections::HashMap::from([(
+                env_name.clone(),
+                vec![StateChange::RemovedExposed(non_exposed_name)]
+            )])
+        );
+
+        // Check if the non-exposed file was removed
+        // it should be : exposed binary + it's manifest and non related file
+        assert_eq!(fs::read_dir(project.bin_dir.path()).unwrap().count(), 3);
+        assert!(exposed_trampoline.path().exists());
+        assert!(unrelated.exists());
+        assert!(!non_exposed_trampoline.path().exists());
+    }
+
+    #[tokio::test]
+    async fn test_prune() {
+        // Create a temporary directory
+        let temp_dir = tempdir().unwrap();
+
+        // Set the env root to the temporary directory
+        let env_root = EnvRoot::new(temp_dir.path().to_owned()).unwrap();
+
+        // Create some directories in the temporary directory
+        let envs = ["env1", "env2", "env3", "non-conda-env-dir"];
+        for env in envs {
+            EnvDir::from_env_root(env_root.clone(), &EnvironmentName::from_str(env).unwrap())
+                .await
+                .unwrap();
+        }
+        // Add conda meta data to env2 to make sure it's seen as a conda environment
+        tokio_fs::create_dir_all(env_root.path().join("env2").join(consts::CONDA_META_DIR))
+            .await
+            .unwrap();
+
+        // Create project with env1 and env3
+        let manifest = Manifest::from_str(
+            &env_root.path().join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
+            r#"
+            [envs.env1]
+            channels = ["conda-forge"]
+            [envs.env1.dependencies]
+            python = "*"
+            [envs.env1.exposed]
+            python1 = "python"
+
+            [envs.env3]
+            channels = ["conda-forge"]
+            [envs.env3.dependencies]
+            python = "*"
+            [envs.env3.exposed]
+            python2 = "python"
+            "#,
+        )
+        .unwrap();
+        let project = Project::from_manifest(
+            manifest,
+            env_root.clone(),
+            BinDir::new(env_root.path().parent().unwrap().to_path_buf()).unwrap(),
+        )
+        .unwrap();
+
+        // Call the prune method with a list of environments to keep (env1 and env3) but
+        // not env4
+        let state_changes = project.prune_old_environments().await.unwrap();
+        assert_eq!(
+            state_changes.changes(),
+            HashMap::from([(
+                "env2".parse().unwrap(),
+                vec![StateChange::RemovedEnvironment]
+            )])
+        );
+
+        // Verify that only the specified directories remain
+        let remaining_dirs = fs::read_dir(env_root.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| entry.file_name().into_string().unwrap())
+            .sorted()
+            .collect_vec();
+
+        assert_eq!(remaining_dirs, vec!["env1", "env3", "non-conda-env-dir"]);
+    }
+
+    #[test]
+    fn test_convert_repodata_to_exposed_data() {
+        let temp_dir = tempdir().unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(temp_dir.path().to_owned());
+        let mut package_record = PackageRecord::new(
+            "python".parse().unwrap(),
+            VersionWithSource::from_str("3.9.7").unwrap(),
+            "build_string".parse().unwrap(),
+        );
+
+        // Set platform to something different than current
+        package_record.subdir = Subdir::LinuxRiscv32.to_string();
+
+        let repodata_record = RepoDataRecord {
+            package_record: package_record.clone(),
+            identifier: DistArchiveIdentifier::try_from_filename("doesnt_matter-0-0.conda")
+                .expect("valid filename"),
+            url: Url::from_str("https://also_doesnt_matter").unwrap(),
+            channel: Some(format!(
+                "{}{}",
+                channel_config.channel_alias.clone(),
+                "test-channel"
+            )),
+        };
+        let prefix_record = PrefixRecord::from_repodata_record(repodata_record, vec![]);
+
+        // Test with default channel alias
+        let (platform, channel, package) =
+            convert_record_to_metadata(&prefix_record, &channel_config).unwrap();
+        assert_eq!(
+            channel,
+            NamedChannelOrUrl::from_str("test-channel").unwrap().into()
+        );
+        assert_eq!(package, "python".parse().unwrap());
+        assert_eq!(platform, Some(Subdir::LinuxRiscv32));
+
+        // Test with different from default channel alias
+        let repodata_record = RepoDataRecord {
+            package_record: package_record.clone(),
+            identifier: DistArchiveIdentifier::try_from_filename("doesnt_matter-0-0.conda")
+                .expect("valid filename"),
+            url: Url::from_str("https://also_doesnt_matter").unwrap(),
+            channel: Some("https://test-channel.com/idk".to_string()),
+        };
+        let prefix_record = PrefixRecord::from_repodata_record(repodata_record, vec![]);
+
+        let (_platform, channel, package) =
+            convert_record_to_metadata(&prefix_record, &channel_config).unwrap();
+        assert_eq!(
+            channel,
+            NamedChannelOrUrl::from_str("https://test-channel.com/idk")
+                .unwrap()
+                .into()
+        );
+        assert_eq!(package, "python".parse().unwrap());
+    }
+
+    fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: version.parse().unwrap(),
+            build_string: BuildString::new_unchecked("0"),
+        }
+    }
+
+    /// Source builds derive their `c_stdlib` variant from the device's detected
+    /// virtual packages, emitted as a `<=` bound: a host reporting
+    /// `__osx = 15.7.1` targets `macosx_deployment_target <=15.7.1`, so the
+    /// solve picks the highest published deployment target the device can build
+    /// against rather than pinning the exact -- and unpublished -- host version.
+    #[test]
+    fn test_build_variants_use_device_virtual_packages() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.7.1")];
+        let variants =
+            Project::build_variants(Subdir::OsxArm64, &device, &channels).variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
+        );
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("<=15.7.1".to_string())])
+        );
+    }
+
+    /// The derived providers are conda-forge packages, so an environment that
+    /// doesn't build against conda-forge contributes no variants.
+    #[test]
+    fn test_build_variants_empty_without_conda_forge() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://prefix.dev/my-channel").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.0")];
+        assert!(
+            Project::build_variants(Subdir::OsxArm64, &device, &channels)
+                .variant_configuration
+                .is_empty()
+        );
+    }
+}

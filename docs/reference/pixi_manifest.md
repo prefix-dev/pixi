@@ -1,5 +1,7 @@
 
 The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
+It specifies environments for a workspace, and the package dependency requirements for
+those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
@@ -8,6 +10,24 @@ This document will explain the usage of the different tables.
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
     For example, the `[workspace]` table becomes `[tool.pixi.workspace]`.
     There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../python/pyproject_toml.md) documentation for more information.
+
+## TOML 1.1
+
+Pixi supports [TOML 1.1](https://toml.io/en/v1.1.0), which most notably allows multiline inline tables with trailing commas:
+
+```toml
+[dependencies]
+python = {
+    version = ">=3.12",
+    channel = "conda-forge",
+}
+```
+
+Commands that modify the manifest, like `pixi add`, keep the layout you wrote: new entries in a multiline table land on their own line, and removed entries take their whole line with them.
+
+!!! warning
+    Editor tooling and other programs that read your manifest may not understand TOML 1.1 yet.
+    In particular, most Python tools (pip, build backends, and Python's built-in `tomllib`) only read TOML 1.0, so using TOML 1.1 syntax in `pyproject.toml` can break them even though Pixi accepts it.
 
 ## Manifest discovery
 
@@ -65,13 +85,49 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
+The available (save `noarch`) platforms are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/subdir/enum.Subdir.html).
 
-!!! tip "Special macOS behavior"
-    macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
-    To support both, include both in your platforms list.
-    Fallback: If `osx-arm64` can't resolve, use `osx-64`.
-    Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
+#### Inline-table entries (per-platform virtual packages)
+
+Each entry can also be an inline table that pins which virtual packages the solver should treat as available on that subdir. This is the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. It replaces the legacy `[system-requirements]` table.
+
+```toml
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
+  { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
+]
+```
+
+Recognised keys on an inline-table entry:
+
+- `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
+- `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
+- Built-in virtual-package keys: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+- Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`. Without a build string, the virtual package has the default build `0`. A build string may only contain ASCII letters, digits, `_`, `.` and `+`, as CEP 26 requires.
+
+Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir against Pixi's [default declared virtual packages](../workspace/system_requirements.md#default-declared-virtual-packages).
+
+See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for binding features to specific rich entries.
+
+!!! tip "Special macOS and Windows ARM behavior"
+    To support both architectures on macOS or Windows, include both platforms in your list.
+
+    ```toml
+    # Specific environment for all platforms
+    platforms = ["osx-64", "osx-arm64", "win-64", "win-arm64"]
+    # Environments that run on both Intel and ARM setups but using the emulators:
+    platforms = ["osx-64", "win-64"]
+    ```
+
+    | OS      | Platform    | Architecture  | Notes                                                                                                                                  |
+    |---------|-------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------|
+    | macOS   | `osx-64`    | Intel         | Runs on Apple Silicon via [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) |
+    | macOS   | `osx-arm64` | Apple Silicon | Optimized binaries for Apple Silicon (recommended).                                                                                    |
+    | Windows | `win-64`    | Intel/AMD64   | Runs on ARM processors with [Prism](https://learn.microsoft.com/en-us/windows/arm/apps-on-arm-x86-emulation)                           |                                         |
+    | Windows | `win-arm64` | ARM64         | Optimized binaries for ARM, not all packages support this yet.                                                                         |
+
 
 ### `name` (optional)
 
@@ -158,22 +214,81 @@ URL of the workspace documentation.
 
 ### `conda-pypi-map` (optional)
 
-Mapping of channel name or URL to location of mapping that can be URL/Path.
-Mapping should be structured in `json` format where `conda_name`: `pypi_package_name`.
-Example:
+Per-channel overrides for the conda-to-PyPI name mapping that Pixi uses to detect which conda packages satisfy PyPI dependencies.
+Each entry maps a channel name or URL to a mapping location (URL or path), a table, or `false`:
+
+```toml
+[workspace.conda-pypi-map]
+# Additive overlay from a file: your entries take priority, and anything not
+# listed falls back to the default mapping.
+robostack = "local/robostack_mapping.json"
+
+# Inline entries, no file needed. A list maps one conda package to several
+# PyPI packages; `false` means "not a PyPI package".
+conda-forge = { mapping-mode = "overlay", mapping = { pytorch = "torch", airflow = ["airflow", "apache-airflow"], not-on-pypi = false } }
+
+# Replace Pixi's default mapping data for this channel. The same-name
+# heuristic is controlled separately.
+my-mirror = { location = "https://example.com/mapping.json", mapping-mode = "replace" }
+
+# Disable PyPI name derivation for this channel.
+internal = false
+```
+
+Mapping files are JSON objects with `conda_name: pypi_package_name` entries.
+The value can also be a list of PyPI names (the conda package then satisfies all of them and one PURL is emitted per name), or `null` to mark a package as not available on PyPI.
+This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
 
 ```json title="local/robostack_mapping.json"
 {
   "jupyter-ros": "my-name-from-mapping",
-  "boltons": "boltons-pypi"
+  "airflow": ["airflow", "apache-airflow"],
+  "boltons": "boltons-pypi",
+  "not-on-pypi": null
 }
 ```
 
-If `conda-forge` is not present in `conda-pypi-map` `pixi` will use `prefix.dev` mapping for it.
+The table form accepts:
+
+- `location`: URL or path of a mapping JSON file. Relative paths are resolved against the workspace root.
+- `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
+- `mapping-mode`: `"overlay"` (default) or `"replace"`. With `overlay`, Pixi consults your entries first and falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/) for anything not listed. With `replace`, Pixi uses your mapping instead of the default mapping data for that channel. If no `location` or `mapping` is provided, the project mapping is empty.
+- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and the conda-pypi channel and `false` for other channels.
+
+A mapping fetched from a `location` URL is cached using standard HTTP cache semantics (honoring the server's `Cache-Control`/`ETag` headers). If a refresh fails (e.g. offline), the previously fetched copy is reused with a warning; if no copy has been fetched yet, the failure is an error.
+
+For example, `conda-forge = { mapping-mode = "replace" }` uses an empty project mapping, skips Pixi's default mapping data, and still keeps the conda-forge same-name heuristic.
+
+To disable the mapping, either per channel or entirely:
 
 ```toml
-conda-pypi-map = { "conda-forge" = "https://example.com/mapping", "https://repo.prefix.dev/robostack" = "local/robostack_mapping.json"}
+[workspace]
+conda-pypi-map = false                      # disable for all channels
+# or
+conda-pypi-map = { conda-forge = false }    # disable for one channel
 ```
+
+Global disable (`conda-pypi-map = false`) also disables the offline same-name heuristic. Per-channel disable (`<channel> = false`) disables all PyPI name derivation for that channel, including the same-name heuristic.
+
+Lookup behavior depends on where the configuration applies:
+
+| Configuration | Project-defined mapping | prefix.dev fallback | same-name heuristic |
+| --- | --- | --- | --- |
+| unset | no | yes, except for the conda-pypi channel | yes, for conda-forge and the conda-pypi channel |
+| `conda-pypi-map = false` | no | no | no |
+| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge and the conda-pypi channel |
+| `<channel> = false` | no | no | no |
+| `mapping-mode = "overlay"`, package missing | miss | yes | yes, if enabled |
+| `mapping-mode = "replace"`, package missing | miss, or empty mapping | no | yes, if enabled |
+| `same-name-heuristic = false`, package missing | miss | depends on `mapping-mode` | no |
+| package entry `false` / `null` / `[]` | explicit no-PyPI entry | no | no |
+
+!!! warning "Behavior change"
+    Bare location strings (`conda-forge = "mapping.json"`) used to be *exclusive*: only packages in your file were mapped.
+    They are now *additive* (`mapping-mode = "overlay"`). To restore the old source-of-truth behavior, use the table form with `mapping-mode = "replace"` and `same-name-heuristic = false`.
+    The previous idiom of avoiding mapping lookups with an empty map (`conda-pypi-map = {}`) is deprecated but keeps its legacy behavior: no default mapping lookup, while still allowing the conda-forge same-name heuristic. Use `conda-pypi-map = false` to disable all derivation, or `conda-pypi-map = { conda-forge = { mapping-mode = "replace" } }` to spell the legacy behavior explicitly.
+    Additionally, configuring a mapping for one channel no longer suppresses the conda-forge name heuristic for channels that are *not* listed in `conda-pypi-map`; unlisted channels now behave exactly as if no mapping were configured.
+    To suppress the same-name heuristic while keeping mapping data, set `same-name-heuristic = false`. To suppress all PURL derivation for one channel, use `<channel> = false`; to suppress it globally, use `conda-pypi-map = false`.
 
 ### `channel-priority` (optional)
 
@@ -187,6 +302,10 @@ Options:
     Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities.
 
     We strongly recommend not to switch the default.
+
+- `flexible`: The channels are used in the order they are defined in the `channels` list, but per package the candidates of a higher-priority channel are exhausted before the solver falls back to the next channel, regardless of the version.
+    Unlike `strict`, a package that only exists in a lower-priority channel can still be picked even when a higher-priority channel also provides it under a constraint the solve cannot satisfy.
+    This keeps most of the predictability of `strict` while avoiding some unsolvable environments, at the cost of possibly mixing channels per package.
 
 - `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
    Care should be taken when using this option.
@@ -209,6 +328,34 @@ channel-priority = "disabled"
     channels = ["conda-forge", "channel-name"]
     [dependencies]
     package = {version = "*", channel = "channel-name"}
+    ```
+
+### `solve-strategy` (optional)
+
+This is the setting for the strategy used in the solver step.
+
+Options:
+
+- `highest`: **Default**, Solve all packages to the highest compatible version.
+
+- `lowest`: Solve all packages to the lowest compatible version.
+
+- `lowest-direct`: Solve only direct dependency packages to the lowest compatible version. Transitive dependencies are still sorted using the `highest` strategy.
+
+```toml
+solve-strategy = "lowest"
+```
+
+!!! note
+    When multiple features used in an environment set a specific solve strategy,
+    the one from the left-most feature declared in the environment is used.
+    ```toml
+    [feature.one]
+    solve-strategy = "lowest"
+    [feature.two]
+    solve-strategy = "lowest-direct"
+    [environments]
+    combined = ["two", "one"] # <- The solve strategy from feature `two` is used
     ```
 
 ### `requires-pixi` (optional)
@@ -235,23 +382,233 @@ requires-pixi = ">=0.40,<1.0"
 
 !!! note
     This option should be used to improve the reproducibility of building the workspace. A complicated
-    requirement spec may be an obstacle to setup the building environment.
+    requirement spec may be an obstacle to setup the build environment.
 
 
 ### `exclude-newer` (optional)
 
-When specified this will exclude any package from consideration that is newer than the specified date.
-This is useful to reproduce installations regardless of new package releases.
+When specified on the workspace this will exclude any package from consideration that is newer than the specified timestamp or duration.
+This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
+installing recently published (and potentially compromised) packages.
 
-The date may be specified in the following formats:
+The cutoff may be specified in the following formats:
 
 * As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
-* As a date in the format `YYYY-MM-DD` (e.g. `2023-10-01`) in the systems time zone.
+* As a date in `YYYY-MM-DD` format (e.g. `2026-03-30`). This is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
+* As a relative duration (e.g. `7d`, `1h30m`, `30m`). Relative durations support everything [`humantime`](https://docs.rs/humantime/latest/humantime/fn.parse_duration.html) accepts. The duration is relative to the current time at solve time.
 
-Both PyPi and conda packages are considered.
+When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
-!! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
-If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+Both PyPI and conda packages are considered.
+The cutoff also applies to the build and host dependencies when packages of the workspace are built, both as source dependencies and with `pixi publish`.
+
+```toml
+[workspace]
+exclude-newer = "7d"
+```
+
+Use [`pixi workspace exclude-newer set`](cli/pixi/workspace/exclude-newer/set.md) to set the cutoff from the command line, and [`pixi workspace exclude-newer unset`](cli/pixi/workspace/exclude-newer/unset.md) to remove it.
+
+#### Exemptions
+
+Some releases need to get through the cutoff immediately, for example an urgent security fix that you have reviewed, or a package you publish yourself.
+Instead of lowering the cutoff for every future release of such a package, exempt the releases you vetted.
+Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
+An exempted release is never excluded, regardless of its upload time.
+
+The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`, or the `url` of a package archive, optionally with its `md5` or `sha256` but no other field.
+`polars = "==1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
+
+```toml
+[workspace]
+channels = [
+  # get the most recent versions of packages you control
+  { channel = "https://my.internal/channel", exclude-newer = "0d" },
+  "conda-forge",
+  "pytorch",
+]
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+# CVE-XXXX-YYYY: this release contains the fix
+polars = "==1.43.1"
+# only ever built by us
+py-rattler = "*"
+# a release of a specific build string from a specific channel
+pytorch-cpu = { version = "==2.10.0", build = "cpu_*", channel = "pytorch" }
+# only the builds of this release that were published when it was reviewed
+openssl = { version = "==3.2.1", cutoff = "2026-10-12T08:00:00Z" }
+```
+
+A channel can override the cutoff with its own `exclude-newer` value, as shown above.
+Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.
+
+An exemption without a `cutoff` also lets through matching releases that are published later, e.g. a new build of `polars ==1.43.1`.
+Give an exemption a `cutoff` to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
+The cutoff of an exemption takes the same values as the workspace cutoff, so it can also be a duration such as `"1d"`, which exempts matching releases once they are a day old.
+Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.
+
+Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.
+[`pixi workspace exclude-newer prune`](cli/pixi/workspace/exclude-newer/prune.md) removes these stale exemptions.
+
+[`pixi workspace exclude-newer exempt`](cli/pixi/workspace/exclude-newer/exempt.md) adds exemptions without editing the manifest by hand.
+It takes the same specs as `pixi add`, so a bare package name exempts every release.
+An exemption with a version gets the current time as its `cutoff`, use `--cutoff` to pick a different one or `--no-cutoff` to exempt future releases as well.
+Exempting a package again replaces its exemption, and [`pixi workspace exclude-newer unexempt`](cli/pixi/workspace/exclude-newer/unexempt.md) removes it.
+
+```shell
+# exempts the releases of polars 1.43.1 published until now, and every release of py-rattler
+pixi workspace exclude-newer exempt polars==1.43.1 py-rattler
+pixi workspace exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12
+pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]' --no-cutoff
+pixi workspace exclude-newer unexempt py-rattler
+# remove the exemptions whose cutoff all channels have passed
+pixi workspace exclude-newer prune
+```
+
+#### PyPI packages
+
+The cutoff of `exclude-newer` applies to PyPI packages as well.
+Use `pypi-exclude-newer` to give PyPI packages their own `cutoff`, or to exempt PyPI packages from the cutoff.
+Without a `cutoff` of its own, `pypi-exclude-newer` falls back to the cutoff of `exclude-newer`.
+
+PyPI exemptions only support `"*"` for now, which exempts every release of the package.
+This is especially useful when a package is pinned to a separate `index` that you trust, or that does not provide upload times (see the note below).
+Pass `--pypi` to the `pixi workspace exclude-newer` commands to edit `pypi-exclude-newer`, e.g. `pixi workspace exclude-newer exempt --pypi torch`.
+
+```toml
+[workspace]
+exclude-newer = "7d"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+
+[pypi-dependencies]
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+```
+
+!!! warning "Deprecated: top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables"
+    The top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables of per-package cutoffs are deprecated and will be removed.
+    Replace a per-package cutoff of `"0d"` with a `"*"` exemption, or narrow it down to the releases you vetted.
+    Other per-package cutoffs have no direct replacement: to allow newer releases of a package, exempt the versions you vetted, and to keep a package on older releases, constrain its version in the dependencies.
+
+!!! note "Satisfiability checks with `exclude-newer`"
+    For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during
+    lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
+    when a locked conda package is newer than the configured cutoff and not exempt.
+
+    For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a
+    result, changes to `exclude-newer` or `pypi-exclude-newer` do not trigger the same
+    lock file satisfiability check for already locked PyPI packages. Run `pixi update` to
+    re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
+
+!!! note
+    Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+    If the field is not present for a given distribution, the distribution will be treated as unavailable, unless its package is exempted. PyPI provides `upload-time` for all packages.
+
+    If an extra index does not expose `upload-time`, such as a private mirror, you can lift the cutoff for that index with a
+    per-index override on [`extra-index-urls`](#alternative-registries):
+    `{ url = "https://internal/simple", exclude-newer = "0d" }`.
+
+### `build-variants` (optional)
+
+!!! warning "Preview Flag"
+    Build variants require the `pixi-build` preview flag to be enabled:
+    ```toml
+    [workspace]
+    preview = ["pixi-build"]
+    ```
+
+Build variants allow you to specify different dependency versions for building packages in your workspace, creating a "build matrix" that targets multiple configurations. This is particularly useful for testing packages against different compiler versions, Python versions, or other critical dependencies.
+
+Build variants are defined as key-value pairs where each key represents a dependency name and the value is a list of version specifications to build against.
+
+#### Basic Usage
+
+```toml
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+c_compiler_version = ["11.4", "14.0"]
+```
+
+#### How Build Variants Work
+
+When build variants are specified, Pixi will:
+
+1. **Create variant combinations**: Generate all possible combinations of the specified variants
+2. **Build separate packages**: Create distinct package builds for each variant combination
+3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
+4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
+
+On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [system requirements](../workspace/system_requirements.md). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
+
+#### Platform-Specific Variants
+
+Build variants can also be specified per-platform:
+
+```toml
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+
+# Windows-specific variants
+[workspace.target.win-64.build-variants]
+python = ["3.11.*"]  # Only Python 3.11 on Windows
+c_compiler = ["vs2019"]
+
+# Linux-specific variants
+[workspace.target.linux-64.build-variants]
+c_compiler = ["gcc"]
+c_compiler_version = ["11.4", "13.0"]
+```
+
+#### Common Use Cases
+
+- **Multi-version Python packages**: Build against Python 3.11 and 3.12
+- **Compiler variants**: Test with different compiler versions for C/C++ packages
+- **Dependency compatibility**: Ensure packages work with different versions of key dependencies
+- **Cross-platform builds**: Different build configurations per operating system
+
+For detailed examples and tutorials, see the [build variants documentation](../build/variants.md).
+
+### `build-variants-files` (optional)
+
+!!! warning "Preview Flag"
+    Build variant files require the `pixi-build` preview flag to be enabled:
+    ```toml
+    [workspace]
+    preview = ["pixi-build"]
+    ```
+
+Use `build-variants-files` to reference external variant definitions from YAML files.
+Paths are resolved relative to the workspace root and processed in the listed
+order: entries from earlier files take precedence over values loaded from later ones.
+
+```toml
+[workspace]
+build-variants-files = [
+    "./pinning/conda_build_config.yaml",
+    "./variants/overrides.yaml",
+]
+```
+
+Each entry must point to either a `conda_build_config.yaml` or another `.yaml`
+file that defines build variants.
+If the file is called `conda_build_config.yaml`, it will attempt to parse it with a subset of [`conda-build`'s variant syntax](https://docs.conda.io/projects/conda-build/en/stable/resources/variants.html#using-variants-with-the-conda-build-api).
+Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-build documentation](https://rattler.build/latest/variants/#variant-configuration).
+
+### `dependencies` (optional)
+
+A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`.
+The environment tables (`[dependencies]`, `[feature.*.dependencies]`, `[target.*.dependencies]`, `[constraints]`) can inherit out of the box.
+The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview flag, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
+Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+pixi-build-cmake = "0.3.*"
+shared-lib = { path = "packages/shared-lib" }
+```
 
 ## The `tasks` table
 
@@ -264,17 +621,19 @@ Pixi's tasks are run in a Pixi environment using `pixi run` and are executed usi
 ```toml
 [tasks]
 simple = "echo This is a simple task"
-cmd = { cmd="echo Same as a simple task but now more verbose"}
-depending = { cmd="echo run after simple", depends-on="simple"}
-alias = { depends-on=["depending"]}
-download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"]}
-build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"]}
-run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
+cmd = { cmd="echo Same as a simple task but now more verbose" }
+depending = { cmd="echo run after simple", depends-on="simple" }
+alias = { depends-on=["depending"] }
+download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"] }
+build = { cmd="npm run build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"] }
+run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }} # Set an environment variable
+backend = { cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] } # Template strings in env
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
-clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
+clean-env = { cmd="python isolated.py", clean-env=true } # Only on Unix!
+test = { cmd="pytest", default-environment="test" }  # Set a default pixi environment
 ```
 
-You can modify this table using [`pixi task`](cli/pixi/task.md).
+You can modify this table using [`pixi task`](cli/pixi/task/index.md).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 
@@ -282,35 +641,25 @@ You can modify this table using [`pixi task`](cli/pixi/task.md).
     If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
     For example, if you want to hide `depending`, you can rename it to `_depending`.
 
-## The `system-requirements` table
+## The `system-requirements` table (deprecated)
 
-The system requirements are used to define minimal system specifications used during dependency resolution.
+!!! warning "Deprecated"
+    The `[system-requirements]` table (and its per-feature variant `[feature.<name>.system-requirements]`) is parsed for backwards compatibility but should not be used in new manifests. Declare the virtual packages directly on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) using inline-table entries.
 
-For example, we can define a unix system with a specific minimal libc version.
-```toml
-[system-requirements]
-libc = "2.28"
-```
-or make the workspace depend on a specific version of `cuda`:
-```toml
-[system-requirements]
-cuda = "12"
-```
-
-The options are:
-
-- `linux`: The minimal version of the linux kernel.
-- `libc`: The minimal version of the libc library. Also allows specifying the family of the libc library.
-e.g. `libc = { family="glibc", version="2.28" }`
-- `macos`: The minimal version of the macOS operating system.
-- `cuda`: The minimal version of the CUDA library.
-
-More information in the [system requirements documentation](../workspace/system_requirements.md).
+    Existing tables are migrated transparently into synthetic per-platform entries at parse time, and the on-disk file is rewritten the first time you edit platforms through the CLI. See [Migrating from `[system-requirements]`](../workspace/system_requirements.md) for the equivalent forms.
 
 ## The `pypi-options` table
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
-These options can be specified either at the root level, which will add it to the default options feature, or on feature level, which will create a union of these options when the features are included in the environment.
+It can appear in three scopes:
+
+- `[workspace.pypi-options]`: the workspace base. Always applied to every environment, including those that set `no-default-feature = true`.
+- `[pypi-options]` at the root of the manifest: shorthand for the default feature's options. Only applied to environments that include the default feature.
+- `[feature.<name>.pypi-options]`: per-feature options, applied to environments that include that feature.
+
+When an environment is resolved, the workspace base is used as the starting point and the options of all included features are overlaid on top. For single-assignment fields (`index-url`, `index-strategy`, `prerelease-mode`, `skip-wheel-filename-check`) a feature value overrides the workspace value; list-valued fields (`extra-index-urls`, `find-links`) and union-like fields (`no-build`, `no-binary`, `no-build-isolation`) are merged.
+
+Two features in the same environment may set the same single-assignment value, but conflicting values across features produce a parse-time error.
 
 The options that can be defined are:
 
@@ -321,6 +670,8 @@ The options that can be defined are:
 - `no-build`: don't build source distributions.
 - `no-binary`: don't use pre-build wheels.
 - `index-strategy`: allows for specifying the index strategy to use.
+- `prerelease-mode`: controls whether pre-release versions are allowed during dependency resolution.
+- `skip-wheel-filename-check`: allows installing wheels with version mismatches between filename and metadata.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
 
@@ -335,18 +686,38 @@ Often you might want to use an alternative or extra index for your workspace. Th
 
 - `index-url`: replaces the main index url. If this is not set the default index used is `https://pypi.org/simple`.
    **Only one** `index-url` can be defined per environment.
-- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And are preferred over the `index-url`. These are merged across features into an environment.
+- `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And
+   are preferred over the `index-url`. These are merged across features into an environment.
+   Each entry may be a plain URL string, or an inline table `{ url = "...", exclude-newer = ... }`
+   that overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) for packages served
+   from that index only. Use `exclude-newer = "0d"` to lift the cutoff for an index, for example
+   a private mirror that does not expose `upload-time` metadata. Unlike other cutoffs, this also keeps
+   releases without an upload time. Exemptions in
+   [`pypi-exclude-newer`](#exclude-newer-optional) take precedence over the cutoff of an index.
+   Listing the same index with different cutoffs in one environment is an error.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
-   This is similar to the `--find-links` option in `pip`. These are merged across features into an environment.
+   This is similar to the `--find-links` option in `pip`. These are merged across features into an
+   environment.
 
 An example:
 
 ```toml
 [pypi-options]
 index-url = "https://pypi.org/simple"
-extra-index-urls = ["https://example.com/simple"]
+extra-index-urls = [
+    "https://example.com/simple",
+    # No exclude-newer cutoff for this index (it does not expose `upload-time`):
+    { url = "https://internal.example.com/simple", exclude-newer = "0d" },
+    # A custom cutoff for this index only:
+    { url = "https://other.example.com/simple", exclude-newer = "2025-01-01" },
+]
 find-links = [{path = './links'}]
 ```
+
+!!! note
+    Changing a per-index `exclude-newer` does not invalidate already locked PyPI packages (see the
+    satisfiability note under [`exclude-newer`](#exclude-newer-optional)). Run `pixi update` to
+    re-resolve PyPI packages after changing it.
 
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
 
@@ -355,6 +726,7 @@ There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/
 
 
 ### No Build Isolation
+
 Even though build isolation is a good default.
 One can choose to **not** isolate the build for a certain package name, this allows the build to access the `pixi` environment.
 This is convenient if you want to use `torch` or something similar for your build-process.
@@ -371,6 +743,13 @@ no-build-isolation = ["detectron2"]
 detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
 ```
 
+Setting `no-build-isolation` also affects the order in which PyPI packages are installed.
+Packages are installed in that order:
+
+- conda packages in one go
+- packages with build isolation in one go
+- packages without build isolation installed in the order they are added to `no-build-isolation`
+
 It is also possible to remove all packages from build isolation by setting the `no-build-isolation` to `true`.
 
 ```toml
@@ -379,9 +758,13 @@ no-build-isolation = true
 ```
 
 !!! tip "Conda dependencies define the build environment"
-    To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
+    To use `no-build-isolation` effectively, use conda dependencies to define the build environment.
+    These are installed before the PyPI dependencies are resolved, this way these dependencies are
+    available during the build process. In the example above adding `torch` as a PyPI dependency
+    would be ineffective, as it would not yet be installed during the PyPI resolution phase.
 
 ### No Build
+
 When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error.
 
 Can be either set per package or globally.
@@ -398,7 +781,8 @@ no-build = ["package1", "package2"]
 
 When features are merged, the following priority is adhered:
 `no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
-So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+So, to expand: if `no-build = true` is set for *any* feature in the environment, this
+will be used as the setting for the environment.
 
 
 ### No Binary
@@ -421,7 +805,8 @@ no-binary = ["package1", "package2"]
 
 When features are merged, the following priority is adhered:
 `no-binary = true` > `no-binary = ["package1", "package2"]` > `no-binary = false`
-So, to expand: if `no-binary = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+So, to expand: if `no-binary = true` is set for *any* feature in the environment, this
+will be used as the setting for the environment.
 
 
 ### Index Strategy
@@ -442,6 +827,63 @@ By default, `uv` and thus `pixi`, will stop at the first index on which a given 
 !!! info "PyPI only"
     The `index-strategy` only changes PyPI package resolution and not conda package resolution.
 
+
+### Prerelease Mode
+
+The strategy to use when considering pre-release versions during dependency resolution. Description taken from the [uv documentation](https://docs.astral.sh/uv/reference/settings/#prerelease).
+
+By default, `pixi` will allow pre-release versions when a package only has pre-release versions available, or when a pre-release version is explicitly requested in the version specifier (e.g., `>=1.0.0a1`).
+
+!!! warning "One prerelease mode per environment"
+    Only one `prerelease-mode` can be defined per environment or solve-group, otherwise, an error will be shown.
+
+#### Possible values:
+
+- **"disallow"**: Disallow all pre-release versions.
+- **"allow"**: Allow all pre-release versions.
+- **"if-necessary"**: Prefer stable versions, falling back to pre-release versions when necessary to satisfy the requirements.
+- **"explicit"**: Prefer stable versions for first-party packages with explicit pre-release markers in their version requirements, falling back to pre-releases when necessary. Disallow pre-releases for other packages.
+- **"if-necessary-or-explicit"** (default): Alias for `"if-necessary"`, following uv 0.12's pre-release selection policy.
+
+Example:
+```toml
+[pypi-options]
+prerelease-mode = "allow"  # Allow all pre-release versions
+```
+
+### Skip Wheel Filename Check
+
+By default, `uv` validates that wheel filenames match the package metadata (name and version) inside the wheel. This validation ensures that wheels are correctly named and helps prevent installation of malformed packages.
+
+However, in some cases you may need to install wheels where the filename version doesn't match the metadata version. The `skip-wheel-filename-check` option allows you to disable this validation.
+
+!!! warning "One skip-wheel-filename-check per environment"
+    Only one `skip-wheel-filename-check` can be defined per environment or solve-group, otherwise, an error will be shown.
+
+#### Possible values:
+
+- **`false`** (default): Perform wheel filename validation. Installation will fail if filename and metadata don't match.
+- **`true`**: Skip wheel filename validation. Allow installing wheels with mismatched filename and metadata versions.
+
+#### Precedence
+
+The `UV_SKIP_WHEEL_FILENAME_CHECK` environment variable takes precedence over the `skip-wheel-filename-check` pypi-option. This allows for temporary overrides without modifying the manifest.
+
+
+Example:
+```toml
+[pypi-options]
+# Allow installing malformed wheels
+skip-wheel-filename-check = true 
+```
+
+Or set per feature:
+```toml
+[feature.special.pypi-options]
+# Only for this feature's environment
+skip-wheel-filename-check = true
+```
+
 ## The `dependencies` table(s)
 ??? info "Details regarding the dependencies"
     For more detail regarding the dependency types, make sure to check the [Run, Host, Build](../build/dependency_types.md) dependency documentation.
@@ -453,6 +895,9 @@ The default is `[dependencies]`, which are dependencies that are shared across p
 
 Dependencies are defined using a [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html).
 A `VersionSpec` combines a [Version](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html) with an optional operator.
+
+!!! tip "Need to specify build strings or more specific packages?"
+    For detailed information on specifying build strings and advanced package specifications, see the [Package Specifications](../concepts/package_specifications.md) guide.
 
 
 Some examples are:
@@ -468,12 +913,24 @@ package2 = ">1.2,<=1.4"
 package3 = ">=1.2.3|<1.0.0"
 ```
 
-Dependencies can also be defined as a mapping where it is using a [matchspec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.NamelessMatchSpec.html):
+Dependencies can also be defined as a mapping where it is using a matchspec
 
 ```toml
 package0 = { version = ">=1.2.3", channel="conda-forge" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 ```
+
+An entry can also inherit its spec from the [`[workspace.dependencies]`](#dependencies-optional) pool by writing `{ workspace = true }` instead of a direct spec:
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+
+[dependencies]
+numpy = { workspace = true }
+```
+
+See [Workspace Dependencies](../build/workspace_dependencies.md) for the override layering and error rules.
 
 !!! tip
     The dependencies can be easily added using the `pixi add` command line.
@@ -495,28 +952,75 @@ rust = "==1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
+### `constraints`
 
-### `host-dependencies`
+The `constraints` table lets you restrict the versions of conda packages that *may* be installed
+without explicitly requiring them.
+A constraint is only enforced when the package in question is actually present in the environment
+(pulled in by another dependency); if the package is not needed, the constraint is silently ignored.
 
-```toml
-[host-dependencies]
-python = "~=3.10.3"
-```
-Typical examples of host dependencies are:
+This is useful for two common scenarios:
 
-- Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
-- Libraries your workspace links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
-
-### `build-dependencies`
-
-This table contains dependencies that are needed to build the workspace.
-Different from `dependencies` and `host-dependencies` these packages are installed for the architecture of the _build_ machine.
-This enables cross-compiling from one machine architecture to another.
+- **Preventing known-bad versions** – you know that a transitive dependency has a regression in a
+  certain version range and you want to rule it out without adding a hard dependency.
+- **Coordinating optional packages** – your project works with or without an optional library, but
+  if that library is installed it must be a specific generation (e.g. CUDA 12 vs 11).
 
 ```toml
-[build-dependencies]
-cmake = "~=3.24"
+[workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[dependencies]
+# openssl will be pulled in transitively; this constraint
+# ensures we never end up with a vulnerable 1.x release.
+requests = ">=2.28"
+
+[constraints]
+openssl = ">=3.0"
 ```
+
+Constraints use the same [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html)
+syntax as `[dependencies]`.
+They also support the same inline MatchSpec fields, including `channel`.
+
+```toml
+[constraints]
+openssl = { channel = "conda-forge", version = ">=3.0" }
+```
+
+!!! note
+    Constraints do **not** cause a package to be installed. They only restrict which version is
+    acceptable *if* the package is already being installed. Use `[dependencies]` when you actually
+    need the package to be present.
+
+#### Platform-specific constraints
+
+Like `[dependencies]`, constraints can be made platform-specific using the
+[`[target]`](#the-target-table) table:
+
+```toml
+[constraints]
+openssl = ">=3.0"
+
+[target.linux-64.constraints]
+# Tighten the constraint further on Linux
+openssl = ">=3.0.7"
+```
+
+#### Per-feature constraints and merging
+
+Constraints can also be scoped to a [feature](#the-feature-table).
+When an environment is composed of multiple features, constraints from **all active features are
+concatenated**, exactly like `[dependencies]`.
+This means each feature can independently constrain transitive dependencies, and the resulting
+environment must satisfy all of them simultaneously.
+
+```toml title="Per-feature constraints"
+--8<-- "docs/source_files/pixi_tomls/feature-constraints.toml:per-feature-constraints"
+```
+
+The above example will produce an environment with `mkdocs` and `python` installed, but the solver will make sure that the Python version is at least 3.14.0 and that `click` is not version 8.1.7.
 
 ### `pypi-dependencies`
 
@@ -540,7 +1044,7 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 #### Version specification:
 
-These dependencies don't follow the conda matchspec specification.
+These dependencies don't follow the [conda MatchSpec](https://rattler.prefix.dev/py-rattler/match_spec#matchspec)  specification.
 The `version` is a string specification of the version according to [PEP404/PyPA](https://packaging.python.org/en/latest/specifications/version-specifiers/).
 Additionally, a list of extra's can be included, which are essentially optional dependencies.
 Note that this `version` is distinct from the conda MatchSpec type.
@@ -572,6 +1076,9 @@ boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
 
 # With https, specific tag and some subdirectory
 boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
+
+# With https and Git LFS files fetched during checkout
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
 
 # You can also directly add a source dependency from a path, tip keep this relative to the root of the workspace.
 minimal-project = { path = "./minimal-project", editable = true}
@@ -633,16 +1140,24 @@ Learn more about installing PyTorch [here](../python/pytorch.md).
 A git repository to install from.
 This support both https:// and ssh:// urls.
 
-Use `git` in combination with `rev` or `subdirectory`:
+Git dependencies must refer to a project directory, optionally selected with `subdirectory`.
+References to wheel or source archives inside a Git repository using `#path=...` are not supported.
+
+Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 
 - `rev`: A specific revision to install. e.g. `rev = "0106aced5faa299e6ede89d1230bd6784f2c3660`
 - `subdirectory`: A subdirectory to install from. `subdirectory = "src"` or `subdirectory = "src/packagex"`
+- `lfs`: Fetch Git LFS objects during the checkout. `lfs = true`
+  Requires `git-lfs` to be installed on the machine.
+  For PyPI dependencies Git LFS additionally has to be initialized with `git lfs install`.
+  This also works for conda source dependencies in `[dependencies]`.
 
 ```toml
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
 ```
 
 ##### `path`
@@ -682,6 +1197,9 @@ This way when a source distribution depends on `gcc` for example, it's used from
 ## The `activation` table
 
 The activation table is used for specialized activation operations that need to be run when the environment is activated.
+As with other top level tables, `[activation]` belongs to the `default` feature.
+Therefore, every environment that doesn't set `no-default-feature = true` includes that activation script.
+To set activation scripts or variables for only some environments, put them on a feature (`[feature.<name>.activation]`) and add that feature to the relevant entries in `[environments]`.
 
 There are two types of activation operations a user can modify in the manifest:
 
@@ -703,6 +1221,7 @@ These activation operations will be run before the `pixi run` and `pixi shell` c
     And the environment variables are set in the shell that is running the activation script, thus take note when using e.g. `$` or `%`.
 
     If you have scripts or env variable per platform use the [target](#the-target-table) table.
+    If you need them per environment, define them on a feature and include that feature in the desired environments (see [the multi-environment guide](../workspace/multi_environment.md)).
 
 ```toml
 [activation]
@@ -734,6 +1253,7 @@ The target table is currently implemented for the following sub-tables:
 
 - [`activation`](#the-activation-table)
 - [`dependencies`](#dependencies)
+- [`constraints`](#constraints)
 - [`tasks`](#the-tasks-table)
 
 The target table is defined using `[target.PLATFORM.SUB-TABLE]`.
@@ -782,7 +1302,8 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../workspace/multi_environment.md).
+The `[environments]` table allows you to define different environments. The design is
+explained in the [this design document](../workspace/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]
@@ -799,13 +1320,15 @@ This will create an environment called `test` that has `pytest` installed.
 The `feature` table allows you to define the following fields per feature.
 
 - `dependencies`: Same as the [dependencies](#dependencies).
+- `constraints`: Same as the [constraints](#constraints).
 - `pypi-dependencies`: Same as the [pypi-dependencies](#pypi-dependencies).
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
-- `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
+- `system-requirements`: Deprecated; see [the migration page](../workspace/system_requirements.md). Declare per-platform virtual packages on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) and bind the feature to the relevant entries via `platforms` below.
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at workspace level.
+- `platforms`: A list of names referencing entries in [`workspace.platforms`](#platforms) (bare conda subdirs are accepted as aliases). Unless overridden, the `platforms` of the feature are those defined at workspace level. Use this to bind a feature to a [rich-platform entry](#inline-table-entries-per-platform-virtual-packages) such as `"linux-64-cuda"`.
 - `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at workspace level.
 - `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
+- `solve-strategy`: Same as the [solve-strategy](#solve-strategy-optional).
 - `target`: Same as the [target](#the-target-table).
 - `tasks`: Same as the [tasks](#the-tasks-table).
 
@@ -813,14 +1336,22 @@ These tables are all also available without the `feature` prefix.
 When those are used we call them the `default` feature. This is a protected name you can not use for your own feature.
 
 ```toml title="Cuda feature table example"
+[workspace]
+# CUDA 12 is declared on the linux-64 build target.
+platforms = [
+  "osx-arm64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+]
+
 [feature.cuda]
 activation = {scripts = ["cuda_activation.sh"]}
 # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
 channels = ["nvidia"]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
+constraints = {cuda = ">=12.0"}
 pypi-dependencies = {torch = "==1.9.0"}
-platforms = ["linux-64", "osx-arm64"]
-system-requirements = {cuda = "12"}
+# Reference the rich workspace platform by name; bare subdirs are accepted as aliases.
+platforms = ["linux-64-cuda", "osx-arm64"]
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
@@ -836,9 +1367,6 @@ cudnn = "12.0"
 [feature.cuda.pypi-dependencies]
 torch = "==1.9.0"
 
-[feature.cuda.system-requirements]
-cuda = "12"
-
 [feature.cuda.tasks]
 warmup = "python warmup.py"
 
@@ -848,7 +1376,7 @@ mlx = "x.y.z"
 # Channels and Platforms are not available as separate tables as they are implemented as lists
 [feature.cuda]
 channels = ["nvidia"]
-platforms = ["linux-64", "osx-arm64"]
+platforms = ["linux-64-cuda", "osx-arm64"]
 ```
 
 ### The `environments` table
@@ -864,6 +1392,8 @@ The environments table is defined using the following fields:
   These dependencies will then be the same version in all environments that have the same solve group.
   But the different environments contain different subsets of the solve-groups dependencies set.
 - `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
+
+Additionally, most fields that a [feature](#the-feature-table) accepts - `dependencies`, `pypi-dependencies`, `tasks`, `activation`, `channels`, `platforms`, `constraints`, `target` and more - can be set directly on an environment. See [Defining dependencies directly on an environment](#defining-dependencies-directly-on-an-environment).
 
 ```toml title="Full environments table specification"
 [environments]
@@ -888,76 +1418,357 @@ test = {features = ["test"]}
 When an environment comprises several features (including the default feature):
 
 - The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
-- The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
-- The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
-- The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
-- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace `platforms` to all platforms it can support across its environments.
+- The `dependencies` and `pypi-dependencies` of the environment are the union of the
+  `dependencies` and `pypi-dependencies` of all its features. This means that if several features
+  define a requirement for the same package, both requirements will be combined. Beware of conflicting
+  requirements across features added to the same environment.
+- The declared virtual packages of the environment come from the `workspace.platforms`
+  entries each feature selects (via `feature.<name>.platforms`). When multiple features
+  contribute entries that target the same conda subdir, the highest declared version of
+  each virtual package wins. Legacy `[system-requirements]` tables are folded into this
+  same model at parse time.
+- The `channels` of the environment is the union of the `channels` of all its features.
+  Channel priorities can be specified in each feature, to ensure channels are considered in the right
+  order in the environment.
+- The `platforms` of the environment is the intersection of the `platforms` of all its features.
+  Be aware that the platforms supported by a feature (including the default feature) will be considered
+  as the `platforms` defined at workspace level (unless overridden in the feature). This means that
+  it is usually a good idea to set the workspace `platforms` to all platforms it can support across
+  its environments.
+
+#### Defining dependencies directly on an environment
+
+Features are the right tool when you want to *share* dependencies between environments.
+When something belongs to a single environment, you can skip the feature and define it directly on the environment:
+
+```toml title="Inline environment dependencies"
+[environments.dev.dependencies]
+git = "*"
+
+[environments.test.dependencies]
+pytest = "*"
+pytest-xdist = "*"
+```
+
+This defines two environments, `dev` and `test`, without any intermediate feature.
+All feature content is available this way: `dependencies`, `pypi-dependencies`, `dev`, `tasks`, `activation`, `channels`, `channel-priority`, `solve-strategy`, `platforms`, `constraints`, `target` and `pypi-options`.
+`host-dependencies`, `build-dependencies` and `system-requirements` are not accepted here; define a feature if you need them.
+
+Inline content can be combined with shared features.
+The inline content takes precedence over the referenced features, which is relevant for the fields where order matters (such as `tasks` and `activation`):
+
+```toml title="Inline content combined with shared features"
+[feature.python.dependencies]
+python = "3.14.*"
+
+[environments.dev]
+features = ["python"]
+dependencies = { git = "*" }
+```
+
+Inline content is private to its environment; it cannot be referenced from the feature list of another environment.
+This also applies to the `default` environment: content defined inline on `[environments.default]` belongs to the default environment only, while the top-level tables (for example `[dependencies]` or `[tasks]`) belong to the default feature and are therefore inherited by every environment that doesn't set `no-default-feature = true`.
+
+Inline content can also be edited from the command line: the manifest-editing commands (`pixi add`, `pixi remove`, `pixi upgrade`, `pixi task add/remove/alias`, `pixi workspace channel add/remove` and `pixi workspace platform add/remove`) accept an `--environment` flag next to `--feature`:
+
+```shell
+pixi add --environment dev git
+pixi task add --environment dev serve "python serve.py"
+```
+
+The content is written inline on the environment, creating the environment if it does not exist.
 
 ## Global configuration
 
 The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
 
 
-## Preview features
-Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
+## Preview flags
+Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview flags. Preview flags are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview flags to enable, or the boolean value `true` to enable all preview flags.
 
-An example of a preview feature in the manifest:
+An example of a preview flag in the manifest:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
 ```
 
-Preview features in the documentation will be marked as such on the relevant pages.
+Preview flags in the documentation will be marked as such on the relevant pages.
 
-## Pixi Build
-
-Pixi build is an experimental feature that requires `preview = ["pixi-build"]` to be set in `[workspace]`
-
-### Workspace section
-
-Currently, `workspace` is an alias for `project` and we recommend using `workspace` instead of `project`,
-when making use of the `pixi-build` preview feature.
-To use this keyword the preview feature *does not* need to be enabled, but for now we do recommend it for that use-case solely.
-
-### Package section
-
-The package section is used to define the package that is built by the project.
-Pixi only allows this table if `preview = ["pixi-build"]` is set in `[workspace]`.
+## The `dev` table
+The `dev` table allows you to depend on the development dependencies of a source package.
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:package"
+[dev]
+my-package = { path = "src/my-package" }
 ```
+This will install the `build-dependencies`, `host-dependencies` and `run-dependencies` defined in the package located at `src/my-package`.
+More information can be found in the [Dev packages](../build/dev.md) documentation.
 
-### Host, Build, dependencies
+## The `package` section
 
-The package section re-uses the `host-dependencies` and `build-dependencies`,
-which you can read about here: [host-build-dependencies](#host-dependencies) and [build-dependencies](#build-dependencies).
-If you have the `preview = ["pixi-build"]` enabled these are interpreted as part of the package.
+!!! warning "Important note"
+    `pixi-build` is a [preview flag](#preview-flags), and will change until it is stabilized.
+    Please keep that in mind when you use it for your workspaces.
+    ```toml
+    --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
+    ```
 
-### Run dependencies
+The package section can be added
+to a workspace manifest to define the package that is built by Pixi.
 
-Run dependencies are dependencies that are required at runtime by your package.
-For Python packages, these are the most common dependency types.
-For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.
+A package section needs to be inside a `workspace`,
+either in the same manifest file as the `[workspace]` table or in a sub folder `pixi.toml`/`pyproject.toml` file.
+
+These packages will be built into a conda package that can be installed into a conda environment.
+The package section is defined using the following fields:
+
+- `name`: The name of the package.
+- `version`: The version of the package.
+- `build`: The build system used to build the package.
+- `build-dependencies`: The build dependencies of the package.
+- `host-dependencies`: The host dependencies of the package.
+- `run-dependencies`: The run dependencies of the package.
+- `run-constraints`: Version constraints applied to the package's run environment.
+- `run-exports`: The run-exports the package declares for its downstream consumers.
+- `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
+- `publish`: Whether a workspace-wide [`pixi publish`](cli/pixi/publish.md) publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.
+
+And to extend the basics, it can also contain the following fields:
+
+- `description`: A short description of the package.
+- `authors`: A list of authors of the package.
+- `license`: The license of the package.
+- `license-file`: The license file of the package.
+- `readme`: The README file of the package.
+- `homepage`: The homepage link of the package.
+- `repository`: The repository link of the package.
+- `documentation`: The documentation link of the package.
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:run-dependencies"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:package"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:extra-fields"
 ```
 
-### The `build-system`
+!!! note "Workspace inheritance"
+    Most extra fields can be inherited from the workspace manifest.
+    This means that you can define the `description`, `authors`, `license` in the workspace manifest, and they will be inherited by the package manifest.
+    ```toml
+    [workspace]
+    name = "my-workspace"
+
+    [package]
+    name = { workspace = true } # Inherit the name from the workspace
+    ```
+
+    Dependency entries in `[package.*-dependencies]`, `[package.run-constraints]`,
+    their target variants, and `[package.build.backend]` can also be inherited
+    per entry from a `[workspace.dependencies]` pool defined on the workspace.
+    See [Workspace Dependencies](../build/workspace_dependencies.md) for the
+    override layering and error rules.
+
+### `build` table
 
 The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:
 
-- `channels`: specifies the channels to get the build backend from.
-- `build-backend`: specifies the build backend to use. This is a table that can contain the following fields:
+- `source`: specifies the location of the source code for the package. Default: manifest directory. Currently supported options:
+  - `path`: a string representing a relative or absolute path to the source code.
+  - `git`: a string representing URL to the source repository.
+  - `rev`: a string representing SHA revision to checkout.
+  - `subdirectory`: a string representing path to subdirectory to use.
+- `flags`: package variant flags recorded in the produced package metadata.
+- `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
-  - `version`: the version of the build backend to use.
+  - `version`: the version of the build backend to use. Optional; when omitted it defaults to `*` (any version).
+  - `channels`: the channels to get the build backend from. When omitted the workspace channels are used.
+  - `additional-dependencies`: extra packages to install alongside the build backend.
+- `config`: a table that contains the configuration options for the build backend.
+- `target`: a table that can contain target specific build configuration.
+  - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
+- `build-number`: an integer recorded as the build number of the produced package. When omitted the build backend determines the build number itself.
+- `build-string-prefix`: a string prepended to the build string that the backend generates automatically. Use it to disambiguate builds without overriding the whole build string.
+- `secrets`: a list of environment variable names whose values are exposed to the build script. The names are read from the manifest; the values are looked up in the host environment at build time and forwarded to the build backend through the recipe (`build.script.secrets`), matching rattler-build's behavior. Useful for passing credentials such as `GH_TOKEN` or registry tokens into the build without recording them in the manifest.
+
+More documentation on the backends can be found in the [build backend documentation](../build/backends.md).
+
+#### Basic build configuration example
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-system"
 ```
 
-!!! note
-    We are currently not publishing the backends on conda-forge, but will do so in the future.
-    For now the backends are published at [conda channel](https://prefix.dev/channels/pixi-build-backends).
+#### Target-specific build configuration example
+
+For platform-specific build configuration, use the `[package.build.target.<platform>]` table:
+
+```toml
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.*" }
+
+[package.build.config]
+# Base configuration applied to all platforms
+extra-args = ["-DCMAKE_BUILD_TYPE=Release"]
+
+[package.build.target.linux-64.config]
+# Linux-specific configuration
+extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DLINUX_FLAG=ON"]
+
+[package.build.target.win-64.config]
+# Windows-specific configuration
+extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
+```
+
+
+### The `build`, `host`, `run` and `run-constraints` dependency tables
+The dependencies of a package are split into several tables.
+Each of these tables has a different purpose and is used to define the dependencies of the package.
+
+- [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
+- [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
+- [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+- [`extra-dependencies`](#extra-dependencies): Optional run dependency groups that consumers can request through `extras`.
+- [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
+- [`run-exports`](#run-exports): Dependencies and constraints this package exports to the run environment of its consumers.
+
+
+### `build-dependencies`
+
+Build dependencies are required in the build environment and contain all tools that are not needed on the host of the package.
+
+Following packages are examples of typical build dependencies:
+
+- compilers (`gcc`, `clang`, `gfortran`)
+- build tools (`cmake`, `ninja`, `meson`)
+- `make`
+- `pkg-config`
+- VSC packages (`git`, `svn`)
+
+??? warning "Using git SSH URLs"
+    When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+    You can do this by running `ssh-add` which will prompt you for your SSH key passphrase.
+    Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key.
+    For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-dependencies"
+```
+
+### `host-dependencies`
+
+Host dependencies are required during build phase, but in contrast to build packages they have to be present on the host.
+
+Following packages are typical examples for host dependencies:
+
+- shared libraries (c/c++)
+- python/r libraries that link against c libraries
+- `python`, `r-base`
+- `setuptools`, `pip`
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:host-dependencies"
+```
+
+### `run-dependencies`
+
+The `run-dependencies` are the packages that will be installed in the environment when the package is run.
+
+- Libraries
+- Extra data file packages
+- Python/R packages that are not needed during build time
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
+```
+
+### `extra-dependencies`
+
+The `extra-dependencies` table defines extra dependency groups for a package. For example, a package that declares `test` and `cuda` groups:
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:extra-dependencies"
+```
+
+A workspace that consumes this package as a source dependency requests the `test` group with:
+
+```toml
+[dependencies]
+mypackage = { path = "./mypackage", extras = ["test"] }
+```
+
+### `run-constraints`
+
+The `run-constraints` are version constraints applied to the package's run environment.
+They constrain the versions of packages that may be installed *if* they are pulled in by another dependency, without themselves causing those packages to be installed.
+
+This mirrors the conda concept that surfaces as `run_constrained` in the package metadata.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-constraints"
+```
+
+### `run-exports`
+
+The `run-exports` tables declare the dependencies this package exports to its *consumers*, mirroring the conda [run-exports mechanism](https://docs.conda.io/projects/conda-build/en/latest/resources/define-metadata.html#export-runtime-requirements).
+When another package depends on this package in its `host-dependencies` or `build-dependencies`, the exported entries are automatically added to that consumer's run dependencies or run constraints.
+
+The five buckets differ in when they apply:
+
+- `weak`: Added to the run dependencies of consumers that depend on this package in `host-dependencies`. This is the most common bucket; a library exports itself so consumers that link against it get it at runtime.
+- `strong`: Added to the run dependencies of consumers that depend on this package in `build-dependencies` or `host-dependencies`. Typically used by compilers to inject their runtime libraries.
+- `noarch`: The only bucket applied when the consuming output is `noarch`. A `noarch` consumer ignores the `weak` and `strong` buckets, so a package that should reach `noarch` consumers must export itself in `noarch` too.
+- `weak-constraints`: Added to the run *constraints* of consumers that depend on this package in `host-dependencies`.
+- `strong-constraints`: Added to the run *constraints* of consumers that depend on this package in `build-dependencies` or `host-dependencies`.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-exports"
+```
+
+The `weak`, `strong` and `noarch` buckets accept the same specs as the dependency tables, including `path` and `git` source specs and [workspace inheritance](../build/workspace_dependencies.md).
+The constraints buckets accept binary specs only: a constraint never causes a package to be built or installed, so a source spec would be meaningless there.
+Url specs and `path` specs pointing at package archives (`.conda` / `.tar.bz2`) are rejected in every bucket because the exported spec is recorded in the built package, where a url or machine-local file path would be meaningless to consumers.
+
+!!! note "Exporting the package itself"
+    A package that exports *itself* (like `package = { path = "." }` above) is recorded without a version restriction when the built package is published.
+    To export the package pinned to the version it was built as, use [`pin-subpackage`](#pin-subpackage-and-pin-compatible) instead.
+
+!!! warning "Path specs in published packages"
+    A `path` source spec in a run-export only resolves for consumers that build the package from source within the same workspace layout.
+    In a published binary package the source location is dropped and only the package name and matchspec selectors remain.
+
+Like the other package dependency tables, every bucket accepts [conditional `if(...)` sub-tables](../build/dependency_types.md#conditional-dependencies):
+
+```toml
+[package.run-exports.weak."if(host_platform == 'linux-64')"]
+libgl = ">=1"
+```
+
+### `pin-subpackage` and `pin-compatible`
+
+Package dependency tables accept two pin specs that resolve to a concrete version range while the package is built, mirroring rattler-build's [`pin_subpackage` and `pin_compatible`](https://rattler-build.prefix.dev/latest/reference/jinja/#the-pin-functions) functions.
+
+A `pin-compatible` entry pins a dependency to a range derived from the version that was resolved in the *previous* environment.
+For an entry in `run-dependencies` that is the host environment (falling back to the build environment), for an entry in `host-dependencies` it is the build environment.
+The referenced package must be part of that environment, so a `pin-compatible` run dependency usually pairs with a host dependency of the same name:
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-pins.toml:pins"
+```
+
+A `pin-subpackage` entry pins the package *itself* for its consumers, so it is only accepted in the `run-exports` tables and only on an entry named after the package.
+
+Both pins take the same arguments:
+
+- `lower-bound`: A pin expression like `"x.x"` (the number of version segments to keep) or a literal version. Defaults to `"x.x.x.x.x.x"`, which pins to the exact resolved version.
+- `upper-bound`: A pin expression like `"x"` (the segment to bump, exclusive) or a literal version. Defaults to `"x"`, which excludes the next major version.
+- `build`: An optional build-string matcher such as `"mpi_mpich_*"`.
+- `exact`: Pin the exact version and build string. Cannot be combined with any other argument.
+
+A pin expression selects version segments with `x` characters and derives a bound from the resolved version.
+For the lower bound, the version is truncated to the selected segments: `"x.x"` turns `1.2.3` into `>=1.2`.
+For the upper bound, the last selected segment is incremented by one and `.0a0` is appended, so pre-releases of the excluded version do not match: `"x"` turns `1.2.3` into `<2.0a0`, and `"x.x"` turns it into `<1.3.0a0`.
+
+The shorthand `{ pin-compatible = true }` uses the default bounds, matching a bare `pin_compatible('name')` call in a rattler-build recipe.
+If the host environment resolves `libfoo=1.2.3`, the default bounds produce `libfoo >=1.2.3,<2.0a0`.
+
+Pins are not accepted in `build-dependencies` (the build environment is resolved first, so there is nothing to pin against), in `run-constraints`, in `extra-dependencies`, or in any workspace dependency table.

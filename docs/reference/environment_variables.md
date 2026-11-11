@@ -28,6 +28,55 @@ Pixi can also be configured via environment variables.
         </ul>
       </td>
     </tr>
+    <tr>
+      <td><code>PIXI_NO_CONFIG</code></td>
+      <td>When set to a truthy value (e.g. <code>1</code>), pixi skips loading system and user-level configuration files, both pixi's own (such as <code>/etc/pixi/config.toml</code> and <code>~/.pixi/config.toml</code>) and the <a href="pixi_configuration.md#configuration-shared-with-other-rattler-based-tools">shared</a> ones (such as <code>/etc/rattler/config.toml</code>). Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still loaded. Equivalent to passing <code>--no-config</code>. Useful in CI, scripts, and tests that need to be insulated from a developer's global settings.</td>
+      <td>Not set.</td>
+    </tr>
+    <tr>
+      <td><code>PIXI_CONFIG_FILE</code></td>
+      <td>Path to a configuration file to load <em>instead of</em> the system and user-level config files. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still merged on top. Equivalent to passing <code>--config-file &lt;PATH&gt;</code>.</td>
+      <td>Not set.</td>
+    </tr>
+    <tr>
+      <td><code>RATTLER_HOME</code></td>
+      <td>Directory holding a <a href="pixi_configuration.md#configuration-shared-with-other-rattler-based-tools">shared</a> <code>config.toml</code> that every rattler-based tool reads. It ranks above the other shared locations and below every pixi-specific one.</td>
+      <td>Not set.</td>
+    </tr>
+    <tr>
+      <td><code>PIXI_OVERRIDE_PLATFORM</code></td>
+      <td>
+        Overrides the detected host platform used to select and install environments.
+        Accepts any valid platform string (e.g. <code>linux-aarch64</code>, <code>osx-arm64</code>, <code>win-64</code>).
+      </td>
+      <td>Not set, pixi detects the current platform automatically.</td>
+    </tr>
+    <tr>
+      <td><code>PIXI_GIT_LFS</code></td>
+      <td>Deprecated: set <code>lfs = true</code> on the git dependency in the manifest instead. When set to a truthy value (e.g. <code>1</code>), pixi fetches Git LFS objects for git dependencies.</td>
+      <td>Not set.</td>
+    </tr>
+    <tr>
+      <td><code>RATTLER_AUTH_FILE</code></td>
+      <td>Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See <a href="../../deployment/authentication/#override-the-authentication-storage">authentication docs</a> for the file format.</td>
+      <td>
+        <ul>
+          <li>If <code>RATTLER_AUTH_FILE</code> is not set, the system keyring is used.</li>
+          <li>If no keyring is available, file storage from <code>~/.rattler/credentials.json</code> is used.</li>
+          <li>Additionally, <code>.netrc</code> file authentication is checked.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><code>PIXI_NO_TELEMETRY</code></td>
+      <td>If set to a non-empty value, disables the anonymous ping sent by the install scripts and by <code>pixi self-update</code>. See <a href="../telemetry/">Telemetry</a>.</td>
+      <td>Not set (ping enabled).</td>
+    </tr>
+    <tr>
+      <td><code>DO_NOT_TRACK</code></td>
+      <td>Same effect as <code>PIXI_NO_TELEMETRY</code>; honors the ecosystem-wide <a href="https://consoledonottrack.com"><code>DO_NOT_TRACK</code></a> convention.</td>
+      <td>Not set (ping enabled).</td>
+    </tr>
   </tbody>
 </table>
 
@@ -36,10 +85,10 @@ Pixi can also be configured via environment variables.
 
 The following environment variables are set by Pixi, when using the `pixi run`, `pixi shell`, or `pixi shell-hook` command:
 
-- `PIXI_PROJECT_ROOT`: The root directory of the project.
-- `PIXI_PROJECT_NAME`: The name of the project.
-- `PIXI_PROJECT_MANIFEST`: The path to the manifest file (`pixi.toml`).
-- `PIXI_PROJECT_VERSION`: The version of the project.
+- `PIXI_WORKSPACE_ROOT`: The root directory of the workspace. (Legacy alias: `PIXI_PROJECT_ROOT`.)
+- `PIXI_WORKSPACE_NAME`: The name of the workspace. (Legacy alias: `PIXI_PROJECT_NAME`.)
+- `PIXI_WORKSPACE_MANIFEST`: The path to the manifest file (`pixi.toml`). (Legacy alias: `PIXI_PROJECT_MANIFEST`.)
+- `PIXI_WORKSPACE_VERSION`: The version of the workspace. (Legacy alias: `PIXI_PROJECT_VERSION`.)
 - `PIXI_PROMPT`: The prompt to use in the shell, also used by `pixi shell` itself.
 - `PIXI_ENVIRONMENT_NAME`: The name of the environment, defaults to `default`.
 - `PIXI_ENVIRONMENT_PLATFORMS`: Comma separated list of platforms supported by the project.
@@ -49,4 +98,121 @@ The following environment variables are set by Pixi, when using the `pixi run`, 
 - `INIT_CWD`: ONLY IN `pixi run`: The directory where the command was run from.
 
 !!! note
-    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
+    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the workspace by setting `PIXI_WORKSPACE_ROOT` in the environment.
+
+!!! note
+    The `PIXI_PROJECT_*` variables are kept as legacy aliases of their `PIXI_WORKSPACE_*` counterparts and are set to the same values. Prefer the `PIXI_WORKSPACE_*` names. Where pixi reads these variables as input (`PIXI_WORKSPACE_MANIFEST`/`PIXI_PROJECT_MANIFEST` and `PIXI_WORKSPACE_ROOT`/`PIXI_PROJECT_ROOT`), the `PIXI_WORKSPACE_*` variant takes precedence if both are set to different values.
+
+## Environment Variable Priority
+
+The following priority rule applies for environment variables: `task.env` > `activation.env` > `activation.scripts` > activation scripts of dependencies > outside environment variables.
+Variables defined at a higher priority will override those defined at a lower priority.
+
+!!! warning
+
+    In older versions of Pixi, this priority was not well-defined, and there are a number of known
+    deviations from the current priority which exist in some older versions.
+    Please see the warning in [the advanced tasks documentation](../workspace/advanced_tasks.md#environment-variables)
+    for further details and migration guidance.
+
+##### Example 1:  `task.env` > `activation.env`
+
+In `pixi.toml`, we defined an environment variable `HELLO_WORLD` in both `tasks.hello` and `activation.env`. 
+
+When we run `echo $HELLO_WORLD`, it will output:
+```
+Hello world!
+```
+
+```toml title="pixi.toml"
+[tasks.hello]
+cmd = "echo $HELLO_WORLD"
+env = { HELLO_WORLD = "Hello world!" }
+[activation.env]
+HELLO_WORLD = "Activate!"
+```
+
+##### Example 2: `activation.env` > `activation.scripts`
+
+In `pixi.toml`, we defined the same environment variable `DEBUG_MODE` in both `activation.env` and in the activation script file `setup.sh`.
+When we run `echo Debug mode: $DEBUG_MODE`, it will output:
+```bash
+Debug mode: enabled
+```
+
+```toml title="pixi.toml"
+[activation.env]
+DEBUG_MODE = "enabled"
+
+[activation]
+scripts = ["setup.sh"]
+```
+
+```bash title="setup.sh"
+export DEBUG_MODE="disabled"
+```
+
+##### Example 3: `activation.scripts` > activation scripts of dependencies
+
+In `pixi.toml`, we have our local activation script and a dependency `my-package` that also sets environment variables through its activation scripts.
+When we run `echo Library path: $LIB_PATH`, it will output:
+```
+Library path: /my/lib
+```
+
+```toml title="pixi.toml"
+[activation]
+scripts = ["local_setup.sh"]
+
+[dependencies]
+my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
+```
+```bash title="local_setup.sh"
+export LIB_PATH="/my/lib"
+```
+
+##### Example 4: activation scripts of dependencies > outside environment variable
+
+If we have a dependency that sets `PYTHON_PATH` and the same variable is already set in the outside environment.
+When we run `echo Python path: $PYTHON_PATH`, it will output:
+```bash
+Python path: /pixi/python
+```
+```
+# Outside environment
+export PYTHON_PATH="/system/python"
+```
+```toml title="pixi.toml"
+[dependencies]
+python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
+```
+
+##### Example 5: Complex Example - All priorities combined
+In `pixi.toml`, we define the same variable `APP_CONFIG` across multiple levels:
+```toml title="pixi.toml"
+[tasks.start]
+cmd = "echo Config: $APP_CONFIG"
+env = { APP_CONFIG = "task-specific" }
+
+[activation.env]
+APP_CONFIG = "activation-env"
+
+[activation]
+scripts = ["app_setup.sh"]
+
+[dependencies]
+config-loader = "*"  # Sets APP_CONFIG="dependency-config"
+```
+```bash title="app_setup.sh"
+export APP_CONFIG="activation-script"
+```
+```bash
+# Outside environment
+export APP_CONFIG="system-config"
+```
+
+Since `task.env` has the highest priority, when we run `pixi run start` it will output:
+
+```
+Config: task-specific
+```

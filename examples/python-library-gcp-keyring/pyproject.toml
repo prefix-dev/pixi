@@ -1,3 +1,6 @@
+#:tombi toml-version = "v1.0.0"
+# The Python packaging ecosystem parses this file with TOML 1.0 parsers
+
 # Introduction:
 #
 # This is a small example that builds and uploads a `.whl` to a custom pypi registry
@@ -26,21 +29,20 @@
 # Use `pixi install --pypi-keyring-provider subprocess` or configure in global configuration
 
 [project]
+name = "python-library-gcp-keyring"
+version = "0.1.2"
+description = "Add a short description here"
+requires-python = ">= 3.11"
 authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
 dependencies = ["rich"]
-description = "Add a short description here"
-name = "python-library-gcp-keyring"
-requires-python = ">= 3.11"
-version = "0.1.2"
 
 [build-system]
-build-backend = "hatchling.build"
 requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.pixi.project]
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64", "win-64", "osx-64"]
-
 
 [tool.pixi.feature.publish.dependencies]
 # For building wheel using hatch
@@ -53,9 +55,22 @@ twine = "*"
 keyring = ">=25.2.0,<25.3"
 "keyrings.google-artifactregistry-auth" = ">=1.1.1,<1.2"
 
+# This has tasks for building and uploading to custom GCP instance
+[tool.pixi.feature.publish.tasks]
+# Build into a wheel using hatch
+build = { cmd = "hatch build", inputs = ["say_hi/*"], outputs = ["dist/*"] }
+# Upload to custom GCP registry using twine
+publish = { cmd = "twine upload --skip-existing --repository-url https://europe-west4-python.pkg.dev/test-artifact-registry-423208/test/ dist/*", depends-on = [
+  "build",
+] }
+
 # Test feature
 [tool.pixi.feature.test.dependencies]
 pytest = "*"
+
+# Test the library
+[tool.pixi.feature.test.tasks]
+test = "pytest tests/"
 
 # Local install for testing
 [tool.pixi.feature.local]
@@ -75,16 +90,3 @@ publish = { features = ["publish"], solve-group = "default" }
 # Use this env for testing:
 test-gcp = { features = ["test", "gcp"] }
 test-local = { features = ["test", "local"] }
-
-# This has tasks for building and uploading to custom GCP instance
-[tool.pixi.feature.publish.tasks]
-# Build into a wheel using hatch
-build = { cmd = "hatch build", inputs = ["say_hi/*"], outputs = ["dist/*"] }
-# Upload to custom GCP registry using twine
-publish = { cmd = "twine upload --skip-existing --repository-url https://europe-west4-python.pkg.dev/test-artifact-registry-423208/test/ dist/*", depends-on = [
-  "build",
-] }
-
-# Test the library
-[tool.pixi.feature.test.tasks]
-test = "pytest tests/"

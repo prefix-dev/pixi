@@ -4,13 +4,13 @@ use rattler_conda_types::Version;
 use url::Url;
 
 /// Defines the contents of the `[package]` section of the project manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Package {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>,
 
     /// The version of the project
-    pub version: Version,
+    pub version: Option<Version>,
 
     /// An optional project description
     pub description: Option<String>,
@@ -35,11 +35,15 @@ pub struct Package {
 
     /// URL of the project documentation
     pub documentation: Option<Url>,
+
+    /// Whether a workspace-wide `pixi publish` publishes this package.
+    /// Packages that do not opt in are left out of the publish set.
+    pub publish: bool,
 }
 
 impl Package {
     /// Creates a new package with the given name and version.
-    pub fn new(name: String, version: Version) -> Self {
+    pub fn new(name: Option<String>, version: Option<Version>) -> Self {
         Self {
             name,
             version,
@@ -51,6 +55,7 @@ impl Package {
             homepage: None,
             repository: None,
             documentation: None,
+            publish: false,
         }
     }
 }

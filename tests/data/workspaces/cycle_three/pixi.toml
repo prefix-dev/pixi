@@ -1,0 +1,8 @@
+[workspace]
+channels = []
+name = "cycle_three"
+platforms = []
+preview = ["pixi-build"]
+
+[dependencies]
+package_a = { path = "package_a" }

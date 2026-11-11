@@ -1,5 +1,5 @@
 use pep508_rs::{InvalidNameError, PackageName};
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{borrow::Borrow, str::FromStr};
 
 /// A package name for Pypi that also stores the source version of the name.
@@ -49,6 +49,16 @@ impl Serialize for PypiPackageName {
     }
 }
 
+impl<'de> Deserialize<'de> for PypiPackageName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
 impl PypiPackageName {
     pub fn from_normalized(normalized: PackageName) -> Self {
         Self {
@@ -63,6 +73,11 @@ impl PypiPackageName {
 
     pub fn as_source(&self) -> &str {
         &self.source
+    }
+
+    pub fn with_source(mut self, source: String) -> Self {
+        self.source = source;
+        self
     }
 }
 

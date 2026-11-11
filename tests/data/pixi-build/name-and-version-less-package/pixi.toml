@@ -1,0 +1,16 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+exclude-newer = "7d"
+platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
+preview = ["pixi-build"]
+
+# [dependencies]
+# rust-app = { path = "." }
+
+# [package.build.backend]
+# channels = [
+#   "https://prefix.dev/pixi-build-backends",
+#   "https://prefix.dev/conda-forge",
+# ]
+# name = "pixi-build-rust"
+# version = "*"

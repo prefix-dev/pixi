@@ -1,12 +1,8 @@
-use std::str::FromStr;
-
-use pixi_spec::BinarySpec;
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl};
-use url::Url;
-
+use rattler_conda_types::ChannelUrl;
 /// Describes how a backend should be instantiated.
-#[derive(Debug)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum BackendSpec {
@@ -15,8 +11,18 @@ pub enum BackendSpec {
     // TODO: Support in-memory backends without going through JSON-RPC.
 }
 
+impl BackendSpec {
+    /// Resolves the backend specification to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        match self {
+            BackendSpec::JsonRpc(spec) => BackendSpec::JsonRpc(spec.resolve(source_anchor)),
+        }
+    }
+}
+
 /// Describes a backend that uses JSON-RPC to communicate with an executable.
-#[derive(Debug)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct JsonRpcBackendSpec {
@@ -27,9 +33,27 @@ pub struct JsonRpcBackendSpec {
     pub command: CommandSpec,
 }
 
+impl JsonRpcBackendSpec {
+    /// Resolves the JsonRpcBackendSpec to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        Self {
+            name: self.name,
+            command: {
+                match self.command {
+                    CommandSpec::EnvironmentSpec(env_spec) => {
+                        CommandSpec::EnvironmentSpec(Box::new(env_spec.resolve(source_anchor)))
+                    }
+                    CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
+                }
+            },
+        }
+    }
+}
+
 /// Describes a command that should be run by calling an executable in a certain
 /// environment.
-#[derive(Debug)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum CommandSpec {
@@ -37,9 +61,22 @@ pub enum CommandSpec {
     System(SystemCommandSpec),
 }
 
+impl CommandSpec {
+    /// Resolves the CommandSpec to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        match self {
+            CommandSpec::EnvironmentSpec(env_spec) => {
+                CommandSpec::EnvironmentSpec(Box::new(env_spec.resolve(source_anchor)))
+            }
+            CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
+        }
+    }
+}
+
 /// Describes a command that should be run by calling an executable on the
 /// system.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct SystemCommandSpec {
@@ -50,19 +87,19 @@ pub struct SystemCommandSpec {
 
 /// Describes a conda environment that should be set up in which the backend is
 /// run.
-#[derive(Debug)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct EnvironmentSpec {
     /// The main requirement
-    pub requirement: (rattler_conda_types::PackageName, BinarySpec),
+    pub requirement: (rattler_conda_types::PackageName, PixiSpec),
 
     /// The requirements for the environment.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "DependencyMap::is_empty")
     )]
-    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
+    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 
     /// Additional constraints to apply to the environment
     #[cfg_attr(
@@ -80,23 +117,48 @@ pub struct EnvironmentSpec {
     pub command: Option<String>,
 }
 
+impl EnvironmentSpec {
+    /// Resolves the EnvironmentSpec to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(mut self, source_anchor: SourceAnchor) -> Self {
+        let maybe_source_spec = self.requirement.1.try_into_source_spec();
+        let pixi_spec = match maybe_source_spec {
+            Ok(source_spec) => PixiSpec::from(source_spec.resolve(&source_anchor)),
+            Err(pixi_spec) => pixi_spec,
+        };
+        self.requirement.1 = pixi_spec;
+        self
+    }
+}
+
 impl JsonRpcBackendSpec {
     /// Constructs a new default instance for spawning a recipe build backend.
-    pub fn default_rattler_build(channel_config: &ChannelConfig) -> Self {
+    pub fn default_rattler_build(channels: Vec<ChannelUrl>) -> Self {
         const DEFAULT_BUILD_TOOL: &str = "pixi-build-rattler-build";
-
-        let conda_forge_channel = Channel::from_name("conda-forge", channel_config).base_url;
-        let backends_channel = Url::from_str("https://prefix.dev/pixi-build-backends")
-            .unwrap()
-            .into();
 
         Self {
             name: DEFAULT_BUILD_TOOL.to_string(),
             command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
-                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), BinarySpec::any()),
+                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), PixiSpec::any()),
                 additional_requirements: Default::default(),
                 constraints: Default::default(),
-                channels: vec![conda_forge_channel, backends_channel],
+                channels,
+                command: None,
+            })),
+        }
+    }
+
+    /// Constructs a new default instance for spawning a ROS build backend.
+    pub fn default_ros_build(channels: Vec<ChannelUrl>) -> Self {
+        const DEFAULT_BUILD_TOOL: &str = "pixi-build-ros";
+
+        Self {
+            name: DEFAULT_BUILD_TOOL.to_string(),
+            command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
+                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), PixiSpec::any()),
+                additional_requirements: Default::default(),
+                constraints: Default::default(),
+                channels,
                 command: None,
             })),
         }

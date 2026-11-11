@@ -4,9 +4,15 @@ self-hosted-runner:
     - 16core_windows_latest_runner
     - windows_arm64_2025_large
     - windows_x64_2025_large
+    - namespace-profile-*
+    - nscloud-*
 
 paths:
   .github/workflows/release.yml:
     # This file is auto-generated so just ignore any error
     ignore:
       - .*
+  .github/workflows/vouch-manage-by-issue.yml:
+    # actionlint does not know `concurrency.queue` yet: https://github.com/rhysd/actionlint/issues/654
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'

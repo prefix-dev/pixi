@@ -20,17 +20,23 @@ configure = { cmd = [
     ".build",
 ] }
 
+# Add task descriptions, to be surfaced when the tasks are listed
+say-hello = { cmd = ["echo", "hello world"], description = "Greet the world." }
+
 # Depend on other tasks
 build = { cmd = ["ninja", "-C", ".build"], depends-on = ["configure"] }
 
 # Using environment variables
-run = "python main.py $PIXI_PROJECT_ROOT"
+run = "python main.py $PIXI_WORKSPACE_ROOT"
 set = "export VAR=hello && echo $VAR"
 
 # Cross platform file operations
 copy = "cp pixi.toml pixi_backup.toml"
 clean = "rm pixi_backup.toml"
 move = "mv pixi.toml backup.toml"
+
+# Setting a default environment for the task
+test = { cmd = "pytest", default-environment = "test" }
 ```
 
 ## Depends on
@@ -107,7 +113,8 @@ pixi run style
 
 ### Environment specification for task dependencies
 
-You can specify the environment to use for a dependent task:
+You can specify the environment to use for a dependent task.
+The environment must be defined in the workspace, otherwise Pixi reports an error when it loads the manifest:
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
@@ -120,9 +127,12 @@ When you run the main task, Pixi ensures each dependent task uses its specified 
 pixi run test-all
 ```
 
-The environment specified for a task dependency takes precedence over the environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`, the first dependency will still run in the `py311` environment as specified in the TOML file.
+The environment specified for a task dependency takes precedence over the environment specified via
+the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`,
+the first dependency will still run in the `py311` environment as specified in the TOML file.
 
-In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.
+In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments,
+allowing you to verify compatibility across different Python versions with a single command.
 
 ## Working directory
 
@@ -154,6 +164,18 @@ This will add the following line to [manifest file](../reference/pixi_manifest.m
 bar = { cmd = "python bar.py", cwd = "scripts" }
 ```
 
+## Default environment
+
+You can set the default Pixi [environment](../tutorials/multi_environment.md#adding-an-environment) used by a task using the `default-environment` field:
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_default_environment.toml:default-environment"
+```
+
+The default environment can be overridden as usual with the `--environment` argument:
+```shell
+pixi run -e other_environment test
+```
+
 ## Task Arguments
 
 Tasks can accept arguments that can be referenced in the command. This provides more flexibility and reusability for your tasks.
@@ -174,6 +196,7 @@ Arguments can be:
 
 - **Required**: must be provided when running the task
 - **Optional**: can have default values that are used when not explicitly provided
+- **Constrained**: can be restricted to a set of allowed values using `choices`
 
 ### Defining Task Arguments
 
@@ -209,6 +232,62 @@ pixi run deploy auth-service
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
+### Passing Extra Arguments with `--`
+
+When a task defines typed `args`, all command-line values are matched against those definitions. If you need to pass *additional* flags or arguments directly to the underlying command on top of the typed args, use `--` as a separator. Everything after `--` is forwarded verbatim to the command, regardless of the task's `args` definition.
+
+```toml
+[tasks.test]
+cmd = "pytest {{ target }} -v"
+args = [{ arg = "target", default = "tests/unit" }]
+```
+
+```shell
+# Without --, extra flags would cause an error:
+# × task 'test' received more arguments than expected
+#   hint: use `--` to separate task arguments from extra passthrough arguments
+pixi run test tests/integration --tb=short --maxfail=5
+
+# With --, the typed arg is filled and the rest is forwarded:
+pixi run test tests/integration -- --tb=short --maxfail=5
+✨ Pixi task (test in default): pytest tests/integration -v --tb=short --maxfail=5
+```
+
+You can also use `--` when relying on a default argument value:
+
+```shell
+# "target" uses its default, "--maxfail=5" is forwarded to the command
+pixi run test -- --maxfail=5
+✨ Pixi task (test in default): pytest tests/unit -v --maxfail=5
+```
+
+!!! note "Tasks without typed args"
+    For tasks that do **not** define `args`, `--` is passed through to the underlying command unchanged. This preserves its meaning for programs that use `--` themselves (e.g. `git log -- somefile`).
+
+### Restricting Values with Choices
+
+You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks_choices"
+```
+
+```shell
+# Providing a valid choice
+pixi run compile debug
+✨ Pixi task (compile): echo 'Compiling in debug mode'
+Compiling in debug mode
+
+# Default value must also be one of the choices
+pixi run test
+✨ Pixi task (test): echo 'Running unit tests'
+Running unit tests
+
+# Providing an invalid value results in an error
+pixi run compile fast
+× got 'fast' for argument 'mode' of task 'compile', choose from: debug, release
+```
+
 ### Passing Arguments to Dependent Tasks
 
 You can pass arguments to tasks that are dependencies of other tasks:
@@ -254,7 +333,17 @@ pixi run partial-override-with-arg cli-arg
 
 ### MiniJinja Templating for Task Arguments
 
-Task commands support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+Task commands and env variables defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+
+!!! note "Templating and ad-hoc CLI commands"
+    MiniJinja templating is only applied to tasks defined in your manifest file (`pixi.toml` / `pyproject.toml`).
+    Ad-hoc commands passed directly to `pixi run` on the command line are **not** templated by default,
+    so commands like `pixi run echo '{{ hello }}'` are passed through as-is.
+    Use the `--templated` flag to opt in to template rendering for CLI commands:
+
+    ```shell
+    pixi run --templated echo '{{ pixi.platform }}'
+    ```
 
 Basic syntax for using an argument in your command:
 
@@ -268,6 +357,68 @@ You can also use filters to transform argument values:
 --8<-- "docs/source_files/pixi_workspaces/minijinja/task_args/pixi.toml:tasks"
 ```
 
+#### Pixi Variables
+
+In addition to task arguments, Pixi automatically provides a `pixi` object in the MiniJinja context with system variables:
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `pixi.platform` | The platform name for the environment in which the task will run | `linux-64`, `osx-arm64`, `win-64` |
+| `pixi.environment.name` | The name of the current environment (when available) | `default`, `prod`, `test` |
+| `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
+| `pixi.version` | The version of pixi being used | `0.59.0` |
+| `pixi.init_cwd` | The current working directory when pixi was invoked | `/path/to/cwd` |
+| `pixi.is_win` | Boolean flag indicating if the platform is Windows | `True` or `False` |
+| `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `True` or `False` |
+| `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `True` or `False` |
+| `pixi.is_osx` | Boolean flag indicating if the platform is macOS | `True` or `False` |
+
+!!! warning "Booleans render as `True` and `False`"
+    Booleans follow Jinja2 spelling, so interpolating one with `{{ pixi.is_win }}`
+    writes `True` or `False`, and `{{ none }}` writes `None`. Branch with
+    `{% if %}` rather than comparing the rendered text, and add `| lower` when a
+    task needs the lowercase spelling a shell expects:
+
+    ```toml title="pixi.toml"
+    [tasks]
+    configure = "cmake -DWIN={{ pixi.is_win | lower }}"
+    ```
+
+    Earlier Pixi versions rendered `true` and `false` here.
+
+These variables are particularly useful for creating platform-specific or environment-aware tasks:
+
+```toml title="pixi.toml"
+[tasks]
+# Platform-specific commands
+build = { cmd = "cargo build --target {{ pixi.platform }}", args = [] }
+download-binary = { cmd = "curl -O https://example.com/binary-{{ pixi.platform }}.tar.gz", args = [] }
+
+# Conditional execution based on platform
+install = { cmd = "{% if pixi.is_win %}install.bat{% else %}./install.sh{% endif %}", args = [] }
+
+# Environment-aware tasks
+deploy = { cmd = "deploy.sh --env {{ pixi.environment.name }}", args = [] }
+
+# Using manifest path
+validate = { cmd = "validator --manifest {{ pixi.manifest_path }}", args = [] }
+
+# Using init_cwd in inputs/outputs for caching
+mkdir_test = { cmd = "mkdir -p {{ pixi.init_cwd }}/test", outputs = ["{{ pixi.init_cwd }}/test"] }
+```
+
+The pixi variables can also be combined with task arguments:
+
+```toml title="pixi.toml"
+[tasks]
+deploy = {
+    cmd = "deploy.sh --platform {{ pixi.platform }} --env {{ environment }} --version {{ pixi.version }}",
+    args = [{ arg = "environment", default = "staging" }]
+}
+```
+
+When running tasks with typed arguments, the platform will automatically reflect the best platform for the environment where the task executes.
+
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
 ## Task Names
@@ -278,7 +429,7 @@ A task name follows these rules:
 - Must **be unique** within the table.
 - [`_`]("underscores") at the start of the name will **hide** the task from the `pixi task list` command.
 
-Hiding tasks can be useful if your project defines many tasks but your users only need to use a subset of them.
+Hiding tasks can be useful if your workspace defines many tasks but your users only need to use a subset of them.
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/task_visibility.toml:project_tasks"
@@ -324,35 +475,59 @@ Note: if you want to debug the globs you can use the `--verbose` flag to see whi
 pixi run -v start
 ```
 
-## Environment variables
-You can set environment variables for a task.
-These are seen as "default" values for the variables as you can overwrite them from the shell.
+## Environment Variables
 
-```toml title="pixi.toml"
-[tasks]
-echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
-```
-If you run `pixi run echo` it will output `hello`.
-When you set the environment variable `ARGUMENT` before running the task, it will use that value instead.
+You can set environment variables directly for a task, as well as by other means.
+See [the environment variable priority documentation](../reference/environment_variables.md#environment-variable-priority) for full details of ways to set environment variables,
+and how those ways interact with each other.
 
-```shell
-ARGUMENT=world pixi run echo
-✨ Pixi task (echo in default): echo $ARGUMENT
-world
-```
+Notes on environment variables in tasks:
 
-These variables are not shared over tasks, so you need to define these for every task you want to use them in.
+- Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
+- Templating is allowed in env variables, when you have something like `{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }`. The arg `{{ backend }}` value is interpreted by the `backend` values passed in.
 
-!!! note "Extend instead of overwrite"
-    If you use the same environment variable in the value as in the key of the map you will also overwrite the variable.
-    For example overwriting a `PATH`
+!!! warning
+
+    In older versions of Pixi, this priority was not well-defined, and there are a number of known
+    deviations from the current priority which exist in some older versions:
+
+    - `activation.scripts` used to take priority over `activation.env`
+    - activation scripts of dependencies used to take priority over `activation.env`
+    - outside environment variables used to override variables set in `task.env`
+
+    If you previously relied on a certain priority which no longer applies, you may need to change your
+    task definitions.
+
+    For the specific case of overriding `task.env` with outside environment variables, this behavior can
+    now be recreated using [task arguments](#task-arguments). For example, if you were previously using
+    a setup like:
+
     ```toml title="pixi.toml"
     [tasks]
-    echo = { cmd = "echo $PATH", env = { PATH = "/tmp/path:$PATH" } }
+    echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
     ```
-    This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
+
+    ```shell
+    ARGUMENT=world pixi run echo
+    ✨ Pixi task (echo in default): echo $ARGUMENT
+    world
+    ```
+
+    you can now recreate this behavior like:
+
+    ```toml title="pixi.toml"
+    [tasks]
+    echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }] }
+    ```
+
+    ```shell
+    pixi run echo world
+    ✨ Pixi task (echo): echo world
+    world
+    ```
 
 ## Clean environment
+
 You can make sure the environment of a task is "Pixi only".
 Here Pixi will only include the minimal required environment variables for your platform to run the command in.
 The environment will contain all variables set by the conda environment like `"CONDA_PREFIX"`.
@@ -361,7 +536,7 @@ It will however include some default values from the shell, like:
 
 ```toml
 [tasks]
-clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true}
+clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true }
 ```
 This setting can also be set from the command line with `pixi run --clean-env TASK_NAME`.
 
@@ -376,6 +551,7 @@ This setting can also be set from the command line with `pixi run --clean-env TA
 To support the different OS's (Windows, OSX and Linux), Pixi integrates a shell that can run on all of them.
 This is [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands).
 The task shell is a limited implementation of a bourne-shell interface.
+Task command lines and the values of `tasks.<name>.env` are parsed and expanded by this shell.
 
 ### Built-in commands
 
@@ -424,5 +600,125 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
   - `echo *.py` will echo all filenames that end with `.py`
   - `echo **/*.py` will echo all filenames that end with `.py` in this directory and all descendant directories.
   - `echo data[0-9].csv` will echo all filenames that have a single number after `data` and before `.csv`
+- **Comments:** lines starting with `#` are comments and are ignored by the shell.
+
+### Multi-line tasks
+
+A task command can span multiple lines by using TOML's triple-quoted string syntax.
+Each newline is treated by `deno_task_shell` as a command separator, equivalent to `;`:
+
+```toml title="pixi.toml"
+[tasks]
+release = """
+cargo build --release
+strip target/release/myapp
+cp target/release/myapp dist/
+"""
+```
+
+A failing command does **not** abort the task by default; the next line still runs.
+If you want fail-fast behavior, either chain commands with `&&` or enable it explicitly with `set -e` (also written as `set -o errexit`) at the top of the task:
+
+```toml title="pixi.toml"
+[tasks]
+release = """
+set -e
+cargo build --release
+strip target/release/myapp
+cp target/release/myapp dist/
+"""
+```
+
+You can toggle the option on and off within a task with `set +e` / `set -e` for specific sections.
+
+Long commands can be split across multiple lines with a trailing backslash (`\`), the same line-continuation rule as bash.
+Use TOML's literal multi-line string (`'''...'''`) so the backslash reaches the shell verbatim.
+Inside a basic multi-line string (`"""..."""`) TOML itself treats a trailing backslash as a line continuation and silently drops it:
+
+```toml title="pixi.toml"
+[tasks]
+build = '''
+cargo build \
+    --release \
+    --features fast
+'''
+```
 
 More info in [`deno_task_shell` documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner).
+
+## Best Practices
+
+Task can be very handy and may even replace simple Makefiles.
+There are a few principles that can make tasks more useful.
+
+### Use a `description`
+
+It is a good habit to add a description to your task:
+
+```toml title="pixi.toml"
+[tasks]
+echo = { cmd = "echo Hello Pixi user", description = "Friendly greeting to a Pixi user" }
+build = { cmd = "build", description = "Build everything" }
+test = { cmd = "test", description = "Run all tests" }
+```
+
+Now, the command `pixi task list` will not only list all task names but also their descriptions.
+
+```shell
+pixi task list
+Task   Description
+build  Build everything
+echo   Friendly greeting to a Pixi user
+test   Run all tests
+```
+
+Tasks whose environment cannot run on the current machine are shown dimmed.
+
+This list can be very helpful to quickly find the right tasks.
+
+### Use different TOML syntax for long commands
+
+Tasks can get quite long:
+
+```toml title="pixi.toml"
+echo-arg = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello"}], description = "Display the given argument" }
+```
+
+While it is possible to add line breaks inside the task in your `pixi.toml` to make the task more readable:
+
+```toml title="pixi.toml"
+echo-arg = {
+    cmd = "echo {{ ARGUMENT }}",
+    args = [{"arg" = "ARGUMENT", "default" = "hello"}],
+    description = "Display the given argument"
+}
+```
+
+it will not work in `pyproject.toml` because it supports only TOML 1.0, that doesn't allow line breaks inside the task specification. Other tools can't parse the `pyproject.toml` anymore.
+So if you use an editable dependency:
+
+```toml title="pyproject.toml"
+[tool.pixi.pypi-dependencies]
+myproject = { path = ".", editable = true }
+```
+
+Pixi will use your build system and reports an error:
+
+```shell
+Error:   × failed to update PyPI packages for environment 'default'
+  ├─▶ Failed to prepare distributions
+  ├─▶ Failed to build `proj1 @ file:///.../proj1`
+  ├─▶ The build backend returned an error
+  ╰─▶ Call to `hatchling.build.build_editable` failed (exit status: 1)
+```
+
+There is an alternative syntax, adding the task name to the table header:
+
+```toml title="pyproject.toml"
+[tool.pixi.tasks.echo-arg]
+cmd = "echo {{ ARGUMENT }}"
+args = [{"arg" = "ARGUMENT", "default" = "hello"}]
+description = "Display the given argument"
+```
+
+This is valid  TOML 1.0 syntax and makes more complex task better readable.

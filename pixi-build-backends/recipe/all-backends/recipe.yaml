@@ -1,0 +1,352 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
+
+schema_version: 1
+
+context:
+  cmake_version: ${{ env.get('PIXI_BUILD_CMAKE_VERSION', default='0.1.0dev') }}
+  mojo_version: ${{ env.get('PIXI_BUILD_MOJO_VERSION', default='0.1.0dev') }}
+  python_backend_version: ${{ env.get('PIXI_BUILD_PYTHON_VERSION', default='0.1.0dev') }}
+  r_version: ${{ env.get('PIXI_BUILD_R_VERSION', default='0.1.0dev') }}
+  rattler_build_version: ${{ env.get('PIXI_BUILD_RATTLER_BUILD_VERSION', default='0.1.0dev') }}
+  rust_version: ${{ env.get('PIXI_BUILD_RUST_VERSION', default='0.1.0dev') }}
+  ros_version: ${{ env.get('PIXI_BUILD_ROS_VERSION', default='0.1.0dev') }}
+
+recipe:
+  name: pixi-build-backends
+  version: 0.0.0
+
+outputs:
+  # === Staging output for Rust backends (builds once, cached for all Rust backend packages) ===
+  - staging:
+      name: rust-backends-build
+    source:
+      - path: ../../..
+        filter:
+          exclude:
+            - .git
+    requirements:
+      build:
+        - ${{ compiler("rust") }}
+        - ${{ compiler("c") }}
+        - ${{ stdlib("c") }}
+        # for building aws-lc-sys
+        - cmake
+        - ninja
+        - cargo-bundle-licenses
+        - cargo-auditable
+        - if: osx
+          then: ld64
+      host:
+        - pkg-config
+        - libzlib
+        - liblzma
+        - if: unix
+          then: openssl
+    build:
+      script:
+        env:
+          AWS_LC_SYS_CMAKE_BUILDER: "1"
+          CARGO_PROFILE_RELEASE_STRIP: symbols
+        content:
+          - if: unix
+            then:
+              - export RUSTC_WRAPPER=sccache
+              - export OPENSSL_DIR="$PREFIX"
+              - export CARGO_TARGET_DIR=${{ SRC_DIR }}/../../../target-cache-rust-backends
+          - if: win
+            then:
+              - set RUSTC_WRAPPER=sccache
+              - set "CARGO_TARGET_DIR=${{ SRC_DIR }}\..\..\..\\target-cache-rust-backends"
+          # Build all Rust backends at once
+          - cargo auditable build --locked --release --bins -p pixi-build-cmake -p pixi-build-mojo -p pixi-build-python -p pixi-build-r -p pixi-build-rattler-build -p pixi-build-ros -p pixi-build-rust
+          # Install binaries to prefix
+          - if: unix
+            then:
+              - TARGET=${CARGO_BUILD_TARGET:-$(rustc -vV | grep "host:" | awk '{print $2}')}
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-cmake $PREFIX/bin/pixi-build-cmake
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-mojo $PREFIX/bin/pixi-build-mojo
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-python $PREFIX/bin/pixi-build-python
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-r $PREFIX/bin/pixi-build-r
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-rattler-build $PREFIX/bin/pixi-build-rattler-build
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-ros $PREFIX/bin/pixi-build-ros
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-rust $PREFIX/bin/pixi-build-rust
+          - if: win
+            then:
+              - if not exist "%PREFIX%\bin" mkdir "%PREFIX%\bin"
+              # The rust activation package sets CARGO_BUILD_TARGET, which makes
+              # cargo place binaries in a target triple subdirectory.
+              - if defined CARGO_BUILD_TARGET (set "BIN_DIR=%CARGO_TARGET_DIR%\%CARGO_BUILD_TARGET%\release") else (set "BIN_DIR=%CARGO_TARGET_DIR%\release")
+              - copy %BIN_DIR%\pixi-build-cmake.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-mojo.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-python.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-r.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-rattler-build.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-ros.exe %PREFIX%\bin\
+              - copy %BIN_DIR%\pixi-build-rust.exe %PREFIX%\bin\
+          - if: unix
+            then: cargo-bundle-licenses --format yaml --output $PREFIX/THIRDPARTY.yml
+          - if: win
+            then: cargo-bundle-licenses --format yaml --output %PREFIX%\THIRDPARTY.yml
+
+  # === pixi-build-cmake ===
+  - package:
+      name: pixi-build-cmake
+      version: ${{ cmake_version }}
+    inherit: rust-backends-build
+    build:
+      files:
+        - bin/pixi-build-cmake
+        - bin/pixi-build-cmake.exe
+        - LICENSE
+        - THIRDPARTY.yml
+      script:
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
+    requirements:
+      run:
+        - pixi-build-api-version >=7,<8
+    tests:
+      - script: pixi-build-cmake --help
+      - package_contents:
+          bin:
+            - pixi-build-cmake
+    about:
+      homepage: https://github.com/prefix-dev/pixi-build-backends
+      summary: A pixi build backend to build CMake based packages.
+      description: |
+        This package provides a build backend for pixi that allows building packages using CMake.
+      license: BSD-3-Clause
+      license_file:
+        - LICENSE
+        - THIRDPARTY.yml
+      documentation: https://prefix-dev.github.io/pixi-build-backends
+      repository: https://github.com/prefix-dev/pixi-build-backends
+
+  # === pixi-build-mojo ===
+  - package:
+      name: pixi-build-mojo
+      version: ${{ mojo_version }}
+    inherit: rust-backends-build
+    build:
+      files:
+        - bin/pixi-build-mojo
+        - bin/pixi-build-mojo.exe
+        - LICENSE
+        - THIRDPARTY.yml
+      script:
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
+    requirements:
+      run:
+        - pixi-build-api-version >=7,<8
+    tests:
+      - script: pixi-build-mojo --help
+      - package_contents:
+          bin:
+            - pixi-build-mojo
+    about:
+      homepage: https://github.com/prefix-dev/pixi-build-backends
+      summary: A pixi build backend to build Mojo packages.
+      description: |
+        This package provides a build backend for pixi that allows building packages using the Mojo compiler.
+      license: BSD-3-Clause
+      license_file:
+        - LICENSE
+        - THIRDPARTY.yml
+      documentation: https://prefix-dev.github.io/pixi-build-backends
+      repository: https://github.com/prefix-dev/pixi-build-backends
+
+  # === pixi-build-python ===
+  - package:
+      name: pixi-build-python
+      version: ${{ python_backend_version }}
+    inherit: rust-backends-build
+    build:
+      files:
+        - bin/pixi-build-python
+        - bin/pixi-build-python.exe
+        - LICENSE
+        - THIRDPARTY.yml
+      script:
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
+    requirements:
+      run:
+        - pixi-build-api-version >=7,<8
+    tests:
+      - script: pixi-build-python --help
+      - package_contents:
+          bin:
+            - pixi-build-python
+    about:
+      homepage: https://github.com/prefix-dev/pixi-build-backends
+      summary: A pixi build backend to build Python packages.
+      description: |
+        This package provides a build backend for pixi that allows building Python packages
+        using PEP 517 compatible build systems.
+      license: BSD-3-Clause
+      license_file:
+        - LICENSE
+        - THIRDPARTY.yml
+      documentation: https://prefix-dev.github.io/pixi-build-backends
+      repository: https://github.com/prefix-dev/pixi-build-backends
+
+  # === pixi-build-r ===
+  - package:
+      name: pixi-build-r
+      version: ${{ r_version }}
+    inherit: rust-backends-build
+    build:
+      files:
+        - bin/pixi-build-r
+        - bin/pixi-build-r.exe
+        - LICENSE
+        - THIRDPARTY.yml
+      script:
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
+    requirements:
+      run:
+        - pixi-build-api-version >=7,<8
+    tests:
+      - script: pixi-build-r --help
+      - package_contents:
+          bin:
+            - pixi-build-r
+    about:
+      homepage: https://github.com/prefix-dev/pixi-build-backends
+      summary: A pixi build backend to build R packages.
+      description: |
+        This package provides a build backend for pixi that allows building R packages.
+      license: BSD-3-Clause
+      license_file:
+        - LICENSE
+        - THIRDPARTY.yml
+      documentation: https://prefix-dev.github.io/pixi-build-backends
+      repository: https://github.com/prefix-dev/pixi-build-backends
+
+  # === pixi-build-rattler-build ===
+  - package:
+      name: pixi-build-rattler-build
+      version: ${{ rattler_build_version }}
+    inherit: rust-backends-build
+    build:
+      files:
+        - bin/pixi-build-rattler-build
+        - bin/pixi-build-rattler-build.exe
+        - LICENSE
+        - THIRDPARTY.yml
+      script:
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
+    requirements:
+      run:
+        - pixi-build-api-version >=7,<8
+    tests:
+      - script: pixi-build-rattler-build --help
+      - package_contents:
+          bin:
+            - pixi-build-rattler-build
+    about:
+      homepage: https://github.com/prefix-dev/pixi-build-backends
+      summary: A pixi build backend to build recipe.yaml files.
+      description: |
+        This package provides a build backend for pixi that allows building packages
+        using rattler-build recipe.yaml files.
+      license: BSD-3-Clause
+      license_file:
+        - LICENSE
+        - THIRDPARTY.yml
+      documentation: https://prefix-dev.github.io/pixi-build-backends
+      repository: https://github.com/prefix-dev/pixi-build-backends
+
+  # === pixi-build-rust ===
+  - package:
+      name: pixi-build-rust
+      version: ${{ rust_version }}
+    inherit: rust-backends-build
+    build:
+      files:
+        - bin/pixi-build-rust
+        - bin/pixi-build-rust.exe
+        - LICENSE
+        - THIRDPARTY.yml
+      script:
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
+    requirements:
+      run:
+        - pixi-build-api-version >=7,<8
+    tests:
+      - script: pixi-build-rust --help
+      - package_contents:
+          bin:
+            - pixi-build-rust
+    about:
+      homepage: https://github.com/prefix-dev/pixi-build-backends
+      summary: A pixi build backend to build Rust packages.
+      description: |
+        This package provides a build backend for pixi that allows building Rust packages
+        using Cargo.
+      license: BSD-3-Clause
+      license_file:
+        - LICENSE
+        - THIRDPARTY.yml
+      documentation: https://prefix-dev.github.io/pixi-build-backends
+      repository: https://github.com/prefix-dev/pixi-build-backends
+
+  # === pixi-build-ros ===
+  - package:
+      name: pixi-build-ros
+      version: ${{ ros_version }}
+    inherit: rust-backends-build
+    build:
+      files:
+        - bin/pixi-build-ros
+        - bin/pixi-build-ros.exe
+        - LICENSE
+        - THIRDPARTY.yml
+      script:
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
+    requirements:
+      run:
+        - pixi-build-api-version >=7,<8
+    tests:
+      - script: pixi-build-ros --help
+      - package_contents:
+          bin:
+            - pixi-build-ros
+    about:
+      homepage: https://github.com/prefix-dev/pixi-build-backends
+      summary: A pixi build backend to build ROS packages.
+      description: |
+        This package provides a build backend for pixi that allows building ROS packages
+        using package.xml manifests.
+      license: BSD-3-Clause
+      license_file:
+        - LICENSE
+        - THIRDPARTY.yml
+      documentation: https://prefix-dev.github.io/pixi-build-backends
+      repository: https://github.com/prefix-dev/pixi-build-backends

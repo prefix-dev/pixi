@@ -1,0 +1,13 @@
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-rust"
+version = "*"
+
+[package.build.config]
+extra-input-globs = ["templates/*", "robostack.yaml"]
+
+[package.run-dependencies]
+pixi-build-api-version = ">=7,<8"

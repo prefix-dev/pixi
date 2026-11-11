@@ -1,0 +1,8 @@
+version: 6
+environments:
+  default:
+    channels: []
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
+    packages: {}
+packages: []

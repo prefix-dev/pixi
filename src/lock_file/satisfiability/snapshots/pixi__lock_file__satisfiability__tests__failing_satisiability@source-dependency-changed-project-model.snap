@@ -1,7 +1,0 @@
----
-source: src/lock_file/satisfiability/mod.rs
-expression: s
----
-environment 'default' does not satisfy the requirements of the project for platform 'linux-64'
-    Diagnostic severity: error
-    Caused by: the input hash for 'child-package' (f0d841a0cfd56becd0041a6bbcd215a19ce9c34c08530a98b642381af8ebd32a) does not match the hash in the lock-file (64a8e9eb88c4f6e944a37279a38a47fe7872454fb62bcafad63d200aef4b4a05)

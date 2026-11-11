@@ -1,4 +1,4 @@
-from read_wheels import Package, PackageSpec, WheelTest
+from .read_wheels import Package, PackageSpec, WheelTest
 
 
 def test_spec_to_add_cmd() -> None:

@@ -1,7 +1,8 @@
-lefthook: pixi run --no-progress lefthook
+lefthook: pixi run --no-progress --environment=lefthook lefthook
+no_auto_install: true
 
 templates:
-  run: run --quiet --no-progress --environment=lint
+  run: run --environment=default --quiet --no-progress
 
 colors: true
 
@@ -21,8 +22,11 @@ pre-commit:
   jobs:
     - name: actionlint
       run: pixi {run} actionlint
+    - name: zizmor
+      run: pixi {run} zizmor --no-progress
     - name: cargo-fmt
       glob: "*.rs"
+      stage_fixed: true
       run: pixi {run} cargo-fmt
     - name: ruff
       glob: "*.{py,pyi}"
@@ -33,16 +37,20 @@ pre-commit:
           - name: ruff lint
             run: pixi {run} ruff-lint {staged_files}
           - name: ruff format
-            run: pixi {run} ruff-format {staged_files}
+            run: pixi {run} ruff-fmt {staged_files}
+    - name: cargo-shear
+      glob: "*.rs,Cargo.toml"
+      stage_fixed: true
+      run: pixi {run} cargo-shear
     - name: shell-format
       glob: "*.{sh, bash}"
-      run: pixi {run} shell-format {staged_files}
-    - name: taplo
+      run: pixi {run} shell-fmt {staged_files}
+    - name: tombi
       stage_fixed: true
       glob: "*.toml"
       exclude:
         - schema/examples/invalid/*.toml
-      run: pixi {run} toml-format {staged_files}
+      run: pixi {run} toml-fmt {staged_files}
     - name: dprint
       glob: "*.{yaml,yml}"
       group:
@@ -52,17 +60,23 @@ pre-commit:
           - name: dprint fmt
             run: pixi {run} dprint-fmt {staged_files}
             stage_fixed: true
-    - name: typecheck-python
-      glob: "*.{py,pyi}"
-      run: pixi {run} typecheck-python
     - name: typos
       stage_fixed: true
       run: pixi {run} typos
+    - name: check-into-diagnostic
+      run: pixi {run} check-into-diagnostic
+    - name: typecheck-python
+      glob: "*.{py,pyi}"
+      run: pixi {run} typecheck-python
 
 pre-push:
   jobs:
     - name: cargo-clippy
       glob: "*.rs"
       run: pixi {run} cargo-clippy
+    - name: cargo-deny
+      glob: "Cargo.lock,Cargo.toml"
+      stage_fixed: true
+      run: pixi {run} cargo-deny
     - name: check-openssl
       run: pixi {run} check-openssl

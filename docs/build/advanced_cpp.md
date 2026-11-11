@@ -1,7 +1,7 @@
 In this tutorial, we will show you how to build the same C++ package as from [Building a C++ Package](cpp.md) tutorial using [`rattler-build`](https://rattler.build).
 In this tutorial we assume that you've read the [Building a C++ Package](cpp.md) tutorial.
 If you haven't read it yet, we recommend you to do so before continuing.
-You might also want to check out the [documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rattler-build/) for the `pixi-build-rattler-build` backend.
+You might also want to check out the [documentation](backends/pixi-build-rattler-build.md) for the `pixi-build-rattler-build` backend.
 The project structure and the source code will be the same as in the previous tutorial, so we may skip explicit explanations of some parts.
 
 This approach may be useful when no build backend for your language or build system exists.
@@ -12,7 +12,7 @@ To illustrate this, we will use the same C++ package as in the previous tutorial
 This will unveil the hidden complexity of the build process, and give you a better grasp of how backends work.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
 !!! hint

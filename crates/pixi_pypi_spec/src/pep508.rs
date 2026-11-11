@@ -1,7 +1,7 @@
 use crate::utils::extract_directory_from_url;
-use crate::{Pep508ToPyPiRequirementError, PixiPypiSpec, VersionOrStar};
+use crate::{Pep508ToPyPiRequirementError, PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use pixi_git::GitUrl;
-use pixi_spec::GitSpec;
+use pixi_spec::{GitSpec, Verbatim};
 use std::path::Path;
 
 /// Implement from [`pep508_rs::Requirement`] to make the conversion easier.
@@ -10,11 +10,16 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
     fn try_from(req: pep508_rs::Requirement) -> Result<Self, Self::Error> {
         let converted = if let Some(version_or_url) = req.version_or_url {
             match version_or_url {
-                pep508_rs::VersionOrUrl::VersionSpecifier(v) => PixiPypiSpec::Version {
-                    version: v.into(),
-                    extras: req.extras,
-                    index: None,
-                },
+                pep508_rs::VersionOrUrl::VersionSpecifier(v) => {
+                    PixiPypiSpec::with_extras_and_markers(
+                        PixiPypiSource::Registry {
+                            version: v.into(),
+                            index: None,
+                        },
+                        req.extras,
+                        req.marker,
+                    )
+                }
                 pep508_rs::VersionOrUrl::Url(u) => {
                     let url = u.to_url();
                     if let Some((prefix, ..)) = url.scheme().split_once('+') {
@@ -22,16 +27,17 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                             "git" => {
                                 let subdirectory = extract_directory_from_url(&url);
                                 let git_url = GitUrl::try_from(url).unwrap();
-                                let git_spec = GitSpec {
-                                    git: git_url.repository().clone(),
-                                    rev: Some(git_url.reference().clone().into()),
+                                let git_spec = GitSpec::new(
+                                    git_url.repository().clone(),
+                                    Some(git_url.reference().clone().into()),
                                     subdirectory,
-                                };
+                                );
 
-                                Self::Git {
-                                    url: git_spec,
-                                    extras: req.extras,
-                                }
+                                PixiPypiSpec::with_extras_and_markers(
+                                    PixiPypiSource::Git { git: git_spec },
+                                    req.extras,
+                                    req.marker,
+                                )
                             }
                             "bzr" => {
                                 return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
@@ -68,67 +74,64 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                     {
                         let git_url = GitUrl::try_from(url).unwrap();
                         let subdirectory = extract_directory_from_url(git_url.repository());
-                        let git_spec = GitSpec {
-                            git: git_url.repository().clone(),
-                            rev: Some(git_url.reference().clone().into()),
+                        let git_spec = GitSpec::new(
+                            git_url.repository().clone(),
+                            Some(git_url.reference().clone().into()),
                             subdirectory,
-                        };
-                        Self::Git {
-                            url: git_spec,
-                            extras: req.extras,
-                        }
+                        );
+                        PixiPypiSpec::with_extras_and_markers(
+                            PixiPypiSource::Git { git: git_spec },
+                            req.extras,
+                            req.marker,
+                        )
                     } else if url.scheme().eq_ignore_ascii_case("file") {
-                        // Convert the file url to a path.
+                        // Convert the file URL to a filesystem path. Preserve `u.given()`
+                        // only when it is already in path form (e.g. `./mine`, `/abs/p`):
+                        // the destination `path = "..."` field expects a filesystem path,
+                        // so a `file://...` `given` would round-trip into an unloadable
+                        // manifest. See prefix-dev/pixi#6071.
                         let file = url.to_file_path().map_err(|_| {
                             Pep508ToPyPiRequirementError::PathUrlIntoPath(url.clone())
                         })?;
-                        PixiPypiSpec::Path {
-                            path: file,
-                            editable: None,
-                            extras: req.extras,
-                        }
+                        let path = match u.given() {
+                            Some(g) if !g.starts_with("file:") => {
+                                Verbatim::new_with_given(file, g.to_string())
+                            }
+                            _ => Verbatim::new(file),
+                        };
+                        PixiPypiSpec::with_extras_and_markers(
+                            PixiPypiSource::Path {
+                                path,
+                                editable: None,
+                            },
+                            req.extras,
+                            req.marker,
+                        )
                     } else {
                         let subdirectory = extract_directory_from_url(&url);
-                        PixiPypiSpec::Url {
-                            url,
-                            extras: req.extras,
-                            subdirectory,
-                        }
+                        PixiPypiSpec::with_extras_and_markers(
+                            PixiPypiSource::Url { url, subdirectory },
+                            req.extras,
+                            req.marker,
+                        )
                     }
                 }
             }
-        } else if !req.extras.is_empty() {
-            PixiPypiSpec::Version {
-                version: VersionOrStar::Star,
-                extras: req.extras,
-                index: None,
-            }
-        } else {
-            PixiPypiSpec::RawVersion(VersionOrStar::Star)
-        };
-        Ok(converted)
-    }
-}
-
-impl TryFrom<(pep508_rs::Requirement, Option<PixiPypiSpec>)> for PixiPypiSpec {
-    type Error = Pep508ToPyPiRequirementError;
-    fn try_from(
-        (req, pixi_req): (pep508_rs::Requirement, Option<PixiPypiSpec>),
-    ) -> Result<Self, Self::Error> {
-        let mut converted = req.try_into()?;
-
-        if let Some(pixi_req) = pixi_req {
-            if let (
-                PixiPypiSpec::Version {
-                    index: conv_index, ..
+        } else if !req.extras.is_empty() || !req.marker.is_true() {
+            PixiPypiSpec::with_extras_and_markers(
+                PixiPypiSource::Registry {
+                    version: VersionOrStar::Star,
+                    index: None,
                 },
-                PixiPypiSpec::Version { index, .. },
-            ) = (&mut converted, &pixi_req)
-            {
-                *conv_index = index.clone()
-            }
-        }
-
+                req.extras,
+                req.marker,
+            )
+        } else {
+            PixiPypiSpec::new(PixiPypiSource::Registry {
+                version: VersionOrStar::Star,
+                index: None,
+            })
+        };
         Ok(converted)
     }
 }

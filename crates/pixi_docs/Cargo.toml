@@ -16,5 +16,5 @@ dist = false
 clap = { workspace = true }
 fs-err = { workspace = true }
 itertools = { workspace = true }
-pixi = { path = "../..", features = ["self_update"] }
+pixi_cli = { workspace = true, features = ["self_update"] }
 rattler_conda_types = { workspace = true }

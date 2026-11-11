@@ -1,0 +1,8 @@
+[project]
+name = "requires-newer-pixi-pyproject"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+requires-pixi = ">=100"
+some-future-field = true

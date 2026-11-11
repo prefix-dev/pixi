@@ -1,27 +1,27 @@
 ---
 source: crates/pixi_build_type_conversions/src/project_model.rs
+assertion_line: 318
 expression: project_model
 ---
 {
-  "version": "1",
-  "data": {
-    "name": "array-api-extra",
-    "version": "0.8.0",
-    "description": null,
-    "authors": null,
-    "license": null,
-    "licenseFile": null,
-    "readme": null,
-    "homepage": null,
-    "repository": null,
-    "documentation": null,
-    "targets": {
-      "defaultTarget": {
-        "hostDependencies": {},
-        "buildDependencies": {},
-        "runDependencies": {}
-      },
-      "targets": {}
+  "name": "array-api-extra",
+  "buildStringPrefix": null,
+  "buildNumber": null,
+  "version": "0.8.0",
+  "description": null,
+  "authors": null,
+  "license": null,
+  "licenseFile": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "targets": {
+    "defaultTarget": {
+      "hostDependencies": {},
+      "buildDependencies": {},
+      "runDependencies": {},
+      "runConstraints": {}
     }
   }
 }

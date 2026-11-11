@@ -1,0 +1,11 @@
+[package]
+name = "source"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+# The backend re-derives this extra group, but the locked record below
+# carries no extras at all, so the lock must be reported as drifted.
+[package.extra-dependencies.test]
+extra-pkg = ">=1"

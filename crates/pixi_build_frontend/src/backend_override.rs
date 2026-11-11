@@ -1,17 +1,17 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf, str::FromStr};
 
 use pixi_build_discovery::{CommandSpec, SystemCommandSpec};
 
 use crate::in_memory::{BoxedInMemoryBackend, InMemoryBackendInstantiator};
 
 /// A backend override that can be used to override the backend tools.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BackendOverride {
     /// Overwrite the backend with an executable path.
     System(OverriddenBackends),
 
     /// Use an in-memory backend instantiator to create the backend.
-    InMemory(BoxedInMemoryBackend),
+    InMemory(InMemoryOverriddenBackends),
 }
 
 /// Default implementation for the backend override were no tools are
@@ -31,7 +31,9 @@ impl BackendOverride {
     pub fn from_memory<T: InMemoryBackendInstantiator + Send + Sync + 'static>(
         instantiator: T,
     ) -> Self {
-        Self::InMemory(BoxedInMemoryBackend::from(instantiator))
+        Self::InMemory(InMemoryOverriddenBackends::All(BoxedInMemoryBackend::from(
+            instantiator,
+        )))
     }
 }
 
@@ -72,12 +74,31 @@ pub struct OverriddenTool {
 }
 
 /// List of overridden backends
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OverriddenBackends {
     /// Overrides all backends and assume they are available in the root.
     All,
     /// Specific backend overrides.
     Specified(Vec<OverriddenTool>),
+}
+
+/// List of overridden backends using in memory backends.
+#[derive(Debug, Clone)]
+pub enum InMemoryOverriddenBackends {
+    /// Overrides all backends and use the same in-memory backend for all
+    All(BoxedInMemoryBackend),
+    /// Specific backend overrides using in-memory backends.
+    Specified(HashMap<String, BoxedInMemoryBackend>),
+}
+
+impl InMemoryOverriddenBackends {
+    /// Returns the in-memory backend override for the given name.
+    pub fn backend_override(&self, name: &str) -> Option<&BoxedInMemoryBackend> {
+        match self {
+            InMemoryOverriddenBackends::Specified(overridden) => overridden.get(name),
+            InMemoryOverriddenBackends::All(backend) => Some(backend),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -129,7 +150,7 @@ impl BackendOverride {
     /// to separate different tools. and the `=` is used to separate the
     /// tool name from the path. If no path is provided the tool is assumed to
     /// be available in the root.
-    pub fn from_env() -> miette::Result<Option<Self>> {
+    pub fn from_env() -> Result<Option<Self>, ParseError> {
         let backend_override = match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE_ALL") {
             Ok(_) => {
                 tracing::warn!("overriding build backend with system prefixed tools");

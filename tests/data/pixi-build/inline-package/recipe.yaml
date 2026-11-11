@@ -1,0 +1,17 @@
+package:
+  name: simple-package
+  version: 0.1.0
+
+build:
+  number: 0
+  script:
+    - if: win
+      then:
+        - if not exist "%PREFIX%\bin" mkdir "%PREFIX%\bin"
+        - echo @echo off > %PREFIX%\bin\simple-package.bat
+        - echo echo hello from simple-package >> %PREFIX%\bin\simple-package.bat
+      else:
+        - mkdir -p $PREFIX/bin
+        - echo "#!/usr/bin/env bash" > $PREFIX/bin/simple-package
+        - echo "echo hello from simple-package" >> $PREFIX/bin/simple-package
+        - chmod +x $PREFIX/bin/simple-package

@@ -1,0 +1,19 @@
+[package]
+name = "foo"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+# Host-dep deliberately non-star so the passthrough backend does NOT
+# treat `package` as a variant key for this slot — the host env's
+# chosen version stays governed by the solver (and any installed
+# hint), not by variant substitution.
+[package.host-dependencies]
+package = ">=0.1"
+
+# Run-dep is `*` so when `package` appears in the variant config,
+# passthrough emits one output per variant value. Without a variant
+# config, a single output is emitted.
+[package.run-dependencies]
+package = "*"

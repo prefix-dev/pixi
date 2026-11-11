@@ -1,0 +1,18 @@
+[package]
+name = "package-a"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[package.build-dependencies]
+gcc = ">=9.0"
+
+[package.host-dependencies]
+# This is a dev source, so it should be filtered out
+test-package = { path = "../test-package" }
+
+[package.run-dependencies]
+# This is NOT a dev source, so it should be included
+package-b = { path = "../package-b" }
+requests = ">=2.0"

@@ -1,0 +1,777 @@
+use std::{
+    cmp::Ordering,
+    fmt,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
+use console::StyledObject;
+use fancy_display::FancyDisplay;
+use indexmap::{IndexMap, IndexSet};
+use itertools::{Either, Itertools};
+use miette::{Diagnostic, NamedSource, SourceSpan};
+use pixi_consts::consts;
+use pixi_manifest::{
+    ExcludeNewerConfig, InlinePackageManifest, KnownPreviewFlag, Preview, PrioritizedChannel,
+    toml::{TomlExcludeNewer, TomlPlatform, WorkspacePackageProperties},
+    utils::package_map::{DependencyTable, UniquePackageMap},
+};
+use pixi_spec::PixiSpec;
+use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
+use pixi_utils::diagnostic::Cause;
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
+use serde::{Serialize, Serializer, ser::SerializeMap};
+use serde_derive::Deserialize;
+use thiserror::Error;
+use toml_span::{DeserError, Deserialize, Value, de_helpers::TableHelper};
+
+use super::{ExposedData, environment::EnvironmentName};
+use crate::{Mapping, project::manifest::TomlMapping};
+
+pub const GLOBAL_MANIFEST_VERSION: i64 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ManifestVersion(i64);
+
+impl Default for ManifestVersion {
+    fn default() -> Self {
+        ManifestVersion(GLOBAL_MANIFEST_VERSION)
+    }
+}
+
+impl From<ManifestVersion> for toml_edit::Item {
+    fn from(version: ManifestVersion) -> Self {
+        toml_edit::value(version.0)
+    }
+}
+
+#[derive(Error, Debug, Clone, Diagnostic)]
+pub enum ManifestParsingError {
+    #[error(transparent)]
+    Error(#[from] toml_edit::TomlError),
+    #[error(transparent)]
+    TomlError(#[from] toml_span::Error),
+    #[error("the manifest version '{0}' is too low")]
+    #[diagnostic(help(
+        "the supported version is '{GLOBAL_MANIFEST_VERSION}', update the manifest"
+    ))]
+    VersionTooLow(i64, #[source] toml_span::Error),
+    #[error("the manifest version '{0}' is too high")]
+    #[diagnostic(help(
+        "the supported version is '{GLOBAL_MANIFEST_VERSION}', update `pixi` to support the new manifest version"
+    ))]
+    VersionTooHigh(i64, #[source] toml_span::Error),
+}
+
+/// The global manifest failed to parse.
+#[derive(Error, Debug, Diagnostic)]
+pub enum ManifestParseError {
+    #[error("failed to parse the global manifest '{}'", .path.display())]
+    Spanned {
+        path: PathBuf,
+        #[source_code]
+        source_code: NamedSource<String>,
+        #[label("{message}")]
+        span: SourceSpan,
+        message: String,
+    },
+
+    #[error("failed to parse the global manifest '{}'", .path.display())]
+    #[diagnostic(forward(source))]
+    Invalid {
+        path: PathBuf,
+        #[source]
+        source: Cause<ManifestParsingError>,
+    },
+}
+
+impl ManifestParsingError {
+    /// Attaches the manifest path, and the contents when the error has a span.
+    pub fn into_parse_error(
+        self,
+        file_name: &str,
+        contents: impl Into<String>,
+        path: &Path,
+    ) -> ManifestParseError {
+        if let Some(span) = self.span() {
+            ManifestParseError::Spanned {
+                path: path.to_path_buf(),
+                source_code: NamedSource::new(file_name, contents.into()),
+                span: span.into(),
+                message: self.message(),
+            }
+        } else {
+            ManifestParseError::Invalid {
+                path: path.to_path_buf(),
+                source: Cause::new(self),
+            }
+        }
+    }
+
+    fn span(&self) -> Option<std::ops::Range<usize>> {
+        match self {
+            ManifestParsingError::Error(e) => e.span(),
+            ManifestParsingError::TomlError(e) => Some(e.span.into()),
+            _ => None,
+        }
+    }
+    fn message(&self) -> String {
+        match self {
+            ManifestParsingError::Error(e) => e.message().to_owned(),
+            ManifestParsingError::TomlError(err) => match &err.kind {
+                toml_span::ErrorKind::UnexpectedKeys { expected, .. } => {
+                    format!(
+                        "Unexpected keys, expected only {}",
+                        expected
+                            .iter()
+                            .format_with(", ", |key, f| f(&format_args!("'{key}'")))
+                    )
+                }
+                toml_span::ErrorKind::UnexpectedValue { expected, .. } => {
+                    format!(
+                        "Expected one of {}",
+                        expected
+                            .iter()
+                            .format_with(", ", |key, f| f(&format_args!("'{key}'")))
+                    )
+                }
+                _ => err.to_string(),
+            },
+            _ => self.to_string(),
+        }
+    }
+}
+
+/// Describes the contents of a parsed global project manifest.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ParsedManifest {
+    /// The version of the manifest
+    version: ManifestVersion,
+    /// Packages uploaded after this cutoff are excluded from every
+    /// environment's solve, except for the exempted releases.
+    #[serde(skip_serializing_if = "ExcludeNewerConfig::is_empty")]
+    pub exclude_newer: ExcludeNewerConfig,
+    /// The environments the project can create.
+    pub envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+}
+
+/// The toml-stage of [`ParsedManifest`]: deserialized as-is from the document,
+/// before inline package definitions are converted (which requires the
+/// manifest's root directory as context).
+struct TomlParsedManifest {
+    version: ManifestVersion,
+    exclude_newer: ExcludeNewerConfig,
+    envs: IndexMap<EnvironmentName, TomlParsedEnvironment>,
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let version = th
+            .optional("version")
+            .map(ManifestVersion)
+            .unwrap_or_default();
+        let exclude_newer = th
+            .optional::<TomlExcludeNewer>("exclude-newer")
+            .map(TomlExcludeNewer::into_inner)
+            .unwrap_or_default();
+        let envs = th
+            .optional::<TomlIndexMap<_, TomlParsedEnvironment>>("envs")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
+
+        ensure_unique_exposed_names(value, &envs)?;
+        ensure_unique_shortcut_names(value, &envs)?;
+
+        th.finalize(None)?;
+
+        Ok(Self {
+            version,
+            exclude_newer,
+            envs,
+        })
+    }
+}
+
+fn ensure_unique_exposed_names(
+    value: &mut Value<'_>,
+    envs: &IndexMap<EnvironmentName, TomlParsedEnvironment>,
+) -> Result<(), DeserError> {
+    let mut exposed_names = IndexSet::new();
+    let mut duplicates = IndexMap::new();
+    for key in envs
+        .values()
+        .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
+    {
+        if !exposed_names.insert(key) {
+            duplicates.entry(key).or_insert_with(Vec::new).push(key);
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                format!(
+                    "Duplicated exposed names found: {}",
+                    duplicates
+                        .keys()
+                        .sorted()
+                        .map(|exposed_name| exposed_name.fancy_display())
+                        .join(", ")
+                )
+                .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        }));
+    }
+    Ok(())
+}
+
+fn ensure_unique_shortcut_names(
+    value: &mut Value<'_>,
+    envs: &IndexMap<EnvironmentName, TomlParsedEnvironment>,
+) -> Result<(), DeserError> {
+    let mut shortcut_names = IndexSet::new();
+    let mut duplicates = IndexMap::new();
+    for key in envs.values().flat_map(|env| env.shortcuts.iter().flatten()) {
+        if !shortcut_names.insert(key) {
+            duplicates.entry(key).or_insert_with(Vec::new).push(key);
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                format!(
+                    "Duplicated shortcut names found: {}",
+                    duplicates
+                        .keys()
+                        .sorted()
+                        .map(|shortcut_name| console::style(shortcut_name.as_normalized()).green())
+                        .join(", ")
+                )
+                .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        }));
+    }
+    Ok(())
+}
+
+impl ParsedManifest {
+    /// Parses a toml string into a project manifest.
+    ///
+    /// `root_directory` is the directory containing the manifest file; it is
+    /// used to resolve and convert inline package definitions attached to
+    /// source dependencies.
+    pub(crate) fn from_toml_str(
+        source: &str,
+        root_directory: &Path,
+    ) -> Result<Self, ManifestParsingError> {
+        let mut toml_value = toml_span::parse(source)?;
+
+        let version = toml_value
+            .as_table()
+            .and_then(|table| table.get("version"))
+            .and_then(|version| version.as_integer());
+
+        match TomlParsedManifest::deserialize(&mut toml_value) {
+            Ok(manifest) => manifest.into_parsed_manifest(root_directory),
+            Err(e) => {
+                let error = e
+                    .errors
+                    .into_iter()
+                    .next()
+                    .expect("there should be at least one error");
+                if let Some(version) = version {
+                    // Check if the version is supported.
+                    match version.cmp(&GLOBAL_MANIFEST_VERSION) {
+                        Ordering::Greater => {
+                            Err(ManifestParsingError::VersionTooHigh(version, error))
+                        }
+                        Ordering::Less => Err(ManifestParsingError::VersionTooLow(version, error)),
+                        // Version is supported, but there was another parsing error.
+                        Ordering::Equal => Err(ManifestParsingError::TomlError(error)),
+                    }
+                } else {
+                    Err(ManifestParsingError::TomlError(error))
+                }
+            }
+        }
+    }
+}
+
+impl TomlParsedManifest {
+    /// Converts the toml-stage manifest into a [`ParsedManifest`], turning
+    /// each environment's inline package definitions into
+    /// [`InlinePackageManifest`]s.
+    fn into_parsed_manifest(
+        self,
+        root_directory: &Path,
+    ) -> Result<ParsedManifest, ManifestParsingError> {
+        // The global manifest has no preview mechanism; source dependencies
+        // (and with them inline package definitions) are simply supported, so
+        // conversion runs with the pixi-build preview flag enabled.
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
+
+        let mut envs = IndexMap::with_capacity(self.envs.len());
+        for (env_name, env) in self.envs {
+            let DependencyTable {
+                specs: dependencies,
+                inline_packages: inline_toml,
+            } = env.dependencies;
+
+            // The global manifest has no `[workspace.dependencies]` pool to
+            // inherit from, so `{ workspace = true }` entries are rejected.
+            let dependencies = dependencies.into_direct().map_err(|e| {
+                ManifestParsingError::TomlError(
+                    e.errors
+                        .into_iter()
+                        .next()
+                        .expect("there should be at least one error"),
+                )
+            })?;
+
+            let mut inline_packages = IndexMap::with_capacity(inline_toml.len());
+            for (name, package) in inline_toml {
+                let span = package.span.clone();
+                // There is no workspace to inherit from, so `{ workspace =
+                // true }` fields in inline definitions fail to resolve, and
+                // package defaults stay empty.
+                let converted = InlinePackageManifest::from_toml_package(
+                    &name,
+                    package.value,
+                    WorkspacePackageProperties::default(),
+                    &preview,
+                    root_directory,
+                )
+                .map_err(|e| {
+                    ManifestParsingError::TomlError(toml_span::Error {
+                        kind: toml_span::ErrorKind::Custom(e.to_string().into()),
+                        span: span
+                            .map(|range| toml_span::Span::new(range.start, range.end))
+                            .unwrap_or_default(),
+                        line_info: None,
+                    })
+                })?;
+                inline_packages.insert(name, converted.value);
+            }
+
+            envs.insert(
+                env_name,
+                ParsedEnvironment {
+                    channels: env.channels,
+                    platform: env.platform,
+                    dependencies,
+                    inline_packages,
+                    exposed: env.exposed,
+                    shortcuts: env.shortcuts,
+                },
+            );
+        }
+
+        Ok(ParsedManifest {
+            version: self.version,
+            exclude_newer: self.exclude_newer,
+            envs,
+        })
+    }
+}
+
+impl<I> From<I> for ParsedManifest
+where
+    I: IntoIterator<Item = ExposedData>,
+{
+    fn from(value: I) -> Self {
+        let mut envs: IndexMap<EnvironmentName, ParsedEnvironment> = IndexMap::new();
+        for data in value {
+            let ExposedData {
+                env_name,
+                platform,
+                channels,
+                package,
+                executable_name,
+                exposed,
+            } = data;
+            let parsed_environment = envs.entry(env_name).or_default();
+            parsed_environment.channels.extend(channels);
+            parsed_environment.platform = platform;
+            parsed_environment
+                .dependencies
+                .specs
+                .insert(package, PixiSpec::default());
+            parsed_environment
+                .exposed
+                .insert(Mapping::new(exposed, executable_name));
+        }
+
+        Self {
+            envs,
+            version: ManifestVersion::default(),
+            exclude_newer: ExcludeNewerConfig::default(),
+        }
+    }
+}
+
+/// Custom serializer for a map of exposed names to executable names.
+fn serialize_expose_mappings<S>(
+    mappings: &IndexSet<Mapping>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut map = serializer.serialize_map(Some(mappings.len()))?;
+    for mapping in mappings {
+        map.serialize_entry(&mapping.exposed_name(), &mapping.executable_name())?;
+    }
+    map.end()
+}
+
+#[derive(Serialize, Debug, Clone, Default)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct ParsedEnvironment {
+    pub channels: IndexSet<PrioritizedChannel>,
+    /// Subdir used by the environment.
+    pub platform: Option<Subdir>,
+    pub dependencies: UniquePackageMap,
+    /// Inline package definitions attached to source dependencies. Keyed by
+    /// dependency name; the matching source spec lives in
+    /// [`Self::dependencies`].
+    #[serde(skip)]
+    pub inline_packages: IndexMap<PackageName, InlinePackageManifest>,
+    #[serde(default, serialize_with = "serialize_expose_mappings")]
+    pub exposed: IndexSet<Mapping>,
+    pub shortcuts: Option<IndexSet<PackageName>>,
+}
+
+/// The toml-stage of [`ParsedEnvironment`]: inline package definitions are
+/// still raw [`TomlPackage`](pixi_manifest::toml::TomlPackage)s inside the
+/// [`DependencyTable`]; they are converted by
+/// [`TomlParsedManifest::into_parsed_manifest`], which has the root directory
+/// as context.
+struct TomlParsedEnvironment {
+    channels: IndexSet<PrioritizedChannel>,
+    platform: Option<Subdir>,
+    dependencies: DependencyTable,
+    exposed: IndexSet<Mapping>,
+    shortcuts: Option<IndexSet<PackageName>>,
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlParsedEnvironment {
+    fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let channels = th
+            .optional::<TomlIndexSet<PrioritizedChannel>>("channels")
+            .map(TomlIndexSet::into_inner)
+            .unwrap_or_default();
+        let platform = th.optional::<TomlPlatform>("platform").map(Subdir::from);
+        let dependencies = th.optional("dependencies").unwrap_or_default();
+        let exposed = th
+            .optional::<TomlMapping>("exposed")
+            .map(TomlMapping::into_inner)
+            .unwrap_or_default();
+        let shortcuts = th
+            .optional_s::<TomlWith<_, TomlIndexSet<TomlFromStr<PackageName>>>>("shortcuts")
+            .map(|s| s.value.into_inner());
+
+        th.finalize(None)?;
+
+        Ok(Self {
+            channels,
+            platform,
+            dependencies,
+            exposed,
+            shortcuts,
+        })
+    }
+}
+
+impl ParsedEnvironment {
+    // Create empty parsed environment
+    pub(crate) fn new(channels: impl IntoIterator<Item = PrioritizedChannel>) -> Self {
+        Self {
+            channels: channels.into_iter().collect(),
+            ..Default::default()
+        }
+    }
+
+    /// Returns the channels associated with this environment.
+    pub fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
+        PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
+    }
+
+    /// The channels with their priority and `exclude-newer` override, sorted
+    /// by priority.
+    pub fn prioritized_channels(&self) -> impl Iterator<Item = &PrioritizedChannel> {
+        self.channels
+            .iter()
+            .sorted_by_key(|channel| std::cmp::Reverse(channel.priority.unwrap_or(0)))
+    }
+
+    /// Splits the dependencies into source and binary requirements.
+    pub(crate) fn split_into_source_and_binary_requirements(
+        &self,
+    ) -> (UniquePackageMap, UniquePackageMap) {
+        self.dependencies
+            .specs
+            .clone()
+            .into_iter()
+            .partition_map(
+                |(name, constraint)| match constraint.into_source_or_binary() {
+                    Either::Left(source) => Either::Left((name, source)),
+                    Either::Right(binary) => Either::Right((name, binary)),
+                },
+            )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
+pub struct ExposedName(String);
+
+impl fmt::Display for ExposedName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FancyDisplay for ExposedName {
+    fn fancy_display(&self) -> StyledObject<&str> {
+        consts::EXPOSED_NAME_STYLE.apply_to(&self.0)
+    }
+}
+
+#[derive(Error, Diagnostic, Debug, PartialEq)]
+pub enum ExposedNameError {
+    #[error("'pixi' is not allowed as exposed name in the map")]
+    PixiBinParseError,
+}
+
+impl FromStr for ExposedName {
+    type Err = ExposedNameError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        if value == "pixi" {
+            Err(ExposedNameError::PixiBinParseError)
+        } else {
+            Ok(ExposedName(value.to_string()))
+        }
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for ExposedName {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        Ok(toml_span::de_helpers::parse(value)?)
+    }
+}
+
+impl AsRef<str> for ExposedName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use insta::assert_snapshot;
+    use rattler_conda_types::PackageName;
+
+    use super::{EnvironmentName, ParsedManifest};
+
+    #[test]
+    fn test_invalid_age_policies_are_rejected() {
+        for policy in [
+            r#"[global]
+exclude-newer = "7d""#,
+            r#"exclude-newer = { python = "0d" }"#,
+            r#"exclude-newer = { exemptions = { python = "*" } }"#,
+            r#"exclude-newer = {}"#,
+            r#"exclude-newer = { cutoff = "7d", exemption = { python = "*" } }"#,
+            r#"exclude-newer = { cutoff = "date" }"#,
+            r#"exclude-newer = { cutoff = "7d", exemptions = { python = ">=!" } }"#,
+            r#"exclude-newer = { cutoff = "7d", exemptions = { python = 3 } }"#,
+        ] {
+            assert!(
+                ParsedManifest::from_toml_str(policy, std::path::Path::new("")).is_err(),
+                "invalid policy was accepted: {policy}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_exclude_newer_with_exemptions() {
+        let contents = r#"
+        exclude-newer = { cutoff = "7d", exemptions = { python = "3.13.*", ruff = { version = "*", build = "h*" } } }
+
+        [envs.python]
+        channels = ["conda-forge"]
+        [envs.python.dependencies]
+        python = "3.13.*"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+        assert_snapshot!(manifest.exclude_newer.cutoff.unwrap(), @"7days");
+        assert_eq!(manifest.exclude_newer.exemptions.len(), 2);
+
+        // The manifest serializes back to the same table.
+        assert_snapshot!(
+            toml_edit::ser::to_string_pretty(&manifest.exclude_newer).unwrap(),
+            @r#"
+        cutoff = "7days"
+
+        [exemptions]
+        python = "3.13.*"
+
+        [exemptions.ruff]
+        version = "*"
+        build = "h*"
+        "#
+        );
+    }
+
+    #[test]
+    fn test_duplicate_exposed() {
+        let contents = r#"
+        [envs.python-3-10]
+        channels = ["conda-forge"]
+        [envs.python-3-10.dependencies]
+        python = "3.10"
+        [envs.python-3-10.exposed]
+        python = "python"
+        python3 = "python"
+        [envs.python-3-11]
+        channels = ["conda-forge"]
+        [envs.python-3-11.dependencies]
+        python = "3.11"
+        [envs.python-3-11.exposed]
+        "python" = "python"
+        "python3" = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new(""));
+
+        fn remove_ansi_escape_sequences(input: &str) -> String {
+            use regex::Regex;
+            let re = Regex::new(r"\x1B\[[0-?]*[ -/]*[@-~]").unwrap();
+            re.replace_all(input, "").to_string()
+        }
+        // Because this error is using `fancy_display`, we need to remove the ANSI
+        // escape sequences before comparing the error message. In CI an
+        // interactive tty is not available so the result will be different when
+        // running it locally, it seems :shrug:
+        //
+        // Might be better for the error implement `Diagnostic`
+        assert!(manifest.is_err());
+        let err = format!("{}", manifest.unwrap_err());
+        assert_snapshot!(remove_ansi_escape_sequences(&err));
+    }
+
+    #[test]
+    fn test_duplicate_dependency() {
+        let contents = r#"
+        [envs.python]
+        channels = ["conda-forge"]
+        [envs.python.dependencies]
+        python = "*"
+        PYTHON = "*"
+        [envs.python.exposed]
+        python = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new(""));
+
+        assert!(manifest.is_err());
+        assert_snapshot!(manifest.unwrap_err());
+    }
+
+    #[test]
+    fn test_expose_pixi() {
+        let contents = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        pixi = "python"
+        "#;
+
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new(""));
+
+        assert!(manifest.is_err());
+        assert_snapshot!(manifest.unwrap_err().to_string());
+    }
+
+    #[test]
+    fn test_tool_deserialization() {
+        let contents = r#"
+        # The name of the environment is `python`
+        [envs.python]
+        channels = ["conda-forge"]
+        # optional, defaults to your current OS
+        platform = "osx-64"
+        # It will expose python, python3 and python3.11, but not pip
+        [envs.python.dependencies]
+        python = "3.11.*"
+        pip = "*"
+
+        [envs.python.exposed]
+        python = "python"
+        python3 = "python3"
+        "python3.11" = "python3.11"
+
+        # The name of the environment is `python3-10`
+        [envs.python3-10]
+        channels = ["https://prefix.dev/conda-forge"]
+        # It will expose python3.10
+        [envs.python3-10.dependencies]
+        python = "3.10.*"
+
+        [envs.python3-10.exposed]
+        "python3.10" = "python"
+        "#;
+        let _manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+    }
+
+    /// An inline package definition attached to a git source dependency is
+    /// parsed into an `InlinePackageManifest`, and the surrounding spec
+    /// remains a source spec in the dependency map.
+    #[test]
+    fn test_inline_package_definition() {
+        let contents = r#"
+        [envs.xsv]
+        channels = ["conda-forge"]
+        [envs.xsv.dependencies]
+        xsv = { git = "https://github.com/BurntSushi/xsv.git", package.build.backend.name = "pixi-build-rust" }
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+
+        let env_name = EnvironmentName::from_str("xsv").unwrap();
+        let env = manifest.envs.get(&env_name).unwrap();
+        let name = PackageName::from_str("xsv").unwrap();
+
+        // The source spec is retained as a dependency.
+        assert!(env.dependencies.specs.get(&name).unwrap().is_source());
+
+        // The inline definition is converted and keyed by dependency name.
+        let inline = env.inline_packages.get(&name).unwrap();
+        assert_eq!(
+            inline.manifest.build.backend.name.as_normalized(),
+            "pixi-build-rust"
+        );
+    }
+
+    /// An inline definition without a source location is meaningless and
+    /// rejected, matching the workspace inline syntax.
+    #[test]
+    fn test_inline_package_requires_source() {
+        let contents = r#"
+        [envs.xsv]
+        channels = ["conda-forge"]
+        [envs.xsv.dependencies]
+        xsv = { version = "*", package.build.backend.name = "pixi-build-rust" }
+        "#;
+        assert!(ParsedManifest::from_toml_str(contents, std::path::Path::new("")).is_err());
+    }
+}

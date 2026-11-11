@@ -1,12 +1,13 @@
-from record_results import RESULTS_FILE
-import tomllib
-from rich.console import Console
-from rich.table import Table
-from rich.text import Text
-from rich.panel import Panel
 from pathlib import Path
 
-from read_wheels import read_wheel_file
+import tomli
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+from .read_wheels import read_wheel_file
+from .record_results import RESULTS_FILE
 
 
 def terminal_summary() -> None:
@@ -17,7 +18,7 @@ def terminal_summary() -> None:
         return
 
     with results_file.open("rb") as f:
-        results = tomllib.load(f)["results"]
+        results = tomli.load(f)["results"]
 
     packages = read_wheel_file()
 
@@ -29,7 +30,7 @@ def terminal_summary() -> None:
     table.add_column("Error Details")
 
     # Populate the table with collected results
-    names = []
+    names: list[str] = []
     for result in sorted(results, key=lambda r: r["name"]):
         outcome_color = "green" if result["outcome"] == "passed" else "red"
         error_details = result["longrepr"] if result["outcome"] == "failed" else ""
@@ -104,7 +105,7 @@ pixi r test-common-wheels-dev -k "jax[cuda12]"
 
         results_file = RESULTS_FILE
         with results_file.open("rb") as r:
-            results = tomllib.load(r)["results"]
+            results = tomli.load(r)["results"]
             for result in results:
                 outcome = (
                     '<span style="color: green">Passed</span>'

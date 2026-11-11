@@ -1,0 +1,13 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-missing-version"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+# This is a registry dependency that requires a version to be present
+# in the lock file. The lock file has been hand-edited to remove
+# the version, which should cause the satisfiability check to fail.
+[pypi-dependencies]
+my-dep = ">=1.0"

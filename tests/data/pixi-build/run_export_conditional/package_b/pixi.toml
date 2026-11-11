@@ -1,0 +1,25 @@
+[package]
+name = "package_b"
+version = "0.1.0"
+
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-python"
+version = "*"
+
+[package.host-dependencies]
+hatchling = "*"
+
+# The consumer is a noarch python package, so only the noarch bucket applies.
+# The `unix or win` expression holds on every platform; rattler-build
+# evaluates it while rendering the recipe.
+[package.run-exports.noarch."if(unix or win)"]
+package_b = { path = "." }
+
+# This expression never holds; if condition evaluation regressed, the
+# nonexistent package would fail the workspace solve.
+[package.run-exports.noarch."if(unix and win)"]
+package-that-does-not-exist = "==99.99.99"

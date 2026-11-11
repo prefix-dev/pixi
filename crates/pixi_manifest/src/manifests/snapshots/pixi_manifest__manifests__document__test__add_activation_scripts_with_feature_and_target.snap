@@ -1,0 +1,15 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: document.to_string()
+---
+
+[project]
+name = "test"
+channels = []
+platforms = []
+
+[feature.cuda.target."cuda-*".activation]
+scripts = ["cuda.sh"]
+
+[target.unix.activation]
+scripts = ["posix.sh"]

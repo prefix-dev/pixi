@@ -1,11 +1,10 @@
 ---
 source: crates/pixi_manifest/src/manifests/source.rs
 expression: source.to_string()
-snapshot_kind: text
 ---
 [project]
 name = "test"
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = []
 platforms = []
 

@@ -1,5 +1,5 @@
-use indexmap::{Equivalent, IndexMap, IndexSet};
-use itertools::Either;
+use itertools::{Either, Itertools};
+use ordermap::{Equivalent, OrderMap, OrderSet};
 use pixi_spec::{BinarySpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use serde::ser::{SerializeMap, SerializeSeq};
@@ -17,23 +17,22 @@ use std::{borrow::Cow, hash::Hash, iter::FromIterator};
 /// The generic 'Dependencies' struct is aliased as specific PyPiDependencies
 /// and CondaDependencies struct to represent Pypi and Conda dependencies
 /// respectively.
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DependencyMap<N: Hash + Eq + Clone, D: Hash + Eq + Clone> {
-    map: IndexMap<N, IndexSet<D>>,
+    map: OrderMap<N, OrderSet<D>>,
 }
 
 impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Default for DependencyMap<N, D> {
     fn default() -> Self {
         DependencyMap {
-            map: IndexMap::new(),
+            map: OrderMap::new(),
         }
     }
 }
 
 impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> IntoIterator for DependencyMap<N, D> {
-    type Item = (N, IndexSet<D>);
-    type IntoIter = indexmap::map::IntoIter<N, IndexSet<D>>;
+    type Item = (N, OrderSet<D>);
+    type IntoIter = ordermap::map::IntoIter<N, OrderSet<D>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()
@@ -48,12 +47,22 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Extend<(N, D)> for DependencyMa
     }
 }
 
+impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Extend<DependencyMap<N, D>>
+    for DependencyMap<N, D>
+{
+    fn extend<T: IntoIterator<Item = DependencyMap<N, D>>>(&mut self, iter: T) {
+        for other in iter {
+            Extend::<(N, D)>::extend(self, other.into_specs());
+        }
+    }
+}
+
 impl<'a, M, N: Hash + Eq + Clone + 'a, D: Hash + Eq + Clone + 'a> From<M> for DependencyMap<N, D>
 where
-    M: IntoIterator<Item = Cow<'a, IndexMap<N, D>>>,
+    M: IntoIterator<Item = Cow<'a, OrderMap<N, D>>>,
 {
     /// Create Dependencies<N, D> from an iterator over items of type Cow<'a,
-    /// IndexMap<N, D>
+    /// OrderMap<N, D>
     fn from(m: M) -> Self {
         m.into_iter().fold(Self::default(), |mut acc: Self, deps| {
             // Either clone the values from the Cow or move the values from the owned map.
@@ -92,17 +101,28 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
         self.map.entry(name).or_default().insert(spec);
     }
 
+    /// Overwrites all requirements for a package with a single new requirement.
+    ///
+    /// This removes any existing specs for the package and replaces them with
+    /// the provided spec. This is useful for single-target scenarios where only
+    /// one spec per package should exist.
+    pub fn insert_overwrite(&mut self, name: N, spec: D) {
+        let mut specs = OrderSet::new();
+        specs.insert(spec);
+        self.map.insert(name, specs);
+    }
+
     /// Check if there is any dependency
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
 
     /// Removes a specific dependency
-    pub fn remove<Q>(&mut self, name: &Q) -> Option<(N, IndexSet<D>)>
+    pub fn remove<Q>(&mut self, name: &Q) -> Option<(N, OrderSet<D>)>
     where
         Q: ?Sized + Hash + Equivalent<N>,
     {
-        self.map.shift_remove_entry(name)
+        self.map.remove_entry(name)
     }
 
     /// Combines two sets of dependencies where the requirements of `self` are
@@ -115,9 +135,36 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
         Self { map }
     }
 
+    /// Merges multiple dependency maps by combining all specs for each package.
+    ///
+    /// This is useful when combining dependencies from multiple features where
+    /// each feature can have different specs for the same package. All specs
+    /// are preserved and collected in the order they appear.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Feature 1: foo = "1.0"
+    /// // Feature 2: foo = "2.0"
+    /// // Result: foo has specs ["1.0", "2.0"]
+    /// let merged = DependencyMap::merge_all([deps1, deps2]);
+    /// ```
+    pub fn merge_all<'a>(maps: impl IntoIterator<Item = &'a Self>) -> Self
+    where
+        N: 'a,
+        D: 'a,
+    {
+        let mut result = Self::default();
+        result.extend(
+            maps.into_iter()
+                .flat_map(|map| map.iter_specs().map(|(n, s)| (n.clone(), s.clone()))),
+        );
+        result
+    }
+
     /// Returns an iterator over tuples of dependency names and their combined
     /// requirements.
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&N, &IndexSet<D>)> + '_ {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&N, &OrderSet<D>)> + '_ {
         self.map.iter()
     }
 
@@ -151,11 +198,34 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
     }
 
     /// Returns the package specs for the specified package name.
-    pub fn get<Q>(&self, name: &Q) -> Option<&IndexSet<D>>
+    pub fn get<Q>(&self, name: &Q) -> Option<&OrderSet<D>>
     where
         Q: ?Sized + Hash + Equivalent<N>,
     {
         self.map.get(name)
+    }
+
+    /// Returns a single spec for the specified package name.
+    ///
+    /// This is a convenience method for the common case where you expect
+    /// only one spec per package (e.g., within a single target).
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Some(&D))` if exactly one spec is found
+    /// - `Ok(None)` if the package doesn't exist
+    /// - `Err(itertools::ExactlyOneError)` if there are multiple specs for the package
+    pub fn get_single<Q>(
+        &self,
+        name: &Q,
+    ) -> Result<Option<&D>, itertools::ExactlyOneError<ordermap::set::Iter<'_, D>>>
+    where
+        Q: ?Sized + Hash + Equivalent<N>,
+    {
+        let Some(specs) = self.map.get(name) else {
+            return Ok(None);
+        };
+        specs.iter().at_most_one()
     }
 }
 
@@ -166,7 +236,7 @@ impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::Namele
     ) -> impl DoubleEndedIterator<Item = rattler_conda_types::MatchSpec> {
         self.map.into_iter().flat_map(|(name, specs)| {
             specs.into_iter().map(move |spec| {
-                rattler_conda_types::MatchSpec::from_nameless(spec, Some(name.clone()))
+                rattler_conda_types::MatchSpec::from_nameless(spec, name.clone().into())
             })
         })
     }
@@ -177,7 +247,7 @@ impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::Namele
     ) -> impl DoubleEndedIterator<Item = rattler_conda_types::MatchSpec> {
         self.map.iter().flat_map(|(name, specs)| {
             specs.into_iter().map(move |spec| {
-                rattler_conda_types::MatchSpec::from_nameless(spec.clone(), Some(name.clone()))
+                rattler_conda_types::MatchSpec::from_nameless(spec.clone(), name.clone().into())
             })
         })
     }
@@ -192,7 +262,7 @@ impl DependencyMap<rattler_conda_types::PackageName, BinarySpec> {
         self.into_specs()
             .map(|(name, spec)| {
                 let spec = spec.try_into_nameless_match_spec(channel_config)?;
-                Ok(MatchSpec::from_nameless(spec, Some(name)))
+                Ok(MatchSpec::from_nameless(spec, name.into()))
             })
             .collect()
     }

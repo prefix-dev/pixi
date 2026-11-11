@@ -1,11 +1,11 @@
 We support the use of the `pyproject.toml` as our manifest file in pixi.
 This allows the user to keep one file with all configuration.
 The `pyproject.toml` file is a standard for Python projects.
-We don't advise to use the `pyproject.toml` file for anything else than python projects, the `pixi.toml` is better suited for other types of projects.
+We don't advise to use the `pyproject.toml` file for anything else than Python projects, the `pixi.toml` is better suited for other types of projects.
 
 ## Initial setup of the `pyproject.toml` file
 
-When you already have a `pyproject.toml` file in your project, you can run `pixi init` in a that folder. Pixi will automatically
+When you already have a `pyproject.toml` file in your project, you can run `pixi init` in that folder. Pixi will automatically
 
 - Add a `[tool.pixi.workspace]` section to the file, with the platform and channel information required by pixi;
 - Add the current project as an editable pypi dependency;
@@ -15,10 +15,10 @@ If you do not have an existing `pyproject.toml` file , you can run `pixi init --
 
 ## Python dependency
 
-The `pyproject.toml` file supports the `requires_python` field.
+The `pyproject.toml` file supports the `requires-python` field.
 Pixi understands that field and automatically adds the version to the dependencies.
 
-This is an example of a `pyproject.toml` file with the `requires_python` field, which will be used as the python dependency:
+This is an example of a `pyproject.toml` file with the `requires-python` field, which will be used as the Python dependency:
 
 ```toml title="pyproject.toml"
 [project]
@@ -45,7 +45,7 @@ python = ">=3.9"
 ## Dependency section
 
 The `pyproject.toml` file supports the `dependencies` field.
-Pixi understands that field and automatically adds the dependencies to the project as `[pypi-dependencies]`.
+Pixi understands that field and automatically adds the dependencies to the workspace as `[pypi-dependencies]`.
 
 This is an example of a `pyproject.toml` file with the `dependencies` field:
 
@@ -108,9 +108,12 @@ As Pixi takes the conda dependencies over the pypi dependencies.
 
 ## Optional dependencies
 
-If your python project includes groups of optional dependencies, Pixi will automatically interpret them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
+If your python project includes groups of optional dependencies, Pixi will automatically interpret
+them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
+You can add them to Pixi environments manually, or use `pixi init` to setup the workspace,
+which will create one environment per feature. Self-references to other groups of optional
+dependencies are also handled.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -142,22 +145,24 @@ platforms = ["linux-64"] # if executed on linux
 [tool.pixi.environments]
 default = {features = [], solve-group = "default"}
 test = {features = ["test"], solve-group = "default"}
-all = {features = ["all", "test"], solve-group = "default"}
+all = {features = ["all"], solve-group = "default"}
 ```
 
-In this example, three environments will be created by pixi:
+In this example, three environments will be created by Pixi:
 
 - **default** with 'package1' as pypi dependency
 - **test** with 'package1' and 'pytest' as pypi dependencies
 - **all** with 'package1', 'package2' and 'pytest' as pypi dependencies
 
-All environments will be solved together, as indicated by the common `solve-group`, and added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to your use case (e.g. if you do not need a particular environment).
+All environments will be solved together, as indicated by the common `solve-group`, and
+added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to
+your use case (e.g. if you do not need a particular environment).
 
 ## Dependency groups
 
 If your python project includes dependency groups, Pixi will automatically interpret them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per dependency group.
+You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per dependency group.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -221,7 +226,12 @@ dependencies = [
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+platforms = [
+    "osx-arm64",
+    "osx-64",
+    { platform = "linux-64", cuda = "11.0" },
+    { platform = "win-64", cuda = "11.0" },
+]
 
 [tool.pixi.dependencies]
 compilers = "*"
@@ -230,9 +240,6 @@ cmake = "*"
 [tool.pixi.tasks]
 start = "python my_project/main.py"
 lint = "ruff lint"
-
-[tool.pixi.system-requirements]
-cuda = "11.0"
 
 [tool.pixi.feature.test.dependencies]
 pytest = "*"
@@ -285,7 +292,7 @@ Given a source tree:
     └── pyproject.toml
 ```
 
-Concretly what this looks like in the `pyproject.toml` for `main_project`:
+Concretely what this looks like in the `pyproject.toml` for `main_project`:
 
 ```toml
 [tool.pixi.pypi-dependencies]

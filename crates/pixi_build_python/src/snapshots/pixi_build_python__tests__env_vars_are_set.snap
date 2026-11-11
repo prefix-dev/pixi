@@ -1,0 +1,7 @@
+---
+source: crates/pixi_build_python/src/main.rs
+expression: generated_recipe.recipe.build.script
+---
+env:
+  foo: bar
+content: "[ ... script ... ]"

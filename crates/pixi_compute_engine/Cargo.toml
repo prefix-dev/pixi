@@ -1,0 +1,25 @@
+[package]
+name = "pixi_compute_engine"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Generic incremental computation engine for pixi"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+cmp_any = { workspace = true }
+futures = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true, features = ["derive"], optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+
+[dev-dependencies]
+derive_more = { workspace = true, features = ["display"] }
+insta = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio-test = { workspace = true }

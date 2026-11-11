@@ -6,7 +6,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
     (
         [
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "pip",
@@ -17,6 +17,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -24,9 +25,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "python",
@@ -37,6 +41,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -44,9 +49,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "pytorch",
@@ -57,6 +65,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -72,9 +81,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "torchvision",
@@ -85,6 +97,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -100,9 +113,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "black",
@@ -113,6 +129,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -128,9 +145,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "darglint",
@@ -141,6 +161,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -156,9 +177,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "flake8",
@@ -169,6 +193,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -184,9 +209,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "flake8-bugbear",
@@ -197,6 +225,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -212,9 +241,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "flake8-comprehensions",
@@ -225,6 +257,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -240,9 +273,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "isort",
@@ -253,6 +289,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -268,9 +305,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "palettable",
@@ -281,6 +321,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -296,9 +337,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "pydocstyle",
@@ -309,6 +353,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -324,9 +369,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "pytest",
@@ -337,6 +385,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -352,9 +401,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "pytest-cov",
@@ -365,6 +417,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -380,9 +433,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "pytest-benchmark",
@@ -393,6 +449,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -408,9 +465,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "m2r2",
@@ -421,6 +481,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -436,9 +497,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "sphinx",
@@ -449,6 +513,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -464,9 +529,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "sphinx-automodapi",
@@ -477,6 +545,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -492,9 +561,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "sphinx_rtd_theme",
@@ -505,6 +577,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -520,9 +593,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "matplotlib",
@@ -543,6 +619,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -558,9 +635,12 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
             MatchSpec {
-                name: Some(
+                name: Exact(
                     PackageName {
                         normalized: None,
                         source: "tikzplotlib",
@@ -571,6 +651,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build_number: None,
                 file_name: None,
                 extras: None,
+                flags: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -586,6 +667,9 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 sha256: None,
                 url: None,
                 license: None,
+                license_family: None,
+                condition: None,
+                track_features: None,
             },
         ],
         [
@@ -659,62 +743,328 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
             },
         ],
         [
-            Name(
-                "pytorch",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/pytorch/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "pytorch",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/pytorch/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
         ],
     ),

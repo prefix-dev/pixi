@@ -1,0 +1,764 @@
+from pathlib import Path
+
+import pytest
+import tomli
+import tomli_w
+
+from .common import (
+    CURRENT_PLATFORM,
+    ExitCode,
+    Workspace,
+    copy_manifest,
+    copytree_with_local_backend,
+    verify_cli_command,
+)
+
+BUILD_RUNNING_STRING = "Running build for recipe:"
+
+
+@pytest.mark.slow
+def test_build_conda_package(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    simple_workspace.write_files()
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--target-dir",
+            str(simple_workspace.workspace_dir),
+            "--path",
+            simple_workspace.package_dir,
+        ],
+    )
+
+    # Ensure that we don't create directories we don't need
+    assert not simple_workspace.workspace_dir.joinpath("noarch").exists()
+    assert not simple_workspace.workspace_dir.joinpath(CURRENT_PLATFORM).exists()
+
+    # Ensure that exactly one conda package has been built
+    built_packages = list(simple_workspace.workspace_dir.glob("*.conda"))
+    assert len(built_packages) == 1
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    CURRENT_PLATFORM not in {"linux-64", "win-64"},
+    reason="virtual_packages channel ships the cuda package only for linux-64 and win-64",
+)
+def test_build_honors_cuda_override(
+    pixi: Path,
+    simple_workspace: Workspace,
+    test_data: Path,
+) -> None:
+    """`CONDA_OVERRIDE_CUDA` must reach the host solve, so a machine without a
+    GPU can build a package whose host requirements need `__cuda`."""
+    channel = test_data.joinpath("channels", "channels", "virtual_packages").as_uri()
+    simple_workspace.workspace_manifest["workspace"]["channels"].insert(0, channel)
+    simple_workspace.recipe["requirements"] = {"host": ["cuda"]}
+    simple_workspace.write_files()
+
+    command = [
+        pixi,
+        "publish",
+        "--target-dir",
+        str(simple_workspace.workspace_dir),
+        "--path",
+        simple_workspace.package_dir,
+    ]
+
+    # An empty override disables `__cuda`, so this fails on a GPU machine too.
+    verify_cli_command(
+        command,
+        expected_exit_code=ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": ""},
+        stderr_contains="__cuda",
+    )
+    verify_cli_command(command, env={"CONDA_OVERRIDE_CUDA": "12.0"})
+
+
+@pytest.mark.slow
+def test_publish_honors_exclude_newer(
+    pixi: Path,
+    simple_workspace: Workspace,
+    dummy_channel_1: str,
+) -> None:
+    """`pixi publish` builds with the `exclude-newer` of the workspace, like
+    the build of a source dependency does."""
+    simple_workspace.recipe["requirements"] = {"host": ["dummy-b"]}
+    command = [
+        pixi,
+        "publish",
+        "--target-dir",
+        str(simple_workspace.workspace_dir),
+        "--path",
+        simple_workspace.package_dir,
+    ]
+
+    # Every package in dummy_channel_1 was uploaded in 2025. The cutoff is set
+    # on that channel only, so it doesn't affect the build backend.
+    channels = simple_workspace.workspace_manifest["workspace"]["channels"]
+    channels.insert(0, {"channel": dummy_channel_1, "exclude-newer": "2020-01-01"})
+    simple_workspace.write_files()
+    verify_cli_command(
+        command,
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+    channels[0] = dummy_channel_1
+    simple_workspace.write_files()
+    verify_cli_command(command)
+
+
+@pytest.mark.slow
+def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
+    simple_workspace.write_files()
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            simple_workspace.workspace_dir,
+        ],
+        stderr_contains=BUILD_RUNNING_STRING,
+    )
+
+    conda_build_params = simple_workspace.find_debug_file("conda_build_v1_params.json")
+
+    assert conda_build_params is not None
+
+    # Remove the files to get a clean state
+    conda_build_params.unlink()
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            simple_workspace.workspace_dir,
+        ],
+        stderr_excludes=BUILD_RUNNING_STRING,
+    )
+
+    # Everything should be cached, so no build call,
+    assert simple_workspace.find_debug_file("conda_build_v1_params.json") is None
+
+
+def conda_artifact_mtimes(workspace: Workspace) -> dict[Path, int]:
+    """The mtimes of every `.conda` pixi built for this workspace, keyed by path."""
+    return {
+        path: path.stat().st_mtime_ns
+        for path in sorted(workspace.workspace_dir.joinpath(".pixi").rglob("*.conda"))
+    }
+
+
+def install(pixi: Path, workspace: Workspace, expect_build: bool) -> None:
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            workspace.workspace_dir,
+        ],
+        stderr_contains=BUILD_RUNNING_STRING if expect_build else None,
+        stderr_excludes=None if expect_build else BUILD_RUNNING_STRING,
+    )
+
+
+@pytest.mark.slow
+def test_touching_recipe_does_not_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
+    simple_workspace.write_files()
+    install(pixi, simple_workspace, expect_build=True)
+    artifacts = conda_artifact_mtimes(simple_workspace)
+    assert artifacts, "the first install must have built a package"
+
+    simple_workspace.recipe_path.touch()
+
+    install(pixi, simple_workspace, expect_build=False)
+
+    # The cached artifacts are served as they are, not written again.
+    assert conda_artifact_mtimes(simple_workspace) == artifacts
+
+
+@pytest.mark.slow
+def test_same_size_recipe_edit_triggers_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
+    """The counterpart to touching the recipe. Both a touch and this edit
+    change only the mtime and leave the size alone, so the hash is the only
+    thing that separates them. A wrong hash wiring here would silently serve
+    the previous artifact."""
+    simple_workspace.write_files()
+    install(pixi, simple_workspace, expect_build=True)
+
+    original = simple_workspace.recipe_path.read_text()
+    assert "version: 1.0.0" in original
+    edited = original.replace("version: 1.0.0", "version: 1.0.1")
+    assert len(edited) == len(original), "the edit must not change the file size"
+    simple_workspace.recipe_path.write_text(edited)
+
+    install(pixi, simple_workspace, expect_build=True)
+
+
+@pytest.mark.slow
+def test_project_model_change_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
+    simple_workspace.write_files()
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            simple_workspace.workspace_dir,
+        ],
+        stderr_contains=BUILD_RUNNING_STRING,
+    )
+
+    conda_build_params = simple_workspace.find_debug_file("conda_build_v1_params.json")
+    assert conda_build_params is not None
+
+    # Remove the conda build params to get a clean state
+    conda_build_params.unlink()
+
+    # modify extra-input-globs
+    simple_workspace.package_manifest["package"]["build"].setdefault(
+        "configuration", {}
+    ).setdefault("extra-input-globs", ["*.md"])
+    simple_workspace.write_files()
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            simple_workspace.workspace_dir,
+        ],
+        stderr_contains=BUILD_RUNNING_STRING,
+    )
+
+    # modifying the project model should trigger a rebuild and therefore create a file
+    assert simple_workspace.find_debug_file("conda_build_v1_params.json") is not None
+
+
+@pytest.mark.slow
+def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    This one tries to run the Python based rich example project,
+    installed as a normal package by overriding with an environment variable.
+    """
+    project = "editable-pyproject"
+    test_data = build_data.joinpath(project)
+
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    copytree_with_local_backend(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pyproject.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+        ],
+    )
+
+    # Verify that package is installed as editable
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+            "check-editable",
+        ],
+        stdout_contains="The package is installed as editable.",
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.xdist_group("serial")
+def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    This one tries to run the Python based rich example project,
+    installed as a normal package by overriding with an environment variable.
+    """
+    project = "editable-pyproject"
+    test_data = build_data.joinpath(project)
+
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    copytree_with_local_backend(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pyproject.toml")
+
+    env = {
+        "BUILD_EDITABLE_PYTHON": "false",
+    }
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+        ],
+        env=env,
+    )
+
+    # Verify that package is installed as editable
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+            "check-editable",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stdout_contains="The package is not installed as editable.",
+    )
+
+
+@pytest.mark.slow
+def test_build_using_rattler_build_backend(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    build_data: Path,
+) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
+    copytree_with_local_backend(
+        test_data / "array-api-extra", tmp_pixi_workspace, dirs_exist_ok=True
+    )
+
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Running pixi publish should build the recipe.yaml and copy the package
+    verify_cli_command(
+        [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
+    )
+
+    # really make sure that conda package was built
+    package_to_be_built = next(tmp_pixi_workspace.glob("*.conda"))
+
+    assert "array-api-extra" in package_to_be_built.name
+    assert package_to_be_built.exists()
+
+    # check that immediately repeating the build also works (prefix-dev/pixi-build-backends#287)
+    verify_cli_command(
+        [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("backend", "non_incremental_evidence"),
+    [("pixi-build-rust", "Compiling simple-app"), ("pixi-build-cmake", "Configuring done")],
+)
+def test_incremental_builds(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    build_data: Path,
+    backend: str,
+    non_incremental_evidence: str,
+) -> None:
+    test_workspace = build_data / "minimal-backend-workspaces" / backend
+    copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    verify_cli_command(
+        [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
+        stderr_contains=non_incremental_evidence,
+        strip_ansi=True,
+    )
+
+    # immediately repeating the build should give evidence of incremental compilation
+    verify_cli_command(
+        [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
+        stderr_excludes=non_incremental_evidence,
+        strip_ansi=True,
+    )
+
+
+@pytest.mark.slow
+def test_error_manifest_deps(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
+    # copy the whole smokey project to the tmp_pixi_workspace
+    copytree_with_local_backend(test_data / "smokey", tmp_pixi_workspace / "smokey")
+    manifest_path = tmp_pixi_workspace / "smokey" / "pixi.toml"
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Please specify all binary dependencies in the recipe",
+    )
+
+
+@pytest.mark.slow
+def test_error_manifest_deps_no_default(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
+    # copy the whole smokey2 project to the tmp_pixi_workspace
+    copytree_with_local_backend(test_data / "smokey2", tmp_pixi_workspace / "smokey2")
+    manifest_path = tmp_pixi_workspace / "smokey2" / "pixi.toml"
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Please specify all binary dependencies in the recipe",
+    )
+
+
+@pytest.mark.slow
+def test_rattler_build_source_dependency(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
+    # copy the whole smokey2 project to the tmp_pixi_workspace
+    copytree_with_local_backend(
+        test_data / "source-dependency", tmp_pixi_workspace / "source-dependency"
+    )
+    manifest_path = tmp_pixi_workspace / "source-dependency" / "b" / "pixi.toml"
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+        ],
+        expected_exit_code=ExitCode.SUCCESS,
+        stderr_contains="hello from package a!",
+    )
+
+
+@pytest.mark.slow
+def test_rattler_build_point_to_recipe(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
+    # copy the whole smokey2 project to the tmp_pixi_workspace
+    copytree_with_local_backend(
+        test_data / "source-dependency", tmp_pixi_workspace / "source-dependency"
+    )
+    manifest_path = tmp_pixi_workspace / "source-dependency" / "c" / "recipe.yaml"
+
+    output_dir = tmp_pixi_workspace.joinpath("dist")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    verify_cli_command(
+        [pixi, "publish", "-v", "--target-dir", str(output_dir), "--path", manifest_path],
+        expected_exit_code=ExitCode.SUCCESS,
+    )
+
+    built_packages = list(output_dir.glob("*.conda"))
+    assert built_packages, "no package artifacts produced"
+
+
+@pytest.mark.slow
+def test_rattler_build_autodiscovery(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
+    # copy the whole smokey2 project to the tmp_pixi_workspace
+    copytree_with_local_backend(
+        test_data / "source-dependency", tmp_pixi_workspace / "source-dependency"
+    )
+    # don-t point to recipe.yaml, but to the directory containing it
+    manifest_path = tmp_pixi_workspace / "source-dependency" / "c"
+
+    output_dir = tmp_pixi_workspace.joinpath("dist")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    verify_cli_command(
+        [pixi, "publish", "-v", "--target-dir", str(output_dir), "--path", manifest_path],
+        expected_exit_code=ExitCode.SUCCESS,
+    )
+
+    built_packages = list(output_dir.glob("*.conda"))
+    assert built_packages, "no package artifacts produced"
+
+
+def test_suggest_what_manifest_file_should_be(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
+    # copy the whole smokey2 project to the tmp_pixi_workspace
+    copytree_with_local_backend(
+        test_data / "source-dependency", tmp_pixi_workspace / "source-dependency"
+    )
+    # don-t point to recipe.yaml, but to the directory containing it
+    manifest_path = tmp_pixi_workspace / "source-dependency" / "empty-dir"
+
+    manifest_path.mkdir(parents=True, exist_ok=True)
+
+    verify_cli_command(
+        [pixi, "publish", "-v", "--path", manifest_path],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Ensure that the source directory contains a valid manifest file: package.xml, recipe.yaml, recipe.yml, pixi.toml, pyproject.toml, mojoproject.toml",
+    )
+
+
+@pytest.mark.slow
+def test_recursive_source_run_dependencies(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    """
+    Test whether recursive source dependencies work properly if
+    they are specified in the `run-dependencies` section
+    """
+    project = "recursive_source_run_dep"
+    test_data = build_data.joinpath(project)
+
+    copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+        ],
+    )
+
+    # Package B is a dependency of Package A
+    # Check that it is properly installed
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+            "package-b",
+        ],
+        stdout_contains="hello from package-b",
+    )
+
+
+@pytest.mark.slow
+def test_conditional_run_exports(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """A conditional `[package.run-exports.*."if(...)"]` bucket propagates.
+
+    `package_b` noarch-exports itself behind an `if(unix or win)` condition
+    that rattler-build evaluates while rendering the recipe, and declares a
+    nonexistent package behind an `if(unix and win)` condition that never
+    holds. `package_a` only host-depends on `package_b`, so finding it in the
+    run environment proves the true branch applied; the solve succeeding at
+    all proves the false branch did not.
+    """
+    project = "run_export_conditional"
+    test_data = build_data.joinpath(project)
+
+    copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "package-b",
+        ],
+        stdout_contains="hello from package-b",
+    )
+
+
+@pytest.mark.slow
+def test_recursive_source_build_dependencies(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    """
+    Test whether recursive source dependencies work properly if
+    they are specified in the `host-dependencies` section
+    """
+    project = "recursive_source_build_dep"
+    test_data = build_data.joinpath(project)
+
+    copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "lock",
+            "--manifest-path",
+            manifest_path,
+        ],
+    )
+
+    # Package B is a dependency of Package A
+    # Check that Package A works properly and that the output is valid
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--frozen",
+            "--manifest-path",
+            manifest_path,
+            "start",
+        ],
+        stdout_contains=["Package A application starting", "5 + 3 = 8"],
+    )
+
+
+@pytest.mark.slow
+def test_source_path(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    Test path in `[package.build.source]`
+    """
+    test_data = build_data.joinpath("minimal-backend-workspaces", "pixi-build-cmake")
+
+    copytree_with_local_backend(
+        test_data, tmp_pixi_workspace, dirs_exist_ok=True, copy_function=copy_manifest
+    )
+
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest = tomli.loads(manifest_path.read_text())
+    manifest.setdefault("package", {}).setdefault("build", {})["source"] = {"path": "."}
+    manifest_path.write_text(tomli_w.dumps(manifest))
+
+    verify_cli_command(
+        [pixi, "publish", "--target-dir", str(tmp_pixi_workspace), "--path", tmp_pixi_workspace],
+    )
+
+    # Ensure that exactly one conda package has been built
+    built_packages = list(tmp_pixi_workspace.glob("*.conda"))
+    assert len(built_packages) == 1
+
+
+@pytest.mark.slow
+def test_extra_args(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    Check that `package.build.config.extra-args` are picked up,
+    and can be used to alter the build directory for meson-python.
+    """
+    project = "python-builddir"
+    test_data = build_data.joinpath(project)
+
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    copytree_with_local_backend(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pixi.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "-v",
+            "--manifest-path",
+            manifest_path,
+        ],
+    )
+    assert target_dir.joinpath("src", "mybuilddir", "build.ninja").is_file()
+
+
+@pytest.mark.slow
+def test_target_specific_dependency(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path, target_specific_channel_1: str
+) -> None:
+    """
+    Check that target-specific dependencies are not solved for on other targets.
+    """
+    project = "target-specific"
+    test_data = build_data.joinpath(project)
+
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    copytree_with_local_backend(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pixi.toml")
+
+    manifest = tomli.loads(manifest_path.read_text())
+    manifest["workspace"]["channels"] += [target_specific_channel_1]
+    manifest_path.write_text(tomli_w.dumps(manifest))
+
+    verify_cli_command(
+        [pixi, "publish", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("workspace_dirname", "package_name"),
+    [
+        ("build-variant-manifest-rattler-build", "variant-manifest"),
+        ("build-variant-manifest-python", "variant-manifest-python"),
+    ],
+)
+def test_workspace_variants_separate_work_directories(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    build_data: Path,
+    multiple_versions_channel_1: str,
+    workspace_dirname: str,
+    package_name: str,
+) -> None:
+    """Test that building with multiple variants creates separate work directories.
+
+    This test verifies the fix for issue #4878 where build artifacts from different
+    variants would accumulate in the same work directory, causing package sizes to
+    grow progressively.
+
+    The fix ensures that each variant combination gets its own work directory by
+    including variants in the work directory key hash.
+    """
+    test_workspace = build_data.joinpath(workspace_dirname)
+    copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest = tomli.loads(manifest_path.read_text())
+    manifest["workspace"]["channels"].append(multiple_versions_channel_1)
+    manifest_path.write_text(tomli_w.dumps(manifest))
+
+    # Build all variants and copy them into the dist directory (no channel indexing).
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--path",
+            manifest_path,
+            "--target-dir",
+            str(tmp_pixi_workspace.joinpath("dist")),
+        ],
+    )
+
+    # Check that the package's bld root exists.
+    # Layout: .pixi/bld/<pkg>/<workspace_key>/ (one workspace_key per variant).
+    package_bld_dir = tmp_pixi_workspace / ".pixi" / "bld" / package_name
+    assert package_bld_dir.exists(), "Package build directory should exist"
+
+    # Should have at least 2 workspace directories (one per package3 variant).
+    workspace_dirs = [d for d in package_bld_dir.iterdir() if d.is_dir()]
+    assert len(workspace_dirs) >= 2, (
+        f"Expected at least 2 workspace directories for different variants, "
+        f"found {len(workspace_dirs)}: {[d.name for d in workspace_dirs]}"
+    )

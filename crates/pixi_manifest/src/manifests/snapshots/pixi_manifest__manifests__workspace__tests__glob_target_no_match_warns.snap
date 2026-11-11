@@ -1,0 +1,17 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nversion = \"0.1.0\"\nchannels = []\nplatforms = ['win-64', 'osx-64', 'linux-64']\n\n[target.\"cuda-*\".dependencies]\nfoo = \"1.0\"\n\"#)"
+---
+  ⚠ The target selector 'cuda-*' does not match any of the platforms supported by the workspace
+   ╭─[pixi.toml:8:10]
+ 5 │ channels = []
+ 6 │ platforms = ['win-64', 'osx-64', 'linux-64']
+   ·             ────────────────┬───────────────
+   ·                             ╰── the platforms supported by the workspace are defined here
+ 7 │
+ 8 │ [target."cuda-*".dependencies]
+   ·          ───┬──
+   ·             ╰── target selector specified here
+ 9 │ foo = "1.0"
+   ╰────
+  help: Declare a platform whose name matches 'cuda-*', using `pixi workspace platform add <name>`

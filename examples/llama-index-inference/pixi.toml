@@ -1,4 +1,4 @@
-[project]
+[workspace]
 channels = ["conda-forge"]
 description = "Llama-index and llama.cpp running a local model, tested with MacOS ARM and Linux AMD 64"
 name = "alpaca"

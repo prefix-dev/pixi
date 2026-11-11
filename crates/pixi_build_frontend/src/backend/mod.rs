@@ -1,14 +1,14 @@
 use std::fmt::{Debug, Formatter};
 
+use rattler_conda_types::VersionWithSource;
+
 pub mod in_memory;
 
 use in_memory::InMemoryBackend;
 use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
-        conda_build_v0::{CondaBuildParams, CondaBuildResult},
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
-        conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
     },
 };
@@ -34,7 +34,7 @@ pub struct Backend {
 
 pub enum BackendImplementation {
     /// The backend is a JSON-RPC backend.
-    JsonRpc(json_rpc::JsonRpcBackend),
+    JsonRpc(Box<json_rpc::JsonRpcBackend>),
 
     /// An in memory backend.
     InMemory(Box<dyn InMemoryBackend>),
@@ -66,11 +66,18 @@ impl BackendImplementation {
             BackendImplementation::InMemory(in_memory) => in_memory.identifier(),
         }
     }
+
+    pub fn version(&self) -> Option<&VersionWithSource> {
+        match self {
+            BackendImplementation::JsonRpc(json_rpc) => json_rpc.version(),
+            BackendImplementation::InMemory(_) => None,
+        }
+    }
 }
 
 impl From<json_rpc::JsonRpcBackend> for BackendImplementation {
     fn from(json_rpc: json_rpc::JsonRpcBackend) -> Self {
-        BackendImplementation::JsonRpc(json_rpc)
+        BackendImplementation::JsonRpc(Box::new(json_rpc))
     }
 }
 
@@ -96,6 +103,12 @@ impl Backend {
         self.inner.identifier()
     }
 
+    /// Returns the version of the backend, if available. This is useful for
+    /// debugging purposes mostly.
+    pub fn version(&self) -> Option<&VersionWithSource> {
+        self.inner.version()
+    }
+
     /// Returns the capabilities of the backend. This takes into account both
     /// the actual capabilities of the backend and the API version that is in
     /// use.
@@ -107,42 +120,16 @@ impl Backend {
         &self.capabilities
     }
 
+    /// Returns the capabilities of the backend, without taking into account the
+    /// API version. This is only useful for debugging purposes. In most cases
+    /// [`Self::capabilities`] should be used instead.
+    pub fn backend_capabilities(&self) -> BackendCapabilities {
+        self.inner.capabilities()
+    }
+
     /// Returns the API version that was used to establish the backend.
     pub fn api_version(&self) -> PixiBuildApiVersion {
         self.api_version
-    }
-
-    pub async fn conda_get_metadata(
-        &self,
-        params: CondaMetadataParams,
-    ) -> Result<CondaMetadataResult, CommunicationError> {
-        assert!(
-            self.inner.capabilities().provides_conda_metadata(),
-            "This backend does not support the conda get metadata procedure"
-        );
-        match &self.inner {
-            BackendImplementation::JsonRpc(json_rpc) => json_rpc.conda_get_metadata(params).await,
-            BackendImplementation::InMemory(in_memory) => in_memory.conda_get_metadata(params),
-        }
-    }
-
-    pub async fn conda_build_v0<W: BackendOutputStream + Send + 'static>(
-        &self,
-        params: CondaBuildParams,
-        output_stream: W,
-    ) -> Result<CondaBuildResult, CommunicationError> {
-        assert!(
-            self.inner.capabilities().provides_conda_build_v0(),
-            "This backend does not support the conda build v0 procedure"
-        );
-        match &self.inner {
-            BackendImplementation::JsonRpc(json_rpc) => {
-                json_rpc.conda_build_v0(params, output_stream).await
-            }
-            BackendImplementation::InMemory(in_memory) => {
-                in_memory.conda_build_v0(params, &output_stream)
-            }
-        }
     }
 
     pub async fn conda_build_v1<W: BackendOutputStream + Send + 'static>(
@@ -158,24 +145,29 @@ impl Backend {
             BackendImplementation::JsonRpc(json_rpc) => {
                 json_rpc.conda_build_v1(params, output_stream).await
             }
-            BackendImplementation::InMemory(in_memory) => {
-                in_memory.conda_build_v1(params, &output_stream)
-            }
+            BackendImplementation::InMemory(in_memory) => in_memory
+                .conda_build_v1(params, &output_stream)
+                .map_err(|e| *e),
         }
     }
 
     /// Returns the outputs that this backend can produce.
-    pub async fn conda_outputs(
+    pub async fn conda_outputs<W: BackendOutputStream + Send + 'static>(
         &self,
         params: CondaOutputsParams,
+        output_stream: W,
     ) -> Result<CondaOutputsResult, CommunicationError> {
         assert!(
             self.inner.capabilities().provides_conda_outputs(),
             "This backend does not support the conda outputs procedure"
         );
         match &self.inner {
-            BackendImplementation::JsonRpc(json_rpc) => json_rpc.conda_outputs(params).await,
-            BackendImplementation::InMemory(in_memory) => in_memory.conda_outputs(params),
+            BackendImplementation::JsonRpc(json_rpc) => {
+                json_rpc.conda_outputs(params, output_stream).await
+            }
+            BackendImplementation::InMemory(in_memory) => in_memory
+                .conda_outputs(params, &output_stream)
+                .map_err(|e| *e),
         }
     }
 }

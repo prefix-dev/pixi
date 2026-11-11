@@ -1,0 +1,589 @@
+use std::{
+    io::{self, Write},
+    str::FromStr,
+};
+
+use clap::Parser;
+use indexmap::IndexMap;
+use indexmap::IndexSet;
+use miette::{IntoDiagnostic, Report};
+use pixi_api::DefaultContext;
+use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_config::default_channel_config;
+use pixi_core::workspace::WorkspaceLocatorError;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
+use pixi_progress::await_in_progress;
+use rattler_conda_types::{
+    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, RepoDataRecord, Subdir,
+};
+use tracing::{debug, error};
+use url::Url;
+
+use crate::{
+    cli_config::{ChannelsConfig, WorkspaceConfig},
+    cli_interface::{CliInterface, cli_workspace_context},
+};
+
+/// Search for conda packages
+///
+/// Its output will list the latest version of package.
+#[derive(Debug, Parser)]
+#[clap(arg_required_else_help = true)]
+pub struct Args {
+    /// MatchSpec of a package to search
+    #[arg(required = true)]
+    pub package: String,
+
+    #[clap(flatten)]
+    pub channels: ChannelsConfig,
+
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
+    pub project_config: WorkspaceConfig,
+
+    #[clap(flatten)]
+    pub config: pixi_config::ConfigCli,
+
+    /// The platform to search packages for.
+    /// By default, searches all platforms from the manifest (or all known
+    /// platforms if no manifest is found). Accepts a workspace platform
+    /// name; a bare conda subdir (e.g. `linux-64`) is also accepted.
+    #[arg(short, long)]
+    pub platform: Option<PixiPlatformName>,
+
+    /// Limit the number of versions shown per package, -1 for no limit
+    #[clap(short, long, default_value = "5", allow_hyphen_values = true)]
+    pub limit: i64,
+
+    /// Limit the number of packages shown, -1 for no limit
+    #[clap(
+        short = 'n',
+        long = "limit-packages",
+        default_value = "5",
+        allow_hyphen_values = true
+    )]
+    pub limit_packages: i64,
+
+    /// Output in JSON format
+    #[arg(long, conflicts_with_all = ["limit", "limit_packages"])]
+    pub json: bool,
+}
+
+fn build_json_output(packages: &[RepoDataRecord]) -> IndexMap<String, Vec<&RepoDataRecord>> {
+    let mut result: IndexMap<String, Vec<&RepoDataRecord>> = IndexMap::new();
+    for pkg in packages {
+        let platform = pkg.package_record.subdir.clone();
+        result.entry(platform).or_default().push(pkg);
+    }
+    for records in result.values_mut() {
+        records.sort_unstable_by(|a, b| b.cmp(a));
+    }
+    result
+}
+
+pub async fn execute_impl<W: Write>(
+    args: Args,
+    out: &mut W,
+) -> miette::Result<Vec<RepoDataRecord>> {
+    let workspace = match crate::workspace_locator()
+        .with_global_config_source(args.config_source.source())
+        .with_search_start(args.project_config.workspace_locator_start())
+        .with_cli_config(args.config.clone())
+        .locate()
+        .await
+    {
+        Ok(project) => Some(project),
+        Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
+            debug!("No project file found, continuing without project configuration.",);
+            None
+        }
+        Err(err) => {
+            error!(
+                "Error loading project configuration, continuing without:\n{:?}",
+                Report::from(err)
+            );
+            None
+        }
+    };
+
+    // Resolve channels from project / CLI args
+    let channels = args.channels.resolve_from_project(workspace.as_ref())?;
+    eprintln!(
+        "Using channels: {}",
+        channels
+            .iter()
+            .map(|c| c.name())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    // Resolve platforms. With a workspace in scope, look the name up
+    // against the declared platforms first and fall back to a subdir
+    // parse; without a workspace, only the subdir parse runs (an empty
+    // workspace-platform set forces the fallback branch).
+    let platforms = if let Some(name) = args.platform {
+        let workspace_platforms = workspace
+            .as_ref()
+            .map(|w| w.workspace_manifest().workspace.platforms.clone())
+            .unwrap_or_else(IndexSet::default);
+        let resolved = resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
+            .into_iter()
+            .next()
+            .expect("resolve_platforms preserves length");
+        vec![resolved.subdir(), Subdir::NoArch]
+    } else if let Some(ref workspace) = workspace {
+        let workspace_platforms = &workspace.workspace_manifest().workspace.platforms;
+        let mut platforms: Vec<Subdir> = workspace
+            .default_environment()
+            .platforms()
+            .into_iter()
+            .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == &name))
+            .map(|p| p.subdir())
+            .collect();
+        if !platforms.contains(&Subdir::NoArch) {
+            platforms.push(Subdir::NoArch);
+        }
+        platforms
+    } else {
+        Subdir::all().collect()
+    };
+
+    let matchspec = MatchSpec::from_str(
+        &args.package,
+        ParseStrictnessWithNameMatcher {
+            parse_strictness: ParseStrictness::Lenient,
+            exact_names_only: false,
+        },
+    )
+    .into_diagnostic()?;
+
+    // Only fetch records for the packages that will be shown; the total
+    // fuzzy match count comes back separately for the "... and N more" hint.
+    let fuzzy_limit = if args.json || args.limit_packages < 0 {
+        None
+    } else {
+        Some(args.limit_packages as usize)
+    };
+
+    let result = if let Some(workspace) = workspace {
+        await_in_progress("searching packages...", |_| async {
+            cli_workspace_context(workspace)
+                .search(matchspec, channels, platforms, fuzzy_limit)
+                .await
+        })
+        .await?
+    } else {
+        let config = pixi_config::Config::try_load_global_with(&args.config_source.source())?
+            .merge_config(args.config.clone().into());
+        await_in_progress("searching packages...", |_| async {
+            DefaultContext::new(CliInterface {})
+                .search(config, matchspec, channels, platforms, fuzzy_limit)
+                .await
+        })
+        .await?
+    };
+    // Keep machine-readable output quiet, matching conda's JSON behavior.
+    if !args.json {
+        for notice in &result.notices {
+            pixi_reporters::queue_channel_notice(notice);
+        }
+    }
+    let packages = result.packages;
+
+    if args.json {
+        let json_output = build_json_output(&packages);
+        let json_str = serde_json::to_string_pretty(&json_output).into_diagnostic()?;
+        if let Err(e) = writeln!(out, "{json_str}")
+            && e.kind() != std::io::ErrorKind::BrokenPipe
+        {
+            return Err(e).into_diagnostic();
+        }
+    } else {
+        let limit_versions = if args.limit < 0 {
+            None
+        } else {
+            Some(args.limit as usize)
+        };
+        let limit_packages = if args.limit_packages < 0 {
+            None
+        } else {
+            Some(args.limit_packages as usize)
+        };
+
+        // Print search results with detailed info for first N packages
+        if let Err(e) = print_search_results(
+            &packages,
+            out,
+            limit_packages,
+            limit_versions,
+            result.fuzzy_matches,
+        ) && e.kind() != std::io::ErrorKind::BrokenPipe
+        {
+            return Err(e).into_diagnostic();
+        }
+    }
+
+    Ok(packages)
+}
+
+pub async fn execute(args: Args) -> miette::Result<()> {
+    let mut out = io::stdout();
+    execute_impl(args, &mut out).await?;
+    Ok(())
+}
+
+fn print_search_results<W: Write>(
+    packages: &[RepoDataRecord],
+    out: &mut W,
+    limit_packages: Option<usize>,
+    limit_versions: Option<usize>,
+    fuzzy_matches: Option<usize>,
+) -> io::Result<()> {
+    // Group packages by name
+    let mut by_name: IndexMap<&PackageName, Vec<&RepoDataRecord>> = IndexMap::new();
+    for pkg in packages {
+        by_name
+            .entry(&pkg.package_record.name)
+            .or_default()
+            .push(pkg);
+    }
+
+    // The fuzzy fallback only fetches records for the packages that are
+    // shown; it reports the total match count for the hint below.
+    let total_packages = fuzzy_matches.unwrap_or(by_name.len());
+
+    let channel_config = default_channel_config();
+
+    // Single package name => show detailed view
+    if by_name.len() == 1 && total_packages <= 1 {
+        let (name, records) = by_name.iter().next().expect("by_name has exactly 1 entry");
+        // When limit is 0, only print the package name
+        if limit_versions == Some(0) {
+            writeln!(out, "{}", name.as_source())?;
+            return Ok(());
+        }
+        let newest = records
+            .last()
+            .expect("records is non-empty since packages is non-empty");
+        let others: Vec<_> = records.iter().rev().skip(1).cloned().collect();
+        print_package_info(newest, &others, out, limit_versions)?;
+        return Ok(());
+    }
+
+    // Multiple package names => show compact summary view
+    let n_packages = limit_packages.unwrap_or(usize::MAX);
+    let n_versions = limit_versions.unwrap_or(usize::MAX);
+
+    for (i, (name, records)) in by_name.iter().enumerate() {
+        if i >= n_packages {
+            break;
+        }
+        if i > 0 && n_versions > 0 {
+            writeln!(out)?;
+        }
+
+        // When limit is 0, only print the package name
+        if n_versions == 0 {
+            writeln!(out, "{}", name.as_source())?;
+            continue;
+        }
+
+        let total_versions = records.len();
+        writeln!(
+            out,
+            "{} ({} {})",
+            console::style(name.as_source()).green().bold(),
+            total_versions,
+            if total_versions == 1 {
+                "version"
+            } else {
+                "versions"
+            }
+        )?;
+
+        let shown = total_versions.min(n_versions);
+        for record in records.iter().rev().take(shown) {
+            let channel_name = record
+                .channel
+                .as_ref()
+                .and_then(|channel| Url::from_str(channel).ok())
+                .and_then(|url| channel_config.strip_channel_alias(&url))
+                .or_else(|| record.channel.clone())
+                .unwrap_or_else(|| "<unknown>".to_string());
+
+            writeln!(
+                out,
+                "  {} {} [{}] {}",
+                console::style(&record.package_record.version).cyan(),
+                record.package_record.build,
+                record.package_record.subdir,
+                console::style(channel_name).dim(),
+            )?;
+        }
+
+        let remaining_versions = total_versions.saturating_sub(shown);
+        if remaining_versions > 0 {
+            let label = if remaining_versions == 1 {
+                "version"
+            } else {
+                "versions"
+            };
+            writeln!(
+                out,
+                "  {}",
+                console::style(format!(
+                    "... and {remaining_versions} more {label} (use -l to show more)"
+                ))
+                .dim(),
+            )?;
+        }
+    }
+
+    let remaining_packages = total_packages.saturating_sub(by_name.len().min(n_packages));
+    if remaining_packages > 0 {
+        let label = if remaining_packages == 1 {
+            "package"
+        } else {
+            "packages"
+        };
+        writeln!(
+            out,
+            "\n{}",
+            console::style(format!(
+                "... and {remaining_packages} more {label} (use -n to show more)"
+            ))
+            .dim(),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn format_additional_builds_string(builds: Option<Vec<&RepoDataRecord>>) -> String {
+    let builds = builds.unwrap_or_default();
+    match builds.len() {
+        0 => String::new(),
+        1 => " (+ 1 build)".to_string(),
+        _ => format!(" (+ {} builds)", builds.len()),
+    }
+}
+
+fn print_package_info<W: Write>(
+    package: &RepoDataRecord,
+    other_versions: &Vec<&RepoDataRecord>,
+    out: &mut W,
+    limit_versions: Option<usize>,
+) -> io::Result<()> {
+    let package = package.clone();
+    let package_name = package.package_record.name.as_source();
+    let build = &package.package_record.build;
+    let mut grouped_by_version = IndexMap::new();
+    for version in other_versions {
+        grouped_by_version
+            .entry(&version.package_record.version)
+            .or_insert_with(Vec::new)
+            .insert(0, *version);
+    }
+    let other_builds = grouped_by_version.shift_remove(&package.package_record.version);
+    let package_info = format!(
+        "{}-{}-{}{}",
+        console::style(package.package_record.name.as_source()),
+        console::style(package.package_record.version.to_string()),
+        console::style(&package.package_record.build),
+        console::style(format_additional_builds_string(other_builds))
+    );
+
+    writeln!(out, "{package_info}")?;
+    writeln!(out, "{}\n", "-".repeat(package_info.chars().count()))?;
+
+    writeln!(
+        out,
+        "{:19} {}",
+        console::style("Name"),
+        console::style(package_name)
+    )?;
+
+    writeln!(
+        out,
+        "{:19} {}",
+        console::style("Version"),
+        console::style(package.package_record.version)
+    )?;
+
+    writeln!(
+        out,
+        "{:19} {}",
+        console::style("Build"),
+        console::style(build)
+    )?;
+
+    let size = match package.package_record.size {
+        Some(size) => indicatif::HumanBytes(size).to_string(),
+        None => String::from("Not found."),
+    };
+    writeln!(
+        out,
+        "{:19} {}",
+        console::style("Size"),
+        console::style(size)
+    )?;
+
+    if let Some(license) = package.package_record.license.as_ref() {
+        writeln!(
+            out,
+            "{:19} {}",
+            console::style("License"),
+            console::style(license)
+        )?;
+    }
+
+    if let Some(timestamp) = package.package_record.timestamp {
+        writeln!(
+            out,
+            "{:19} {}",
+            console::style("Timestamp"),
+            console::style(
+                timestamp
+                    .jiff_timestamp()
+                    .strftime("%Y-%m-%d %H:%M:%S UTC")
+                    .to_string()
+            )
+        )?;
+    }
+
+    writeln!(
+        out,
+        "{:19} {}",
+        console::style("Subdir"),
+        console::style(&package.package_record.subdir)
+    )?;
+
+    if let Some(noarch_kind) = package.package_record.noarch.kind() {
+        writeln!(
+            out,
+            "{:19} {}",
+            console::style("NoArch"),
+            console::style(format!("{noarch_kind:?}").to_lowercase())
+        )?;
+    }
+
+    writeln!(
+        out,
+        "{:19} {}",
+        console::style("File Name"),
+        console::style(package.identifier.to_file_name())
+    )?;
+
+    writeln!(
+        out,
+        "{:19} {}",
+        console::style("URL"),
+        console::style(&package.url)
+    )?;
+
+    let md5 = match package.package_record.md5 {
+        Some(md5) => hex::encode(md5),
+        None => "Not available".to_string(),
+    };
+    writeln!(out, "{:19} {}", console::style("MD5"), console::style(md5))?;
+
+    let sha256 = match package.package_record.sha256 {
+        Some(sha256) => hex::encode(sha256),
+        None => "Not available".to_string(),
+    };
+    writeln!(
+        out,
+        "{:19} {}",
+        console::style("SHA256"),
+        console::style(sha256),
+    )?;
+
+    if !package.package_record.track_features.is_empty() {
+        writeln!(out, "\nTrack features:")?;
+        for feature in &package.package_record.track_features {
+            writeln!(out, " - {feature}")?;
+        }
+    }
+
+    if let Some(purls) = package.package_record.purls.as_ref()
+        && !purls.is_empty()
+    {
+        writeln!(out, "\nPackage URLs:")?;
+        for purl in purls {
+            writeln!(out, " - {purl}")?;
+        }
+    }
+
+    writeln!(out, "\nDependencies:")?;
+    for dependency in &package.package_record.depends {
+        writeln!(out, " - {dependency}")?;
+    }
+
+    if let Some(run_exports) = package.package_record.run_exports.as_ref() {
+        writeln!(out, "\nRun exports:")?;
+        let mut print_run_exports = |name: &str, run_exports: &[String]| {
+            if !run_exports.is_empty() {
+                writeln!(out, "  {name}:")?;
+                for run_export in run_exports {
+                    writeln!(out, "   - {run_export}")?;
+                }
+            }
+            Ok::<(), std::io::Error>(())
+        };
+        print_run_exports("noarch", &run_exports.noarch)?;
+        print_run_exports("strong", &run_exports.strong)?;
+        print_run_exports("weak", &run_exports.weak)?;
+        print_run_exports("strong constrains", &run_exports.strong_constrains)?;
+        print_run_exports("weak constrains", &run_exports.weak_constrains)?;
+    } else {
+        writeln!(out, "\nRun exports: not available in repodata")?;
+    }
+
+    // Print summary of older versions for package
+    if !grouped_by_version.is_empty() {
+        writeln!(out, "\nOther Versions ({}):", grouped_by_version.len())?;
+        let version_width = grouped_by_version
+            .keys()
+            .map(|v| v.to_string().len())
+            .chain(["Version".len()].iter().cloned())
+            .max()
+            .expect("there is at least one version, so this should not be empty")
+            + 1;
+        writeln!(
+            out,
+            "{:version_width$} {}",
+            console::style("Version").bold(),
+            console::style("Build").bold(),
+            version_width = version_width
+        )?;
+        let max_displayed = limit_versions.unwrap_or(usize::MAX);
+        for (i, (version, builds)) in grouped_by_version.iter().enumerate() {
+            if i >= max_displayed {
+                let remaining = grouped_by_version.len() - max_displayed;
+                writeln!(
+                    out,
+                    "{} and {} more",
+                    console::style("...").dim(),
+                    remaining
+                )?;
+                break;
+            }
+            let newest_build = builds
+                .last()
+                .expect("each version group has at least one build");
+            let other_builds = builds[..builds.len() - 1].to_vec();
+            writeln!(
+                out,
+                "{:version_width$} {}{}",
+                console::style(version.to_string()),
+                console::style(newest_build.package_record.build.clone()),
+                console::style(format_additional_builds_string(Some(other_builds))).dim(),
+                version_width = version_width
+            )?;
+        }
+    }
+
+    Ok(())
+}

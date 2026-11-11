@@ -1,0 +1,8 @@
+#:schema ./../../schema.json
+
+[workspace]
+channels = ["conda-forge"]
+
+[tasks.foo]
+args = ["pixi"]
+cmd = """{{ pixi }}"""

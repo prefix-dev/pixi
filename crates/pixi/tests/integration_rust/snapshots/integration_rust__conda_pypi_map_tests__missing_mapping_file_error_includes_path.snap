@@ -1,0 +1,20 @@
+---
+source: crates/pixi/tests/integration_rust/conda_pypi_map_tests.rs
+expression: err
+---
+ProjectDefined(
+    Io(
+        Custom {
+            kind: NotFound,
+            error: Error {
+                kind: OpenFile,
+                source: Os {
+                    [MAPPING_CODE],
+                    kind: NotFound,
+                    [MAPPING_MESSAGE],
+                },
+                [MAPPING_PATH],
+            },
+        },
+    ),
+)

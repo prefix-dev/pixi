@@ -16,7 +16,8 @@ on:
         description: "The operating system to run the tests on"
         required: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   test_common_wheels:
@@ -25,15 +26,17 @@ jobs:
     timeout-minutes: 15
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/release"
+      PIXI_BUILD_BACKEND_OVERRIDE: "pixi-build-rust=${{ github.workspace }}/target/release/pixi-build-rust${{ contains(inputs.arch, 'windows') && '.exe' || '' }}"
       LOGS_DIR: "${{ github.workspace }}/tests/wheel_tests/.logs"
       SUMMARY_FILE: "${{ github.workspace }}/tests/wheel_tests/.summary.md"
       PYTHONIOENCODING: utf-8
       PYTEST_ADDOPTS: "--color=yes"
     steps:
       - name: Checkout repo
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.sha }}
+          persist-credentials: false
       - name: Create Dev Drive using ReFS
         if: ${{ contains(inputs.arch, 'windows') }}
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
@@ -42,7 +45,7 @@ jobs:
         run: |
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-${{ inputs.arch }}-${{ inputs.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -63,7 +66,7 @@ jobs:
           $resolvedPath = Resolve-Path $env:SUMMARY_FILE
           Get-Content $resolvedPath | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
       - name: Upload Logs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: ${{ always() }}
         with:
           name: wheel-tests-logs-${{ inputs.arch }}

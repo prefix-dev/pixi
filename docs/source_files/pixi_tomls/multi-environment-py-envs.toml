@@ -3,17 +3,20 @@ channels = ["https://prefix.dev/conda-forge"]
 name = "pixi"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 
+# --8<-- [start:py-envs]
+# The testing tools are shared, so they live in a feature.
 [feature.test.dependencies]
 pytest = "*"
 
-# --8<-- [start:py-envs]
-[feature.py311.dependencies]
-python = "3.11.*"
+[feature.test.tasks]
+test = "pytest"
 
-[feature.py312.dependencies]
-python = "3.12.*"
+# The python version is unique to each environment, so it is defined inline.
+[environments.test-py311]
+dependencies = { python = "3.11.*" }
+features = ["test"]
 
-[environments]
-test-py311 = ["py311", "test"]
-test-py312 = ["py312", "test"]
+[environments.test-py312]
+dependencies = { python = "3.12.*" }
+features = ["test"]
 # --8<-- [end:py-envs]

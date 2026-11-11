@@ -1,0 +1,5 @@
+---
+source: crates/pixi_manifest/src/toml/test_develop.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"test\"\n        channels = []\n        platforms = [\"linux-64\"]\n\n        [develop]\n        bad-pkg = { path = \"../path\", git = \"https://github.com/example/repo.git\" }\n        \"#,)"
+---
+  × failed to parse develop dependency: only one of `url`, `path`, or `git` can be specified

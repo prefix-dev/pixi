@@ -1,0 +1,6 @@
+[package]
+name = "package_c"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }

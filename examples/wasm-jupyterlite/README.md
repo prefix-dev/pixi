@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup pixi project
+      - name: Setup pixi
         uses: prefix-dev/setup-pixi@v0.8.2
       - name: Build dist
         run: pixi run build-dist

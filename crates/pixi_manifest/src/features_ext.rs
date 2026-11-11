@@ -1,16 +1,24 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_spec::ResolvedExcludeNewer;
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
+    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Subdir,
 };
 
 use crate::{
-    CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
-    has_features_iter::HasFeaturesIter, has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions, workspace::ChannelPriority,
+    CondaConstraints, CondaDependencies, Feature, PixiPlatform, PixiPlatformName,
+    PrioritizedChannel, PyPiDependencies, SpecType,
+    dependencies::CondaDevDependencies,
+    exclude_newer::{ExcludeNewerError, resolve_exclude_newer, resolve_pypi_exclude_newer},
+    has_features_iter::HasFeaturesIter,
+    has_manifest_ref::HasWorkspaceManifest,
+    platform_composition::{combined_platform_name, feature_supports_subdir},
+    pypi::{ResolvedPypiExcludeNewer, pypi_options::PypiOptions},
+    workspace::{ChannelPriority, SolveStrategy},
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
@@ -31,6 +39,28 @@ pub struct ChannelPriorityCombinationError;
 /// There is blanket implementation available for all types that implement
 /// [`HasWorkspaceManifest`] and [`HasFeaturesIter`]
 pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<'source> {
+    /// Returns the channels associated with this collection, preserving the
+    /// effective metadata for the first winning entry of every unique channel.
+    fn prioritized_channels(
+        &self,
+    ) -> IndexMap<&'source NamedChannelOrUrl, &'source PrioritizedChannel> {
+        let channels = self.features().flat_map(|feature| match &feature.channels {
+            Some(channels) => channels,
+            None => &self.workspace_manifest().workspace.channels,
+        });
+
+        let mut prioritized = IndexMap::new();
+        for channel in channels.into_iter().sorted_by(|a, b| {
+            let a = a.priority.unwrap_or(0);
+            let b = b.priority.unwrap_or(0);
+            b.cmp(&a)
+        }) {
+            prioritized.entry(&channel.channel).or_insert(channel);
+        }
+
+        prioritized
+    }
+
     /// Returns the channels associated with this collection.
     ///
     /// Users can specify custom channels on a per-feature basis. This method
@@ -40,14 +70,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// If a feature does not specify any channel the default channels from the
     /// project metadata are used instead.
     fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
-        // Collect all the channels from the features in one set,
-        // deduplicate them and sort them on feature index, default feature comes last.
-        let channels = self.features().flat_map(|feature| match &feature.channels {
-            Some(channels) => channels,
-            None => &self.workspace_manifest().workspace.channels,
-        });
-
-        PrioritizedChannel::sort_channels_by_priority(channels).collect()
+        self.prioritized_channels().into_keys().collect()
     }
 
     /// Returns the channels associated with this collection.
@@ -65,7 +88,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .collect()
     }
 
-    /// Returns the channel priority, error on multiple values, return None if
+    /// Returns the channel priority, error on multiple, different values, return None if
     /// no value is set.
     ///
     /// When using multiple channel priorities over different features we should
@@ -74,7 +97,8 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let mut channel_priority = None;
         for feature in self.features() {
             if let Some(priority) = feature.channel_priority {
-                if channel_priority == Some(priority) {
+                // If we already have a priority and it's different, error
+                if channel_priority.is_some() && channel_priority != Some(priority) {
                     return Err(ChannelPriorityCombinationError);
                 }
                 channel_priority = Some(priority);
@@ -83,59 +107,131 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         Ok(channel_priority)
     }
 
-    /// Returns whether packages should be excluded newer than a certain date.
-    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
-        self.workspace_manifest()
-            .workspace
-            .exclude_newer
-            .map(Into::into)
+    /// Returns the effective exclude-newer solver configuration with absolute cutoffs.
+    fn exclude_newer_config_resolved(
+        &self,
+        channel_config: &ChannelConfig,
+    ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
+        let workspace = &self.workspace_manifest().workspace;
+        resolve_exclude_newer(
+            &workspace.exclude_newer,
+            self.prioritized_channels().into_values(),
+            channel_config,
+            &workspace.exclude_newer_package_overrides,
+            self.workspace_manifest().loaded_at,
+        )
+    }
+
+    /// Returns the effective PyPI exclude-newer solver configuration with absolute cutoffs.
+    fn pypi_exclude_newer_config_resolved(&self) -> ResolvedPypiExcludeNewer {
+        let workspace = &self.workspace_manifest().workspace;
+        resolve_pypi_exclude_newer(
+            &workspace.pypi_exclude_newer,
+            workspace.exclude_newer.cutoff,
+            &workspace.pypi_exclude_newer_package_overrides,
+            self.workspace_manifest().loaded_at,
+        )
     }
 
     /// Returns the strategy for solving packages.
-    fn solve_strategy(&self) -> rattler_solve::SolveStrategy {
-        rattler_solve::SolveStrategy::default()
+    ///
+    /// The chosen strategy is the first explicitly declared one in a feature
+    /// as they are provided by the [`HasFeaturesIter::features`] iterator.
+    ///
+    /// If no feature declares a strategy, the default value of [`SolveStrategy`] is used.
+    fn solve_strategy(&self) -> SolveStrategy {
+        self.features()
+            .flat_map(|feature| feature.solve_strategy)
+            .next()
+            .unwrap_or_default()
     }
 
     /// Returns the platforms that this collection is compatible with.
     ///
-    /// Which platforms a collection support depends on which platforms the
-    /// selected features of the collection supports. The platforms that are
-    /// supported by the collection is the intersection of the platforms
-    /// supported by its features.
+    /// On the subdir-only `[system-requirements]` path each subdir every
+    /// feature supports resolves to the platform composed from the union of the
+    /// virtual packages its features' referenced platforms declare (registered
+    /// up front during parsing).
     ///
-    /// Features can specify which platforms they support through the
-    /// `platforms` key. If a feature does not specify any platforms the
-    /// features defined by the project are used.
-    fn platforms(&self) -> HashSet<Platform> {
-        self.features()
-            .map(|feature| {
-                match &feature.platforms {
-                    Some(platforms) => platforms,
-                    None => &self.workspace_manifest().workspace.platforms,
-                }
+    /// Otherwise a workspace platform is supported when every selected feature
+    /// supports it by name or bare subdir. The bare-subdir shorthand only
+    /// widens: on subdirs where a feature pins a platform by exact name, only
+    /// the exactly pinned platforms remain, so a feature constrained to
+    /// `linux-64` does not drag a declared `linux-64-cuda` variant into the
+    /// environment (prefix-dev/pixi#6493) while a sibling feature pinning
+    /// that variant by name still selects it.
+    fn platforms(&self) -> HashSet<PixiPlatformName> {
+        let workspace = &self.workspace_manifest().workspace;
+        if workspace.use_platform_composition {
+            let features: Vec<&Feature> = self.features().collect();
+            let subdirs: IndexSet<Subdir> = workspace
+                .platforms
                 .iter()
-                .copied()
-                .collect::<HashSet<_>>()
+                .map(PixiPlatform::subdir)
+                .collect();
+            return subdirs
+                .into_iter()
+                .filter(|subdir| {
+                    features.iter().all(|feature| {
+                        feature_supports_subdir(feature, *subdir, &workspace.platforms)
+                    })
+                })
+                .filter_map(|subdir| {
+                    let name = combined_platform_name(&features, subdir, &workspace.platforms);
+                    workspace
+                        .platforms
+                        .iter()
+                        .find(|platform| platform.name().as_str() == name)
+                        .map(|platform| platform.name().clone())
+                })
+                .collect();
+        }
+        let exact_names: HashSet<&PixiPlatformName> = self
+            .features()
+            .filter_map(|feature| feature.platforms.as_ref())
+            .flatten()
+            .collect();
+        let exact_subdirs: HashSet<Subdir> = workspace
+            .platforms
+            .iter()
+            .filter(|platform| exact_names.contains(platform.name()))
+            .map(PixiPlatform::subdir)
+            .collect();
+        workspace
+            .platforms
+            .iter()
+            .filter(|platform| {
+                self.features()
+                    .all(|feature| feature.supports_platform(Some(platform)))
             })
-            .reduce(|accumulated_platforms, feat| {
-                accumulated_platforms.intersection(&feat).copied().collect()
+            .filter(|platform| {
+                exact_names.contains(platform.name()) || !exact_subdirs.contains(&platform.subdir())
             })
-            .unwrap_or_default()
+            .map(|platform| platform.name().clone())
+            .collect()
     }
 
-    /// Returns the system requirements for this collection.
-    ///
-    /// The system requirements of the collection are the union of the system
-    /// requirements of all the features in the collection. If multiple
-    /// features specify a requirement for the same system package, the
-    /// highest is chosen.
-    fn local_system_requirements(&self) -> SystemRequirements {
-        self.features()
-            .map(|feature| &feature.system_requirements)
-            .fold(SystemRequirements::default(), |acc, req| {
-                acc.union(req)
-                    .expect("system requirements should have been validated upfront")
-            })
+    /// Whether `feature` contributes to `platform` in this collection. On the
+    /// composition path a feature matches by subdir (so it applies to the
+    /// composed platform); otherwise it matches by name or bare subdir.
+    fn feature_supports_platform(
+        &self,
+        feature: &Feature,
+        platform: Option<&PixiPlatform>,
+    ) -> bool {
+        let Some(platform) = platform else {
+            return true;
+        };
+        let workspace = &self.workspace_manifest().workspace;
+        if workspace.use_platform_composition {
+            crate::platform_composition::feature_supports_platform(
+                feature,
+                platform,
+                &workspace.platforms,
+            )
+        } else {
+            feature.supports_platform(Some(platform))
+        }
     }
 
     /// Returns true if any of the features has any reference to a pypi
@@ -150,10 +246,13 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// features define a requirement for the same package that both
     /// requirements are returned. The different requirements per package
     /// are sorted in the same order as the features they came from.
-    fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
-        self.features()
+    fn pypi_dependencies<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> PyPiDependencies {
+        let deps: Vec<_> = self
+            .features()
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.pypi_dependencies(platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the dependencies to install for this collection.
@@ -165,10 +264,17 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ///
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
-    fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> CondaDependencies {
-        self.features()
+    fn dependencies<'a>(
+        &'a self,
+        kind: SpecType,
+        platform: Option<&'a PixiPlatform>,
+    ) -> CondaDependencies {
+        let deps: Vec<_> = self
+            .features()
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.dependencies(kind, platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the combined dependencies to install for this collection.
@@ -183,39 +289,90 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ///
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
-    fn combined_dependencies(&self, platform: Option<Platform>) -> CondaDependencies {
-        self.features()
+    fn combined_dependencies<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> CondaDependencies {
+        let deps: Vec<_> = self
+            .features()
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.combined_dependencies(platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
+    }
+
+    /// Returns the combined dev dependencies to install for this collection.
+    ///
+    /// Dev dependencies from all features in the group are collected and
+    /// merged. If multiple features define the same dev dependency, the
+    /// last one wins (later features override earlier ones).
+    fn combined_dev_dependencies<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> CondaDevDependencies {
+        let deps: Vec<_> = self
+            .features()
+            .filter(|f| self.feature_supports_platform(f, platform))
+            .filter_map(|f| f.dev_dependencies(platform))
+            .collect();
+
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
+    }
+
+    /// Returns the combined version constraints for this collection.
+    ///
+    /// Constraints from all features are combined. If multiple features define
+    /// a constraint for the same package, all constraints are retained and the
+    /// solver must satisfy all of them simultaneously.
+    ///
+    /// If the `platform` is `None`, no platform specific constraints are taken
+    /// into consideration.
+    fn combined_constraints<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> CondaConstraints {
+        let constraints: Vec<_> = self
+            .features()
+            .filter(|f| self.feature_supports_platform(f, platform))
+            .filter_map(|f| f.constraints(platform))
+            .collect();
+        DependencyMap::merge_all(constraints.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the pypi options for this collection.
     ///
-    /// The pypi options of all features are combined. They will be combined in
-    /// the order that they are defined in the manifest.
-    /// The index-url is a special case and can only be defined once. This
-    /// should have been verified beforehand.
+    /// The workspace-level pypi-options act as a base that always applies,
+    /// regardless of which features the environment includes (notably it still
+    /// applies when `no-default-feature = true`). Feature-level pypi-options
+    /// are unioned together and then overlaid on top of the workspace base:
+    /// single-assignment fields set by a feature override the workspace value,
+    /// while list-valued and union-like fields are merged.
+    ///
+    /// Multiple features may set the same single-assignment value (e.g. the
+    /// same `index-url`); conflicting feature-level values for the same
+    /// single-assignment field should have been rejected at parse time.
     fn pypi_options(&self) -> PypiOptions {
-        // Collect all the pypi-options from the features in one set,
-        // deduplicate them and sort them on feature index, default feature comes last.
-        let pypi_options: Vec<_> = self
-            .features()
-            .filter_map(|feature| {
-                if feature.pypi_options().is_none() {
-                    self.workspace_manifest().workspace.pypi_options.as_ref()
-                } else {
-                    feature.pypi_options()
-                }
-            })
-            .collect();
+        // The workspace-level pypi-options form the base that always applies.
+        let base = self
+            .workspace_manifest()
+            .workspace
+            .pypi_options
+            .clone()
+            .unwrap_or_default();
 
-        // Merge all the pypi options into one.
-        pypi_options
-            .into_iter()
+        // Union the feature-level pypi-options together. Equal single-value
+        // fields are permitted; conflicts are caught at parse time, so the
+        // `expect` is safe here.
+        let feature_opts = self
+            .features()
+            .filter_map(|feature| feature.pypi_options())
             .fold(PypiOptions::default(), |acc, opts| {
                 acc.union(opts)
                     .expect("merging of pypi-options should already have been checked")
-            })
+            });
+
+        // Overlay features on top of the workspace base: features win on
+        // single-assignment fields, lists and union-like fields are merged.
+        // Conflicting cutoffs of an extra index are caught at parse time.
+        base.overlay(&feature_opts)
+            .expect("merging of pypi-options should already have been checked")
     }
 }
 

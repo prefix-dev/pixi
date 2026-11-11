@@ -1,0 +1,14 @@
+[package]
+name = "package_a"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+# A platform-specific output so that the strong run-exports of the build
+# dependencies apply; a noarch output would only receive the noarch bucket.
+[package.build.config]
+noarch = false
+
+[package.build-dependencies]
+package_b = { path = "../package_b" }

@@ -4,11 +4,12 @@ use std::{
     ops::Range,
 };
 
-use crate::{KnownPreviewFeature, ManifestKind, WorkspaceManifest};
+use crate::{KnownPreviewFlag, ManifestKind, WorkspaceManifest};
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
 use pixi_pypi_spec::Pep508ToPyPiRequirementError;
 use pixi_toml::TomlDiagnostic;
+use pyproject_toml::ResolveError;
 use rattler_conda_types::{InvalidPackageNameError, version_spec::ParseVersionSpecError};
 use thiserror::Error;
 use toml_span::{DeserError, Error};
@@ -113,7 +114,11 @@ pub enum TomlError {
     #[error(transparent)]
     Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
     #[error(transparent)]
+    ResolveError(#[from] ResolveError),
+    #[error(transparent)]
     InvalidNonPackageDependencies(#[from] InvalidNonPackageDependencies),
+    InvalidFeature(String),
+    InvalidPlatform(String),
 }
 
 impl From<toml_span::Error> for TomlError {
@@ -132,13 +137,9 @@ impl Display for TomlError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TomlError::Error(err) => write!(f, "{}", err.message()),
-            TomlError::TomlError(err) => write!(f, "{}", err),
+            TomlError::TomlError(err) => write!(f, "{err}"),
             TomlError::NoPixiTable(manifest_kind, detail) => {
-                let filename = match manifest_kind {
-                    ManifestKind::Pyproject => "pyproject.toml",
-                    ManifestKind::Pixi => "pixi.toml",
-                    ManifestKind::MojoProject => "mojoproject.toml",
-                };
+                let filename = manifest_kind.file_name();
                 if let Some(detail) = detail {
                     write!(f, "Missing table in manifest {filename}:\n{detail}")
                 } else {
@@ -146,7 +147,7 @@ impl Display for TomlError {
                 }
             }
             TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
-            TomlError::Generic(err) => write!(f, "{}", &err.message),
+            TomlError::Generic(err) => write!(f, "{}", err.message),
             TomlError::FeatureNotEnabled(err) => write!(f, "{err}"),
             TomlError::TableError { part, table_name } => write!(
                 f,
@@ -163,6 +164,9 @@ impl Display for TomlError {
                 write!(f, "Could not convert pep508 to pixi pypi requirement")
             }
             TomlError::InvalidNonPackageDependencies(err) => write!(f, "{err}"),
+            TomlError::ResolveError(err) => write!(f, "{err}"),
+            TomlError::InvalidFeature(feature_name) => write!(f, "{feature_name} does not exist"),
+            TomlError::InvalidPlatform(name) => write!(f, "{name} is not a valid platform name"),
         }
     }
 }
@@ -189,7 +193,7 @@ pub struct FeatureNotEnabled {
 }
 
 impl FeatureNotEnabled {
-    pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFeature) -> Self {
+    pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFlag) -> Self {
         Self {
             feature: <&'static str>::from(feature).into(),
             message: message.into(),
@@ -205,7 +209,7 @@ impl FeatureNotEnabled {
 impl Diagnostic for FeatureNotEnabled {
     fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         Some(Box::new(format!(
-            "Add `preview = [\"{}\"]` under [workspace] to enable the preview feature",
+            "Run `pixi workspace preview add {}` to enable the preview flag",
             self.feature
         )))
     }
@@ -313,10 +317,13 @@ pub struct UnknownFeature {
 impl UnknownFeature {
     pub fn new(feature: String, manifest: impl Borrow<WorkspaceManifest>) -> Self {
         // Find the top 2 features that are closest to the feature name.
+        // Features synthesized for inline environment content cannot be
+        // referenced, so they are never suggested.
         let existing_features = manifest
             .borrow()
             .features
             .keys()
+            .filter(|f| !f.is_environment())
             .filter_map(|f| {
                 let distance = strsim::jaro(f.as_str(), &feature);
                 (distance > 0.6).then_some((distance, f))
@@ -374,20 +381,5 @@ impl Diagnostic for InvalidNonPackageDependencies {
         Some(Box::new(self.invalid_dependency_sections.iter().map(
             |range| LabeledSpan::new_with_span(None, SourceSpan::from(range.clone())),
         )))
-    }
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[error("an error occurred while parsing the manifest")]
-pub struct MultiTomlError {
-    #[related]
-    pub errors: Vec<TomlError>,
-}
-
-impl From<DeserError> for MultiTomlError {
-    fn from(value: DeserError) -> Self {
-        Self {
-            errors: value.errors.into_iter().map(Into::into).collect(),
-        }
     }
 }

@@ -1,0 +1,359 @@
+use clap::Parser;
+use fancy_display::FancyDisplay;
+use itertools::Itertools;
+use pixi_config::ConfigCli;
+use pixi_core::{
+    UpdateLockFileOptions,
+    environment::{InstallFilter, LockFileSource, get_lock_file_and_prefixes},
+    lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
+};
+use pixi_manifest::PixiPlatformName;
+use std::fmt::Write;
+
+use crate::cli_config::ScriptWorkspaceConfig;
+use crate::shared::install_platform::resolve_install_platform;
+use pixi_manifest::platform::host::host_baseline;
+
+/// Install an environment.
+///
+/// This command installs an environment, if the lock file is not up-to-date it
+/// will be updated.
+///
+/// `pixi install` only installs one environment at a time,
+/// if you have multiple environments you can select the right one with the
+/// `--environment` flag. If you don't provide an environment, the `default`
+/// environment will be installed.
+///
+/// If you want to install all environments, you can use the `--all` flag.
+///
+/// Running `pixi install` is not required before running other commands like
+/// `pixi run` or `pixi shell`. These commands will automatically install the
+/// environment if it is not already installed.
+///
+/// You can use `pixi reinstall` to reinstall all environments, one environment
+/// or just some packages of an environment.
+///
+/// `pixi install --script` installs a PEP 723 script's environment without
+/// running the script. It uses the same environment as `pixi run --script`.
+/// Pixi updates an adjacent lock file when one exists. Otherwise, it updates
+/// the cached resolution.
+#[derive(Parser, Debug)]
+pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
+    pub workspace_config: ScriptWorkspaceConfig,
+
+    #[clap(flatten)]
+    pub lock_file_usage: crate::LockFileUsageConfig,
+
+    /// The environment to install
+    #[arg(long, short)]
+    pub environment: Option<Vec<String>>,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
+
+    /// Install all environments
+    #[arg(long, short, conflicts_with = "environment")]
+    pub all: bool,
+
+    /// Install for the given platform; a warning is printed when it
+    /// doesn't run on this machine.
+    #[arg(long, short)]
+    pub platform: Option<PixiPlatformName>,
+
+    /// Skip installation of specific packages present in the lock file. This
+    /// uses a soft exclusion: the package will be skipped but its dependencies
+    /// are installed.
+    #[arg(long)]
+    pub skip: Option<Vec<String>>,
+
+    /// Skip a package and its entire dependency subtree. This performs a hard
+    /// exclusion: the package and its dependencies are not installed unless
+    /// reachable from another non-skipped root.
+    #[arg(long)]
+    pub skip_with_deps: Option<Vec<String>>,
+
+    /// Install and build only these package(s) and their dependencies. Can be
+    /// passed multiple times.
+    #[arg(long)]
+    pub only: Option<Vec<String>>,
+}
+
+const SKIP_CUTOFF: usize = 5;
+
+impl Args {
+    /// Rejects workspace environment selectors when installing a script.
+    fn validate_script_options(&self) -> miette::Result<()> {
+        if self.workspace_config.script.is_none() {
+            return Ok(());
+        }
+
+        let mut unsupported = Vec::new();
+        if self.environment.is_some() {
+            unsupported.push("--environment");
+        }
+        if self.all {
+            unsupported.push("--all");
+        }
+
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(miette::miette!(
+                help = "A PEP 723 script has one implicit default environment.",
+                "`pixi install --script` does not support {}",
+                unsupported.join(", ")
+            ))
+        }
+    }
+}
+
+pub async fn execute(args: Args) -> miette::Result<()> {
+    args.validate_script_options()?;
+
+    let mut workspace = crate::workspace_locator()
+        .with_global_config_source(args.config_source.source())
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_cli_config(args.config.clone())
+        .locate()
+        .await?;
+
+    // Apply backend override if provided (primarily for testing)
+    if let Some(backend_override) = args
+        .workspace_config
+        .workspace_config
+        .backend_override
+        .clone()
+    {
+        workspace = workspace.with_backend_override(backend_override);
+    }
+
+    let target_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
+
+    // Install either:
+    //
+    // 1. specific environments
+    // 2. all environments
+    // 3. default environment (if no environments are specified)
+    let envs = if let Some(envs) = args.environment {
+        envs
+    } else if args.all {
+        workspace
+            .environments()
+            .iter()
+            .map(|env| env.name().to_string())
+            .collect()
+    } else {
+        vec![workspace.default_environment().name().to_string()]
+    };
+
+    // Get the environments by name
+    let mut environments = envs
+        .into_iter()
+        .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // When installing all environments, silently skip any that don't support
+    // the current platform. When the user explicitly asks for an environment
+    // (or the default), we still want to surface the platform error.
+    if args.all {
+        workspace.refresh_environment_hosts().await?;
+        let (supported, skipped): (Vec<_>, Vec<_>) = environments
+            .into_iter()
+            .partition(|env| env.best_declared_platform().is_some());
+
+        if !skipped.is_empty() {
+            tracing::warn!(
+                "Skipping environment(s) that do not support the current platform: {}",
+                skipped
+                    .iter()
+                    .map(|env| env.name().fancy_display().to_string())
+                    .join(", ")
+            );
+        }
+
+        environments = supported;
+    }
+
+    // Build the install filter from CLI args
+    let filter = InstallFilter::new()
+        .skip_direct(args.skip.clone().unwrap_or_default())
+        .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
+        .target_packages(args.only.clone().unwrap_or_default());
+
+    // Resolve the lock data and install the selected prefixes. Scripts use an
+    // adjacent lock file when one exists. Otherwise, they use the cached
+    // resolution. Other workspaces update their persistent lock file.
+    let update_lock_file_options = UpdateLockFileOptions {
+        lock_file_usage: args.lock_file_usage.to_usage(),
+        no_install: false,
+        max_concurrent_solves: workspace.config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    let (LockFileDerivedData { lock_file, .. }, prefixes) = get_lock_file_and_prefixes(
+        &environments,
+        target_platform.as_ref(),
+        Some(pixi_reporters::TopLevelProgress::from_global()),
+        UpdateMode::Revalidate,
+        if args.workspace_config.script.is_some() {
+            LockFileSource::Resolve(update_lock_file_options)
+        } else {
+            LockFileSource::Update(update_lock_file_options)
+        },
+        ReinstallPackages::default(),
+        &filter,
+    )
+    .await?;
+
+    // Message what's installed
+    let mut message = console::style(console::Emoji("✔ ", "")).green().to_string();
+
+    let skip_opts = args.skip.is_some()
+        || args.skip_with_deps.is_some()
+        || args.only.as_ref().is_some_and(|v| !v.is_empty());
+
+    if let Ok(Some(environment)) = environments.iter().at_most_one() {
+        if args.workspace_config.script.is_some() {
+            write!(&mut message, "The script environment has been installed")
+                .expect("failed to write into message buffer");
+        } else {
+            write!(
+                &mut message,
+                "The {} environment has been installed",
+                environment.name().fancy_display(),
+            )
+            .expect("failed to write into message buffer");
+        }
+
+        if skip_opts {
+            // Use the platform the install actually targeted (honoring a
+            // `--platform` override), falling back to the host subdir. Unlike
+            // `best_declared_platform()`, this never panics when the chosen platform is
+            // not runnable on the current host (e.g. a cross-target install).
+            let host_platform = host_baseline();
+            let platform = environment
+                .named_or_best_declared_platform(target_platform.as_ref())
+                .unwrap_or(&host_platform);
+            let locked_env = lock_file
+                .environment(environment.name().as_str())
+                .expect("lock file is missing installed environment");
+
+            let names = PackageFilterNames::new(&filter, locked_env, platform).unwrap_or_default();
+
+            let num_skipped = names.ignored.len();
+            let num_retained = names.retained.len();
+
+            // When only is set, also print the number of packages that will be installed
+            if args.only.as_ref().is_some_and(|v| !v.is_empty()) {
+                write!(&mut message, ", including {num_retained} packages")
+                    .expect("failed to write into message buffer");
+            }
+
+            // Create set of unmatched packages, that matches the skip filter
+            let (matched, unmatched): (Vec<_>, Vec<_>) = args
+                .skip
+                .iter()
+                .flatten()
+                .chain(args.skip_with_deps.iter().flatten())
+                .partition(|name| names.ignored.contains(*name));
+
+            if !unmatched.is_empty() {
+                tracing::warn!(
+                    "The skipped arg(s) '{}' did not match any packages in the lock file",
+                    unmatched.into_iter().join(", ")
+                );
+            }
+
+            if num_skipped > 0 {
+                if num_skipped < SKIP_CUTOFF {
+                    let mut skipped_packages_vec: Vec<_> = names.ignored.into_iter().collect();
+                    skipped_packages_vec.sort();
+
+                    write!(
+                        &mut message,
+                        " excluding '{}'",
+                        skipped_packages_vec.join("', '")
+                    )
+                    .expect("failed to write into message buffer");
+                } else if matched.is_empty() {
+                    write!(&mut message, " excluding {num_skipped} other packages")
+                        .expect("failed to write into message buffer");
+                } else {
+                    write!(
+                        &mut message,
+                        " excluding '{}' and {} other packages",
+                        matched.into_iter().join("', '"),
+                        num_skipped
+                    )
+                    .expect("failed to write into message buffer");
+                }
+            }
+        }
+    } else {
+        let env = environments
+            .iter()
+            .format_with(", ", |e, f| f(&e.name().fancy_display()));
+        write!(
+            &mut message,
+            "The following environments have been installed: {env}",
+        )
+        .expect("failed to write into message buffer");
+    }
+
+    if args.workspace_config.script.is_some() {
+        // Script environments live in the cache, not in the workspace, so the
+        // location is not otherwise discoverable.
+        if let Some(prefix) = prefixes.first() {
+            write!(
+                &mut message,
+                " at '{}'",
+                console::style(prefix.root().display()).bold()
+            )
+            .expect("failed to write into message buffer");
+        }
+    } else if let Ok(Some(path)) = workspace.config().detached_environments_dir() {
+        write!(
+            &mut message,
+            " in '{}'",
+            console::style(path.display()).bold()
+        )
+        .expect("failed to write into message buffer");
+    }
+
+    eprintln!("{message}.");
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use clap::Parser;
+
+    use super::Args;
+
+    #[test]
+    fn accepts_a_script_workspace() {
+        let args = Args::try_parse_from(["install", "--script", "example.py"]).unwrap();
+        assert_eq!(
+            args.workspace_config.script.as_deref(),
+            Some(Path::new("example.py"))
+        );
+        assert!(args.validate_script_options().is_ok());
+    }
+
+    #[test]
+    fn rejects_environment_selectors_with_a_script() {
+        for selector in [["--environment", "test"].as_slice(), ["--all"].as_slice()] {
+            let args =
+                Args::try_parse_from(["install", "--script", "example.py"].iter().chain(selector))
+                    .unwrap();
+            let error = args.validate_script_options().unwrap_err();
+            assert!(error.to_string().contains(selector[0]), "{error}");
+        }
+    }
+}

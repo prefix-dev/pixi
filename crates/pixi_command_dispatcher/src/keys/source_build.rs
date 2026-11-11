@@ -1,0 +1,1592 @@
+//! Compute-engine Key that builds a source record into a `.conda` artifact.
+//! Build/host envs come pre-resolved on the input record, so no nested
+//! solves run here. Caching is two-tiered: a content-addressed artifact
+//! cache (hit returns the cached `.conda`) and a workspace cache that
+//! gives the backend a stable incremental-build location across runs
+//! sharing the same deps.
+
+use std::{
+    collections::{BTreeMap, HashSet},
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::Arc,
+};
+
+use derive_more::Display;
+use futures::{SinkExt, channel::mpsc::unbounded};
+use pixi_build_discovery::{BackendSpec, EnabledProtocols};
+use pixi_build_types::procedures::{
+    conda_build_v1::CondaPackageFormat,
+    conda_outputs::{CondaOutput, CondaOutputsParams},
+};
+use pixi_compute_engine::{ComputeCtx, Key};
+use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
+use pixi_variant::VariantSelector;
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, PackageName, PackageRecord, RepoDataRecord, Subdir,
+    package::DistArchiveIdentifier, prefix::Prefix,
+};
+use rattler_digest::Sha256Hash;
+use tracing::instrument;
+use url::Url;
+use xxhash_rust::xxh3::Xxh3;
+
+pub use crate::cache::{ArtifactCache, WorkspaceCache};
+use crate::cache::{
+    ArtifactCacheError, CacheLookup, SourceMutability,
+    artifact::ImmutableBackend,
+    compute_artifact_cache_key, compute_workspace_key,
+    markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
+};
+use crate::{
+    BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
+    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment,
+    BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
+    PrefixPlatformMismatchError, PrefixRecordOrigin, ProjectModelOverrides, SourceBuildError,
+    SourceBuildPrefixKind,
+    build::{Dependencies, PixiRunExports, convert_extra_dependencies},
+    compute_data::{HasGateway, HasIoConcurrencySemaphore},
+    injected_config::{ChannelConfigKey, EnabledProtocolsKey},
+    inline_package::discover_backend,
+    instantiate_backend_key::resolve_immutable_backend_identifier_from_spec,
+};
+use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_sources::SourceCheckoutExt;
+
+/// Unwrap a `CommandDispatcherError<E>` produced by a `ctx.*` ext call.
+/// Cancellation is handled at the engine layer, so it shouldn't reach
+/// here; treat it as a programming error.
+fn unwrap_dispatcher_err<E>(err: CommandDispatcherError<E>) -> E {
+    match err {
+        CommandDispatcherError::Failed(e) => e,
+        CommandDispatcherError::Cancelled => {
+            unreachable!("compute-engine cancellation does not surface inside a Key compute body")
+        }
+    }
+}
+
+/// Hash the *contents* of the user-provided variant files before checkout. If
+/// a file cannot be read, the checkout-free path is disabled rather than
+/// keying an artifact without one of its static build inputs.
+///
+/// Only the contents go into the key, in declaration order (later files
+/// override earlier ones). The paths themselves are deliberately excluded:
+/// they are absolute, so including them would tie every cached artifact to
+/// one workspace location for no gain -- what the build reads is the content.
+fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<u64>> {
+    spec.variant_files
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|path| {
+            let file = fs_err::File::open(path).ok()?;
+            crate::file_fingerprint::hash_file_contents(file).ok()
+        })
+        .collect()
+}
+
+/// Synthetic backend identifier standing in for the real one in the
+/// checkout-free artifact cache key.
+///
+/// The real identifier is only known after a checkout, so this covers the
+/// build inputs that a checkout would otherwise have pinned. Fields are
+/// listed explicitly rather than hashing [`SourceBuildSpec`] wholesale: the
+/// spec carries values that are *not* stable across processes, and folding
+/// one of those in silently turns every lookup into a miss.
+///
+/// The user-supplied project-model overrides (build string prefix and build
+/// number) are hashed here rather than in [`compute_artifact_cache_key`]:
+/// that function now folds in the *discovered* project model and
+/// configuration, both of which require a checkout to obtain. On the
+/// checkout-free path the pinned (content-addressed) manifest source already
+/// pins the project model and configuration via the record, so only the
+/// overrides remain to be captured here.
+///
+/// Deliberately **not** hashed:
+///
+/// - `exclude_newer`, whose `ResolvedExcludeNewer::cutoff` is derived from
+///   `Utc::now()` for a relative `exclude-newer` and therefore differs on
+///   every invocation. It only influences which backend gets solved, and
+///   that is already validated on lookup by re-solving the recorded backend
+///   and comparing its `env@…` identifier.
+/// - Anything [`compute_artifact_cache_key`] already folds in itself: the
+///   record, both platforms, the package format, and the inline content
+///   hash. (`InlinePackage` hashes as just its `content_hash`, so
+///   `spec.inline` would be redundant.)
+fn immutable_backend_identifier(
+    spec: &SourceBuildSpec,
+    variant_file_hashes: &[u64],
+    enabled_protocols: &EnabledProtocols,
+    channel_config: &ChannelConfig,
+    project_model_overrides: &ProjectModelOverrides,
+) -> String {
+    let mut hasher = Xxh3::new();
+    "immutable-artifact-v5".hash(&mut hasher);
+    project_model_overrides.hash(&mut hasher);
+    spec.channels.hash(&mut hasher);
+    spec.build_profile.hash(&mut hasher);
+    spec.variant_configuration.hash(&mut hasher);
+    // Virtual packages are absent from `compute_artifact_cache_key`, but a
+    // backend may select variants on them (`__cuda`, `__glibc`), so an
+    // artifact built against one set must not be reused for another.
+    // This is an extra defensive check, as differently selected variants
+    // should already be captured by
+    // `compute_artifact_cache_key`’s `build_packages`/`host_packages`.
+    spec.build_environment
+        .build_virtual_packages
+        .hash(&mut hasher);
+    spec.build_environment
+        .host_virtual_packages
+        .hash(&mut hasher);
+    variant_file_hashes.hash(&mut hasher);
+    enabled_protocols.hash(&mut hasher);
+    // Both halves of the channel config matter: `channel_alias` expands bare
+    // channel names, and `root_dir` resolves relative ones. The artifact
+    // cache is normally workspace-local, which would make `root_dir`
+    // constant, but `CacheBase::Workspace` falls back to the global root when
+    // no workspace is configured, so entries keyed here can be shared between
+    // different roots.
+    channel_config.channel_alias.hash(&mut hasher);
+    channel_config.root_dir.hash(&mut hasher);
+    format!("immutable@{:016x}", hasher.finish())
+}
+
+/// Hashable inputs to a source build. Runtime concerns (reporters, log
+/// sinks, force-rebuild) stay out of the spec; force-rebuild wipes the
+/// artifact-cache entry before calling the Key.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct SourceBuildSpec {
+    /// `build_packages` and `host_packages` are expected to be populated
+    /// upstream.
+    pub record: Arc<UnresolvedSourceRecord>,
+
+    pub channels: Vec<ChannelUrl>,
+
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
+
+    pub build_environment: BuildEnvironment,
+
+    pub build_profile: BuildProfile,
+
+    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
+
+    pub variant_files: Option<Vec<PathBuf>>,
+
+    /// User-supplied build string prefix forwarded to the backend's
+    /// project model. Overrides any value declared in the manifest.
+    pub build_string_prefix: Option<String>,
+
+    /// User-supplied build number forwarded to the backend's project
+    /// model. Overrides any value declared in the manifest.
+    pub build_number: Option<u64>,
+
+    /// Archive format and compression level. `None` lets the backend pick.
+    /// Folds into the artifact cache key but not the workspace key, so
+    /// different formats share build state but get distinct artifacts.
+    pub package_format: Option<CondaPackageFormat>,
+
+    /// Inline package definition for this source. Repopulated from
+    /// the consuming manifest by the installer; when set, the backend is built
+    /// from it instead of discovering a manifest in the checkout.
+    pub inline: Option<crate::InlinePackage>,
+}
+
+/// Built artifact plus its sha256 and a
+/// [`RepoDataRecord`]. `artifact_sha256` propagates into dependents'
+/// cache keys for transitive invalidation.
+#[derive(Debug, Clone)]
+pub struct SourceBuildResult {
+    pub artifact: PathBuf,
+
+    pub artifact_sha256: Sha256Hash,
+
+    /// `url` points at [`Self::artifact`]; `sha256` matches
+    /// [`Self::artifact_sha256`].
+    pub record: RepoDataRecord,
+}
+
+#[derive(Clone, Debug, Display, Eq, Hash, PartialEq)]
+#[display("{}", _0.record.name().as_source())]
+pub struct SourceBuildKey(pub Arc<SourceBuildSpec>);
+
+impl SourceBuildKey {
+    pub fn new(spec: SourceBuildSpec) -> Self {
+        Self(Arc::new(spec))
+    }
+}
+
+impl Key for SourceBuildKey {
+    type Value = Result<Arc<SourceBuildResult>, SourceBuildError>;
+
+    #[instrument(
+        skip_all,
+        name = "source-build",
+        fields(
+            package = %self.0.record.name().as_source(),
+            host_platform = %self.0.build_environment.host_platform,
+        )
+    )]
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let spec = self.0.clone();
+        compute_inner(ctx, spec).await.map(Arc::new)
+    }
+}
+
+/// Core body of [`SourceBuildKey::compute`]. Separated out to keep error
+/// mapping + reporter scaffolding orthogonal to the pipeline itself.
+async fn compute_inner(
+    ctx: &mut ComputeCtx,
+    spec: Arc<SourceBuildSpec>,
+) -> Result<SourceBuildResult, SourceBuildError> {
+    // Results are collected in a stable (build, host) order so the
+    // artifact cache key stays deterministic across buckets. The full
+    // build results feed the prefix installs below so the source deps
+    // are not built a second time through the installer.
+    let (build_source_dep_results, host_source_dep_results) =
+        recurse_source_deps(ctx, &spec).await?;
+    let build_source_dep_sha256s: Vec<Sha256Hash> = build_source_dep_results
+        .iter()
+        .map(|result| result.artifact_sha256)
+        .collect();
+    let host_source_dep_sha256s: Vec<Sha256Hash> = host_source_dep_results
+        .iter()
+        .map(|result| result.artifact_sha256)
+        .collect();
+
+    let project_model_overrides = ProjectModelOverrides {
+        build_string_prefix: spec.build_string_prefix.clone(),
+        build_number: spec.build_number,
+    };
+    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
+    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
+        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
+    let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
+    let channel_config = ctx.compute(&ChannelConfigKey).await;
+    // Backend overrides are *not* checked here. An overridden backend is a
+    // `CommandSpec::System` after `ResolvedBackendCommandKey` re-applies the
+    // override, and `resolve_immutable_backend_identifier_from_spec` returns
+    // `None` for anything that is not an `EnvironmentSpec`, so an overridden
+    // backend already declines the checkout-free path on its own. Gating on
+    // "any backend is overridden" instead would disable the optimisation for
+    // every package in the workspace as soon as one unrelated backend is
+    // pointed at a local binary.
+    let immutable_cache_key = (!spec.record.has_mutable_source())
+        .then(|| immutable_variant_file_hashes(&spec))
+        .flatten()
+        .map(|variant_file_hashes| {
+            let immutable_identifier = immutable_backend_identifier(
+                &spec,
+                &variant_file_hashes,
+                &enabled_protocols,
+                &channel_config,
+                &project_model_overrides,
+            );
+            // The discovered project model and configuration require a
+            // checkout, which this path deliberately avoids. For an immutable
+            // (content-addressed) source both are pinned by the record, and
+            // the user overrides are folded into `immutable_identifier`, so a
+            // `None` model hash and the default configuration hash are safe
+            // here.
+            compute_artifact_cache_key(
+                &spec.record,
+                spec.build_environment.build_platform,
+                spec.build_environment.host_platform,
+                &immutable_identifier,
+                None,
+                crate::input_hash::ConfigurationHash::default(),
+                &build_source_dep_sha256s,
+                &host_source_dep_sha256s,
+                spec.package_format,
+                spec.inline.as_ref().map(|inline| inline.content_hash),
+            )
+        });
+
+    // this is the checkout-free path: we have a cache hit for the immutable artifact,
+    // so we return early before checking out the repo
+    if let Some(key) = immutable_cache_key.as_ref()
+        && let Some(backend) = artifact_cache
+            .immutable_backend(spec.record.name(), key)
+            .await
+        && let Ok(Some(identifier)) = resolve_immutable_backend_identifier_from_spec(
+            ctx,
+            backend.spec(),
+            spec.exclude_newer.clone(),
+        )
+        .await
+        && let Some(hit) = artifact_cache
+            .lookup_immutable(spec.record.name(), key, &backend, &identifier)
+            .await
+    {
+        tracing::debug!(
+            package = %spec.record.name().as_source(),
+            key = %key,
+            artifact = %hit.artifact.display(),
+            "checkout-free artifact cache hit",
+        );
+        return Ok(SourceBuildResult {
+            artifact: hit.artifact,
+            artifact_sha256: hit.sha256,
+            record: hit.record,
+        });
+    }
+
+    let manifest_source = spec.record.manifest_source.clone();
+    let manifest_checkout = ctx
+        .checkout_pinned_source(manifest_source.clone())
+        .await
+        .map_err(SourceBuildError::SourceCheckout)?;
+    let build_source_checkout = match spec.record.build_source.as_ref() {
+        Some(pinned) => ctx
+            .checkout_pinned_source(pinned.pinned().clone())
+            .await
+            .map_err(SourceBuildError::SourceCheckout)?,
+        None => manifest_checkout.clone(),
+    };
+
+    // Resolve a stable backend identifier WITHOUT spawning the JSON-RPC
+    // backend. Goes through the same dependency-resolution Keys
+    // (`DiscoveredBackendKey` -> `ResolvedBackendCommandKey` ->
+    // `EphemeralEnvKey` for env-spec backends) so when a real
+    // instantiation runs later in the same process the work is shared
+    // via the engine's dedup; what's skipped here is the spawn,
+    // JSON-RPC handshake, and activator run.
+    //
+    // We need this identifier only to form the artifact cache key — on
+    // a cache hit there's no further reason to talk to a backend, so
+    // doing the spawn before the lookup is pure waste.
+    let manifest_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+    let build_source_dir = build_source_checkout
+        .path
+        .as_dir_or_file_parent()
+        .to_path_buf();
+    let discovered_backend_identifier = crate::resolve_backend_identifier(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        manifest_anchor.clone(),
+        spec.exclude_newer.clone(),
+        spec.inline.as_ref(),
+    )
+    .await
+    .map_err(|err: Arc<crate::InstantiateBackendError>| {
+        SourceBuildError::Initialize((*err).clone())
+    })?;
+    // Discovery is content-addressed, so this only retrieves the descriptor
+    // used by the identifier resolution above.
+    let discovered = discover_backend(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        spec.inline.as_ref(),
+    )
+    .await
+    .map_err(|err| SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err)))?;
+    let BackendSpec::JsonRpc(backend_spec) = discovered
+        .backend_spec
+        .clone()
+        .resolve(manifest_anchor.clone());
+    let immutable_backend = if immutable_cache_key.is_some() {
+        resolve_immutable_backend_identifier_from_spec(
+            ctx,
+            backend_spec.clone(),
+            spec.exclude_newer.clone(),
+        )
+        .await
+        .map_err(|err| SourceBuildError::Initialize((*err).clone()))?
+        .and_then(|identifier| ImmutableBackend::new(identifier, backend_spec.clone()))
+    } else {
+        None
+    };
+    // Complex environment specs and non-environment backends retain the
+    // existing backend-keyed path.
+    let immutable_cache_key = immutable_backend.as_ref().and(immutable_cache_key);
+    let backend_identifier = immutable_backend
+        .as_ref()
+        .map(|backend| backend.identifier.clone())
+        .unwrap_or(discovered_backend_identifier);
+
+    // Cache key covers structural identity + dep content addresses;
+    // source-file freshness lives in the sidecar, not the key.
+    let project_model_with_overrides =
+        project_model_overrides.apply(discovered.init_params.project_model.clone());
+    let project_model_with_overrides_hash = project_model_with_overrides
+        .as_ref()
+        .map(crate::input_hash::ProjectModelHash::from);
+    let configuration_hash = crate::input_hash::ConfigurationHash::compute(
+        discovered.init_params.configuration.as_ref(),
+        discovered.init_params.target_configuration.as_ref(),
+    );
+    let cache_key = immutable_cache_key.clone().unwrap_or_else(|| {
+        compute_artifact_cache_key(
+            &spec.record,
+            spec.build_environment.build_platform,
+            spec.build_environment.host_platform,
+            &backend_identifier,
+            project_model_with_overrides_hash,
+            configuration_hash,
+            &build_source_dep_sha256s,
+            &host_source_dep_sha256s,
+            spec.package_format,
+            spec.inline.as_ref().map(|inline| inline.content_hash),
+        )
+    });
+
+    // On artifact cache hit, return without invoking the backend.
+    // Force-rebuild is handled by wiping the cache entry before calling;
+    // this body honors whatever state it finds on disk.
+    let source_dir = build_source_checkout
+        .path
+        .as_dir_or_file_parent()
+        .to_path_buf();
+    // Only path pins are mutable; a git commit or url archive pin fully
+    // determines the source content, so the artifact key alone suffices.
+    let mutability = if spec.record.has_mutable_source() {
+        SourceMutability::Mutable
+    } else {
+        SourceMutability::Immutable
+    };
+    let cached = if let Some(backend) = immutable_backend.as_ref() {
+        artifact_cache
+            .lookup_immutable(spec.record.name(), &cache_key, backend, &backend_identifier)
+            .await
+    } else {
+        match artifact_cache
+            .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
+            .await
+            .map_err(map_cache_err)?
+        {
+            CacheLookup::Hit(hit) => Some(hit),
+            CacheLookup::Miss(reason) => {
+                tracing::debug!(
+                    package = %spec.record.name().as_source(),
+                    key = %cache_key,
+                    reason = %reason,
+                    "artifact cache miss, rebuilding",
+                );
+                None
+            }
+        }
+    };
+    if let Some(hit) = cached {
+        tracing::debug!(
+            package = %spec.record.name().as_source(),
+            artifact = %hit.artifact.display(),
+            "artifact cache hit",
+        );
+        return Ok(SourceBuildResult {
+            artifact: hit.artifact,
+            artifact_sha256: hit.sha256,
+            record: hit.record,
+        });
+    }
+
+    // Cache miss: now spawn the backend. `InstantiateBackendKey`
+    // re-uses the discovery / ephemeral-env work the identifier
+    // resolve already cached, so this only pays for the JSON-RPC
+    // spawn + handshake + activator.
+    let backend = ctx
+        .compute(
+            &InstantiateBackendKey::new(
+                manifest_checkout.path.as_std_path(),
+                crate::build_backend_metadata::checkout_root_for(&manifest_checkout),
+                manifest_anchor.clone(),
+                build_source_dir,
+                spec.exclude_newer.clone(),
+            )
+            .with_project_model_overrides(project_model_overrides)
+            .with_inline(spec.inline.clone()),
+        )
+        .await
+        .map_err(|err: Arc<crate::InstantiateBackendError>| {
+            SourceBuildError::Initialize((*err).clone())
+        })?;
+
+    // The backend build directory is reused when the source, dependencies,
+    // variants, backend, and package and build settings match.
+    // `package_format` is intentionally not included: differently-encoded
+    // outputs of the same build can share the same workdir.
+    let workspace_key = compute_workspace_key(
+        &spec.record,
+        spec.build_environment.build_platform,
+        spec.build_environment.host_platform,
+        &backend_identifier,
+        project_model_with_overrides_hash,
+        configuration_hash,
+    );
+    let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;
+    let workspace_cache = WorkspaceCache::new(workspaces_dir.as_std_path());
+    // ensure_dir_locked holds an exclusive cross-process lock for the
+    // guard's lifetime, so a concurrent pixi process building the same
+    // (source, deps, variants, backend) combination blocks here.
+    let workspace_guard = workspace_cache
+        .ensure_dir_locked(spec.record.name(), &workspace_key)
+        .await
+        .map_err(|err| SourceBuildError::CreateWorkDirectory(Arc::new(err)))?;
+    let work_directory = workspace_guard.path().to_path_buf();
+
+    // Find the output matching our (name, variants) pair. Caching this
+    // call is future work; see BuildBackendMetadataKey for a shape that
+    // could dedup.
+    let (output, build_variant) = fetch_matching_output(&backend, &spec, &work_directory).await?;
+
+    // Source entries were already built by `recurse_source_deps`; hand
+    // their binary records to `install_prefix` so the installer links
+    // them instead of triggering another build. Build and host packages
+    // come pre-resolved on the input record (v7+ lock file), so the two
+    // installs are independent and can run concurrently.
+    let build_source_dep_records = records_by_name(&build_source_dep_results);
+    let host_source_dep_records = records_by_name(&host_source_dep_results);
+    let directories = Directories::new(&work_directory, spec.build_environment.host_platform);
+    let ((build_records, _build_install_result), (host_records, _host_install_result)) = ctx
+        .try_compute2(
+            async |ctx| {
+                install_prefix(
+                    ctx,
+                    &spec,
+                    SourceBuildPrefixKind::Build,
+                    directories.build_prefix.clone(),
+                    spec.record.build_packages.clone(),
+                    &build_source_dep_records,
+                )
+                .await
+            },
+            async |ctx| {
+                install_prefix(
+                    ctx,
+                    &spec,
+                    SourceBuildPrefixKind::Host,
+                    directories.host_prefix.clone(),
+                    spec.record.host_packages.clone(),
+                    &host_source_dep_records,
+                )
+                .await
+            },
+        )
+        .await?;
+
+    // Resolve `pin_compatible` markers against the build/host records we
+    // just produced. Visibility ordering:
+    // - build deps see no compat records (can't pin_compatible inside
+    //   the env being defined)
+    // - host deps see build records
+    // - run deps (+ run_exports) see build + host records
+    let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
+    let mut build_pixi_records: Vec<PixiRecord> = build_records
+        .iter()
+        .cloned()
+        .map(|r| PixiRecord::Binary(Arc::new(r)))
+        .collect();
+    let mut host_pixi_records: Vec<PixiRecord> = host_records
+        .iter()
+        .cloned()
+        .map(|r| PixiRecord::Binary(Arc::new(r)))
+        .collect();
+
+    // Resolve build dependencies first; the build env can't reference
+    // pin-compatible markers against anything (it's the env being defined)
+    // so we hand `Dependencies::new` an empty compatibility map.
+    let build_dependencies = output
+        .build_dependencies
+        .as_ref()
+        .map(|deps| {
+            Dependencies::new(
+                deps,
+                Some(source_anchor.clone()),
+                &std::collections::HashMap::new(),
+            )
+        })
+        .transpose()
+        .map_err(SourceBuildError::from)?
+        .unwrap_or_default();
+
+    // Extract run-exports from the build env now so the host
+    // dependencies (and ultimately the run dependencies) can incorporate
+    // them. Without this step the backend receives the raw
+    // `run_dependencies` from the output and the resulting
+    // `info/index.json` `depends` array is missing any dependencies
+    // contributed by build / host packages' run-exports.
+    let gateway = ctx.global_data().gateway().clone();
+    let build_run_exports = build_dependencies
+        .extract_run_exports(
+            &mut build_pixi_records,
+            &output.ignore_run_exports,
+            &gateway,
+            None,
+        )
+        .await
+        .map_err(|err| SourceBuildError::RunExportsExtraction("build".into(), Arc::new(err)))?;
+
+    let mut compat_map: std::collections::HashMap<rattler_conda_types::PackageName, &PixiRecord> =
+        std::collections::HashMap::new();
+    for r in &build_pixi_records {
+        compat_map.insert(r.name().clone(), r);
+    }
+
+    let host_dependencies = output
+        .host_dependencies
+        .as_ref()
+        .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compat_map))
+        .transpose()
+        .map_err(SourceBuildError::from)?
+        .unwrap_or_default()
+        // Apply strong build run-exports to host so they are part of the
+        // host env solve. They stay marked as run-export-sourced, so the
+        // extraction below does not treat them as direct dependencies.
+        .extend_with_run_exports_from_build(&build_run_exports);
+
+    let host_run_exports = host_dependencies
+        .extract_run_exports(
+            &mut host_pixi_records,
+            &output.ignore_run_exports,
+            &gateway,
+            None,
+        )
+        .await
+        .map_err(|err| SourceBuildError::RunExportsExtraction("host".into(), Arc::new(err)))?;
+
+    for r in &host_pixi_records {
+        compat_map.insert(r.name().clone(), r);
+    }
+
+    let run_dependencies = Dependencies::new(&output.run_dependencies, None, &compat_map)
+        .map_err(SourceBuildError::from)?
+        .extend_with_run_exports_from_build_and_host(
+            host_run_exports,
+            build_run_exports,
+            output.metadata.subdir,
+        );
+    let run_exports = PixiRunExports::try_from_protocol(&output.run_exports, &compat_map)
+        .map_err(SourceBuildError::from)?;
+
+    // Resolve the extra groups the same way as run dependencies so the built
+    // package records them in its `experimental_extra_depends`. Extras do not
+    // receive run-exports, mirroring the metadata path.
+    let extra_dependencies =
+        convert_extra_dependencies(&output.extra_dependencies, None, &compat_map)
+            .map_err(SourceBuildError::from)?;
+
+    let editable =
+        matches!(spec.build_profile, BuildProfile::Development) && spec.record.has_mutable_source();
+    // Anything the backend reads it reads after this point; a file modified
+    // later gets an unconfirmed fingerprint in the cache entry.
+    let build_started = std::time::SystemTime::now();
+    let built = ctx
+        .backend_source_build(BackendSourceBuildSpec {
+            method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
+                editable,
+                dependencies: run_dependencies,
+                extra_dependencies,
+                run_exports,
+                build_prefix: BackendSourceBuildPrefix {
+                    platform: spec.build_environment.build_platform,
+                    prefix: directories.build_prefix,
+                    dependencies: build_dependencies,
+                    records: build_records,
+                },
+                host_prefix: BackendSourceBuildPrefix {
+                    platform: spec.build_environment.host_platform,
+                    prefix: directories.host_prefix,
+                    dependencies: host_dependencies,
+                    records: host_records,
+                },
+                variant: build_variant,
+                output_directory: None,
+                package_format: spec.package_format,
+            }),
+            backend,
+            name: output.metadata.name.clone(),
+            version: output.metadata.version.clone(),
+            build: output.metadata.build.to_string(),
+            subdir: output.metadata.subdir.to_string(),
+            work_directory,
+            channels: spec.channels.clone(),
+        })
+        .await
+        .map_err_with(SourceBuildError::from)
+        .map_err(unwrap_dispatcher_err)?;
+
+    // Synthesize a RepoDataRecord from the built .conda so the cache
+    // can persist it alongside the artifact.
+    let record = synthesize_repodata(&built.output_file).await?;
+
+    // Resolve the files matching the build's reported globs through the
+    // compute engine (same deduped walk as `build_backend_metadata`).
+    // An immutable source is fully pinned by the cache key, so its entry
+    // carries no file lists; recording them would only embed absolute
+    // paths into the machine-local cache dir that lookup never consults.
+    let (input_glob_sets, input_files) = match mutability {
+        SourceMutability::Mutable => {
+            let input_files =
+                crate::input_globs::collect_input_files(ctx, &built.input_glob_sets, &source_dir)
+                    .await
+                    .map_err(SourceBuildError::GlobSet)?;
+            (built.input_glob_sets, input_files)
+        }
+        SourceMutability::Immutable => (Vec::new(), Vec::new()),
+    };
+
+    let stored = if let Some(backend) = immutable_backend {
+        artifact_cache
+            .store_immutable(
+                spec.record.name(),
+                &cache_key,
+                &built.output_file,
+                build_started,
+                record,
+                backend,
+            )
+            .await
+            .map_err(map_cache_err)?
+    } else {
+        artifact_cache
+            .store(
+                spec.record.name(),
+                &cache_key,
+                &built.output_file,
+                input_glob_sets,
+                input_files,
+                build_started,
+                record,
+            )
+            .await
+            .map_err(map_cache_err)?
+    };
+
+    Ok(SourceBuildResult {
+        artifact: stored.artifact,
+        artifact_sha256: stored.sha256,
+        record: stored.record,
+    })
+}
+
+/// Index source-dependency build results by package name for the prefix
+/// installs.
+fn records_by_name(
+    results: &[Arc<SourceBuildResult>],
+) -> std::collections::HashMap<rattler_conda_types::PackageName, Arc<RepoDataRecord>> {
+    results
+        .iter()
+        .map(|result| {
+            (
+                result.record.package_record.name.clone(),
+                Arc::new(result.record.clone()),
+            )
+        })
+        .collect()
+}
+
+/// Fan out over every source entry in `build_packages` and
+/// `host_packages`, recursively build each via [`SourceBuildKey`], and
+/// return the build results split by bucket. The buckets feed into the
+/// cache key separately so a dep moving build ↔ host invalidates.
+async fn recurse_source_deps(
+    ctx: &mut ComputeCtx,
+    spec: &Arc<SourceBuildSpec>,
+) -> Result<(Vec<Arc<SourceBuildResult>>, Vec<Arc<SourceBuildResult>>), SourceBuildError> {
+    // build_packages run on the build platform. The nested build's
+    // HOST platform is therefore the outer's BUILD platform.
+    let build = build_source_deps(
+        ctx,
+        spec.clone(),
+        spec.record.build_packages.clone(),
+        spec.build_environment.to_build_from_build(),
+    )
+    .await?;
+    // host_packages target the outer host platform. The nested build's
+    // build_environment matches the outer's.
+    let host = build_source_deps(
+        ctx,
+        spec.clone(),
+        spec.record.host_packages.clone(),
+        spec.build_environment.clone(),
+    )
+    .await?;
+    Ok((build, host))
+}
+
+/// Build a single bucket (build or host) of source dependencies concurrently.
+async fn build_source_deps(
+    ctx: &mut ComputeCtx,
+    spec: Arc<SourceBuildSpec>,
+    packages: Vec<UnresolvedPixiRecord>,
+    nested_build_environment: BuildEnvironment,
+) -> Result<Vec<Arc<SourceBuildResult>>, SourceBuildError> {
+    let sources: Vec<Arc<UnresolvedSourceRecord>> = packages
+        .into_iter()
+        .filter_map(|r| match r {
+            UnresolvedPixiRecord::Source(s) => Some(s),
+            UnresolvedPixiRecord::Binary(_) => None,
+        })
+        .collect();
+    if sources.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mapper = {
+        let spec = spec.clone();
+        let build_env = nested_build_environment;
+        async move |sub_ctx: &mut ComputeCtx,
+                    src: Arc<UnresolvedSourceRecord>|
+                    -> Result<Arc<SourceBuildResult>, SourceBuildError> {
+            let nested_spec = SourceBuildSpec {
+                record: src,
+                channels: spec.channels.clone(),
+                exclude_newer: spec.exclude_newer.clone(),
+                build_environment: build_env.clone(),
+                build_profile: spec.build_profile,
+                variant_configuration: spec.variant_configuration.clone(),
+                variant_files: spec.variant_files.clone(),
+                // Nested source builds inherit the user-supplied
+                // overrides from the top-level invocation so the entire
+                // dependency closure builds against consistent values.
+                build_string_prefix: spec.build_string_prefix.clone(),
+                build_number: spec.build_number,
+                // The format is inherited too, so a package that is both
+                // built in its own right and consumed as a source
+                // dependency (e.g. two members of one workspace during
+                // `pixi publish`) shares a single cache entry instead of
+                // being built once per format.
+                package_format: spec.package_format,
+                // A nested source dependency carries its own on-disk manifest;
+                // inline definitions apply only to the consumer's direct deps.
+                inline: None,
+            };
+            let result = sub_ctx.compute(&SourceBuildKey::new(nested_spec)).await?;
+            Ok(result)
+        }
+    };
+    ctx.try_compute_join(sources, mapper).await
+}
+
+/// Call `conda_outputs` on the backend and pick the one matching this
+/// record's name + variants, together with the variant to build it with (see
+/// [`build_variant`]).
+async fn fetch_matching_output(
+    backend: &crate::BackendHandle,
+    spec: &SourceBuildSpec,
+    work_directory: &std::path::Path,
+) -> Result<
+    (
+        CondaOutput,
+        BTreeMap<String, pixi_build_types::VariantValue>,
+    ),
+    SourceBuildError,
+> {
+    let variant_config = spec.variant_configuration.as_ref().map(|variants| {
+        variants
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    v.iter()
+                        .cloned()
+                        .map(pixi_build_types::VariantValue::from)
+                        .collect(),
+                )
+            })
+            .collect()
+    });
+
+    // The backend streams log lines; we drop them here (no SourceBuild
+    // reporter lifecycle is wired up yet).
+    let (mut log_sink, _log_rx) = unbounded::<String>();
+    let outputs = backend
+        .lock()
+        .await
+        .conda_outputs(
+            CondaOutputsParams {
+                host_platform: spec.build_environment.host_platform,
+                build_platform: spec.build_environment.build_platform,
+                variant_configuration: variant_config,
+                variant_files: spec.variant_files.clone(),
+                work_directory: work_directory.to_path_buf(),
+                channels: spec.channels.clone(),
+            },
+            move |line| {
+                let _ = futures::executor::block_on(log_sink.send(line));
+            },
+        )
+        .await
+        .map_err(BackendSourceBuildError::from)
+        .map_err(SourceBuildError::from)?;
+
+    let selector = VariantSelector::new(
+        spec.record
+            .variants
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+    );
+    let matching = outputs
+        .outputs
+        .iter()
+        .filter(|o| &o.metadata.name == spec.record.name());
+    selector
+        .find(matching, |o| &o.metadata.variant)
+        .map(|output| (output.clone(), build_variant(output, &outputs.outputs)))
+        .ok_or_else(|| SourceBuildError::MissingOutput {
+            name: spec.record.name().as_normalized().to_string(),
+            variants: spec
+                .record
+                .variants
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        })
+}
+
+/// The variant to build `output` with: its own variant, plus the variants of
+/// the outputs of the same recipe it exactly pins, transitively.
+///
+/// Backends render the whole recipe with only the variant they are given, so
+/// without these a pinned sibling (recorded in the variant as `<name>` =
+/// `<version> <build>`) would render with a different hash, and so would
+/// `output`.
+fn build_variant(
+    output: &CondaOutput,
+    outputs: &[CondaOutput],
+) -> BTreeMap<String, pixi_build_types::VariantValue> {
+    let mut variant = output.metadata.variant.clone();
+    let mut visited = HashSet::new();
+    let mut pending = vec![output];
+    while let Some(current) = pending.pop() {
+        for (key, value) in &current.metadata.variant {
+            let pinned = outputs.iter().find(|sibling| {
+                sibling.metadata.name.as_normalized() == key
+                    && value.to_string()
+                        == format!("{} {}", sibling.metadata.version, sibling.metadata.build)
+            });
+            if let Some(sibling) = pinned
+                && visited.insert(&sibling.metadata.name)
+            {
+                for (key, value) in &sibling.metadata.variant {
+                    variant.entry(key.clone()).or_insert_with(|| value.clone());
+                }
+                pending.push(sibling);
+            }
+        }
+    }
+    variant
+}
+
+/// Install a build or host environment into `prefix`, returning the
+/// fully-resolved `RepoDataRecord`s that end up inside.
+async fn install_prefix(
+    ctx: &mut ComputeCtx,
+    spec: &SourceBuildSpec,
+    target: SourceBuildPrefixKind,
+    prefix_path: PathBuf,
+    packages: Vec<UnresolvedPixiRecord>,
+    resolved_source_deps: &std::collections::HashMap<
+        rattler_conda_types::PackageName,
+        Arc<RepoDataRecord>,
+    >,
+) -> Result<
+    (
+        Vec<RepoDataRecord>,
+        Option<crate::InstallPixiEnvironmentResult>,
+    ),
+    SourceBuildError,
+> {
+    // Always create the prefix directory, even when empty. The backend's
+    // build script expands $PREFIX into this path and writes into it, so
+    // it must exist on disk regardless of whether any packages got
+    // installed.
+    let prefix = Prefix::create(&prefix_path)
+        .map_err(|e| SourceBuildError::CreateBuildEnvironmentDirectory(Arc::new(e)))?;
+    if packages.is_empty() {
+        return Ok((Vec::new(), None));
+    }
+    let build_environment = match target {
+        SourceBuildPrefixKind::Build => spec.build_environment.to_build_from_build(),
+        SourceBuildPrefixKind::Host => spec.build_environment.clone(),
+    };
+    let label = match target {
+        SourceBuildPrefixKind::Build => format!("{} (build)", spec.record.name().as_source()),
+        SourceBuildPrefixKind::Host => format!("{} (host)", spec.record.name().as_source()),
+    };
+    // Substitute every source entry with the binary record its build
+    // produced. Handing the installer the pre-built binaries keeps it
+    // from launching another build of the same package with different
+    // build parameters (a different package format, notably).
+    let mut records = Vec::with_capacity(packages.len());
+    let mut install_records = Vec::with_capacity(packages.len());
+    for package in packages {
+        let (record, origin) = match package {
+            UnresolvedPixiRecord::Binary(binary) => (binary, PrefixRecordOrigin::Solved),
+            UnresolvedPixiRecord::Source(source) => {
+                let built = resolved_source_deps
+                    .get(source.name())
+                    .expect("source dependency should have been built by recurse_source_deps")
+                    .clone();
+                (built, PrefixRecordOrigin::Built)
+            }
+        };
+        // The records were solved (or built) for
+        // `build_environment.host_platform`; a record of another platform
+        // means the platform tracking upstream went wrong, and installing it
+        // would only produce an opaque failure once the build script tries
+        // to run or link against it.
+        verify_record_matches_platform(
+            target,
+            spec.record.name(),
+            &record,
+            origin,
+            build_environment.host_platform,
+        )?;
+        records.push((*record).clone());
+        install_records.push(UnresolvedPixiRecord::Binary(record));
+    }
+    let install_spec = InstallPixiEnvironmentSpec {
+        name: label,
+        records: install_records,
+        prefix,
+        installed: None,
+        ignore_packages: None,
+        build_environment,
+        force_reinstall: Default::default(),
+        exclude_newer: spec.exclude_newer.clone(),
+        channels: spec.channels.clone(),
+        variant_configuration: spec.variant_configuration.clone(),
+        variant_files: spec.variant_files.clone(),
+        // Build/host environments install pre-built packages; no inline
+        // definitions apply here.
+        inline_packages: Default::default(),
+    };
+    let result = ctx
+        .install_pixi_environment(install_spec)
+        .await
+        .map_err_with(|e| match target {
+            SourceBuildPrefixKind::Build => SourceBuildError::InstallBuildEnvironment(Arc::new(e)),
+            SourceBuildPrefixKind::Host => SourceBuildError::InstallHostEnvironment(Arc::new(e)),
+        })
+        .map_err(unwrap_dispatcher_err)?;
+
+    Ok((records, Some(result)))
+}
+
+/// Check that `record` is for `platform` (or `noarch`) before it is
+/// installed into the `kind` prefix of `source_package`. A record whose
+/// subdir is not a known platform is left alone; it is not ours to judge.
+fn verify_record_matches_platform(
+    kind: SourceBuildPrefixKind,
+    source_package: &PackageName,
+    record: &RepoDataRecord,
+    origin: PrefixRecordOrigin,
+    platform: Subdir,
+) -> Result<(), PrefixPlatformMismatchError> {
+    let Ok(subdir) = record.package_record.subdir.parse::<Subdir>() else {
+        return Ok(());
+    };
+    if subdir != Subdir::NoArch && subdir != platform {
+        return Err(PrefixPlatformMismatchError {
+            kind,
+            source_package: source_package.clone(),
+            package: record.package_record.name.clone(),
+            origin,
+            subdir: record.package_record.subdir.clone(),
+            expected: platform,
+        });
+    }
+    Ok(())
+}
+
+/// Read index.json out of the freshly-built `.conda` and synthesize a
+/// `RepoDataRecord` for it.
+async fn synthesize_repodata(
+    output_file: &std::path::Path,
+) -> Result<RepoDataRecord, SourceBuildError> {
+    let file_name = output_file
+        .file_name()
+        .expect("backend did not return a file name")
+        .to_string_lossy()
+        .into_owned();
+    let identifier = DistArchiveIdentifier::try_from_filename(&file_name)
+        .expect("backend returned an invalid archive filename");
+    let sha = compute_package_sha256(output_file).await?;
+    let path = output_file.to_path_buf();
+    let index_json = tokio::task::spawn_blocking(move || {
+        rattler_package_streaming::seek::read_package_file(&path)
+    })
+    .await
+    .expect("index.json read task panicked")
+    .map_err(|err| SourceBuildError::ReadIndexJson(Arc::new(err)))?;
+    let package_record = PackageRecord::from_index_json(index_json, None, Some(sha), None)
+        .map_err(|err| SourceBuildError::ConvertSubdir(Arc::new(err)))?;
+    Ok(RepoDataRecord {
+        package_record,
+        identifier,
+        url: Url::from_file_path(output_file).expect("the output file should be a valid URL"),
+        channel: None,
+    })
+}
+/// Compute the sha256 of a file on a blocking thread.
+async fn compute_package_sha256(path: &std::path::Path) -> Result<Sha256Hash, SourceBuildError> {
+    let p = path.to_path_buf();
+    tokio::task::spawn_blocking({
+        let p = p.clone();
+        move || rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&p)
+    })
+    .await
+    .expect("sha256 task panicked")
+    .map_err(|e| SourceBuildError::CalculateSha256(p, Arc::new(e)))
+}
+
+fn map_cache_err(err: ArtifactCacheError) -> SourceBuildError {
+    match err {
+        ArtifactCacheError::Io {
+            operation,
+            path,
+            source,
+        } => {
+            let msg = format!("{operation} at {}", path.display());
+            SourceBuildError::CreateWorkDirectory(Arc::new(std::io::Error::new(source.kind(), msg)))
+        }
+        ArtifactCacheError::Glob(err) => SourceBuildError::GlobSet(err),
+        ArtifactCacheError::ArtifactFilename(path) => SourceBuildError::MissingOutputFile(path),
+    }
+}
+
+/// Build/host prefixes for a source build: both sit under the workspace
+/// dir, with platform-specific padding for non-Windows hosts.
+struct Directories {
+    build_prefix: PathBuf,
+    host_prefix: PathBuf,
+}
+
+impl Directories {
+    fn new(work_directory: &std::path::Path, host_platform: rattler_conda_types::Subdir) -> Self {
+        const BUILD_DIR: &str = "bld";
+        const HOST_ENV_DIR: &str = "host";
+        const PLACEHOLDER_TEMPLATE_STR: &str = "_placehold";
+
+        let build_prefix = work_directory.join(BUILD_DIR);
+        let host_prefix = if host_platform.is_windows() {
+            work_directory.join(HOST_ENV_DIR)
+        } else {
+            // Non-Windows backends expect a 255-char host prefix for
+            // reliable prefix replacement. Pad with a template string.
+            const PLACEHOLDER_LENGTH: usize = 255;
+            let mut placeholder = String::new();
+            while placeholder.len() < PLACEHOLDER_LENGTH {
+                placeholder.push_str(PLACEHOLDER_TEMPLATE_STR);
+            }
+            let placeholder = placeholder
+                [0..PLACEHOLDER_LENGTH - work_directory.join(HOST_ENV_DIR).as_os_str().len()]
+                .to_string();
+            work_directory.join(format!("{HOST_ENV_DIR}{placeholder}"))
+        };
+        Self {
+            build_prefix,
+            host_prefix,
+        }
+    }
+}
+
+#[cfg(test)]
+mod immutable_identifier_tests {
+    //! The checkout-free artifact key stands in for a backend identifier that
+    //! is only knowable after a checkout, so it must be stable across
+    //! processes: anything derived from the wall clock silently turns every
+    //! lookup into a miss and stores a fresh copy of the artifact.
+    use std::str::FromStr;
+
+    use chrono::{TimeZone, Utc};
+    use pixi_record::{
+        FullSourceRecordData, PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec, SourceRecordData,
+    };
+    use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, package::BuildString};
+
+    use super::*;
+
+    fn record() -> Arc<UnresolvedSourceRecord> {
+        let mut package_record = PackageRecord::new(
+            PackageName::from_str("foo").unwrap(),
+            "1.0.0"
+                .parse::<rattler_conda_types::VersionWithSource>()
+                .unwrap(),
+            "h0".parse().unwrap(),
+        );
+        package_record.subdir = "linux-64".into();
+        Arc::new(UnresolvedSourceRecord {
+            data: SourceRecordData::Full(FullSourceRecordData {
+                package_record,
+                sources: BTreeMap::new(),
+            }),
+            manifest_source: PinnedSourceSpec::Git(PinnedGitSpec {
+                git: Url::parse("https://example.invalid/foo.git").unwrap(),
+                source: PinnedGitCheckout {
+                    commit: "0123456789abcdef0123456789abcdef01234567".parse().unwrap(),
+                    subdirectory: Default::default(),
+                    reference: pixi_spec::GitReference::DefaultBranch,
+                    lfs: None,
+                },
+            }),
+            build_source: None,
+            variants: BTreeMap::new(),
+            identifier_hash: String::new(),
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
+        })
+    }
+
+    fn spec() -> SourceBuildSpec {
+        SourceBuildSpec {
+            record: record(),
+            channels: vec![ChannelUrl::from(
+                Url::parse("https://prefix.dev/conda-forge/").unwrap(),
+            )],
+            exclude_newer: None,
+            build_environment: BuildEnvironment {
+                host_platform: Subdir::Linux64,
+                host_virtual_packages: Vec::new(),
+                build_platform: Subdir::Linux64,
+                build_virtual_packages: Vec::new(),
+            },
+            build_profile: BuildProfile::Development,
+            variant_configuration: None,
+            variant_files: None,
+            build_string_prefix: None,
+            build_number: None,
+            package_format: None,
+            inline: None,
+        }
+    }
+
+    fn identifier_with(spec: &SourceBuildSpec, variant_file_hashes: &[u64]) -> String {
+        identifier_in(
+            spec,
+            variant_file_hashes,
+            &ChannelConfig::default_with_root_dir(PathBuf::from("/workspace")),
+        )
+    }
+
+    fn identifier_in(
+        spec: &SourceBuildSpec,
+        variant_file_hashes: &[u64],
+        channel_config: &ChannelConfig,
+    ) -> String {
+        immutable_backend_identifier(
+            spec,
+            variant_file_hashes,
+            &EnabledProtocols::default(),
+            channel_config,
+            &ProjectModelOverrides {
+                build_string_prefix: spec.build_string_prefix.clone(),
+                build_number: spec.build_number,
+            },
+        )
+    }
+
+    fn identifier(spec: &SourceBuildSpec) -> String {
+        identifier_with(spec, &[])
+    }
+
+    fn cutoff(secs: i64) -> Option<ResolvedExcludeNewer> {
+        Some(ResolvedExcludeNewer::from_datetime(
+            Utc.timestamp_opt(secs, 0).unwrap(),
+        ))
+    }
+
+    /// Regression test. `exclude_newer` resolves to `Utc::now() - duration`
+    /// for a relative `exclude-newer` such as `"7d"`, so hashing it into the
+    /// key made the key unique per process: the checkout-free path could
+    /// never hit, and every run wrote a new artifact-cache entry.
+    #[test]
+    fn identifier_ignores_the_exclude_newer_cutoff() {
+        let mut early = spec();
+        early.exclude_newer = cutoff(1_700_000_000);
+        let mut late = spec();
+        late.exclude_newer = cutoff(1_700_000_042);
+
+        assert_eq!(
+            identifier(&early),
+            identifier(&late),
+            "the checkout-free key must not move with the wall clock",
+        );
+        assert_eq!(
+            identifier(&spec()),
+            identifier(&early),
+            "setting exclude-newer at all must not move the key",
+        );
+    }
+
+    #[test]
+    fn identifier_is_deterministic() {
+        assert_eq!(identifier(&spec()), identifier(&spec()));
+    }
+
+    /// Every input the key *is* responsible for must still move it: these are
+    /// the build inputs a checkout would otherwise have pinned, and which
+    /// `compute_artifact_cache_key` does not fold in itself.
+    #[test]
+    fn identifier_covers_every_input_it_owns() {
+        let baseline = identifier(&spec());
+
+        let mut channels = spec();
+        channels.channels = vec![ChannelUrl::from(
+            Url::parse("https://example.invalid/other/").unwrap(),
+        )];
+        assert_ne!(baseline, identifier(&channels), "channels");
+
+        let mut profile = spec();
+        profile.build_profile = BuildProfile::Release;
+        assert_ne!(baseline, identifier(&profile), "build profile");
+
+        let mut variants = spec();
+        variants.variant_configuration = Some(BTreeMap::from([(
+            "python".to_string(),
+            vec![VariantValue::String("3.13".to_string())],
+        )]));
+        assert_ne!(baseline, identifier(&variants), "variant configuration");
+
+        let mut virtual_packages = spec();
+        virtual_packages.build_environment.host_virtual_packages = vec![GenericVirtualPackage {
+            name: PackageName::from_str("__cuda").unwrap(),
+            version: "12.4".parse().unwrap(),
+            build_string: BuildString::new_unchecked("0"),
+        }];
+        assert_ne!(
+            baseline,
+            identifier(&virtual_packages),
+            "host virtual packages",
+        );
+
+        assert_ne!(
+            baseline,
+            identifier_with(&spec(), &[7]),
+            "variant file hashes",
+        );
+        assert_ne!(
+            identifier_with(&spec(), &[7]),
+            identifier_with(&spec(), &[7, 9]),
+            "variant file count",
+        );
+        assert_ne!(
+            identifier_with(&spec(), &[7, 9]),
+            identifier_with(&spec(), &[9, 7]),
+            "variant file order",
+        );
+
+        let mut alias = ChannelConfig::default_with_root_dir(PathBuf::from("/workspace"));
+        alias.channel_alias = Url::parse("https://mirror.invalid/").unwrap();
+        assert_ne!(
+            baseline,
+            identifier_in(&spec(), &[], &alias),
+            "channel alias",
+        );
+        assert_ne!(
+            baseline,
+            identifier_in(
+                &spec(),
+                &[],
+                &ChannelConfig::default_with_root_dir(PathBuf::from("/elsewhere")),
+            ),
+            "channel config root dir",
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use miette::Diagnostic;
+    use rattler_conda_types::VersionWithSource;
+
+    use super::*;
+
+    fn package_b() -> PackageName {
+        PackageName::new_unchecked("package_b")
+    }
+
+    fn record(name: &str, subdir: &str) -> RepoDataRecord {
+        let mut package_record = PackageRecord::new(
+            PackageName::new_unchecked(name),
+            "1.0.0".parse::<VersionWithSource>().unwrap(),
+            "h0".parse().unwrap(),
+        );
+        package_record.subdir = subdir.into();
+        RepoDataRecord {
+            package_record,
+            identifier: DistArchiveIdentifier::try_from_filename(&format!("{name}-1.0.0-h0.conda"))
+                .unwrap(),
+            url: Url::parse(&format!(
+                "https://example.com/{subdir}/{name}-1.0.0-h0.conda"
+            ))
+            .unwrap(),
+            channel: None,
+        }
+    }
+
+    fn verify(
+        kind: SourceBuildPrefixKind,
+        record: &RepoDataRecord,
+        origin: PrefixRecordOrigin,
+    ) -> Result<(), PrefixPlatformMismatchError> {
+        verify_record_matches_platform(kind, &package_b(), record, origin, Subdir::Linux64)
+    }
+
+    fn help(err: &PrefixPlatformMismatchError) -> String {
+        err.help().expect("the error carries a help").to_string()
+    }
+
+    #[test]
+    fn records_of_the_prefix_platform_and_noarch_pass() {
+        for record in [record("libfoo", "linux-64"), record("pyfoo", "noarch")] {
+            for origin in [PrefixRecordOrigin::Solved, PrefixRecordOrigin::Built] {
+                verify(SourceBuildPrefixKind::Host, &record, origin)
+                    .expect("records of the prefix platform and noarch records are fine");
+            }
+        }
+    }
+
+    #[test]
+    fn solved_record_of_a_foreign_platform_is_a_pixi_bug() {
+        let err = verify(
+            SourceBuildPrefixKind::Build,
+            &record("python", "osx-arm64"),
+            PrefixRecordOrigin::Solved,
+        )
+        .expect_err("an osx-arm64 record must not be installed into a linux-64 prefix");
+
+        assert_eq!(err.kind, SourceBuildPrefixKind::Build);
+        assert_eq!(err.source_package, package_b());
+        assert_eq!(err.package.as_normalized(), "python");
+        assert_eq!(err.origin, PrefixRecordOrigin::Solved);
+        assert_eq!(err.subdir, "osx-arm64");
+        assert_eq!(err.expected, Subdir::Linux64);
+        assert_eq!(
+            err.to_string(),
+            "cannot install 'python' (osx-arm64) into the build environment of 'package_b', which \
+             is for 'linux-64'"
+        );
+        assert_eq!(
+            help(&err),
+            "'python' was picked for 'osx-arm64' while pixi solved the build environment of \
+             'package_b' for 'linux-64'; this is a bug in pixi's cross-compilation platform \
+             tracking, please report it at https://github.com/prefix-dev/pixi/issues together \
+             with the output of `pixi -vv <command>`"
+        );
+    }
+
+    #[test]
+    fn built_record_of_a_foreign_platform_is_a_backend_bug() {
+        let err = verify(
+            SourceBuildPrefixKind::Host,
+            &record("libbar", "osx-arm64"),
+            PrefixRecordOrigin::Built,
+        )
+        .expect_err("an osx-arm64 record must not be installed into a linux-64 prefix");
+
+        assert_eq!(err.origin, PrefixRecordOrigin::Built);
+        assert_eq!(
+            err.to_string(),
+            "cannot install 'libbar' (osx-arm64) into the host environment of 'package_b', which \
+             is for 'linux-64'"
+        );
+        assert_eq!(
+            help(&err),
+            "'libbar' is a source dependency that was built for this environment; its build \
+             backend was asked to build for 'linux-64' but produced a 'osx-arm64' package, please \
+             report this to the maintainers of that backend"
+        );
+    }
+
+    #[test]
+    fn record_with_unknown_subdir_is_ignored() {
+        verify(
+            SourceBuildPrefixKind::Host,
+            &record("mystery", "not-a-platform"),
+            PrefixRecordOrigin::Solved,
+        )
+        .expect("a subdir that is not a platform is not checked");
+    }
+
+    fn conda_output(name: &str, build: &str, variant: &[(&str, &str)]) -> CondaOutput {
+        use pixi_build_types::procedures::conda_outputs::{
+            CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+            CondaOutputRunExports,
+        };
+
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::new_unchecked(name),
+                version: "1.0.0".parse::<VersionWithSource>().unwrap(),
+                build: build.parse().unwrap(),
+                build_number: 0,
+                subdir: Subdir::NoArch,
+                license: None,
+                license_family: None,
+                flags: Default::default(),
+                track_features: Default::default(),
+                noarch: rattler_conda_types::NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant: variant
+                    .iter()
+                    .map(|(key, value)| (key.to_string(), value.to_string().into()))
+                    .collect(),
+            },
+            build_dependencies: None,
+            host_dependencies: None,
+            run_dependencies: CondaOutputDependencies {
+                depends: vec![],
+                constraints: vec![],
+            },
+            extra_dependencies: Default::default(),
+            ignore_run_exports: CondaOutputIgnoreRunExports::default(),
+            run_exports: CondaOutputRunExports::default(),
+            input_globs: None,
+            input_glob_sets: None,
+        }
+    }
+
+    fn variant(entries: &[(&str, &str)]) -> BTreeMap<String, pixi_build_types::VariantValue> {
+        entries
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string().into()))
+            .collect()
+    }
+
+    #[test]
+    fn build_variant_includes_variants_of_pinned_siblings() {
+        let libbar = conda_output("libbar", "h1_0", &[("zlib", "1.3")]);
+        let libfoo = conda_output(
+            "libfoo",
+            "h2_0",
+            &[("libbar", "1.0.0 h1_0"), ("python", "3.12")],
+        );
+        let meta = conda_output("foo-meta", "h3_0", &[("libfoo", "1.0.0 h2_0")]);
+        let unrelated = conda_output("baz", "h4_0", &[("numpy", "2")]);
+        let outputs = [libbar, libfoo, meta.clone(), unrelated];
+
+        assert_eq!(
+            build_variant(&meta, &outputs),
+            variant(&[
+                ("libbar", "1.0.0 h1_0"),
+                ("libfoo", "1.0.0 h2_0"),
+                ("python", "3.12"),
+                ("zlib", "1.3"),
+            ])
+        );
+    }
+
+    #[test]
+    fn build_variant_keeps_own_values_and_ignores_other_builds() {
+        let libfoo_312 = conda_output("libfoo", "h1_0", &[("python", "3.12"), ("zlib", "1.3")]);
+        let libfoo_313 = conda_output("libfoo", "h2_0", &[("python", "3.13"), ("zlib", "1.2")]);
+        let meta = conda_output(
+            "foo-meta",
+            "h3_0",
+            &[("libfoo", "1.0.0 h1_0"), ("python", "3.11")],
+        );
+        let outputs = [libfoo_312, libfoo_313, meta.clone()];
+
+        assert_eq!(
+            build_variant(&meta, &outputs),
+            variant(&[
+                ("libfoo", "1.0.0 h1_0"),
+                ("python", "3.11"),
+                ("zlib", "1.3"),
+            ])
+        );
+    }
+}

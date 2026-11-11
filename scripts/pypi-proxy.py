@@ -1,14 +1,16 @@
+import base64
 import http.server
 import socketserver
 import urllib.request
-from urllib.error import URLError, HTTPError
-import base64
+from typing import override
+from urllib.error import HTTPError, URLError
 
 PORT = 8000
 PYPI_URL = "https://pypi.org/simple"
 
 
 class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    @override
     def do_GET(self) -> None:
         # Check for basic authentication
         if self.headers.get("Authorization") is None:

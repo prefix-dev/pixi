@@ -1,0 +1,604 @@
+//! Content-addressed compute-engine Key for disposable, binary-only conda
+//! environments. Source specs are rejected up-front. The prefix path is
+//! derived from the spec hash and locked with [`EnvironmentLock`] for
+//! cross-process safety.
+//!
+//! This key has no per-key reporter trait of its own. The ephemeral
+//! prefix is populated as part of backend instantiation, so it reads
+//! [`InstantiateBackendReporter`](crate::reporter::InstantiateBackendReporter)
+//! from the engine `DataStore` to build the rattler installer's
+//! per-call reporter.
+
+use std::{
+    collections::BTreeMap,
+    fmt,
+    hash::{Hash, Hasher},
+    mem,
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
+
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use itertools::Either;
+use miette::Diagnostic;
+use pixi_compute_engine::{ComputeCtx, DataStore, Key};
+use pixi_record::PixiRecord;
+use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer};
+use pixi_spec_containers::DependencyMap;
+use pixi_utils::EnvironmentLock;
+use rattler::install::InstallerError;
+use rattler_conda_types::{ChannelUrl, PackageName, RepoDataRecord, prefix::Prefix};
+use rattler_repodata_gateway::{GatewayError, RepoData};
+use rattler_solve::{ChannelPriority, SolveStrategy};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use xxhash_rust::xxh3::Xxh3;
+
+use pixi_compute_network::HasOffline;
+
+use crate::cache::markers::BuildBackendsDir;
+use crate::compute_data::{HasGateway, HasGatewayReporter, HasInstantiateBackendReporter};
+use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
+use crate::install_binary::install_binary_records;
+use crate::reporter::{InstantiateBackendReporter, WrappingGatewayReporter};
+use crate::solve_binary::SolveCondaExt;
+use crate::solve_conda::SolveCondaEnvironmentError;
+use crate::{SolveCondaEnvironmentSpec, compute_data::HasPackageCache};
+use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_reporters::OperationId;
+
+/// How often to warn while blocked on a peer's install lock.
+const EPHEMERAL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Specification for an ephemeral, binary-only conda environment.
+///
+/// The spec's hash is used as the prefix cache key; callers with an
+/// equal spec share the same installed prefix. Source `PixiSpec`s in
+/// `dependencies` cause the Key to fail at compute time.
+#[derive(Clone, Debug)]
+pub struct EphemeralEnvSpec {
+    /// Package requirements. Must be binary-only at compute time.
+    pub dependencies: DependencyMap<PackageName, PixiSpec>,
+
+    /// Additional solver constraints.
+    pub constraints: DependencyMap<PackageName, BinarySpec>,
+
+    /// Channels to search.
+    pub channels: Vec<ChannelUrl>,
+
+    /// Exclude-newer cutoff.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
+
+    /// Solver strategy.
+    pub strategy: SolveStrategy,
+
+    /// Channel priority.
+    pub channel_priority: ChannelPriority,
+}
+
+impl Hash for EphemeralEnvSpec {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let Self {
+            dependencies,
+            constraints,
+            channels,
+            exclude_newer,
+            strategy,
+            channel_priority,
+        } = self;
+        dependencies.hash(state);
+        constraints.hash(state);
+        channels.hash(state);
+        // The prefix is shared across invocations, so hash the cutoffs as
+        // configured: a relative cutoff such as `14d` resolves to a different
+        // time on every invocation and would never hit the cache. A prefix
+        // solved with an earlier resolution still satisfies the cutoff, as
+        // its packages only get older, the same way a prefix solved without
+        // a cutoff is reused when newer packages are published.
+        // Hashed like `Option::hash`, so keys without a cutoff are unchanged.
+        mem::discriminant(exclude_newer).hash(state);
+        if let Some(exclude_newer) = exclude_newer {
+            exclude_newer.hash_configured(state);
+        }
+        // Neither SolveStrategy nor ChannelPriority implement Hash;
+        // use the enum discriminant (both are C-like enums, so the
+        // discriminant fully captures identity).
+        mem::discriminant(strategy).hash(state);
+        mem::discriminant(channel_priority).hash(state);
+    }
+}
+
+impl PartialEq for EphemeralEnvSpec {
+    fn eq(&self, other: &Self) -> bool {
+        self.dependencies == other.dependencies
+            && self.constraints == other.constraints
+            && self.channels == other.channels
+            && self.exclude_newer == other.exclude_newer
+            && mem::discriminant(&self.strategy) == mem::discriminant(&other.strategy)
+            && mem::discriminant(&self.channel_priority)
+                == mem::discriminant(&other.channel_priority)
+    }
+}
+
+impl Eq for EphemeralEnvSpec {}
+
+impl EphemeralEnvSpec {
+    /// Returns a stable cache key derived from the spec hash. The first
+    /// segment is the alphabetically-first dependency package name (as
+    /// a human-readable hint); the second is a URL-safe encoding of the
+    /// spec hash.
+    pub fn cache_key(&self) -> String {
+        let hint: String = self
+            .dependencies
+            .iter_specs()
+            .map(|(name, _)| name.as_normalized().to_string())
+            .min()
+            .unwrap_or_else(|| "env".to_string());
+        let mut hasher = Xxh3::new();
+        self.hash(&mut hasher);
+        let encoded = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
+        format!("{hint}-{encoded}")
+    }
+}
+
+/// The key used to request an ephemeral env from the compute engine.
+///
+/// Wraps the spec in an [`Arc`] so dedup hits and subscribers clone
+/// cheaply. Construct with [`EphemeralEnvKey::new`].
+#[derive(Clone, Debug)]
+pub struct EphemeralEnvKey {
+    spec: Arc<EphemeralEnvSpec>,
+    /// Describes the environment in progress reports. Not part of the key's
+    /// identity: requests for an equal spec share one environment, labelled
+    /// by whichever request came first.
+    label: Arc<str>,
+}
+
+impl EphemeralEnvKey {
+    pub fn new(spec: EphemeralEnvSpec, label: impl Into<Arc<str>>) -> Self {
+        Self {
+            spec: Arc::new(spec),
+            label: label.into(),
+        }
+    }
+}
+
+impl Hash for EphemeralEnvKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.spec.hash(state);
+    }
+}
+
+impl PartialEq for EphemeralEnvKey {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.spec, &other.spec) || *self.spec == *other.spec
+    }
+}
+
+impl Eq for EphemeralEnvKey {}
+
+impl fmt::Display for EphemeralEnvKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.spec.cache_key())
+    }
+}
+
+/// The value returned by a successful [`EphemeralEnvKey`] compute.
+#[derive(Debug)]
+pub struct InstalledEphemeralEnv {
+    /// The prefix where the environment was installed. Content-addressed.
+    pub prefix: Prefix,
+
+    /// The records that were installed. Useful for callers that need
+    /// to look up a specific package version (e.g. the backend tool).
+    pub records: Vec<PixiRecord>,
+}
+
+/// Errors that can be produced by [`EphemeralEnvKey::compute`].
+#[derive(Debug, Clone, Error, Diagnostic)]
+pub enum EphemeralEnvError {
+    #[error(
+        "source dependencies are not supported in ephemeral environments (got source spec for `{}`)",
+        .0.as_source()
+    )]
+    SourceSpecNotAllowed(PackageName),
+
+    #[error("failed to convert a spec")]
+    SpecConversion(#[source] Arc<pixi_spec::SpecConversionError>),
+
+    #[error("failed to query the conda gateway")]
+    Gateway(#[source] Arc<GatewayError>),
+
+    #[error("failed to solve the environment")]
+    Solve(#[source] Arc<SolveCondaEnvironmentError>),
+
+    #[error("failed to construct the prefix at {0}")]
+    CreatePrefix(PathBuf, #[source] Arc<std::io::Error>),
+
+    #[error("failed to acquire the prefix lock at {0}")]
+    AcquireLock(PathBuf, #[source] Arc<std::io::Error>),
+
+    #[error("failed to update the prefix lock at {0}")]
+    UpdateLock(PathBuf, #[source] Arc<std::io::Error>),
+
+    #[error("failed to install the environment at {0}")]
+    Install(PathBuf, #[source] Arc<InstallerError>),
+
+    #[error("failed to read the package cache")]
+    CacheIndex(#[source] Arc<std::io::Error>),
+}
+
+impl Key for EphemeralEnvKey {
+    type Value = Result<Arc<InstalledEphemeralEnv>, Arc<EphemeralEnvError>>;
+
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let spec: &EphemeralEnvSpec = &self.spec;
+
+        // Cross-process fast path: ephemeral env prefixes are
+        // content-addressed by `spec.cache_key()`, so an existing
+        // prefix at the derived path with a marker file recording
+        // the install records is fully reusable. The compute-engine
+        // cache only dedups within a single process, so without this
+        // marker every `pixi run` re-fetches repodata and re-solves
+        // the backend's binary deps — ~250 ms on Windows for
+        // pixi-build-cmake / pixi-build-python — even when the
+        // prefix on disk was already provisioned by a previous run.
+        //
+        // An offline solve can pick older packages than an online one would.
+        // The prefix is content-addressed and shared across processes, so the
+        // two must not land on the same key: otherwise the restricted result
+        // would be served to later online runs, which would silently keep
+        // using an older backend.
+        let offline = ctx.global_data().offline();
+        let cache_key = match offline {
+            true => format!("{}-local", spec.cache_key()),
+            false => spec.cache_key(),
+        };
+        let prefix_path = ctx.cache_dir::<BuildBackendsDir>().await.join(&cache_key);
+        if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
+            return Ok(Arc::new(cached));
+        }
+
+        // 1. Reject source specs, get a binary-only dep map.
+        let binary_specs = match split_into_binary(&spec.dependencies) {
+            Ok(b) => b,
+            Err(name) => return Err(Arc::new(EphemeralEnvError::SourceSpecNotAllowed(name))),
+        };
+
+        // 2. Read the tool build environment (host + build + virtual packages).
+        let build_env = ctx.compute(&ToolBuildEnvironmentKey).await;
+
+        // 3. Fetch binary repodata.
+        let binary_repodata = fetch_binary_repodata(ctx, spec, &binary_specs, &build_env)
+            .await
+            .map_err(Arc::new)?;
+
+        // 4. Build a binary-only SolveCondaEnvironmentSpec and solve.
+        //
+        // Backend environments go through the same solver as everything else,
+        // so offline mode restricts them too. This is only reached on a cold
+        // backend: a previously provisioned one returns from the marker fast
+        // path above without solving at all.
+        let excluded_candidates = crate::offline::exclusions_for_solve(
+            offline,
+            ctx.global_data().package_cache(),
+            binary_repodata
+                .iter()
+                .flat_map(|repo_data| repo_data.iter()),
+        )
+        .await
+        .map_err(|err| Arc::new(EphemeralEnvError::CacheIndex(Arc::new(err))))?;
+
+        let solve_spec = SolveCondaEnvironmentSpec {
+            name: Some(self.label.to_string()),
+            source_specs: DependencyMap::default(),
+            binary_specs,
+            constraints: spec.constraints.clone(),
+            dev_source_records: Vec::new(),
+            source_repodata: Vec::new(),
+            binary_repodata,
+            installed: Vec::new(),
+            platform: build_env.host_platform,
+            channels: spec.channels.clone(),
+            virtual_packages: build_env.host_virtual_packages.clone(),
+            strategy: spec.strategy,
+            channel_priority: spec.channel_priority,
+            exclude_newer: spec.exclude_newer.clone(),
+            excluded_candidates,
+        };
+        let records = ctx
+            .solve_conda(solve_spec)
+            .await
+            .map_err(|e| Arc::new(EphemeralEnvError::Solve(Arc::new(e))))?;
+
+        // 5. Compute prefix path and create it. (`cache_key` and
+        //    `prefix_path` were already derived above for the
+        //    fast-path lookup.)
+        let prefix_std = prefix_path.as_std_path().to_path_buf();
+        let prefix = Prefix::create(prefix_std.clone()).map_err(|e| {
+            Arc::new(EphemeralEnvError::CreatePrefix(
+                prefix_std.clone(),
+                Arc::new(e),
+            ))
+        })?;
+
+        // 6. Cross-process install lock + recheck + install.
+        let binary_records = records
+            .iter()
+            .filter_map(|r| match r {
+                PixiRecord::Binary(b) => Some(b.as_ref().clone()),
+                PixiRecord::Source(_) => None,
+            })
+            .collect::<Vec<_>>();
+        let expected_fingerprint =
+            pixi_utils::EnvironmentFingerprint::compute(binary_records.iter());
+
+        let prefix_display = prefix.path().display().to_string();
+        let mut env_lock = EnvironmentLock::acquire_with_progress(
+            prefix.path(),
+            EPHEMERAL_LOCK_PROGRESS_INTERVAL,
+            |elapsed| {
+                tracing::warn!(
+                    "still waiting on another pixi process to finish installing '{prefix_display}' ({}s elapsed)",
+                    elapsed.as_secs(),
+                );
+            },
+        )
+        .await
+        .map_err(|e| {
+            Arc::new(EphemeralEnvError::AcquireLock(
+                prefix.path().to_path_buf(),
+                Arc::new(e),
+            ))
+        })?;
+        // Recheck under the lock for a peer that just finished.
+        if env_lock.matches(&expected_fingerprint)
+            && let Some(cached) = read_cached_marker(prefix.path()).await
+        {
+            return Ok(Arc::new(cached));
+        }
+
+        // A previous install here crashed; re-link everything.
+        let reinstall_all = env_lock.was_interrupted();
+        env_lock.begin().await.map_err(|e| {
+            Arc::new(EphemeralEnvError::UpdateLock(
+                prefix.path().to_path_buf(),
+                Arc::new(e),
+            ))
+        })?;
+
+        // 7. Install the solved binaries.
+        let data: &DataStore = ctx.global_data();
+        let install_reporter = data
+            .instantiate_backend_reporter()
+            .and_then(|r| InstantiateBackendReporter::create_install_reporter(r.as_ref()));
+        install_binary_records(
+            data,
+            &prefix,
+            binary_records.clone(),
+            build_env.host_platform,
+            reinstall_all,
+            install_reporter,
+        )
+        .await
+        .map_err(|e| {
+            Arc::new(EphemeralEnvError::Install(
+                prefix.path().to_path_buf(),
+                Arc::new(e),
+            ))
+        })?;
+
+        // Write the records marker before releasing the lock so peers
+        // see it on the lock-free fast path.
+        write_cached_marker(prefix.path(), &binary_records).await;
+
+        env_lock.finish(&expected_fingerprint).await.map_err(|e| {
+            Arc::new(EphemeralEnvError::UpdateLock(
+                prefix.path().to_path_buf(),
+                Arc::new(e),
+            ))
+        })?;
+
+        Ok(Arc::new(InstalledEphemeralEnv { prefix, records }))
+    }
+}
+
+/// Marker filename written next to the ephemeral-env prefix's
+/// `conda-meta` directory. Encodes the records the prefix was
+/// provisioned with so a subsequent process can short-circuit the
+/// repodata fetch + solve when the prefix is reused.
+const CACHE_MARKER_FILENAME: &str = ".pixi-ephemeral-cache.json";
+
+/// Schema written to [`CACHE_MARKER_FILENAME`].
+///
+/// `version` lets us reject markers from an older / incompatible
+/// pixi without parsing their payload, so an in-place upgrade can
+/// invalidate the cache cleanly.
+#[derive(Serialize, Deserialize)]
+struct EphemeralEnvCacheMarker {
+    version: u32,
+    records: Vec<RepoDataRecord>,
+}
+
+const EPHEMERAL_ENV_CACHE_MARKER_VERSION: u32 = 1;
+
+/// Read and validate the per-prefix cache marker.
+///
+/// Returns `Some(InstalledEphemeralEnv)` only when the prefix
+/// directory exists, the marker parses, and the recorded
+/// `version` matches what this build of pixi understands. Any
+/// other failure (missing prefix / marker / parse error / version
+/// mismatch) returns `None` so the caller falls through to the
+/// full solve+install path.
+async fn read_cached_marker(prefix_path: &std::path::Path) -> Option<InstalledEphemeralEnv> {
+    let marker_path = prefix_path.join(CACHE_MARKER_FILENAME);
+    let bytes = tokio::fs::read(&marker_path).await.ok()?;
+    let marker: EphemeralEnvCacheMarker = serde_json::from_slice(&bytes).ok()?;
+    if marker.version != EPHEMERAL_ENV_CACHE_MARKER_VERSION {
+        return None;
+    }
+    // The prefix needs to actually exist; if it has been wiped
+    // (e.g. `pixi clean`) but the marker survived, we must
+    // re-install.
+    let prefix = Prefix::create(prefix_path.to_path_buf()).ok()?;
+    let records = marker
+        .records
+        .into_iter()
+        .map(|r| PixiRecord::Binary(Arc::new(r)))
+        .collect();
+    Some(InstalledEphemeralEnv { prefix, records })
+}
+
+/// Write the per-prefix cache marker atomically (write-temp +
+/// rename). Failures are swallowed: skipping the write only costs
+/// the next caller one extra solve, never correctness.
+async fn write_cached_marker(prefix_path: &std::path::Path, records: &[RepoDataRecord]) {
+    let marker = EphemeralEnvCacheMarker {
+        version: EPHEMERAL_ENV_CACHE_MARKER_VERSION,
+        records: records.to_vec(),
+    };
+    let Ok(bytes) = serde_json::to_vec(&marker) else {
+        return;
+    };
+    let dest = prefix_path.join(CACHE_MARKER_FILENAME);
+    let tmp = prefix_path.join(format!("{CACHE_MARKER_FILENAME}.tmp"));
+    if tokio::fs::write(&tmp, &bytes).await.is_err() {
+        return;
+    }
+    let _ = tokio::fs::rename(&tmp, &dest).await;
+}
+
+/// Fetch binary repodata for the spec's dependencies + constraints.
+async fn fetch_binary_repodata(
+    ctx: &mut ComputeCtx,
+    spec: &EphemeralEnvSpec,
+    binary_specs: &DependencyMap<PackageName, BinarySpec>,
+    build_env: &crate::BuildEnvironment,
+) -> Result<Vec<RepoData>, EphemeralEnvError> {
+    use rattler_conda_types::{Channel, Subdir};
+
+    let channel_config = ctx.compute(&ChannelConfigKey).await;
+    let gateway = ctx.global_data().gateway().clone();
+    // `fetch_binary_repodata` is invoked from `EphemeralEnvKey::compute`,
+    // which runs inside the backend-instantiate op's `scope_active`.
+    let gateway_reporter = OperationId::current().and_then(|op_id| {
+        ctx.global_data()
+            .gateway_reporter()
+            .and_then(|r| r.create_gateway_reporter(op_id))
+    });
+
+    let match_specs = binary_specs
+        .clone()
+        .into_match_specs(&channel_config)
+        .map_err(|e| EphemeralEnvError::SpecConversion(Arc::new(e)))?;
+    let constraint_specs = spec
+        .constraints
+        .clone()
+        .into_match_specs(&channel_config)
+        .map_err(|e| EphemeralEnvError::SpecConversion(Arc::new(e)))?;
+
+    let mut query = gateway
+        .query(
+            spec.channels.iter().cloned().map(Channel::from_url),
+            [build_env.host_platform, Subdir::NoArch],
+            match_specs.into_iter().chain(constraint_specs),
+        )
+        .recursive(true)
+        // Without a reporter the fetched notices are dropped on the floor, so
+        // do not pay for them.
+        .channel_notices(gateway_reporter.is_some());
+    if let Some(reporter) = gateway_reporter {
+        query = query.with_reporter(WrappingGatewayReporter(reporter));
+    }
+    query
+        .await
+        .map(|output| output.repodata)
+        .map_err(|e| EphemeralEnvError::Gateway(Arc::new(e)))
+}
+
+/// Validate that every dependency resolves to a [`BinarySpec`] and
+/// return them as a new [`DependencyMap`]. Returns the first offending
+/// package name on source.
+fn split_into_binary(
+    deps: &DependencyMap<PackageName, PixiSpec>,
+) -> Result<DependencyMap<PackageName, BinarySpec>, PackageName> {
+    let mut out: BTreeMap<PackageName, Vec<BinarySpec>> = BTreeMap::new();
+    for (name, spec) in deps.iter_specs() {
+        match spec.clone().into_source_or_binary() {
+            Either::Right(bin) => {
+                out.entry(name.clone()).or_default().push(bin);
+            }
+            Either::Left(_) => return Err(name.clone()),
+        }
+    }
+    let mut result = DependencyMap::<PackageName, BinarySpec>::default();
+    for (name, specs) in out {
+        for spec in specs {
+            result.insert(name.clone(), spec);
+        }
+    }
+    Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use chrono::{DateTime, Utc};
+    use pixi_spec::{ConfiguredCutoffs, ExcludeNewer};
+
+    use super::*;
+
+    fn spec(exclude_newer: Option<ResolvedExcludeNewer>) -> EphemeralEnvSpec {
+        let mut dependencies = DependencyMap::default();
+        dependencies.insert(
+            PackageName::from_str("pixi-build-python").unwrap(),
+            PixiSpec::Version(rattler_conda_types::VersionSpec::Any),
+        );
+        EphemeralEnvSpec {
+            dependencies,
+            constraints: DependencyMap::default(),
+            channels: Vec::new(),
+            exclude_newer,
+            strategy: SolveStrategy::default(),
+            channel_priority: ChannelPriority::default(),
+        }
+    }
+
+    /// `14d` resolved at `now`, as the manifest resolves it.
+    fn relative(now: &str, duration: &str) -> ResolvedExcludeNewer {
+        let cutoff = ExcludeNewer::from_str(duration).unwrap();
+        let now: DateTime<Utc> = now.parse().unwrap();
+        ResolvedExcludeNewer::from_datetime(cutoff.cutoff_at(now)).with_configured_cutoffs(
+            ConfiguredCutoffs {
+                cutoff: Some(cutoff),
+                ..ConfiguredCutoffs::default()
+            },
+        )
+    }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/6617:
+    /// a relative cutoff resolves to a different time on every invocation,
+    /// which must not change the prefix of the backend environment.
+    #[test]
+    fn cache_key_ignores_when_a_relative_cutoff_was_resolved() {
+        let early = spec(Some(relative("2026-10-01T00:00:00Z", "14d")));
+        let late = spec(Some(relative("2026-10-28T12:34:56Z", "14d")));
+        assert_eq!(early.cache_key(), late.cache_key());
+
+        // A different configuration is a different environment.
+        let other = spec(Some(relative("2026-10-01T00:00:00Z", "7d")));
+        assert_ne!(early.cache_key(), other.cache_key());
+        assert_ne!(early.cache_key(), spec(None).cache_key());
+    }
+
+    #[test]
+    fn cache_key_distinguishes_absolute_cutoffs() {
+        let absolute = |cutoff: &str| ResolvedExcludeNewer::from_datetime(cutoff.parse().unwrap());
+        assert_ne!(
+            spec(Some(absolute("2026-10-01T00:00:00Z"))).cache_key(),
+            spec(Some(absolute("2026-10-02T00:00:00Z"))).cache_key()
+        );
+    }
+}

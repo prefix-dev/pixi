@@ -1,0 +1,202 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use itertools::Itertools;
+use miette::IntoDiagnostic;
+use pixi_core::{
+    UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
+    lock_file::resolve_lock_platform_for,
+};
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
+use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_package_name};
+use rattler_lock::LockedPackage;
+
+use crate::workspace::platforms::resolve_platforms;
+use uv_distribution::RegistryWheelIndex;
+use uv_distribution_types::{
+    ConfigSettings, ExtraBuildRequires, ExtraBuildVariables, PackageConfigSettings,
+};
+
+mod package;
+
+use package::PackageExt;
+pub use package::{Package, PackageKind};
+
+#[expect(clippy::too_many_arguments)]
+pub async fn list(
+    workspace: &Workspace,
+    regex: Option<String>,
+    platform: Option<PixiPlatformName>,
+    environment: Option<String>,
+    explicit: bool,
+    no_install: bool,
+    lock_file_usage: LockFileUsage,
+    progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
+) -> miette::Result<Vec<Package>> {
+    let environment = workspace.environment_from_name_or_env_var(environment)?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
+        .await?;
+
+    // Held across the solve so the package table is not written over bars that
+    // have finished but are still rendered.
+    let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(progress);
+
+    let lock_file = workspace
+        .update_lock_file(
+            progress.cloned(),
+            UpdateLockFileOptions {
+                lock_file_usage,
+                no_install,
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
+            },
+        )
+        .await?
+        .0
+        .into_lock_file();
+
+    // Resolve the platform argument: a workspace-platform name takes
+    // priority; a bare conda subdir is accepted as a fallback so the user
+    // never has to spell out which workspace platform they mean. Falls
+    // back to the environment's best platform when unset.
+    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
+    let resolved_platform = match platform {
+        Some(name) => Some(
+            resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
+                .into_iter()
+                .next()
+                .expect("resolve_platforms preserves length"),
+        ),
+        None => None,
+    };
+    let platform = match resolved_platform.as_ref() {
+        Some(p) => p,
+        None => environment
+            .installed_or_best_declared_platform()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "no platform supported by environment '{}' matches the current system",
+                    environment.name()
+                )
+            })?,
+    };
+    let locked_platform = resolve_lock_platform_for(&lock_file, platform);
+    let locked_environment = lock_file.environment(environment.name().as_str());
+
+    // Get all the packages in the environment.
+    let locked_deps = match (locked_platform, locked_environment) {
+        (Some(locked_platform), Some(locked_environment)) => locked_environment
+            .packages(locked_platform)
+            .map(Vec::from_iter)
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+
+    let locked_deps_ext = locked_deps
+        .into_iter()
+        .map(|p| match p {
+            LockedPackage::Pypi(pypi_data) => {
+                let name = to_uv_normalize(pypi_data.name())?;
+                Ok(PackageExt::PyPI(pypi_data.clone().into(), name))
+            }
+            LockedPackage::Conda(c) => Ok(PackageExt::Conda(c.clone())),
+        })
+        .collect::<Result<Vec<_>, ConversionError>>()
+        .into_diagnostic()?;
+
+    // Get the python record from the lock file
+    let mut conda_records = locked_deps_ext.iter().filter_map(|d| d.as_conda());
+
+    // Construct the registry index if we have a python record
+    let python_record = conda_records.find(|r| is_python_package_name(r.name()));
+    let tags;
+    let uv_context;
+    let index_locations;
+    let config_settings = ConfigSettings::default();
+    let package_config_settings = PackageConfigSettings::default();
+    let extra_build_requires = ExtraBuildRequires::default();
+    let extra_build_variables = ExtraBuildVariables::default();
+
+    let hash_strategy = uv_types::HashStrategy::default();
+    let mut registry_index = if let Some(python_record) = python_record {
+        if environment.has_pypi_dependencies() {
+            uv_context =
+                UvResolutionContext::from_config(workspace.config(), workspace.client()?.clone())?;
+            index_locations =
+                pypi_options_to_index_locations(&environment.pypi_options(), workspace.root())
+                    .into_diagnostic()?;
+            let record = python_record
+                .record()
+                .expect("python record should have full metadata");
+            tags = get_pypi_tags(platform, record)?;
+            Some(RegistryWheelIndex::new(
+                &uv_context.cache,
+                &tags,
+                &index_locations,
+                // The strategy only filters which cached wheels the index returns.
+                // `pixi list` uses the index solely to compute the size column.
+                // It deliberately applies no hash policy and reports whatever is cached.
+                // Install-time lookups filter against the lock file digests instead
+                // (see `pixi_install_pypi::hash_verification`).
+                // A wheel whose size is listed here may still be re-fetched on install.
+                &hash_strategy,
+                &config_settings,
+                &package_config_settings,
+                &extra_build_requires,
+                &extra_build_variables,
+            ))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Get the explicit project dependencies with their requested specs
+    let mut requested_specs: HashMap<String, String> = environment
+        .combined_dependencies(Some(platform))
+        .iter()
+        .map(|(name, specs)| {
+            let spec_str = specs.iter().map(|s| s.to_string()).join(", ");
+            (name.as_source().to_string(), spec_str)
+        })
+        .collect();
+    requested_specs.extend(
+        environment
+            .pypi_dependencies(Some(platform))
+            .into_iter()
+            .map(|(name, reqs)| {
+                let spec = reqs
+                    .first()
+                    .map(|r| r.to_string())
+                    .unwrap_or_else(|| "*".to_string());
+                (name.as_normalized().as_dist_info_name().into_owned(), spec)
+            }),
+    );
+
+    let mut packages_to_output = locked_deps_ext
+        .iter()
+        .map(|p| Package::new(p, &requested_specs, registry_index.as_mut()))
+        .collect::<Vec<Package>>();
+
+    // Filter packages by regex if needed
+    if let Some(regex) = regex {
+        let regex = regex::Regex::new(&regex).map_err(|_| miette::miette!("Invalid regex"))?;
+        packages_to_output = packages_to_output
+            .into_iter()
+            .filter(|p| regex.is_match(&p.name))
+            .collect::<Vec<_>>();
+    }
+
+    // Filter packages by explicit if needed
+    if explicit {
+        packages_to_output = packages_to_output
+            .into_iter()
+            .filter(|p| p.is_explicit)
+            .collect::<Vec<_>>();
+    }
+
+    Ok(packages_to_output)
+}

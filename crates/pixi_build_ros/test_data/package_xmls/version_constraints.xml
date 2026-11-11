@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+    <name>custom_ros</name>
+    <version>0.0.1</version>
+    <description>
+        Demo
+    </description>
+
+    <maintainer email="test@test.io">Tester the Tester</maintainer>
+
+    <license>Apache License 2.0</license>
+    <buildtool_depend>catkin</buildtool_depend>
+    <depend version_lte="2.0.0">ros_package</depend>
+    <depend version_lt="2.0.0a0">ros_package2</depend>
+    <depend version_gte="5.15.0" version_lt="5.16.0">libqt5-core</depend>
+    <depend version_eq="10.0.0">tinyxml2</depend>
+    <depend version_lt="10.0.0">asio</depend>
+
+    <export>
+    </export>
+</package>

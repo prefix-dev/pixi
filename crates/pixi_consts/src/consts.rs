@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.50.2",
+    None => "0.84.2",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -29,21 +29,45 @@ pub const ACTIVATION_ENV_CACHE_DIR: &str = "activation-env-v0";
 pub const PIXI_UV_INSTALLER: &str = "uv-pixi";
 pub const CONDA_PACKAGE_CACHE_DIR: &str = rattler_cache::PACKAGE_CACHE_DIR;
 pub const CONDA_REPODATA_CACHE_DIR: &str = rattler_cache::REPODATA_CACHE_DIR;
+pub const CHANNEL_NOTICES_CACHE_DIR: &str = "notices";
 // TODO: move to rattler
 pub const CONDA_META_DIR: &str = "conda-meta";
 pub const CONDA_MENU_SCHEMA_DIR: &str = "Menu";
 pub const PYPI_CACHE_DIR: &str = "uv-cache";
 pub const CONDA_PYPI_MAPPING_CACHE_DIR: &str = "conda-pypi-mapping";
 pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
-// TODO: CACHED_BUILD_ENVS_DIR was deprecated in favor of CACHED_BUILD_ENVS_DIR. This constant will be removed in a future release.
+// TODO: CACHED_BUILD_ENVS_DIR was deprecated in favor of CACHED_BUILD_TOOL_ENVS_DIR. This constant will be removed in a future release.
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-v0";
-pub const CACHED_BUILD_WORK_DIR: &str = "work";
+pub const VIRTUAL_PACKAGE_DETECTORS_CACHE_DIR: &str = "virtual-package-detectors-v0";
+pub const CACHED_URL_DIR: &str = "url-v0";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
-pub const CACHED_SOURCE_METADATA: &str = "metadata";
-pub const CACHED_SOURCE_BUILDS: &str = "pkgs";
+/// Base name of the per-workspace backend-metadata cache, versioned
+/// so that entry-schema changes don't collide. Also houses the backend
+/// work directories for `conda/outputs` under `<source>/work/` — the
+/// cache entries and the backend's scratch space for the same source
+/// live side by side.
+pub const CACHED_BUILD_BACKEND_METADATA: &str = "meta";
+/// Subdirectory under each `<source>/` cache entry that holds the
+/// backend's scratch space for the `conda/outputs` call on that
+/// source.
+pub const BACKEND_METADATA_WORK_SUBDIR: &str = "work";
+/// Content-addressed built packages from source-build, stored directly
+/// under `.pixi/`. Versioned because the sidecar schema is part of the
+/// cache entry.
+pub const SOURCE_BUILD_ARTIFACTS_DIR: &str = "artifacts-v0";
+/// Backend workspaces for source-build. Held directly under `.pixi/`
+/// and named tersely to keep the full path short on Windows
+/// (`MAX_PATH = 260`).
+pub const SOURCE_BUILD_WORKSPACES_DIR: &str = "bld";
+/// Per-workspace cache for legacy (pre-v7) source-record build/host
+/// environments. Each entry is keyed by a stable hash of the inputs
+/// that drive the underlying `ResolveSourcePackageKey` dispatch; entry
+/// schema is versioned in-file so the directory itself is unversioned.
+pub const LEGACY_SOURCE_ENV_DIR: &str = "legacy-source-env";
+pub const WORKSPACES_REGISTRY: &str = "workspaces.toml";
 
 /// The directory relative to the .pixi folder that stores build related caches.
 pub const WORKSPACE_CACHE_DIR: &str = "build";
@@ -63,6 +87,8 @@ pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
     Some(dir) => dir,
     None => ".pixi",
 };
+/// Environment variable to override the detected platform.
+pub const PIXI_OVERRIDE_PLATFORM: &str = "PIXI_OVERRIDE_PLATFORM";
 /// The default manifest name for the global manifest file in the pixi config directory.
 pub const GLOBAL_MANIFEST_DEFAULT_NAME: &str =
     match option_env!("PIXI_GLOBAL_MANIFEST_DEFAULT_NAME") {
@@ -100,11 +126,41 @@ pub const RELEASES_API_BY_TAG: &str = "https://api.github.com/repos/prefix-dev/p
 pub const RELEASES_API_LATEST: &str =
     "https://api.github.com/repos/prefix-dev/pixi/releases/latest";
 
+// Development builds of `main`, published by `.github/workflows/dev-release.yml`.
+// Note: no trailing slash!
+pub const NIGHTLY_RELEASES_URL: &str = "https://github.com/prefix-dev/pixi-nightly/releases";
+pub const NIGHTLY_RELEASES_API_BY_TAG: &str =
+    "https://api.github.com/repos/prefix-dev/pixi-nightly/releases/tags";
+pub const NIGHTLY_RELEASES_API_LATEST: &str =
+    "https://api.github.com/repos/prefix-dev/pixi-nightly/releases/latest";
+
+/// Endpoint for the anonymous installation/update ping, sent by
+/// `pixi __install-ping` (called from the install scripts) and `pixi self-update`.
+pub const INSTALL_PING_URL: &str = "https://installation-ping.prefix.dev/a.png";
+pub const INSTALL_PING_PXID: &str = "21354c5b-2936-42bc-9d4b-9d6253815afd";
+/// Marker file in the cache directory recording that the telemetry notice was
+/// shown, so `pixi self-update` only pings after the user has seen it.
+pub const TELEMETRY_NOTICE_MARKER: &str = "telemetry-notice-shown";
+
 pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";
 pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
 pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
 
+// Build backends constants
+pub const RATTLER_BUILD_FILE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
+pub const RATTLER_BUILD_DIRS: [&str; 2] = ["", "recipe"];
+pub const ROS_BACKEND_FILE_NAMES: [&str; 1] = ["package.xml"];
+
+pub static KNOWN_MANIFEST_FILES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    let mut v = Vec::new();
+    v.push(WORKSPACE_MANIFEST);
+    v.push(PYPROJECT_MANIFEST);
+    v.push(MOJOPROJECT_MANIFEST);
+    v.extend(RATTLER_BUILD_FILE_NAMES);
+    v.extend(ROS_BACKEND_FILE_NAMES);
+    v
+});
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static TASK_ERROR_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().red());
 pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
@@ -140,3 +196,17 @@ impl Display for PypiEmoji {
         }
     }
 }
+
+/// Warning shown when an offline solve writes the lock file.
+///
+/// The versions recorded are the newest ones available locally, which may be
+/// older than what the channels offer. `pixi.lock` is usually committed, so
+/// this needs to be visible rather than silent.
+pub const OFFLINE_LOCK_FILE_WARNING: &str = "`pixi.lock` was written from a solve restricted to locally available packages, so it may pin older versions than the channels offer.\nRe-run `pixi update` without `--offline` to refresh it.";
+
+/// Warning shown when offline mode cannot cover the whole workspace.
+///
+/// The restriction applies to conda packages. PyPI dependencies are resolved
+/// by uv, which pixi runs with offline connectivity but cannot restrict to
+/// cached distributions, so a solve that succeeds may still need the network.
+pub const OFFLINE_PYPI_WARNING: &str = "offline mode restricts conda packages only. This workspace has PyPI dependencies, which may still require network access.";

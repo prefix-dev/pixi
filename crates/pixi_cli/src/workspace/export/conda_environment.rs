@@ -1,0 +1,954 @@
+use std::{collections::HashSet, path::PathBuf};
+
+use clap::Parser;
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic};
+use pep508_rs::{ExtraName, PackageName};
+use pixi_core::workspace::Environment;
+use pixi_manifest::{
+    FeaturesExt, HasWorkspaceManifest, PixiPlatform, pypi::pypi_options::FindLinksUrlOrPath,
+};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
+use rattler_conda_types::{
+    ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
+    ParseStrictness, Subdir,
+};
+use rattler_lock::{CondaPackageData, LockFile, LockedPackage, PypiPackageData, UrlOrPath};
+
+use crate::cli_config::ScriptWorkspaceConfig;
+
+#[derive(Debug, Default, Parser)]
+pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
+    pub workspace_config: ScriptWorkspaceConfig,
+
+    /// Explicit path to export the environment file to.
+    pub output_path: Option<PathBuf>,
+
+    /// The platform to render the environment file for.
+    /// Defaults to the current platform.
+    #[arg(short, long)]
+    pub platform: Option<Subdir>,
+
+    /// The environment to render the environment file for.
+    /// Defaults to the default environment.
+    #[arg(short, long)]
+    pub environment: Option<String>,
+
+    /// The name to use for the rendered conda environment.
+    /// Defaults to the environment name.
+    #[arg(short, long)]
+    pub name: Option<String>,
+
+    /// Exclude pypi dependencies from the exported environment file.
+    ///
+    /// Only the conda dependencies are written, omitting the `pip:` section.
+    #[arg(long)]
+    pub no_pypi: bool,
+
+    /// Render the environment with packages pinned to the versions resolved
+    /// in the lock file instead of the manifest specs.
+    ///
+    /// This produces a "frozen" conda environment file that can be used to
+    /// recreate the same environment without re-running the solver.
+    #[arg(long)]
+    pub from_lock_file: bool,
+}
+
+fn format_pip_extras(extras: &[ExtraName]) -> String {
+    if extras.is_empty() {
+        return String::new();
+    }
+    format!(
+        "[{}]",
+        extras.iter().map(|extra| format!("{extra}")).join("")
+    )
+}
+
+fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> String {
+    let extras = &requirement.extras;
+    let markers = &requirement.env_markers;
+
+    let mut dependency = match &requirement.source {
+        PixiPypiSource::Git { git: git_url } => {
+            let mut git_string = format!(
+                "{name}{extras} @ git+{url}",
+                name = name.as_normalized(),
+                extras = format_pip_extras(extras),
+                url = git_url.git,
+            );
+
+            if let Some(Some(rev)) = git_url.rev.as_ref().map(|rev| rev.reference()) {
+                git_string.push_str(&format!("@{rev}"));
+            }
+
+            if !git_url.subdirectory.is_empty() {
+                git_string.push_str(&format!("#subdirectory={}", git_url.subdirectory));
+            }
+
+            git_string
+        }
+        PixiPypiSource::Path { path, editable } => {
+            if editable.is_some() {
+                format!(
+                    "-e {path}{extras}",
+                    path = path.to_string_lossy(),
+                    extras = format_pip_extras(extras),
+                )
+            } else {
+                format!(
+                    "{path}{extras}",
+                    path = path.to_string_lossy(),
+                    extras = format_pip_extras(extras),
+                )
+            }
+        }
+        PixiPypiSource::Url { url, subdirectory } => {
+            let mut url_string = format!(
+                "{name}{extras} @ {url}",
+                name = name.as_normalized(),
+                extras = format_pip_extras(extras),
+                url = url,
+            );
+
+            if !subdirectory.is_empty() {
+                url_string.push_str(&format!("#subdirectory={subdirectory}"));
+            }
+
+            url_string
+        }
+        PixiPypiSource::Registry { version, .. } => match version {
+            VersionOrStar::Version(_) => format!(
+                "{name}{extras}{version}",
+                name = name.as_normalized(),
+                extras = format_pip_extras(extras),
+                version = version
+            ),
+            VersionOrStar::Star if extras.is_empty() => {
+                format!("{name}", name = name.as_normalized())
+            }
+            VersionOrStar::Star => format!(
+                "{name}{extras}",
+                name = name.as_normalized(),
+                extras = format_pip_extras(extras)
+            ),
+        },
+    };
+
+    let marker_str = markers.try_to_string();
+    if let Some(marker_str) = marker_str {
+        dependency.push_str(&format!("; {marker_str}"));
+    }
+
+    dependency
+}
+
+fn build_env_yaml(
+    platform: &PixiPlatform,
+    environment: &Environment,
+    config: &ChannelConfig,
+    name: String,
+    include_pypi: bool,
+) -> miette::Result<EnvironmentYaml> {
+    let channels =
+        channels_with_nodefaults(environment.channels().into_iter().cloned().collect_vec());
+    let mut env_yaml = rattler_conda_types::EnvironmentYaml {
+        name: Some(name),
+        channels,
+        ..Default::default()
+    };
+
+    let mut pip_dependencies: Vec<String> = Vec::new();
+
+    for (name, pixi_spec) in environment
+        .combined_dependencies(Some(platform))
+        .into_specs()
+    {
+        if let Some(nameless_spec) = pixi_spec
+            .clone()
+            .try_into_nameless_match_spec(config)
+            .into_diagnostic()?
+        {
+            let spec = MatchSpec::from_nameless(nameless_spec, name.clone().into());
+            env_yaml
+                .dependencies
+                .push(MatchSpecOrSubSection::MatchSpec(Box::new(spec)));
+        } else {
+            tracing::warn!(
+                "Failed to convert dependency to conda environment spec: {:?}. Skipping dependency",
+                name
+            );
+        }
+    }
+
+    if include_pypi && environment.has_pypi_dependencies() {
+        for (name, requirement) in environment.pypi_dependencies(Some(platform)).into_specs() {
+            pip_dependencies.push(format_pip_dependency(&name, &requirement));
+        }
+    }
+
+    if !pip_dependencies.is_empty() {
+        let pypi_options = environment.pypi_options();
+        if let Some(ref find_links) = pypi_options.find_links {
+            for find_link in find_links {
+                match find_link {
+                    FindLinksUrlOrPath::Url(url) => {
+                        pip_dependencies.insert(0, format!("--find-links {url}"));
+                    }
+                    FindLinksUrlOrPath::Path(path) => {
+                        pip_dependencies
+                            .insert(0, format!("--find-links {}", path.to_string_lossy()));
+                    }
+                }
+            }
+        }
+        if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
+            for extra_index_url in extra_index_urls {
+                pip_dependencies.insert(0, format!("--extra-index-url {}", extra_index_url.url));
+            }
+        }
+        if let Some(ref index_url) = pypi_options.index_url {
+            pip_dependencies.insert(0, format!("--index-url {index_url}"));
+        }
+
+        env_yaml
+            .dependencies
+            .push(MatchSpecOrSubSection::MatchSpec(Box::new(
+                MatchSpec::from_str("pip", ParseStrictness::Lenient)
+                    .expect("'pip' should be a valid name"),
+            )));
+
+        env_yaml
+            .dependencies
+            .push(MatchSpecOrSubSection::SubSection(
+                "pip".to_string(),
+                pip_dependencies.into_iter().collect_vec(),
+            ));
+    }
+
+    // Add environment variables from activation
+    let activation_vars = environment.activation_env(Some(platform));
+    if !activation_vars.is_empty() {
+        env_yaml.variables = activation_vars;
+    }
+
+    Ok(env_yaml)
+}
+
+fn format_locked_pypi_dependency(pypi: &PypiPackageData, is_editable: bool) -> String {
+    let name = pypi.name().to_string();
+
+    match pypi.location().inner() {
+        UrlOrPath::Path(path) => {
+            if is_editable {
+                format!("-e {path}")
+            } else {
+                path.to_string()
+            }
+        }
+        UrlOrPath::Url(url) => {
+            // Direct references (VCS or file URLs) and other non-registry URLs
+            // require the `name @ url` form. Registry-style URLs (https/http to
+            // a wheel/sdist) are also written this way to preserve the exact
+            // artifact recorded in the lock file.
+            let scheme = url.scheme();
+            if scheme == "file" || scheme.contains('+') {
+                format!("{name} @ {url}")
+            } else {
+                // For plain registry URLs, use a simple version pin so the
+                // resulting environment file is human friendly while still
+                // matching the resolved version.
+                let version = pypi
+                    .version()
+                    .map_or_else(|| String::from("*"), ToString::to_string);
+                format!("{name}=={version}")
+            }
+        }
+    }
+}
+
+fn build_env_yaml_from_lock_file(
+    platform: &PixiPlatform,
+    environment: &Environment,
+    lock_file: &LockFile,
+    name: String,
+    include_pypi: bool,
+) -> miette::Result<EnvironmentYaml> {
+    let env_name = environment.name().as_str();
+    let lock_file_env = lock_file.environment(env_name).ok_or_else(|| {
+        miette::miette!(
+            help = "Run `pixi lock` (or another command that updates the lock file) first.",
+            "environment '{env_name}' not found in the lock file"
+        )
+    })?;
+
+    let channels =
+        channels_with_nodefaults(environment.channels().into_iter().cloned().collect_vec());
+    let mut env_yaml = rattler_conda_types::EnvironmentYaml {
+        name: Some(name),
+        channels,
+        ..Default::default()
+    };
+
+    // Resolve the PixiPlatform we were given to the rattler_lock::Platform<'_>
+    // handle that `Environment::packages` expects, by matching on the
+    // workspace-side platform name.
+    let platform_name = platform.name();
+    let lock_platform = lock_file_env
+        .platforms()
+        .find(|p| p.name().as_str() == platform_name.as_str())
+        .ok_or_else(|| {
+            miette::miette!(
+                help = "Run `pixi lock` to update the lock file for this platform.",
+                "platform '{platform_name}' not found in the lock file for environment '{env_name}'"
+            )
+        })?;
+    let packages = lock_file_env.packages(lock_platform).ok_or_else(|| {
+        miette::miette!(
+            help = "Run `pixi lock` to update the lock file for this platform.",
+            "platform '{platform_name}' not found in the lock file for environment '{env_name}'"
+        )
+    })?;
+
+    // Editable status is a manifest-level property: a pypi dependency is
+    // editable when the workspace requests it (pixi.toml `editable = true`),
+    // not because of how the resolver pinned it. Collect the set of editable
+    // names from the manifest for this environment + platform up front and
+    // look each locked package up.
+    let editable_packages: HashSet<PackageName> = environment
+        .pypi_dependencies(Some(platform))
+        .iter_specs()
+        .filter(|(_, spec)| spec.editable() == Some(true))
+        .map(|(name, _)| name.as_normalized().clone())
+        .collect();
+
+    let mut pip_dependencies: Vec<String> = Vec::new();
+
+    for package in packages {
+        match package {
+            LockedPackage::Conda(CondaPackageData::Binary(p)) => {
+                let pr = &p.package_record;
+                let spec_str = format!(
+                    "{name} =={version} {build}",
+                    name = pr.name.as_source(),
+                    version = pr.version,
+                    build = pr.build,
+                );
+                let spec = MatchSpec::from_str(&spec_str, ParseStrictness::Lenient)
+                    .into_diagnostic()
+                    .with_context(|| {
+                        format!("failed to build a match spec for locked package {spec_str}")
+                    })?;
+                env_yaml
+                    .dependencies
+                    .push(MatchSpecOrSubSection::MatchSpec(Box::new(spec)));
+            }
+            LockedPackage::Conda(CondaPackageData::Source(source)) => {
+                tracing::warn!(
+                    "Skipping conda source package '{}' since source packages cannot be expressed in a conda environment file.",
+                    source.name().as_source()
+                );
+            }
+            LockedPackage::Pypi(pypi) if include_pypi => {
+                let is_editable = editable_packages.contains(pypi.name());
+                pip_dependencies.push(format_locked_pypi_dependency(pypi, is_editable));
+            }
+            // Pypi packages excluded by `--no-pypi`.
+            LockedPackage::Pypi(_) => {}
+        }
+    }
+
+    if !pip_dependencies.is_empty() {
+        let pypi_options = environment.pypi_options();
+        if let Some(ref find_links) = pypi_options.find_links {
+            for find_link in find_links {
+                match find_link {
+                    FindLinksUrlOrPath::Url(url) => {
+                        pip_dependencies.insert(0, format!("--find-links {url}"));
+                    }
+                    FindLinksUrlOrPath::Path(path) => {
+                        pip_dependencies
+                            .insert(0, format!("--find-links {}", path.to_string_lossy()));
+                    }
+                }
+            }
+        }
+        if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
+            for extra_index_url in extra_index_urls {
+                pip_dependencies.insert(0, format!("--extra-index-url {}", extra_index_url.url));
+            }
+        }
+        if let Some(ref index_url) = pypi_options.index_url {
+            pip_dependencies.insert(0, format!("--index-url {index_url}"));
+        }
+
+        env_yaml
+            .dependencies
+            .push(MatchSpecOrSubSection::MatchSpec(Box::new(
+                MatchSpec::from_str("pip", ParseStrictness::Lenient)
+                    .expect("'pip' should be a valid name"),
+            )));
+
+        env_yaml
+            .dependencies
+            .push(MatchSpecOrSubSection::SubSection(
+                "pip".to_string(),
+                pip_dependencies,
+            ));
+    }
+
+    let activation_vars = environment.activation_env(Some(platform));
+    if !activation_vars.is_empty() {
+        env_yaml.variables = activation_vars;
+    }
+
+    Ok(env_yaml)
+}
+
+/// Add `nodefaults` channel if the environment doesn't have `main`, `r`, or
+/// `msys2`
+fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
+    let mut channels = channels;
+    if !channels.iter().any(|channel| {
+        let channel = channel.as_str().to_lowercase();
+        channel == "main" || channel == "r" || channel == "msys2"
+    }) {
+        channels.push(NamedChannelOrUrl::Name("nodefaults".to_string()));
+    }
+    channels
+}
+
+pub async fn execute(args: Args) -> miette::Result<()> {
+    if args.workspace_config.script.is_some() && args.environment.is_some() {
+        return Err(miette::miette!(
+            help = "A PEP 723 script has one implicit default run environment.",
+            "`pixi workspace export conda-environment --script` does not support --environment"
+        ));
+    }
+
+    let workspace = crate::workspace_locator()
+        .with_global_config_source(args.config_source.source())
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()
+        .await?;
+    let environment = workspace.environment_from_name_or_env_var(args.environment)?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
+        .await?;
+    let workspace_platforms = (&workspace)
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .clone();
+    let platform = match args.platform {
+        Some(subdir) => workspace_platforms
+            .iter()
+            .find(|p| p.subdir() == subdir)
+            .cloned()
+            .ok_or_else(|| {
+                miette::miette!("workspace does not define a platform with subdir '{subdir}'")
+            })?,
+        None => environment
+            .installed_or_best_declared_platform()
+            .cloned()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "no platform supported by environment '{}' matches the current system",
+                    environment.name()
+                )
+            })?,
+    };
+    let config = workspace.config();
+    let name = args
+        .name
+        .unwrap_or_else(|| environment.name().as_str().to_string());
+
+    let env_yaml = if args.from_lock_file {
+        let lock_file_path = workspace.lock_file_path();
+        if !lock_file_path.is_file() {
+            miette::bail!(
+                help = "Run `pixi lock` (or another command that updates the lock file) first.",
+                "no lock file found at '{}'",
+                lock_file_path.display(),
+            );
+        }
+        let lock_file = LockFile::from_path(&lock_file_path)
+            .into_diagnostic()
+            .with_context(|| {
+                format!("failed to read lock file at '{}'", lock_file_path.display())
+            })?;
+        build_env_yaml_from_lock_file(&platform, &environment, &lock_file, name, !args.no_pypi)?
+    } else {
+        build_env_yaml(
+            &platform,
+            &environment,
+            config.global_channel_config(),
+            name,
+            !args.no_pypi,
+        )?
+    };
+
+    if let Some(output_path) = args.output_path {
+        env_yaml
+            .to_path(output_path.as_path())
+            .into_diagnostic()
+            .with_context(|| "failed to write environment YAML")?;
+    } else {
+        println!("{}", env_yaml.to_yaml_string());
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_core::Workspace;
+
+    /// Test helper: resolve the platform argument the same way `execute` does.
+    fn resolve_platform(
+        workspace: &Workspace,
+        environment: &Environment<'_>,
+        subdir: Option<Subdir>,
+    ) -> PixiPlatform {
+        let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
+        match subdir {
+            Some(s) => workspace_platforms
+                .iter()
+                .find(|p| p.subdir() == s)
+                .cloned()
+                .expect("test workspace must declare the requested platform"),
+            None => environment
+                .best_declared_platform()
+                .cloned()
+                .expect("environment must support the current system"),
+        }
+    }
+    use std::path::Path;
+
+    #[test]
+    fn test_export_conda_env_yaml() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: Some(Subdir::Osx64),
+            environment: Some("default".to_string()),
+            workspace_config: ScriptWorkspaceConfig::default(),
+            config_source: Default::default(),
+            name: None,
+            from_lock_file: false,
+            no_pypi: false,
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, args.platform);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            true,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_with_pip_extras() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: None,
+            environment: Some("default".to_string()),
+            workspace_config: ScriptWorkspaceConfig::default(),
+            config_source: Default::default(),
+            name: None,
+            from_lock_file: false,
+            no_pypi: false,
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, args.platform);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            true,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_with_pip_extras",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_with_pip_source_editable() {
+        let path =
+            Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi-source-deps/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: None,
+            environment: Some("default".to_string()),
+            workspace_config: ScriptWorkspaceConfig::default(),
+            config_source: Default::default(),
+            name: None,
+            from_lock_file: false,
+            no_pypi: false,
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, args.platform);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            true,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_with_source_editable",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_with_pip_custom_registry() {
+        let path =
+            Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi-custom-registry/pixi.toml");
+        let workspace = match Workspace::from_path(&path) {
+            Ok(workspace) => workspace,
+            Err(err) => {
+                panic!("Failed to load workspace: {err:?}");
+            }
+        };
+        let args = Args {
+            output_path: None,
+            platform: None,
+            environment: Some("alternative".to_string()),
+            workspace_config: ScriptWorkspaceConfig::default(),
+            config_source: Default::default(),
+            name: None,
+            from_lock_file: false,
+            no_pypi: false,
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, args.platform);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            true,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_with_pip_custom_registry",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_with_pip_find_links() {
+        let path =
+            Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi-find-links/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: None,
+            environment: Some("default".to_string()),
+            workspace_config: ScriptWorkspaceConfig::default(),
+            config_source: Default::default(),
+            name: None,
+            from_lock_file: false,
+            no_pypi: false,
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, args.platform);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            true,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_with_pip_find_links",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_pyproject_panic() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/docker/pyproject.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: Some(Subdir::OsxArm64),
+            environment: Some("default".to_string()),
+            workspace_config: ScriptWorkspaceConfig::default(),
+            config_source: Default::default(),
+            name: None,
+            from_lock_file: false,
+            no_pypi: false,
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, args.platform);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            true,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_pyproject_panic",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_with_defaults() {
+        let toml = r#"
+            [workspace]
+            name = "test"
+            channels = ["main"]
+            platforms = ["osx-64"]
+
+            [dependencies]
+            python = "3.9"
+           "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), toml).unwrap();
+        let args = Args {
+            output_path: None,
+            platform: Some(Subdir::Osx64),
+            environment: Some("default".to_string()),
+            workspace_config: ScriptWorkspaceConfig::default(),
+            config_source: Default::default(),
+            name: None,
+            from_lock_file: false,
+            no_pypi: false,
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, args.platform);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            true,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_with_defaults",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    #[test]
+    fn test_channels_with_nodefaults() {
+        let channels = vec![NamedChannelOrUrl::Name("main".to_string())];
+        let channels = channels_with_nodefaults(channels);
+        assert_eq!(channels, vec![NamedChannelOrUrl::Name("main".to_string())]);
+
+        let channels = vec![NamedChannelOrUrl::Name("conda-forge".to_string())];
+        let channels = channels_with_nodefaults(channels);
+        assert_eq!(
+            channels,
+            vec![
+                NamedChannelOrUrl::Name("conda-forge".to_string()),
+                NamedChannelOrUrl::Name("nodefaults".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_from_lock_file() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let lock_file = LockFile::from_path(&workspace.lock_file_path()).unwrap();
+
+        let environment = workspace
+            .environment_from_name_or_env_var(Some("default".to_string()))
+            .unwrap();
+
+        for platform in [Subdir::Osx64, Subdir::Linux64, Subdir::OsxArm64] {
+            let pp = pixi_manifest::PixiPlatform::from_subdir(platform);
+            let env_yaml = build_env_yaml_from_lock_file(
+                &pp,
+                &environment,
+                &lock_file,
+                environment.name().as_str().to_string(),
+                true,
+            )
+            .unwrap();
+            insta::assert_snapshot!(
+                format!("test_export_conda_env_yaml_from_lock_file_{platform}"),
+                env_yaml.to_yaml_string()
+            );
+        }
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_from_lock_file_unknown_platform() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let lock_file = LockFile::from_path(&workspace.lock_file_path()).unwrap();
+        let environment = workspace
+            .environment_from_name_or_env_var(Some("default".to_string()))
+            .unwrap();
+
+        // win-64 is not in the lock file for this project; expect an error.
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Win64);
+        let result = build_env_yaml_from_lock_file(
+            &win64,
+            &environment,
+            &lock_file,
+            environment.name().as_str().to_string(),
+            true,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_specify_output_name() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let env_name = "custom_env_name".to_string();
+        let args = Args {
+            output_path: None,
+            platform: Some(Subdir::Osx64),
+            environment: Some("default".to_string()),
+            workspace_config: ScriptWorkspaceConfig::default(),
+            config_source: Default::default(),
+            name: Some(env_name.clone()),
+            from_lock_file: false,
+            no_pypi: false,
+        };
+        let environment = workspace
+            .environment_from_name_or_env_var(args.environment)
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, args.platform);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            env_name,
+            true,
+        );
+        insta::assert_snapshot!(
+            "test_export_conda_env_yaml_custom_name",
+            env_yaml.unwrap().to_yaml_string()
+        );
+    }
+
+    /// Returns whether the rendered environment file contains any conda
+    /// match specs (excluding the `pip` package itself) and any `pip:`
+    /// sub-section holding the pypi dependencies.
+    fn yaml_contents(env_yaml: &EnvironmentYaml) -> (bool, bool) {
+        let mut has_conda = false;
+        let mut has_pip_section = false;
+        for entry in &env_yaml.dependencies {
+            match entry {
+                MatchSpecOrSubSection::MatchSpec(spec) => {
+                    let is_pip = spec
+                        .name
+                        .as_exact()
+                        .is_some_and(|name| name.as_normalized() == "pip");
+                    if !is_pip {
+                        has_conda = true;
+                    }
+                }
+                MatchSpecOrSubSection::SubSection(name, _) if name == "pip" => {
+                    has_pip_section = true;
+                }
+                MatchSpecOrSubSection::SubSection(..) => {}
+            }
+        }
+        (has_conda, has_pip_section)
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_includes_pypi_by_default() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let environment = workspace
+            .environment_from_name_or_env_var(Some("default".to_string()))
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, None);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            /* include_pypi */ true,
+        )
+        .unwrap();
+
+        let (has_conda, has_pip_section) = yaml_contents(&env_yaml);
+        assert!(has_conda, "conda dependencies should be present");
+        assert!(
+            has_pip_section,
+            "pypi dependencies should be present by default"
+        );
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_no_pypi() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let environment = workspace
+            .environment_from_name_or_env_var(Some("default".to_string()))
+            .unwrap();
+        let platform = resolve_platform(&workspace, &environment, None);
+
+        let env_yaml = build_env_yaml(
+            &platform,
+            &environment,
+            workspace.config().global_channel_config(),
+            environment.name().as_str().to_string(),
+            /* include_pypi */ false,
+        )
+        .unwrap();
+
+        let (has_conda, has_pip_section) = yaml_contents(&env_yaml);
+        assert!(
+            has_conda,
+            "conda dependencies should still be present with --no-pypi"
+        );
+        assert!(
+            !has_pip_section,
+            "pypi dependencies should be omitted with --no-pypi"
+        );
+    }
+}

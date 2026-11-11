@@ -1,0 +1,418 @@
+use std::path::{Path, PathBuf};
+
+use pixi_git::url::RepositoryUrl;
+use pixi_record::LockedGitUrl;
+use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
+use rattler_lock::UrlOrPath;
+use url::Url;
+use uv_cache_info::CacheInfoError;
+use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
+use uv_git_types::GitLfs;
+use uv_pypi_types::{ParsedGitDirectoryUrl, ParsedUrlError};
+
+use crate::utils::{check_url_freshness, is_direct_url, read_direct_url, strip_direct_scheme};
+
+use super::{NeedReinstall, models::ValidateCurrentInstall};
+use pixi_uv_conversions::ConversionError;
+
+/// Whether a resolved [`Dist`] is an editable install.
+fn dist_is_editable(dist: &Dist) -> bool {
+    match dist {
+        Dist::Source(source) => source.is_editable(),
+        Dist::Built(_) => false,
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum NeedsReinstallError {
+    #[error(transparent)]
+    UvConversion(#[from] ConversionError),
+    #[error(transparent)]
+    Conversion(#[from] url::ParseError),
+    #[error(transparent)]
+    ParsedUrl(#[from] ParsedUrlError),
+    #[error("error converting to parsed git url {0}")]
+    PixiGitUrl(String),
+    #[error("while checking freshness: {0}")]
+    FreshnessError(#[from] CacheInfoError),
+}
+
+/// Check if a package needs to be reinstalled
+///
+/// Locked digests are deliberately not compared here.
+/// An installed dist is unpacked, so the original archive digest is not recoverable.
+/// Like uv and pip, hash verification applies when an artifact is materialized
+/// (cache reuse or download, see `crate::hash_verification`).
+/// It does not apply retroactively to already-installed packages.
+pub(crate) fn need_reinstall(
+    installed_dist: &InstalledDist,
+    required_pkg: &crate::InstallablePypiRecord,
+    required_dist: &Dist,
+    lock_file_dir: &Path,
+) -> Result<ValidateCurrentInstall, NeedsReinstallError> {
+    // Check if the installed version is the same as the required version
+    match &installed_dist.kind {
+        InstalledDistKind::Registry(reg) => {
+            // The package on disk came from a registry. Anything other than a
+            // registry URL in the lock file (a path, a git URL, a `direct+` URL)
+            // is a source mismatch and must be reinstalled — even when the
+            // version numbers happen to coincide. See prefix-dev/pixi#2677.
+            match &required_pkg.location {
+                UrlOrPath::Path(_) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::SourceMismatch {
+                            locked_location: required_pkg.location.to_string(),
+                            installed_location: "registry".to_string(),
+                        },
+                    ));
+                }
+                UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::SourceMismatch {
+                            locked_location: required_pkg.location.to_string(),
+                            installed_location: "registry".to_string(),
+                        },
+                    ));
+                }
+                UrlOrPath::Url(_) => {}
+            }
+
+            let specifier = to_uv_version(&required_pkg.version)?;
+
+            if reg.version != specifier {
+                return Ok(ValidateCurrentInstall::Reinstall(
+                    NeedReinstall::VersionMismatch {
+                        installed_version: reg.version.clone(),
+                        locked_version: required_pkg.version.to_string(),
+                    },
+                ));
+            }
+        }
+
+        // For installed distributions check the direct_url.json to check if a re-install is needed
+        InstalledDistKind::Url(direct_url) => {
+            let direct_url_json = match read_direct_url(&direct_url.path) {
+                Ok(Some(direct_url)) => direct_url,
+                Ok(None) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::MissingDirectUrl,
+                    ));
+                }
+                Err(_) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::MissingDirectUrl,
+                    ));
+                }
+            };
+
+            match direct_url_json {
+                uv_pypi_types::DirectUrl::LocalDirectory {
+                    url,
+                    dir_info,
+                    subdirectory: _,
+                } => {
+                    let url = url.into_unsafe_url();
+                    // Convert the locked location, which can be a path or a url, to a url
+                    let locked_url = match &required_pkg.location {
+                        // Fine if it is already a url
+                        UrlOrPath::Url(url) => url.clone(),
+                        // Do some path mangling if it is actually a path to get it into a url
+                        UrlOrPath::Path(path) => {
+                            let path = PathBuf::from(path.as_str());
+                            // Because the path we are comparing to is absolute we need to convert
+                            let path = if path.is_absolute() {
+                                path
+                            } else {
+                                // Relative paths will be relative to the lock file directory
+                                lock_file_dir.join(path)
+                            };
+                            // Okay, now convert to a file path, if we cant do that we need to re-install
+                            match Url::from_file_path(path.clone()) {
+                                Ok(url) => url,
+                                Err(_) => {
+                                    return Ok(ValidateCurrentInstall::Reinstall(
+                                        NeedReinstall::UnableToConvertLockedPath {
+                                            path: path.display().to_string(),
+                                        },
+                                    ));
+                                }
+                            }
+                        }
+                    };
+
+                    // Check if the urls are different
+                    if url == locked_url {
+                        // Okay so these are the same, but we need to check if the cache is newer
+                        // than the source directory
+                        if !check_url_freshness(&url, installed_dist)? {
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::SourceDirectoryNewerThanCache,
+                            ));
+                        }
+                    } else {
+                        return Ok(ValidateCurrentInstall::Reinstall(
+                            NeedReinstall::UrlMismatch {
+                                installed_url: url.to_string(),
+                                locked_url: required_pkg.location.as_url().map(|u| u.to_string()),
+                            },
+                        ));
+                    }
+                    if dir_info.editable.unwrap_or_default() != dist_is_editable(required_dist) {
+                        return Ok(ValidateCurrentInstall::Reinstall(
+                            NeedReinstall::EditableStatusChanged {
+                                required_editable: dist_is_editable(required_dist),
+                                installed_editable: dir_info.editable.unwrap_or_default(),
+                            },
+                        ));
+                    }
+                }
+                uv_pypi_types::DirectUrl::ArchiveUrl {
+                    url,
+                    // Don't think anything ever fills this?
+                    archive_info: _,
+                    // Subdirectory is either in the url or not supported
+                    subdirectory: _,
+                } => {
+                    let lock_file_dir = typed_path::Utf8TypedPathBuf::from(
+                        lock_file_dir.to_string_lossy().as_ref(),
+                    );
+                    let locked_url = match &required_pkg.location {
+                        // Remove `direct+` scheme if it is there so we can compare the required to
+                        // the installed url
+                        UrlOrPath::Url(url) => strip_direct_scheme(url).into_owned(),
+                        UrlOrPath::Path(path) => {
+                            let path = if path.is_absolute() {
+                                path.clone()
+                            } else {
+                                // Relative paths will be relative to the lock file directory
+                                lock_file_dir.join(path).normalize()
+                            };
+                            let url = Url::from_file_path(PathBuf::from(path.as_str()));
+                            match url {
+                                Ok(url) => url,
+                                Err(_) => {
+                                    return Ok(ValidateCurrentInstall::Reinstall(
+                                        NeedReinstall::UnableToParseFileUrl {
+                                            url: path.to_string(),
+                                        },
+                                    ));
+                                }
+                            }
+                        }
+                    };
+
+                    let installed_url = url.into_unsafe_url();
+
+                    if locked_url == installed_url {
+                        // Check cache freshness
+                        if !check_url_freshness(&locked_url, installed_dist)? {
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::ArchiveDistNewerThanCache,
+                            ));
+                        }
+                    } else {
+                        return Ok(ValidateCurrentInstall::Reinstall(
+                            NeedReinstall::UrlMismatch {
+                                installed_url: installed_url.to_string(),
+                                locked_url: required_pkg.location.as_url().map(|u| u.to_string()),
+                            },
+                        ));
+                    }
+                }
+                uv_pypi_types::DirectUrl::VcsUrl { path: Some(_), .. } => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::GitArchiveIsPath,
+                    ));
+                }
+                uv_pypi_types::DirectUrl::VcsUrl {
+                    url,
+                    subdirectory: _,
+                    path: None,
+                } => {
+                    let vcs_info = url.vcs_info().clone();
+                    // Check if the installed git url is the same as the locked git url
+                    // if this fails, it should be an error, because then installed url is not a git url
+                    let installed_git_url =
+                        ParsedGitDirectoryUrl::try_from(url.url().as_url().clone())?;
+
+                    // Try to parse the locked git url, this can be any url, so this may fail
+                    // in practice it always seems to succeed, even with a non-git url
+                    let locked_git_url = match &required_pkg.location {
+                        UrlOrPath::Url(url) => {
+                            // is it a git url?
+                            if LockedGitUrl::is_locked_git_url(url) {
+                                let locked_git_url = LockedGitUrl::new(url.clone());
+                                to_parsed_git_url(&locked_git_url)
+                                    .map_err(|e| NeedsReinstallError::PixiGitUrl(e.to_string()))
+                            } else {
+                                // it is not a git url, so we fallback to use the url as is
+                                ParsedGitDirectoryUrl::try_from(uv_redacted::SafeUrl::from_url(
+                                    url.clone(),
+                                ))
+                                .map_err(|e: uv_pypi_types::ParsedUrlError| e.into())
+                            }
+                        }
+                        UrlOrPath::Path(_path) => {
+                            // Previously
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::GitArchiveIsPath,
+                            ));
+                        }
+                    };
+                    match locked_git_url {
+                        Ok(locked_git_url) => {
+                            // Check the repository base url with the locked url
+                            let installed_repository_url = RepositoryUrl::new(
+                                &installed_git_url
+                                    .url
+                                    .repository()
+                                    .as_url()
+                                    .clone()
+                                    .into_unsafe_url(),
+                            );
+                            let locked_repository_url = RepositoryUrl::new(
+                                &locked_git_url
+                                    .url
+                                    .repository()
+                                    .as_url()
+                                    .clone()
+                                    .into_unsafe_url(),
+                            );
+                            if locked_repository_url != installed_repository_url {
+                                // This happens when this is not a git url
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::UrlMismatch {
+                                        installed_url: installed_git_url.url.to_string(),
+                                        locked_url: Some(locked_git_url.url.to_string()),
+                                    },
+                                ));
+                            }
+                            if vcs_info.requested_revision
+                                != locked_git_url
+                                    .url
+                                    .reference()
+                                    .as_str()
+                                    .map(|s| s.to_string())
+                            {
+                                // The commit id is different, we need to reinstall
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::GitRevMismatch {
+                                        installed_rev: vcs_info
+                                            .requested_revision
+                                            .unwrap_or_default(),
+                                        locked_rev: locked_git_url.url.reference().to_string(),
+                                    },
+                                ));
+                            }
+
+                            if let (Some(installed_commit), Some(locked_commit)) =
+                                (vcs_info.commit_id, locked_git_url.url.precise())
+                                && installed_commit != locked_commit.as_str()
+                            {
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::GitRevMismatch {
+                                        installed_rev: installed_commit,
+                                        locked_rev: locked_commit.to_string(),
+                                    },
+                                ));
+                            }
+
+                            // The same commit checked out with and without LFS
+                            // yields different content. The installed state
+                            // comes from `direct_url.json`, where an absent
+                            // flag means LFS was disabled.
+                            let installed_lfs =
+                                vcs_info.git_lfs.map(GitLfs::from).unwrap_or_default();
+                            let locked_lfs = locked_git_url.url.lfs();
+                            if installed_lfs != locked_lfs {
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::GitLfsMismatch {
+                                        installed_lfs: installed_lfs.enabled(),
+                                        locked_lfs: locked_lfs.enabled(),
+                                    },
+                                ));
+                            }
+                        }
+                        Err(_) => {
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::UnableToParseGitUrl {
+                                    url: required_pkg
+                                        .location
+                                        .as_url()
+                                        .map(|u| u.to_string())
+                                        .unwrap_or_default(),
+                                },
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // Figure out what to do with these
+        InstalledDistKind::EggInfoFile(installed_egg) => {
+            tracing::warn!(
+                "egg-info files are not supported yet, skipping: {}",
+                installed_egg.name
+            );
+        }
+        InstalledDistKind::EggInfoDirectory(installed_egg_dir) => {
+            tracing::warn!(
+                "egg-info directories are not supported yet, skipping: {}",
+                installed_egg_dir.name
+            );
+        }
+        InstalledDistKind::LegacyEditable(egg_link) => {
+            tracing::warn!(
+                ".egg-link pointers are not supported yet, skipping: {}",
+                egg_link.name
+            );
+        }
+    };
+
+    // Do some extra checks if the version is the same
+    let metadata = match installed_dist.read_metadata() {
+        Ok(metadata) => metadata,
+        Err(err) => {
+            // Can't be sure lets reinstall
+            return Ok(ValidateCurrentInstall::Reinstall(
+                NeedReinstall::UnableToGetInstalledDistMetadata {
+                    cause: err.to_string(),
+                },
+            ));
+        }
+    };
+
+    if let Some(ref requires_python) = metadata.requires_python {
+        // If the installed package requires a different requires python version of the locked package,
+        // or if one of them is `Some` and the other is `None`.
+        match &required_pkg.requires_python {
+            Some(locked_requires_python) => {
+                if requires_python.to_string() != locked_requires_python.to_string() {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::RequiredPythonChanged {
+                            installed_python_require: requires_python.to_string(),
+                            locked_python_version: locked_requires_python.to_string(),
+                        },
+                    ));
+                }
+            }
+            None => {
+                return Ok(ValidateCurrentInstall::Reinstall(
+                    NeedReinstall::RequiredPythonChanged {
+                        installed_python_require: requires_python.to_string(),
+                        locked_python_version: "None".to_string(),
+                    },
+                ));
+            }
+        }
+    } else if let Some(requires_python) = &required_pkg.requires_python {
+        return Ok(ValidateCurrentInstall::Reinstall(
+            NeedReinstall::RequiredPythonChanged {
+                installed_python_require: "None".to_string(),
+                locked_python_version: requires_python.to_string(),
+            },
+        ));
+    }
+
+    Ok(ValidateCurrentInstall::Keep)
+}

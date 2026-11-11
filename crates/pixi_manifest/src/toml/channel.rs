@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use crate::PrioritizedChannel;
+use pixi_spec::ExcludeNewer;
 use pixi_toml::TomlFromStr;
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::{Serialize, Serializer};
@@ -29,6 +30,7 @@ impl From<TomlPrioritizedChannel> for PrioritizedChannel {
             TomlPrioritizedChannel::Str(channel) => PrioritizedChannel {
                 channel,
                 priority: None,
+                exclude_newer: None,
             },
         }
     }
@@ -36,10 +38,11 @@ impl From<TomlPrioritizedChannel> for PrioritizedChannel {
 
 impl From<PrioritizedChannel> for TomlPrioritizedChannel {
     fn from(channel: PrioritizedChannel) -> Self {
-        if let Some(priority) = channel.priority {
+        if channel.priority.is_some() || channel.exclude_newer.is_some() {
             TomlPrioritizedChannel::Map(PrioritizedChannel {
                 channel: channel.channel,
-                priority: Some(priority),
+                priority: channel.priority,
+                exclude_newer: channel.exclude_newer,
             })
         } else {
             TomlPrioritizedChannel::Str(channel.channel)
@@ -83,10 +86,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
                 let mut th = TableHelper::new(&mut toml_span::Value::with_span(inner, value.span))?;
                 let channel = th.required::<TomlFromStr<_>>("channel")?;
                 let priority = th.optional("priority");
+                let exclude_newer = th
+                    .optional::<TomlFromStr<ExcludeNewer>>("exclude-newer")
+                    .map(TomlFromStr::into_inner);
                 th.finalize(None)?;
                 Ok(TomlPrioritizedChannel::Map(PrioritizedChannel {
                     channel: channel.into_inner(),
                     priority,
+                    exclude_newer,
                 }))
             }
             other => Err(expected("a string or table", other, value.span).into()),
@@ -139,6 +146,7 @@ mod test {
                         "some-channel",
                     ),
                     priority: None,
+                    exclude_newer: None,
                 },
             ),
         }
@@ -162,6 +170,34 @@ mod test {
                     ),
                     priority: Some(
                         10,
+                    ),
+                    exclude_newer: None,
+                },
+            ),
+        }
+        "###);
+    }
+
+    #[test]
+    fn test_with_exclude_newer() {
+        let channel = TopLevel::from_toml_str(
+            r#"
+        channel = { channel = "some-channel", exclude-newer = "0d" }
+        "#,
+        )
+        .unwrap();
+        assert_debug_snapshot!(channel, @r###"
+        TopLevel {
+            channel: Map(
+                PrioritizedChannel {
+                    channel: Name(
+                        "some-channel",
+                    ),
+                    priority: None,
+                    exclude_newer: Some(
+                        Duration(
+                            0ns,
+                        ),
                     ),
                 },
             ),

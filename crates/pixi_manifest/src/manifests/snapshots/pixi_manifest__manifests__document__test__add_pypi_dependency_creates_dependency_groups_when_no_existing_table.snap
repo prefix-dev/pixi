@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: result
+---
+[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[dependency-groups]
+cuda = ["numpy>=1.20.0"]

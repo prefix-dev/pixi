@@ -22,7 +22,7 @@
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.50.2
+    Version: v0.84.2
 #>
 param (
     [string] $PixiVersion = 'latest',
@@ -32,6 +32,14 @@ param (
 )
 
 Set-StrictMode -Version Latest
+
+function Mask-Credentials {
+    param(
+        [string] $Url
+    )
+    # Replace username:password@ pattern with ***:***@
+    return $Url -replace '://[^:@/]+:[^@/]+@', '://***:***@'
+}
 
 function Publish-Env {
     if (-not ("Win32.NativeMethods" -as [Type])) {
@@ -163,7 +171,9 @@ if (-not @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc") -contains $ARCH)
 
 $BINARY = "pixi-$ARCH"
 
-if ($PixiVersion -eq 'latest') {
+if ($Env:PIXI_DOWNLOAD_URL) {
+    $DOWNLOAD_URL = $Env:PIXI_DOWNLOAD_URL
+} elseif ($PixiVersion -eq 'latest') {
     $DOWNLOAD_URL = "$PixiRepourl/releases/latest/download/$BINARY.zip"
 } else {
     # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
@@ -174,13 +184,14 @@ if ($PixiVersion -eq 'latest') {
 $BinDir = Join-Path $PixiHome 'bin'
 
 Write-Host "This script will automatically download and install Pixi ($PixiVersion) for you."
-Write-Host "Getting it from this url: $DOWNLOAD_URL"
+Write-Host "Getting it from this url: $(Mask-Credentials $DOWNLOAD_URL)"
 Write-Host "The binary will be installed into '$BinDir'"
 
 $TEMP_FILE = [System.IO.Path]::GetTempFileName()
+$webClient = New-Object System.Net.WebClient
 
 try {
-    Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $TEMP_FILE
+    $webClient.DownloadFile($DOWNLOAD_URL, $TEMP_FILE)
 
     # Create the install dir if it doesn't exist
     if (!(Test-Path -Path $BinDir)) {
@@ -193,10 +204,28 @@ try {
     # Extract pixi from the downloaded zip file
     Expand-Archive -Path $ZIP_FILE -DestinationPath $BinDir -Force
 } catch {
-    Write-Host "Error: '$DOWNLOAD_URL' is not available or failed to download"
+    Write-Host "Error: '$(Mask-Credentials $DOWNLOAD_URL)' is not available or failed to download"
     exit 1
 } finally {
+    $webClient.Dispose()
     Remove-Item -Path $ZIP_FILE
+}
+
+# Send an anonymous installation ping (best-effort, never fails the install).
+# The binary handles the opt-out (PIXI_NO_TELEMETRY / DO_NOT_TRACK) and prints
+# its notice to stdout, which is only shown if the command succeeded; binaries
+# older than the `__install-ping` command fail silently.
+try {
+    $PingOutput = & (Join-Path $BinDir 'pixi.exe') __install-ping 2>$null
+    if ($LASTEXITCODE -eq 0 -and $PingOutput) {
+        Write-Host $PingOutput
+    }
+} catch {
+    # Ignore telemetry errors
+} finally {
+    # Don't leak the ping's exit code (e.g. from older binaries without the
+    # command) to whoever runs this script.
+    $global:LASTEXITCODE = 0
 }
 
 # Add pixi to PATH if the folder is not already in the PATH variable
@@ -207,7 +236,7 @@ if (!$NoPathUpdate) {
         # For future sessions
         Write-Env -name 'PATH' -val "$BinDir;$PATH"
         # For current session
-        $Env:PATH = "$BinDir;$PATH"
+        $Env:PATH = "$BinDir;$Env:PATH"
         Write-Output "You may need to restart your shell"
     } else {
         Write-Output "$BinDir is already in PATH"

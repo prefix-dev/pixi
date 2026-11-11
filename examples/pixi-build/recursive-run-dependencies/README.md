@@ -2,7 +2,7 @@
 
 This example shows that source packages can depend on other source packages.
 
-The pixi project at the root includes the package `root` as a dependency and nothing else:
+The pixi workspace at the root includes the package `root` as a dependency and nothing else:
 
 ```toml
 [dependencies]

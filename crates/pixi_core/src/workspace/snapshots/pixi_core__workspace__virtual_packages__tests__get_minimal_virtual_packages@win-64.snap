@@ -1,0 +1,32 @@
+---
+source: crates/pixi_core/src/workspace/virtual_packages.rs
+expression: packages
+---
+[
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__win",
+        },
+        version: Version {
+            version: [[0], [10], [0]],
+            local: [],
+        },
+        build_string: BuildString(
+            "0",
+        ),
+    },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__archspec",
+        },
+        version: Version {
+            version: [[0], [1]],
+            local: [],
+        },
+        build_string: BuildString(
+            "x86_64",
+        ),
+    },
+]

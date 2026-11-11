@@ -1,0 +1,707 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use indexmap::{IndexMap, IndexSet};
+use pixi_core::workspace::{
+    Environment, PypiDeps, SkippedPackage, UpdateDeps, WorkspaceMut,
+    virtual_packages::EnvironmentRunnability,
+};
+use pixi_core::{Workspace, environment::LockFileUsage};
+use pixi_manifest::{
+    EnvironmentName, Feature, FeatureName, KnownPreviewFlag, LoadManifestsError, PixiPlatform,
+    PixiPlatformName, PlatformEdit, PlatformMove, PrioritizedChannel, SpecType, TargetSelector,
+    Task, TaskName,
+};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Subdir};
+
+use crate::global::{GlobalEnvironment, InstallError, InstallOptions, ListError, UninstallError};
+use crate::interface::Interface;
+use crate::workspace::add::GitOptions;
+use crate::workspace::{
+    AddError, ChannelError, ChannelOptions, DependencyOptions, EditActivationError,
+    EnvironmentError, InitError, InitOptions, Package, PlatformError, PreviewFlagsError,
+    ReinstallOptions, RemoveError, RemoveFeatureError, RunError, RunOptions, SetDescriptionError,
+    SetNameError, ShellError, ShellOptions, TaskError,
+};
+
+pub struct DefaultContext<I: Interface> {
+    _interface: I,
+}
+
+impl<I: Interface> DefaultContext<I> {
+    pub fn new(interface: I) -> Self {
+        Self {
+            _interface: interface,
+        }
+    }
+
+    /// Search for packages matching a [`MatchSpec`]
+    pub async fn search(
+        &self,
+        config: pixi_config::Config,
+        matchspec: MatchSpec,
+        channels: IndexSet<Channel>,
+        platforms: Vec<Subdir>,
+        fuzzy_limit: Option<usize>,
+    ) -> miette::Result<crate::workspace::search::SearchResult> {
+        crate::workspace::search::search(None, config, matchspec, channels, platforms, fuzzy_limit)
+            .await
+    }
+}
+
+pub struct GlobalContext<I: Interface> {
+    _interface: I,
+    project: pixi_global::Project,
+}
+
+impl<I: Interface> GlobalContext<I> {
+    pub fn new(interface: I, project: pixi_global::Project) -> Self {
+        Self {
+            _interface: interface,
+            project,
+        }
+    }
+
+    pub fn project(&self) -> &pixi_global::Project {
+        &self.project
+    }
+
+    pub fn manifest_path(&self) -> std::path::PathBuf {
+        self.project.manifest.path.clone()
+    }
+
+    pub async fn list_environments(
+        &self,
+        regex: Option<String>,
+    ) -> Result<Vec<GlobalEnvironment>, ListError> {
+        crate::global::list::list(&self.project, regex).await
+    }
+
+    pub async fn get_environment(
+        &self,
+        name: &pixi_global::EnvironmentName,
+    ) -> Result<GlobalEnvironment, ListError> {
+        crate::global::list::get(&self.project, name).await
+    }
+
+    pub async fn install_environment(
+        &mut self,
+        env_name: &pixi_global::EnvironmentName,
+        specs: &[pixi_global::project::GlobalSpec],
+        options: &InstallOptions,
+    ) -> Result<pixi_global::StateChanges, InstallError> {
+        crate::global::install::install_environment(&mut self.project, env_name, specs, options)
+            .await
+    }
+
+    pub async fn uninstall_environment(
+        &mut self,
+        env_name: &pixi_global::EnvironmentName,
+    ) -> Result<pixi_global::StateChanges, UninstallError> {
+        crate::global::uninstall::uninstall_environment(&mut self.project, env_name).await
+    }
+}
+
+pub struct WorkspaceContext<I: Interface> {
+    interface: I,
+    workspace: Workspace,
+    progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
+}
+
+impl<I: Interface> WorkspaceContext<I> {
+    pub fn new(interface: I, workspace: Workspace) -> Self {
+        Self {
+            interface,
+            workspace,
+            progress: None,
+        }
+    }
+
+    /// Reports solve, download and install progress of every operation this
+    /// context performs. Consumers that are not driving a terminal leave this
+    /// unset and the work stays silent.
+    pub fn with_progress(mut self, progress: Arc<pixi_reporters::TopLevelProgress>) -> Self {
+        self.progress = Some(progress);
+        self
+    }
+
+    pub fn workspace(&self) -> &Workspace {
+        &self.workspace
+    }
+
+    pub fn manifest_path(&self) -> std::path::PathBuf {
+        self.workspace.workspace.provenance.absolute_path()
+    }
+
+    pub fn workspace_mut(&self) -> Result<WorkspaceMut, LoadManifestsError> {
+        Ok(self.attach_progress(self.workspace.clone().modify()?))
+    }
+
+    /// Hands this context's reporter to `workspace` so the solves, downloads
+    /// and installs it triggers are visible. Every `WorkspaceMut` this context
+    /// hands out must go through here, or that work runs silently.
+    fn attach_progress(&self, workspace: WorkspaceMut) -> WorkspaceMut {
+        match &self.progress {
+            Some(progress) => workspace.with_progress(progress.clone()),
+            None => workspace,
+        }
+    }
+
+    pub async fn init(interface: I, options: InitOptions) -> Result<Workspace, InitError> {
+        crate::workspace::init::init(&interface, options).await
+    }
+
+    pub async fn name(&self) -> String {
+        crate::workspace::workspace::name::get(&self.workspace).await
+    }
+
+    pub async fn set_name(&self, name: &str) -> Result<(), SetNameError> {
+        crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
+    }
+
+    pub async fn description(&self) -> Option<String> {
+        crate::workspace::workspace::description::get(&self.workspace).await
+    }
+
+    pub async fn set_description(&self, description: &str) -> Result<(), SetDescriptionError> {
+        crate::workspace::workspace::description::set(
+            &self.interface,
+            self.workspace_mut()?,
+            description,
+        )
+        .await
+    }
+
+    pub async fn preview_flags(&self) -> Vec<KnownPreviewFlag> {
+        crate::workspace::workspace::preview::list(&self.workspace).await
+    }
+
+    /// Enable preview flags by editing the manifest directly, so a
+    /// manifest that fails to load exactly because a flag is missing,
+    /// e.g. a `[package]` section without `pixi-build`, can still be fixed.
+    pub async fn add_preview_flags(
+        interface: I,
+        manifest_path: std::path::PathBuf,
+        flags: Vec<KnownPreviewFlag>,
+    ) -> Result<(), PreviewFlagsError> {
+        crate::workspace::workspace::preview::add(&interface, manifest_path, flags).await
+    }
+
+    /// Disable preview flags by editing the manifest directly, like
+    /// [`Self::add_preview_flags`]. Errors without saving when the
+    /// manifest would no longer load, unless `force` is set.
+    pub async fn remove_preview_flags(
+        interface: I,
+        manifest_path: std::path::PathBuf,
+        flags: Vec<KnownPreviewFlag>,
+        force: bool,
+    ) -> Result<(), PreviewFlagsError> {
+        crate::workspace::workspace::preview::remove(&interface, manifest_path, flags, force).await
+    }
+
+    pub async fn list_activation(&self) -> Vec<crate::workspace::ActivationEntry> {
+        crate::workspace::workspace::activation::list(&self.workspace).await
+    }
+
+    pub async fn add_activation_scripts(
+        &self,
+        scripts: Vec<String>,
+        prepend: bool,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> Result<(), EditActivationError> {
+        crate::workspace::workspace::activation::add_scripts(
+            &self.interface,
+            self.workspace_mut()?,
+            scripts,
+            prepend,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_activation_scripts(
+        &self,
+        scripts: Vec<String>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> Result<(), EditActivationError> {
+        crate::workspace::workspace::activation::remove_scripts(
+            &self.interface,
+            self.workspace_mut()?,
+            scripts,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn set_activation_env(
+        &self,
+        variables: Vec<(String, String)>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> Result<(), EditActivationError> {
+        crate::workspace::workspace::activation::set_env(
+            &self.interface,
+            self.workspace_mut()?,
+            variables,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_activation_env(
+        &self,
+        keys: Vec<String>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> Result<(), EditActivationError> {
+        crate::workspace::workspace::activation::remove_env(
+            &self.interface,
+            self.workspace_mut()?,
+            keys,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn list_channel(&self) -> HashMap<EnvironmentName, Vec<NamedChannelOrUrl>> {
+        crate::workspace::workspace::channel::list(&self.workspace).await
+    }
+
+    pub async fn add_channel(
+        &self,
+        options: ChannelOptions,
+        priority: Option<i32>,
+        prepend: bool,
+    ) -> Result<(), ChannelError> {
+        crate::workspace::workspace::channel::add(
+            &self.interface,
+            self.workspace_mut()?,
+            options,
+            priority,
+            prepend,
+        )
+        .await
+    }
+
+    pub async fn remove_channel(
+        &self,
+        options: ChannelOptions,
+        priority: Option<i32>,
+    ) -> Result<(), ChannelError> {
+        crate::workspace::workspace::channel::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            options,
+            priority,
+        )
+        .await
+    }
+
+    pub async fn set_channels(&self, options: ChannelOptions) -> Result<(), ChannelError> {
+        crate::workspace::workspace::channel::set(&self.interface, self.workspace_mut()?, options)
+            .await
+    }
+
+    pub async fn list_platforms(&self) -> HashMap<EnvironmentName, Vec<PixiPlatformName>> {
+        crate::workspace::workspace::platform::list(&self.workspace).await
+    }
+
+    pub async fn add_platforms(
+        &self,
+        platform: Vec<PixiPlatform>,
+        no_install: bool,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
+    ) -> Result<(), PlatformError> {
+        crate::workspace::workspace::platform::add(
+            &self.interface,
+            self.workspace_mut()?,
+            platform,
+            no_install,
+            feature,
+            lock_file_usage,
+        )
+        .await
+    }
+
+    pub async fn remove_platforms(
+        &self,
+        platform: Vec<PixiPlatform>,
+        no_install: bool,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
+    ) -> Result<(), PlatformError> {
+        crate::workspace::workspace::platform::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            platform,
+            no_install,
+            feature,
+            lock_file_usage,
+        )
+        .await
+    }
+
+    pub async fn edit_platform(
+        &self,
+        name: PixiPlatformName,
+        edit: PlatformEdit,
+        no_install: bool,
+        lock_file_usage: LockFileUsage,
+    ) -> Result<(), PlatformError> {
+        crate::workspace::workspace::platform::edit(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            edit,
+            no_install,
+            lock_file_usage,
+        )
+        .await
+    }
+
+    pub async fn move_platform(
+        &self,
+        name: PixiPlatformName,
+        target: PlatformMove,
+        no_install: bool,
+        lock_file_usage: LockFileUsage,
+    ) -> Result<(), PlatformError> {
+        crate::workspace::workspace::platform::move_platform(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            target,
+            no_install,
+            lock_file_usage,
+        )
+        .await
+    }
+
+    pub async fn add_auto_detected_platform(
+        &self,
+        candidate: PixiPlatform,
+        explicit_name: bool,
+        no_install: bool,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
+    ) -> Result<(), PlatformError> {
+        crate::workspace::workspace::platform::add_auto_detected(
+            &self.interface,
+            self.workspace_mut()?,
+            candidate,
+            explicit_name,
+            no_install,
+            feature,
+            lock_file_usage,
+        )
+        .await
+    }
+
+    /// Look up an existing workspace platform by name.
+    pub async fn get_workspace_platform(&self, name: &PixiPlatformName) -> Option<PixiPlatform> {
+        crate::workspace::workspace::platform::get_workspace_platform(&self.workspace, name).await
+    }
+
+    pub async fn list_environments(&self) -> Vec<Environment<'_>> {
+        crate::workspace::workspace::environment::list(&self.workspace).await
+    }
+
+    pub async fn add_environment(
+        &self,
+        name: EnvironmentName,
+        features: Option<Vec<String>>,
+        solve_group: Option<String>,
+        no_default_feature: bool,
+        force: bool,
+    ) -> Result<(), EnvironmentError> {
+        crate::workspace::workspace::environment::add(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            features,
+            solve_group,
+            no_default_feature,
+            force,
+        )
+        .await
+    }
+
+    pub async fn remove_environment(&self, name: &str) -> Result<(), EnvironmentError> {
+        crate::workspace::workspace::environment::remove(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+        )
+        .await
+    }
+
+    pub async fn list_packages(
+        &self,
+        regex: Option<String>,
+        platform: Option<PixiPlatformName>,
+        environment: Option<String>,
+        explicit: bool,
+        no_install: bool,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<Vec<Package>> {
+        crate::workspace::list::list(
+            &self.workspace,
+            regex,
+            platform,
+            environment,
+            explicit,
+            no_install,
+            lock_file_usage,
+            self.progress.as_ref(),
+        )
+        .await
+    }
+
+    pub async fn list_features(&self) -> IndexMap<FeatureName, Feature> {
+        crate::workspace::workspace::feature::list_features(&self.workspace).await
+    }
+
+    pub async fn list_feature_channels(
+        &self,
+        feature: FeatureName,
+    ) -> Option<IndexSet<PrioritizedChannel>> {
+        crate::workspace::workspace::feature::list_feature_channels(&self.workspace, feature).await
+    }
+
+    pub async fn list_feature_dependencies(
+        &self,
+        feature: FeatureName,
+        target: Option<&TargetSelector>,
+    ) -> Option<HashMap<PackageName, Vec<PixiSpec>>> {
+        crate::workspace::workspace::feature::list_feature_dependencies(
+            &self.workspace,
+            feature,
+            target,
+        )
+        .await
+    }
+
+    pub async fn list_feature_pypi_dependencies(
+        &self,
+        feature: FeatureName,
+        target: Option<&TargetSelector>,
+    ) -> Option<HashMap<PypiPackageName, Vec<PixiPypiSpec>>> {
+        crate::workspace::workspace::feature::list_feature_pypi_dependencies(
+            &self.workspace,
+            feature,
+            target,
+        )
+        .await
+    }
+
+    pub async fn list_feature_tasks(
+        &self,
+        feature: FeatureName,
+        target: Option<&TargetSelector>,
+    ) -> Option<HashMap<TaskName, Task>> {
+        crate::workspace::workspace::feature::list_feature_tasks(&self.workspace, feature, target)
+            .await
+    }
+
+    pub async fn feature_by_task(
+        &self,
+        task: &TaskName,
+        environment: &EnvironmentName,
+    ) -> Option<FeatureName> {
+        crate::workspace::workspace::feature::feature_by_task(&self.workspace, task, environment)
+            .await
+    }
+
+    pub async fn remove_feature(
+        &self,
+        feature: &FeatureName,
+    ) -> Result<Vec<EnvironmentName>, RemoveFeatureError> {
+        crate::workspace::workspace::feature::remove_feature(
+            &self.interface,
+            self.workspace_mut()?,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn add_conda_deps(
+        &self,
+        specs: IndexMap<PackageName, MatchSpec>,
+        spec_type: SpecType,
+        dep_options: DependencyOptions,
+        git_options: GitOptions,
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), AddError> {
+        Box::pin(crate::workspace::add::add_conda_dep(
+            self.workspace_mut()?,
+            specs,
+            spec_type,
+            dep_options,
+            git_options,
+        ))
+        .await
+    }
+
+    pub async fn add_pypi_deps(
+        &self,
+        pypi_deps: PypiDeps,
+        editable: bool,
+        options: DependencyOptions,
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), AddError> {
+        Box::pin(crate::workspace::add::add_pypi_dep(
+            self.workspace_mut()?,
+            pypi_deps,
+            editable,
+            options,
+        ))
+        .await
+    }
+
+    pub async fn remove_conda_deps(
+        &self,
+        specs: IndexMap<PackageName, MatchSpec>,
+        spec_type: SpecType,
+        dep_options: DependencyOptions,
+    ) -> Result<(), RemoveError> {
+        let workspace_mut = self.workspace_mut()?;
+        Box::pin(crate::workspace::remove::remove_conda_deps(
+            workspace_mut,
+            specs,
+            spec_type,
+            dep_options,
+        ))
+        .await
+    }
+
+    pub async fn remove_pypi_deps(
+        &self,
+        pypi_deps: PypiDeps,
+        options: DependencyOptions,
+    ) -> Result<(), RemoveError> {
+        let workspace_mut = self.workspace_mut()?;
+        Box::pin(crate::workspace::remove::remove_pypi_deps(
+            workspace_mut,
+            pypi_deps,
+            options,
+        ))
+        .await
+    }
+
+    pub async fn reinstall(
+        &self,
+        options: ReinstallOptions,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<()> {
+        crate::workspace::reinstall::reinstall(
+            &self.interface,
+            &self.workspace,
+            options,
+            lock_file_usage,
+            self.progress.as_ref(),
+        )
+        .await
+    }
+
+    pub async fn run(&self, options: RunOptions) -> Result<i32, RunError> {
+        crate::workspace::run::run(
+            &self.interface,
+            &self.workspace,
+            options,
+            self.progress.as_ref(),
+        )
+        .await
+    }
+
+    pub async fn shell(&self, options: ShellOptions) -> Result<i32, ShellError> {
+        crate::workspace::shell::shell(&self.workspace, options, self.progress.as_ref()).await
+    }
+
+    pub async fn list_tasks(
+        &self,
+        environment: Option<EnvironmentName>,
+    ) -> Result<
+        HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>,
+        TaskError,
+    > {
+        crate::workspace::task::list_tasks(&self.interface, &self.workspace, environment).await
+    }
+
+    pub async fn add_task(
+        &self,
+        name: TaskName,
+        task: Task,
+        feature: FeatureName,
+        platform: Option<PixiPlatformName>,
+    ) -> Result<(), TaskError> {
+        crate::workspace::task::add_task(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            task,
+            feature,
+            platform,
+        )
+        .await
+    }
+
+    pub async fn alias_task(
+        &self,
+        name: TaskName,
+        task: Task,
+        feature: FeatureName,
+        platform: Option<PixiPlatformName>,
+    ) -> Result<(), TaskError> {
+        crate::workspace::task::alias_task(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            task,
+            feature,
+            platform,
+        )
+        .await
+    }
+
+    pub async fn remove_task(
+        &self,
+        names: Vec<TaskName>,
+        platform: Option<PixiPlatformName>,
+        feature: FeatureName,
+    ) -> Result<(), TaskError> {
+        crate::workspace::task::remove_tasks(
+            &self.interface,
+            self.workspace_mut()?,
+            names,
+            platform,
+            feature,
+        )
+        .await
+    }
+
+    /// Search for packages matching a [`MatchSpec`]
+    pub async fn search(
+        &self,
+        matchspec: MatchSpec,
+        channels: IndexSet<Channel>,
+        platforms: Vec<Subdir>,
+        fuzzy_limit: Option<usize>,
+    ) -> miette::Result<crate::workspace::search::SearchResult> {
+        crate::workspace::search::search(
+            Some(&self.workspace),
+            self.workspace.config().clone(),
+            matchspec,
+            channels,
+            platforms,
+            fuzzy_limit,
+        )
+        .await
+    }
+}

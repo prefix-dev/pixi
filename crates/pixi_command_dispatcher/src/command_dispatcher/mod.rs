@@ -1,40 +1,38 @@
-//! Defines the [`CommandDispatcher`] and its associated components for managing
-//! and synchronizing tasks across different environments.
+//! Defines the [`CommandDispatcher`] and its associated components.
 //!
-//! The [`CommandDispatcher`] is a central component for orchestrating tasks
+//! [`CommandDispatcher`] is a thin, cheaply cloneable handle that wraps a
+//! [`ComputeEngine`] together with shared
+//! [`CommandDispatcherData`] (gateway, caches, resolvers, executor, etc.).
+//! Public methods on the handle build the appropriate
+//! [`Key`](pixi_compute_engine::Key) and submit it to the engine, which
+//! handles deduplication, caching, and dependency tracking for operations
 //! such as solving environments, fetching metadata, and managing source
-//! checkouts. It ensures efficient execution by avoiding redundant computations
-//! and supporting concurrent operations.
+//! checkouts.
 
-use std::{
-    path::{Component, Path, PathBuf},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 pub use builder::CommandDispatcherBuilder;
-pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt};
-pub(crate) use git::GitCheckoutTask;
-pub use instantiate_backend::{InstantiateBackendError, InstantiateBackendSpec};
+pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt, ComputeResultExt};
 use pixi_build_frontend::BackendOverride;
+use pixi_compute_engine::ComputeEngine;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
-use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
-use pixi_spec::SourceSpec;
+use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, Subdir};
+use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
-use reqwest_middleware::ClientWithMiddleware;
-use tokio::sync::{mpsc, oneshot};
-use typed_path::Utf8TypedPath;
+use tokio::sync::Semaphore;
 
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
-    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
-    SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
-    backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
-    build::{BuildCache, source_metadata_cache::SourceMetadataCache},
-    cache_dirs::CacheDirs,
+    BackendHandle, BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+    DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec, Executor,
+    InstantiateBackendError, InstantiateBackendKey,
+    cache::{
+        BuildBackendMetadataCache, CacheDirs,
+        markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
+    },
+    environment::WorkspaceEnvRegistry,
     install_pixi::{
         InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     },
@@ -42,51 +40,50 @@ use crate::{
         InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
         InstantiateToolEnvironmentSpec,
     },
-    limits::ResolvedLimits,
-    solve_conda::SolveCondaEnvironmentError,
-    source_build::{SourceBuildError, SourceBuildResult, SourceBuildSpec},
 };
+use pixi_compute_cache_dirs::CacheLocation;
+use pixi_compute_env_vars::EnvVarsKey;
+use pixi_path::AbsPresumedDirPathBuf;
 
 mod builder;
 mod error;
-mod git;
-mod instantiate_backend;
 
 /// The command dispatcher is responsible for synchronizing requests between
 /// different conda environments.
 #[derive(Clone)]
 pub struct CommandDispatcher {
-    /// The channel through which messages are sent to the command dispatcher.
-    ///
-    /// This is an option so we can drop this field in the `Drop`
-    /// implementation. It should only ever be `None` when the command
-    /// dispatcher is dropped.
-    pub(crate) channel: Option<CommandDispatcherChannel>,
-
-    /// The context in which the command dispatcher is operating. If a command
-    /// dispatcher is created for a background task, this context will indicate
-    /// from which task it was created.
-    pub(crate) context: Option<CommandDispatcherContext>,
-
     /// Holds the shared data required by the command dispatcher.
     pub(crate) data: Arc<CommandDispatcherData>,
 
-    /// Holds a strong reference to the process thread handle, this allows us to
-    /// wait for the background thread to finish once the last (user facing)
-    /// command dispatcher is dropped.
-    pub(crate) processor_handle: Option<Arc<std::thread::JoinHandle<()>>>,
+    /// The generic compute engine. All real work runs through Keys
+    /// computed via this engine.
+    pub(crate) engine: ComputeEngine,
+
+    /// Held so that when the last [`CommandDispatcher`] clone drops,
+    /// the compute dep-graph snapshot is written if the
+    /// `PIXI_COMPUTE_DEP_GRAPH` env var is set.
+    _dump_guard: Arc<DepGraphDumpGuard>,
 }
 
-impl Drop for CommandDispatcher {
-    fn drop(&mut self) {
-        // Release our strong reference to the main thread channel. If this is the last
-        // strong reference to the channel, the thread will shut down.
-        drop(self.channel.take());
+/// Dumps the compute-engine dependency graph when dropped if
+/// `PIXI_COMPUTE_DEP_GRAPH` is set. Held in an `Arc` so the dump runs
+/// only when the last [`CommandDispatcher`] clone is dropped, after
+/// which the graph reflects the full session.
+pub(crate) struct DepGraphDumpGuard {
+    pub engine: ComputeEngine,
+}
 
-        // If this instance holds the last strong reference to the background thread
-        // join handle this will await its shutdown.
-        if let Some(handle) = self.processor_handle.take().and_then(Arc::into_inner) {
-            let _err = handle.join();
+impl Drop for DepGraphDumpGuard {
+    fn drop(&mut self) {
+        let Ok(path) = std::env::var("PIXI_COMPUTE_DEP_GRAPH") else {
+            return;
+        };
+        let graph = pixi_compute_engine::DependencyGraph::from_engine(&self.engine);
+        match graph.write_dot(&path) {
+            Ok(()) => tracing::info!("wrote compute-engine dependency graph to `{path}`"),
+            Err(err) => {
+                tracing::warn!("failed to write PIXI_COMPUTE_DEP_GRAPH dot file to `{path}`: {err}")
+            }
         }
     }
 }
@@ -99,23 +96,21 @@ pub(crate) struct CommandDispatcherData {
     /// The gateway to use to query conda repodata.
     pub gateway: Gateway,
 
-    /// Source metadata cache used to store metadata for source packages.
-    pub source_metadata_cache: SourceMetadataCache,
-
-    /// Build cache used to store build artifacts for source packages.
-    pub build_cache: BuildCache,
+    /// Backend metadata cache used to store metadata for source packages.
+    pub build_backend_metadata_cache: BuildBackendMetadataCache,
 
     /// The resolver of git repositories.
     pub git_resolver: GitResolver,
 
-    /// The base directory to use if relative paths are discovered.
-    pub root_dir: PathBuf,
+    /// The resolver of url archives.
+    pub url_resolver: UrlResolver,
 
-    /// The location to store caches.
-    pub cache_dirs: CacheDirs,
+    /// Anchors and overrides for on-disk caches. Shared with the
+    /// engine via [`CacheDirsKey`](pixi_compute_cache_dirs::CacheDirsKey).
+    pub cache_dirs: Arc<CacheDirs>,
 
     /// The reqwest client to use for network requests.
-    pub download_client: ClientWithMiddleware,
+    pub download_client: LazyClient,
 
     /// Backend overrides for build environments.
     pub build_backend_overrides: BackendOverride,
@@ -123,179 +118,59 @@ pub(crate) struct CommandDispatcherData {
     /// A cache for glob hashes.
     pub glob_hash_cache: GlobHashCache,
 
-    /// The resolved limits for the command dispatcher.
-    pub limits: ResolvedLimits,
-
     /// The package cache used to store packages.
     pub package_cache: PackageCache,
 
     /// The platform (and virtual packages) to use for tools that should run on
     /// the current system. Usually this is the current platform, but it can
     /// be a different platform.
-    pub tool_platform: (Platform, Vec<GenericVirtualPackage>),
+    pub tool_platform: (Subdir, Vec<GenericVirtualPackage>),
 
     /// True if execution of link scripts is enabled.
     pub execute_link_scripts: bool,
 
+    /// Whether symbolic links are allowed during package installation.
+    pub allow_symbolic_links: Option<bool>,
+
+    /// Whether hard links are allowed during package installation.
+    pub allow_hard_links: Option<bool>,
+
+    /// Whether ref links (copy-on-write) are allowed during package installation.
+    pub allow_ref_links: Option<bool>,
+
     /// The execution type of the dispatcher.
     pub executor: Executor,
-}
 
-/// A channel through which to send any messages to the command_dispatcher. Some
-/// dispatchers are constructed by the command_dispatcher itself. To avoid a
-/// cyclic dependency, these "sub"-dispatchers use a weak reference to the
-/// sender.
-#[derive(Clone)]
-pub(crate) enum CommandDispatcherChannel {
-    Strong(mpsc::UnboundedSender<ForegroundMessage>),
-    Weak(mpsc::WeakUnboundedSender<ForegroundMessage>),
-}
+    /// Semaphore that bounds concurrent git checkouts driven through
+    /// the compute engine. `None` means unbounded.
+    pub git_checkout_semaphore: Option<Arc<Semaphore>>,
 
-impl CommandDispatcherChannel {
-    /// Returns an owned channel that can be used to send messages to the
-    /// background task, or `None` if the background task has been dropped.
-    pub fn sender(&self) -> Option<mpsc::UnboundedSender<ForegroundMessage>> {
-        match self {
-            CommandDispatcherChannel::Strong(sender) => Some(sender.clone()),
-            CommandDispatcherChannel::Weak(sender) => sender.upgrade(),
-        }
-    }
-}
+    /// Semaphore that bounds concurrent URL archive fetches driven
+    /// through the compute engine. `None` means unbounded.
+    pub url_checkout_semaphore: Option<Arc<Semaphore>>,
 
-/// Context in which the [`CommandDispatcher`] is operating.
-///
-/// This enum is used to track dependencies and associate tasks with specific
-/// contexts.
-#[derive(Debug, Copy, Clone, derive_more::From, derive_more::TryInto, Hash, Eq, PartialEq)]
-pub(crate) enum CommandDispatcherContext {
-    SolveCondaEnvironment(SolveCondaEnvironmentId),
-    SolvePixiEnvironment(SolvePixiEnvironmentId),
-    BuildBackendMetadata(BuildBackendMetadataId),
-    BackendSourceBuild(BackendSourceBuildId),
-    SourceMetadata(SourceMetadataId),
-    SourceBuild(SourceBuildId),
-    QuerySourceBuildCache(SourceBuildCacheStatusId),
-    InstallPixiEnvironment(InstallPixiEnvironmentId),
-    InstantiateToolEnv(InstantiatedToolEnvId),
-}
+    /// Semaphore that bounds concurrent conda solves driven through
+    /// the compute engine. `None` means unbounded.
+    pub conda_solve_semaphore: Option<Arc<Semaphore>>,
 
-slotmap::new_key_type! {
-    /// An id that uniquely identifies a conda environment that is being solved.
-    pub(crate) struct SolveCondaEnvironmentId;
+    /// Semaphore that bounds concurrent backend source builds driven
+    /// through the compute engine. `None` means unbounded.
+    pub backend_source_build_semaphore: Option<Arc<Semaphore>>,
 
-    /// An id that uniquely identifies a build backend source build request.
-    pub(crate) struct BackendSourceBuildId;
+    /// Semaphore that bounds concurrent filesystem operations while linking
+    /// packages into prefixes. Shared across all installs so concurrent
+    /// environment installs cannot exhaust the file descriptor limit. `None`
+    /// means unbounded.
+    pub io_concurrency_semaphore: Option<Arc<Semaphore>>,
 
-    /// An id that uniquely identifies a conda environment that is being solved.
-    pub(crate) struct SolvePixiEnvironmentId;
-
-    /// An id that uniquely identifies an installation of an environment.
-    pub(crate) struct InstallPixiEnvironmentId;
-
-    /// A unique id that identifies a git source checkout.
-    pub(crate) struct GitCheckoutId;
-}
-
-/// An id that uniquely identifies a build backend metadata request.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct BuildBackendMetadataId(pub usize);
-
-/// An id that uniquely identifies a source metadata request.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct SourceMetadataId(pub usize);
-
-/// An id that uniquely identifies a source build request.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct SourceBuildId(pub usize);
-
-/// An id that uniquely identifies a source build cache request.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct SourceBuildCacheStatusId(pub usize);
-
-/// An id that uniquely identifies a tool environment.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct InstantiatedToolEnvId(pub usize);
-
-/// A message send to the dispatch task.
-#[derive(derive_more::From)]
-pub(crate) enum ForegroundMessage {
-    SolveCondaEnvironment(SolveCondaEnvironmentTask),
-    SolvePixiEnvironment(SolvePixiEnvironmentTask),
-    BuildBackendMetadata(BuildBackendMetadataTask),
-    BackendSourceBuild(BackendSourceBuildTask),
-    SourceMetadata(SourceMetadataTask),
-    SourceBuild(SourceBuildTask),
-    QuerySourceBuildCache(SourceBuildCacheStatusTask),
-    GitCheckout(GitCheckoutTask),
-    InstallPixiEnvironment(InstallPixiEnvironmentTask),
-    InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
-    ClearReporter(oneshot::Sender<()>),
-}
-
-/// A message that is send to the background task to start solving a particular
-/// pixi environment.
-pub(crate) type SolvePixiEnvironmentTask = Task<PixiEnvironmentSpec>;
-impl TaskSpec for PixiEnvironmentSpec {
-    type Output = Vec<PixiRecord>;
-    type Error = SolvePixiEnvironmentError;
-}
-
-/// A message that is send to the background task to install a particular
-/// pixi environment.
-pub(crate) type InstallPixiEnvironmentTask = Task<InstallPixiEnvironmentSpec>;
-impl TaskSpec for InstallPixiEnvironmentSpec {
-    type Output = InstallPixiEnvironmentResult;
-    type Error = InstallPixiEnvironmentError;
-}
-
-/// A message that is send to the background task to start solving a particular
-/// conda environment.
-pub(crate) type SolveCondaEnvironmentTask = Task<SolveCondaEnvironmentSpec>;
-impl TaskSpec for SolveCondaEnvironmentSpec {
-    type Output = Vec<PixiRecord>;
-    type Error = SolveCondaEnvironmentError;
-}
-
-/// A message that is send to the background task to requesting the metadata for
-/// a particular source spec.
-pub(crate) type BuildBackendMetadataTask = Task<BuildBackendMetadataSpec>;
-
-impl TaskSpec for BuildBackendMetadataSpec {
-    type Output = Arc<BuildBackendMetadata>;
-    type Error = BuildBackendMetadataError;
-}
-
-pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
-impl TaskSpec for SourceMetadataSpec {
-    type Output = Arc<SourceMetadata>;
-    type Error = SourceMetadataError;
-}
-
-pub(crate) type SourceBuildTask = Task<SourceBuildSpec>;
-
-impl TaskSpec for SourceBuildSpec {
-    type Output = SourceBuildResult;
-    type Error = SourceBuildError;
-}
-
-pub(crate) type BackendSourceBuildTask = Task<BackendSourceBuildSpec>;
-
-impl TaskSpec for BackendSourceBuildSpec {
-    type Output = BackendBuiltSource;
-    type Error = BackendSourceBuildError;
-}
-
-/// Instantiates a tool environment.
-impl TaskSpec for InstantiateToolEnvironmentSpec {
-    type Output = InstantiateToolEnvironmentResult;
-    type Error = InstantiateToolEnvironmentError;
-}
-
-pub(crate) type SourceBuildCacheStatusTask = Task<SourceBuildCacheStatusSpec>;
-
-impl TaskSpec for SourceBuildCacheStatusSpec {
-    type Output = Arc<SourceBuildCacheEntry>;
-    type Error = SourceBuildCacheStatusError;
+    /// Registry of workspace environment specs reachable by id. Callers
+    /// allocate refs via [`CommandDispatcher::workspace_env_registry`]
+    /// and pass them into Keys that carry an
+    /// [`EnvironmentRef`](crate::EnvironmentRef). A clone of this Arc
+    /// is also registered in the compute engine's `DataStore` so
+    /// projection compute bodies can resolve refs via
+    /// `ctx.global_data().workspace_env_registry().get(id)`.
+    pub workspace_env_registry: Arc<WorkspaceEnvRegistry>,
 }
 
 impl Default for CommandDispatcher {
@@ -320,14 +195,44 @@ impl CommandDispatcher {
         self.data.executor
     }
 
-    /// Returns the cache for source metadata.
-    pub fn source_metadata_cache(&self) -> &SourceMetadataCache {
-        &self.data.source_metadata_cache
+    /// Returns a reference to the compute engine. The engine handles
+    /// Key-based computations with automatic deduplication, caching,
+    /// and cycle detection.
+    pub fn engine(&self) -> &ComputeEngine {
+        &self.engine
     }
 
-    /// Returns the build cache for source packages.
-    pub fn build_cache(&self) -> &BuildCache {
-        &self.data.build_cache
+    /// Returns the cache for source metadata.
+    pub fn build_backend_metadata_cache(&self) -> &BuildBackendMetadataCache {
+        &self.data.build_backend_metadata_cache
+    }
+
+    /// Synchronously resolve a typed cache directory through the
+    /// engine's [`CacheDirsKey`](pixi_compute_cache_dirs::CacheDirsKey)
+    /// and [`EnvVarsKey`] snapshots. Inside Key compute bodies use
+    /// `ctx.cache_dir::<L>().await` so the resolution dependencies are
+    /// recorded in the graph.
+    pub fn cache_dir<L: CacheLocation>(&self) -> AbsPresumedDirPathBuf {
+        let env = self
+            .engine
+            .read(&EnvVarsKey)
+            .expect("EnvVarsKey is injected at construction");
+        self.data.cache_dirs.resolve_with_env::<L>(&env)
+    }
+
+    /// Clear all source-build caches (artifacts + workspaces) for the
+    /// named package. Silently succeeds on packages that have never
+    /// been cached. Suitable for CLI wrappers that implement
+    /// `--clean` / `--force-reinstall`.
+    pub fn clear_source_build_cache(
+        &self,
+        package: &rattler_conda_types::PackageName,
+    ) -> std::io::Result<()> {
+        let artifacts_dir = self.cache_dir::<SourceBuildArtifactsDir>();
+        let workspaces_dir = self.cache_dir::<SourceBuildWorkspacesDir>();
+        crate::keys::ArtifactCache::new(artifacts_dir.as_std_path()).clear_package(package)?;
+        crate::keys::WorkspaceCache::new(workspaces_dir.as_std_path()).clear_package(package)?;
+        Ok(())
     }
 
     /// Returns the gateway used to query conda repodata.
@@ -350,8 +255,62 @@ impl CommandDispatcher {
         &self.data.glob_hash_cache
     }
 
+    /// Returns the workspace-env registry. Callers allocate a
+    /// [`WorkspaceEnvRef`](crate::WorkspaceEnvRef) here and thread the
+    /// ref into Keys that carry an
+    /// [`EnvironmentRef`](crate::EnvironmentRef). The same registry is
+    /// reachable from compute bodies via
+    /// `ctx.global_data().workspace_env_registry()`.
+    pub fn workspace_env_registry(&self) -> &Arc<WorkspaceEnvRegistry> {
+        &self.data.workspace_env_registry
+    }
+
+    /// Returns the channel configuration injected into the compute
+    /// engine at construction. Panics if no value was injected, matching
+    /// the [`pixi_compute_engine::InjectedKey`] contract.
+    pub fn channel_config(&self) -> Arc<rattler_conda_types::ChannelConfig> {
+        self.engine
+            .read(&crate::ChannelConfigKey)
+            .expect("ChannelConfig must be injected on the compute engine")
+    }
+
+    /// Returns the build-protocol discovery configuration injected into
+    /// the compute engine at construction.
+    pub fn enabled_protocols(&self) -> Arc<pixi_build_discovery::EnabledProtocols> {
+        self.engine
+            .read(&crate::EnabledProtocolsKey)
+            .expect("EnabledProtocols must be injected on the compute engine")
+    }
+
+    /// Discovers the build backend for a source path via the compute
+    /// engine. Deduplicated and cached by `DiscoveredBackendKey`; the
+    /// channel configuration and enabled protocols come from the
+    /// engine-wide injected values.
+    pub async fn discovered_backend(
+        &self,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<
+        Arc<pixi_build_discovery::DiscoveredBackend>,
+        CommandDispatcherError<Arc<pixi_build_discovery::DiscoveryError>>,
+    > {
+        let key = crate::DiscoveredBackendKey::new(path);
+        self.engine
+            .with_ctx(async |ctx| ctx.compute(&key).await)
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
+    }
+
+    /// Clears in-memory caches whose correctness depends on the filesystem.
+    ///
+    /// This invalidates memoized results that are derived from files on disk so
+    /// subsequent operations re-check the current state of the filesystem. It:
+    /// - clears glob hash memoization (`GlobHashCache`) used for input file hashing
+    pub async fn clear_filesystem_caches(&self) {
+        self.data.glob_hash_cache.clear();
+    }
+
     /// Returns the download client used by the command dispatcher.
-    pub fn download_client(&self) -> &ClientWithMiddleware {
+    pub fn download_client(&self) -> &LazyClient {
         &self.data.download_client
     }
 
@@ -361,7 +320,7 @@ impl CommandDispatcher {
     }
 
     /// Returns the platform and virtual packages used for tool environments.
-    pub fn tool_platform(&self) -> (Platform, &[GenericVirtualPackage]) {
+    pub fn tool_platform(&self) -> (Subdir, &[GenericVirtualPackage]) {
         (self.data.tool_platform.0, &self.data.tool_platform.1)
     }
 
@@ -370,114 +329,74 @@ impl CommandDispatcher {
         self.data.execute_link_scripts
     }
 
-    /// Returns the channel used to send messages to the command dispatcher.
-    fn channel(&self) -> &CommandDispatcherChannel {
-        self.channel
-            .as_ref()
-            .expect("command dispatcher has been dropped")
+    /// Returns whether symbolic links are allowed during package installation.
+    pub fn allow_symbolic_links(&self) -> Option<bool> {
+        self.data.allow_symbolic_links
     }
 
-    /// Sends a task to the command dispatcher and waits for the result.
-    async fn execute_task<T: TaskSpec>(
+    /// Returns whether hard links are allowed during package installation.
+    pub fn allow_hard_links(&self) -> Option<bool> {
+        self.data.allow_hard_links
+    }
+
+    /// Returns whether ref links (copy-on-write) are allowed during package installation.
+    pub fn allow_ref_links(&self) -> Option<bool> {
+        self.data.allow_ref_links
+    }
+
+    /// Solves an environment whose repodata and host capabilities are already
+    /// known, using the normal solve concurrency limit and reporters.
+    pub async fn solve_conda_environment(
         &self,
-        spec: T,
-    ) -> Result<T::Output, CommandDispatcherError<T::Error>>
-    where
-        ForegroundMessage: From<Task<T>>,
-    {
-        let Some(sender) = self.channel().sender() else {
-            // If this fails, it means the command dispatcher was dropped and the task is
-            // immediately canceled.
-            return Err(CommandDispatcherError::Cancelled);
-        };
-
-        let (tx, rx) = oneshot::channel();
-        sender
-            .send(ForegroundMessage::from(Task {
-                spec,
-                parent: self.context,
-                tx,
-            }))
-            .map_err(|_| CommandDispatcherError::Cancelled)?;
-
-        match rx.await {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(err)) => Err(CommandDispatcherError::Failed(err)),
-            Err(_) => Err(CommandDispatcherError::Cancelled),
-        }
-    }
-
-    /// Notifies the progress reporter that it should clear its output.
-    pub async fn clear_reporter(&self) {
-        let Some(sender) = self.channel().sender() else {
-            // If this fails, it means the command dispatcher was dropped and the task is
-            // immediately canceled.
-            return;
-        };
-        let (tx, rx) = oneshot::channel();
-        let _ = sender.send(ForegroundMessage::ClearReporter(tx));
-        let _ = rx.await;
+        spec: crate::SolveCondaEnvironmentSpec,
+    ) -> Result<
+        Vec<pixi_record::PixiRecord>,
+        CommandDispatcherError<crate::SolveCondaEnvironmentError>,
+    > {
+        use crate::solve_binary::SolveCondaExt;
+        self.engine
+            .with_ctx(async |ctx| ctx.solve_conda(spec).await)
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
     }
 
     /// Returns the metadata of the source spec.
+    ///
+    /// Thin wrapper over [`crate::BuildBackendMetadataKey`]; dedup and
+    /// caching happen inside the compute engine.
     pub async fn build_backend_metadata(
         &self,
         spec: BuildBackendMetadataSpec,
     ) -> Result<Arc<BuildBackendMetadata>, CommandDispatcherError<BuildBackendMetadataError>> {
-        self.execute_task(spec).await
+        let key = crate::BuildBackendMetadataKey::new(spec);
+        self.engine
+            .with_ctx(async |ctx| ctx.compute(&key).await)
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
     }
 
-    /// Returns the metadata of a particular source package.
-    pub async fn source_metadata(
-        &self,
-        spec: SourceMetadataSpec,
-    ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
-        self.execute_task(spec).await
-    }
-
-    /// Query the source build cache for a particular source package.
-    pub async fn source_build_cache_status(
-        &self,
-        spec: SourceBuildCacheStatusSpec,
-    ) -> Result<Arc<SourceBuildCacheEntry>, CommandDispatcherError<SourceBuildCacheStatusError>>
-    {
-        self.execute_task(spec).await
-    }
-
-    /// Builds the source package and returns the built conda package.
-    pub async fn source_build(
-        &self,
-        spec: SourceBuildSpec,
-    ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
-        self.execute_task(spec).await
-    }
-
-    /// Calls into a pixi build backend to perform a source build.
-    pub(crate) async fn backend_source_build(
-        &self,
-        spec: BackendSourceBuildSpec,
-    ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
-        self.execute_task(spec).await
-    }
-
-    /// Solves a particular pixi environment specified by `PixiEnvironmentSpec`.
+    /// Returns the metadata for dev sources.
     ///
-    /// This function processes all package requirements defined in the spec,
-    /// handling both binary and source packages. For source packages, it:
+    /// This method queries the build backend for all outputs from a dev source
+    /// and creates DevSourceRecords for each one. These records contain the
+    /// combined dependencies (build, host, run) for each output.
     ///
-    /// 1. Checks out source code repositories
-    /// 2. Builds necessary environments for processing source dependencies
-    /// 3. Queries metadata from source packages
-    /// 4. Recursively processes any transitive source dependencies
+    /// Unlike `source_metadata`, this is specifically for dev sources
+    /// where the dependencies are installed but the package itself is not built.
     ///
-    /// The function automatically deduplicates work when the same source is
-    /// referenced multiple times, and ensures efficient parallel execution
-    /// where possible.
-    pub async fn solve_pixi_environment(
+    /// # Requirements
+    ///
+    /// - The build backend must support the `conda/outputs` procedure (API v1+)
+    pub async fn dev_source_metadata(
         &self,
-        spec: PixiEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
-        self.execute_task(spec).await
+        spec: DevSourceMetadataSpec,
+    ) -> Result<DevSourceMetadata, CommandDispatcherError<DevSourceMetadataError>> {
+        let key = crate::DevSourceMetadataKey::new(spec);
+        self.engine
+            .with_ctx(async |ctx| ctx.compute(&key).await)
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
+            .map(Arc::unwrap_or_clone)
     }
 
     /// Install a pixi environment.
@@ -486,37 +405,34 @@ impl CommandDispatcher {
     /// installs all required packages into the target prefix. It handles
     /// both binary packages (from conda repositories) and source packages
     /// (built from source code).
+    #[allow(clippy::result_large_err)] // matches install_inner's unboxed error contract
     pub async fn install_pixi_environment(
         &self,
         spec: InstallPixiEnvironmentSpec,
     ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
     {
-        self.execute_task(spec).await
-    }
-
-    /// Solves a particular conda environment.
-    ///
-    /// This method processes a complete environment specification containing
-    /// both binary and source packages to find a compatible set of packages
-    /// that satisfy all requirements and constraints.
-    ///
-    /// Unlike solving pixi environments, this method does not perform recursive
-    /// source resolution and querying repodata as all information is already
-    /// available in the specification.
-    pub async fn solve_conda_environment(
-        &self,
-        spec: SolveCondaEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
-        self.execute_task(spec).await
+        use crate::command_dispatcher::error::flatten_with_ctx_result;
+        use crate::install_pixi::InstallPixiEnvironmentExt;
+        // Heap-allocate the inline `with_ctx` + install pipeline so
+        // its async state machine does not pile onto the caller's
+        // stack. Without the `Box::pin`, a caller that is already
+        // deep in another compute pipeline (for example the PyPI
+        // resolve path invoking a conda prefix setup for build
+        // isolation) can exhaust its thread stack.
+        let future: std::pin::Pin<Box<dyn Future<Output = _> + Send + '_>> = Box::pin(
+            self.engine
+                .with_ctx(async |ctx| ctx.install_pixi_environment(spec).await),
+        );
+        flatten_with_ctx_result(future.await)
     }
 
     /// Instantiates an environment for a tool based on the given spec. Reuses
     /// the environment if possible.
     ///
-    /// This method creates isolated environments for build backends and other
-    /// tools. These environments are specialized containers with specific
-    /// packages needed for particular tasks like building packages,
-    /// extracting metadata, or running tools.
+    /// Thin wrapper over [`crate::EphemeralEnvKey`]: builds the key's spec,
+    /// adds the `pixi-build-api-version` constraint, computes it, and
+    /// extracts the primary-package version + negotiated API from the
+    /// installed records.
     pub async fn instantiate_tool_environment(
         &self,
         spec: InstantiateToolEnvironmentSpec,
@@ -524,147 +440,95 @@ impl CommandDispatcher {
         InstantiateToolEnvironmentResult,
         CommandDispatcherError<InstantiateToolEnvironmentError>,
     > {
-        self.execute_task(spec).await
-    }
+        use pixi_build_types::{
+            PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion,
+        };
+        use pixi_record::PixiRecord;
+        use pixi_spec::BinarySpec;
 
-    /// Checks out a particular source based on a source spec.
-    ///
-    /// This function resolves the source specification to a concrete checkout
-    /// by:
-    /// 1. For path sources: Resolving relative paths against the root directory
-    /// 2. For git sources: Cloning or fetching the repository and checking out
-    ///    the specified reference
-    /// 3. For URL sources: Downloading and extracting the archive (currently
-    ///    unimplemented)
-    ///
-    /// The function handles path normalization and ensures security by
-    /// preventing directory traversal attacks. It also manages caching of
-    /// source checkouts to avoid redundant downloads or clones when the
-    /// same source is used multiple times.
-    pub async fn pin_and_checkout(
-        &self,
-        source_spec: SourceSpec,
-    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
-        match source_spec {
-            SourceSpec::Url(url) => {
-                unimplemented!("fetching URL sources ({}) is not yet implemented", url.url)
-            }
-            SourceSpec::Path(path) => {
-                let source_path = self
-                    .data
-                    .resolve_typed_path(path.path.to_path())
-                    .map_err(SourceCheckoutError::from)
-                    .map_err(CommandDispatcherError::Failed)?;
-                Ok(SourceCheckout {
-                    path: source_path,
-                    pinned: PinnedSourceSpec::Path(PinnedPathSpec { path: path.path }),
-                })
-            }
-            SourceSpec::Git(git_spec) => self.pin_and_checkout_git(git_spec).await,
-        }
-    }
+        let primary_name = spec.requirement.0.clone();
+        let primary_spec = spec.requirement.1.clone();
 
-    /// Checkout pinned source record.
-    ///
-    /// Similar to `pin_and_checkout` but works with already pinned source
-    /// specifications. This is used when we have a concrete revision (e.g.,
-    /// a specific git commit) that we want to check out rather than
-    /// resolving a reference like a branch name.
-    ///
-    /// The method handles different source types appropriately:
-    /// - For path sources: Resolves and validates the path
-    /// - For git sources: Checks out the specific revision
-    /// - For URL sources: Extracts the archive with the exact checksum
-    ///   (unimplemented)
-    pub async fn checkout_pinned_source(
-        &self,
-        pinned_spec: PinnedSourceSpec,
-    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
-        match pinned_spec {
-            PinnedSourceSpec::Path(ref path) => {
-                let source_path = self
-                    .data
-                    .resolve_typed_path(path.path.to_path())
-                    .map_err(SourceCheckoutError::from)
-                    .map_err(CommandDispatcherError::Failed)?;
-                Ok(SourceCheckout {
-                    path: source_path,
-                    pinned: pinned_spec,
-                })
-            }
-            PinnedSourceSpec::Git(git_spec) => self.checkout_pinned_git(git_spec).await,
-            PinnedSourceSpec::Url(_) => {
-                unimplemented!("fetching URL sources is not yet implemented")
-            }
-        }
-    }
-}
+        // Merge requirement + additional requirements into one dep map.
+        let mut dependencies = spec.additional_requirements.clone();
+        dependencies.insert(primary_name.clone(), primary_spec);
 
-impl CommandDispatcherData {
-    /// Resolves the source path to a full path.
-    ///
-    /// This function does not check if the path exists and also does not follow
-    /// symlinks.
-    fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, InvalidPathError> {
-        if path_spec.is_absolute() {
-            Ok(Path::new(path_spec.as_str()).to_path_buf())
-        } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
-            let home_dir = dirs::home_dir().ok_or_else(|| {
-                InvalidPathError::CouldNotDetermineHomeDirectory(PathBuf::from(path_spec.as_str()))
-            })?;
-            debug_assert!(home_dir.is_absolute());
-            normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
-        } else {
-            let root_dir = self.root_dir.as_path();
-            let native_path = Path::new(path_spec.as_str());
-            debug_assert!(root_dir.is_absolute());
-            normalize_absolute_path(&root_dir.join(native_path))
-        }
-    }
-}
+        // Append the pixi-build-api-version constraint.
+        let mut constraints = spec.constraints.clone();
+        constraints.insert(
+            PIXI_BUILD_API_VERSION_NAME.clone(),
+            BinarySpec::Version(PIXI_BUILD_API_VERSION_SPEC.clone()),
+        );
 
-/// Normalize a path, removing things like `.` and `..`.
-///
-/// Source: <https://github.com/rust-lang/cargo/blob/b48c41aedbd69ee3990d62a0e2006edbb506a480/crates/cargo-util/src/paths.rs#L76C1-L109C2>
-fn normalize_absolute_path(path: &Path) -> Result<PathBuf, InvalidPathError> {
-    let mut components = path.components().peekable();
-    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().copied() {
-        components.next();
-        PathBuf::from(c.as_os_str())
-    } else {
-        PathBuf::new()
-    };
+        let ephemeral_spec = crate::EphemeralEnvSpec {
+            dependencies,
+            constraints,
+            channels: spec.channels.clone(),
+            exclude_newer: spec.exclude_newer.clone(),
+            strategy: Default::default(),
+            channel_priority: Default::default(),
+        };
 
-    for component in components {
-        match component {
-            Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {
-                ret.push(component.as_os_str());
-            }
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !ret.pop() {
-                    return Err(InvalidPathError::RelativePathEscapesRoot(
-                        path.to_path_buf(),
-                    ));
+        let key = crate::EphemeralEnvKey::new(
+            ephemeral_spec,
+            format!("tool: {}", primary_name.as_source()),
+        );
+        let installed = self
+            .engine
+            .with_ctx(async |ctx| ctx.compute(&key).await)
+            .await
+            .map_err_into_dispatcher(InstantiateToolEnvironmentError::EphemeralEnv)?;
+
+        // Extract negotiated API and primary-package version.
+        let api = installed
+            .records
+            .iter()
+            .find_map(|r| match r {
+                PixiRecord::Binary(b) if b.package_record.name == *PIXI_BUILD_API_VERSION_NAME => {
+                    PixiBuildApiVersion::from_version(b.package_record.version.as_ref())
                 }
-            }
-            Component::Normal(c) => {
-                ret.push(c);
-            }
-        }
+                _ => None,
+            })
+            .ok_or_else(|| {
+                CommandDispatcherError::Failed(
+                    InstantiateToolEnvironmentError::NoMatchingBackends {
+                        build_backend: Box::new(spec.requirement.clone()),
+                    },
+                )
+            })?;
+
+        let version = installed
+            .records
+            .iter()
+            .find_map(|r| match r {
+                PixiRecord::Binary(b) if b.package_record.name == primary_name => {
+                    Some(b.package_record.version.clone())
+                }
+                _ => None,
+            })
+            .expect("solved env contains the requested primary package");
+
+        Ok(InstantiateToolEnvironmentResult {
+            prefix: installed.prefix.clone(),
+            version,
+            api,
+        })
     }
-    Ok(ret)
-}
 
-/// Defines the inputs and outputs of a certain foreground task specification.
-pub(crate) trait TaskSpec {
-    type Output;
-    type Error;
-}
-
-pub(crate) struct Task<S: TaskSpec> {
-    pub spec: S,
-    pub parent: Option<CommandDispatcherContext>,
-    pub tx: oneshot::Sender<Result<S::Output, S::Error>>,
+    /// Instantiate (and cache) a build backend handle for the given
+    /// [`InstantiateBackendKey`].
+    ///
+    /// Thin wrapper over the compute-engine Key. Multiple concurrent
+    /// callers requesting the same backend share one spawn; the
+    /// returned handle wraps the backend in a [`tokio::sync::Mutex`] to
+    /// serialize stdio JSON-RPC traffic.
+    pub async fn instantiate_backend(
+        &self,
+        key: InstantiateBackendKey,
+    ) -> Result<BackendHandle, CommandDispatcherError<Arc<InstantiateBackendError>>> {
+        self.engine
+            .with_ctx(async |ctx| ctx.compute(&key).await)
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
+    }
 }

@@ -1,12 +1,13 @@
 use crate::{AssociateProvenance, ManifestKind, WithProvenance};
 use miette::{NamedSource, SourceCode};
 
-/// Discriminates the source of between a 'pixi.toml' and a 'pyproject.toml'
-/// manifest.
+/// Discriminates the source format of a Pixi manifest.
 pub enum ManifestSource<S> {
     PyProjectToml(S),
     PixiToml(S),
     MojoProjectToml(S),
+    Pep723(S),
+    CondaScript(S),
 }
 
 impl<S> AsRef<S> for ManifestSource<S> {
@@ -15,6 +16,8 @@ impl<S> AsRef<S> for ManifestSource<S> {
             ManifestSource::PyProjectToml(source) => source,
             ManifestSource::PixiToml(source) => source,
             ManifestSource::MojoProjectToml(source) => source,
+            ManifestSource::Pep723(source) => source,
+            ManifestSource::CondaScript(source) => source,
         }
     }
 }
@@ -26,6 +29,8 @@ impl<S> ManifestSource<S> {
             ManifestSource::PyProjectToml(source) => source,
             ManifestSource::PixiToml(source) => source,
             ManifestSource::MojoProjectToml(source) => source,
+            ManifestSource::Pep723(source) => source,
+            ManifestSource::CondaScript(source) => source,
         }
     }
 
@@ -35,6 +40,8 @@ impl<S> ManifestSource<S> {
             ManifestSource::PyProjectToml(_) => ManifestKind::Pyproject,
             ManifestSource::PixiToml(_) => ManifestKind::Pixi,
             ManifestSource::MojoProjectToml(_) => ManifestKind::MojoProject,
+            ManifestSource::Pep723(_) => ManifestKind::Pep723,
+            ManifestSource::CondaScript(_) => ManifestKind::CondaScript,
         }
     }
 
@@ -44,6 +51,8 @@ impl<S> ManifestSource<S> {
             ManifestSource::PyProjectToml(source) => ManifestSource::PyProjectToml(f(source)),
             ManifestSource::PixiToml(source) => ManifestSource::PixiToml(f(source)),
             ManifestSource::MojoProjectToml(source) => ManifestSource::MojoProjectToml(f(source)),
+            ManifestSource::Pep723(source) => ManifestSource::Pep723(f(source)),
+            ManifestSource::CondaScript(source) => ManifestSource::CondaScript(f(source)),
         }
     }
 
@@ -59,7 +68,8 @@ impl<S: SourceCode + 'static> ManifestSource<S> {
     /// Converts this instance into a [`NamedSource`] with the appropriate name
     /// set based on the type of manifest.
     pub fn into_named(self, file_name: impl AsRef<str>) -> NamedSource<S> {
-        NamedSource::new(file_name, self.into_inner()).with_language("toml")
+        let language = self.kind().language();
+        NamedSource::new(file_name, self.into_inner()).with_language(language)
     }
 }
 
@@ -68,46 +78,48 @@ mod test {
     use insta::assert_snapshot;
     use rstest::rstest;
 
-    use super::*;
-    use crate::manifests::document::ManifestDocument;
-    use crate::{
-        FeatureName, LibCFamilyAndVersion, LibCSystemRequirement, ManifestProvenance, Manifests,
-        SystemRequirements,
-    };
+    use crate::{NewEnvironment, manifests::document::ManifestDocument};
 
     #[rstest]
     #[case::pixi_toml(ManifestDocument::empty_pixi())]
     #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
     fn test_add_environment(#[case] mut source: ManifestDocument) {
         source
-            .add_environment("foo", Some(vec![]), None, false)
-            .unwrap();
-        source
-            .add_environment("bar", Some(vec![String::from("default")]), None, false)
+            .add_environment(NewEnvironment::new("foo").with_features(vec![]))
             .unwrap();
         source
             .add_environment(
-                "baz",
-                Some(vec![String::from("default")]),
-                Some(String::from("group1")),
-                false,
+                NewEnvironment::new("bar").with_features(vec![String::from("default")]),
             )
             .unwrap();
         source
             .add_environment(
-                "foobar",
-                Some(vec![String::from("default")]),
-                Some(String::from("group1")),
-                true,
+                NewEnvironment::new("baz")
+                    .with_features(vec![String::from("default")])
+                    .with_solve_group(String::from("group1")),
             )
             .unwrap();
         source
-            .add_environment("barfoo", Some(vec![String::from("default")]), None, true)
+            .add_environment(
+                NewEnvironment::new("foobar")
+                    .with_features(vec![String::from("default")])
+                    .with_solve_group(String::from("group1"))
+                    .with_no_default_feature(true),
+            )
+            .unwrap();
+        source
+            .add_environment(
+                NewEnvironment::new("barfoo")
+                    .with_features(vec![String::from("default")])
+                    .with_no_default_feature(true),
+            )
             .unwrap();
 
         // Overwrite
         source
-            .add_environment("bar", Some(vec![String::from("not-default")]), None, false)
+            .add_environment(
+                NewEnvironment::new("bar").with_features(vec![String::from("not-default")]),
+            )
             .unwrap();
 
         assert_snapshot!(
@@ -121,150 +133,25 @@ mod test {
     #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
     fn test_remove_environment(#[case] mut source: ManifestDocument) {
         source
-            .add_environment("foo", Some(vec![String::from("default")]), None, false)
+            .add_environment(
+                NewEnvironment::new("foo").with_features(vec![String::from("default")]),
+            )
             .unwrap();
         source
-            .add_environment("bar", Some(vec![String::from("default")]), None, false)
+            .add_environment(
+                NewEnvironment::new("bar").with_features(vec![String::from("default")]),
+            )
             .unwrap();
         assert!(!source.remove_environment("default").unwrap());
         source
-            .add_environment("default", Some(vec![String::from("default")]), None, false)
+            .add_environment(
+                NewEnvironment::new("default").with_features(vec![String::from("default")]),
+            )
             .unwrap();
         assert!(source.remove_environment("default").unwrap());
         assert!(source.remove_environment("foo").unwrap());
         assert_snapshot!(
             format!("test_remove_environment_{}", source.file_name()),
-            source.to_string()
-        );
-    }
-
-    #[rstest]
-    #[case::pixi_toml(ManifestDocument::empty_pixi())]
-    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
-    fn test_add_empty_system_requirement_environment(#[case] mut source: ManifestDocument) {
-        let empty_requirements = SystemRequirements::default();
-        source
-            .add_system_requirements(&empty_requirements, &FeatureName::DEFAULT)
-            .unwrap();
-
-        let manifests = Manifests::from_workspace_source(source.into_source_with_provenance())
-            .unwrap()
-            .value;
-
-        assert_eq!(
-            empty_requirements,
-            manifests
-                .workspace
-                .value
-                .default_feature()
-                .system_requirements
-        );
-    }
-    #[rstest]
-    #[case::pixi_toml(ManifestDocument::empty_pixi())]
-    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
-    fn test_add_single_system_requirement_environment(#[case] mut source: ManifestDocument) {
-        let single_system_requirements = SystemRequirements {
-            linux: Some("4.18".parse().unwrap()),
-            ..SystemRequirements::default()
-        };
-        source
-            .add_system_requirements(&single_system_requirements, &FeatureName::DEFAULT)
-            .unwrap();
-
-        let manifests = Manifests::from_workspace_source(source.into_source_with_provenance())
-            .unwrap()
-            .value;
-
-        assert_eq!(
-            single_system_requirements,
-            manifests
-                .workspace
-                .value
-                .default_feature()
-                .system_requirements
-        );
-    }
-    #[rstest]
-    #[case::pixi_toml(ManifestDocument::empty_pixi())]
-    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
-    fn test_add_full_system_requirement_environment(#[case] mut source: ManifestDocument) {
-        let full_system_requirements = SystemRequirements {
-            linux: Some("4.18".parse().unwrap()),
-            cuda: Some("11.1".parse().unwrap()),
-            macos: Some("13.0".parse().unwrap()),
-            libc: Some(LibCSystemRequirement::GlibC("2.28".parse().unwrap())),
-            archspec: Some("x86_64".to_string()),
-        };
-        source
-            .add_system_requirements(&full_system_requirements, &FeatureName::DEFAULT)
-            .unwrap();
-
-        let kind = source.kind();
-        let source = source.to_string();
-        let manifests = Manifests::from_workspace_source(
-            source
-                .as_str()
-                .with_provenance(ManifestProvenance::from(kind)),
-        )
-        .unwrap()
-        .value;
-
-        assert_eq!(
-            full_system_requirements,
-            manifests
-                .workspace
-                .value
-                .default_feature()
-                .system_requirements
-        );
-        assert_snapshot!(
-            format!(
-                "test_add_full_system_requirement_environment_{}",
-                manifests.workspace.provenance.path.display()
-            ),
-            source.to_string()
-        );
-    }
-    #[rstest]
-    #[case::pixi_toml(ManifestDocument::empty_pixi())]
-    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
-    fn test_add_libc_family_system_requirement_environment(#[case] mut source: ManifestDocument) {
-        let family_system_requirements = SystemRequirements {
-            libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
-                family: Some("glibc".to_string()),
-                version: "1.2".parse().unwrap(),
-            })),
-            ..SystemRequirements::default()
-        };
-        source
-            .add_system_requirements(&family_system_requirements, &FeatureName::DEFAULT)
-            .unwrap();
-
-        let kind = source.kind();
-        let source = source.to_string();
-        let manifests = Manifests::from_workspace_source(
-            source
-                .as_str()
-                .with_provenance(ManifestProvenance::from(kind)),
-        )
-        .unwrap()
-        .value;
-
-        assert_eq!(
-            family_system_requirements,
-            manifests
-                .workspace
-                .value
-                .default_feature()
-                .system_requirements
-        );
-
-        assert_snapshot!(
-            format!(
-                "test_add_family_system_requirement_environment_{}",
-                manifests.workspace.provenance.path.display()
-            ),
             source.to_string()
         );
     }

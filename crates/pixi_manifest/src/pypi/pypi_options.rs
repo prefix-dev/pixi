@@ -1,12 +1,44 @@
-use std::{hash::Hash, path::PathBuf};
+use std::path::PathBuf;
 
 use indexmap::IndexMap;
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_spec::ExcludeNewer;
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
 use url::Url;
+
+/// The strategy to use when considering pre-release versions during dependency
+/// resolution.
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantNames,
+)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum PrereleaseMode {
+    /// Don't allow pre-releases
+    Disallow,
+    /// Allow all pre-releases
+    Allow,
+    /// Prefer stable versions, falling back to pre-releases when necessary
+    IfNecessary,
+    /// Prefer stable versions; allow pre-releases only for explicitly opted-in packages
+    Explicit,
+    /// Alias for IfNecessary (default), following uv's pre-release policy
+    #[default]
+    IfNecessaryOrExplicit,
+}
 
 // taken from: https://docs.astral.sh/uv/reference/settings/#index-strategy
 /// The strategy to use when resolving against multiple index URLs.
@@ -118,6 +150,51 @@ impl NoBinary {
     }
 }
 
+/// An extra PyPI index URL with an optional per-index `exclude-newer` override.
+///
+/// Serializes as a bare URL string when no override is set, or as an inline
+/// table `{ url = "...", exclude-newer = ... }` otherwise. Mirrors the conda
+/// `ChannelInlineTable` (see [`crate::PrioritizedChannel`]).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PypiExtraIndex {
+    /// The extra index URL.
+    pub url: Url,
+    /// Overrides the workspace-level `exclude-newer` cutoff for packages served
+    /// from this index only. `None` inherits the global cutoff, and a zero
+    /// duration such as `0d` lifts the cutoff for this index.
+    pub exclude_newer: Option<ExcludeNewer>,
+}
+
+impl PypiExtraIndex {
+    /// Creates an extra index from a URL without a per-index `exclude-newer`
+    /// override (i.e. inheriting the global cutoff).
+    pub fn from_url(url: Url) -> Self {
+        Self {
+            url,
+            exclude_newer: None,
+        }
+    }
+}
+
+impl Serialize for PypiExtraIndex {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match &self.exclude_newer {
+            // Serialize as a bare URL string when there is no override.
+            None => self.url.serialize(serializer),
+            Some(exclude_newer) => {
+                use serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("url", &self.url)?;
+                map.serialize_entry("exclude-newer", exclude_newer)?;
+                map.end()
+            }
+        }
+    }
+}
+
 /// Specific options for a PyPI registries
 #[derive(Debug, Clone, PartialEq, Serialize, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -125,7 +202,7 @@ pub struct PypiOptions {
     /// The index URL to use as the primary pypi index
     pub index_url: Option<Url>,
     /// Any extra indexes to use, that will be searched after the primary index
-    pub extra_index_urls: Option<Vec<Url>>,
+    pub extra_index_urls: Option<Vec<PypiExtraIndex>>,
     /// Flat indexes also called `--find-links` in pip
     /// These are flat listings of distributions
     pub find_links: Option<Vec<FindLinksUrlOrPath>>,
@@ -133,38 +210,36 @@ pub struct PypiOptions {
     pub no_build_isolation: NoBuildIsolation,
     /// The strategy to use when resolving against multiple index URLs.
     pub index_strategy: Option<IndexStrategy>,
+    /// The strategy for handling pre-release versions during dependency
+    /// resolution.
+    pub prerelease_mode: Option<PrereleaseMode>,
     /// Don't build sdist for all or certain packages
     pub no_build: Option<NoBuild>,
     /// Dependency overrides
     pub dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     /// Don't use pre-built wheels all or certain packages
     pub no_binary: Option<NoBinary>,
+    /// Skip wheel filename validation
+    pub skip_wheel_filename_check: Option<bool>,
 }
 
-/// Clones and deduplicates two iterators of values
-fn clone_and_deduplicate<'a, I: Iterator<Item = &'a T>, T: Clone + Eq + Hash + 'a>(
-    values: I,
-    other: I,
-) -> Vec<T> {
-    values
-        .cloned()
-        .chain(other.cloned())
-        .collect::<IndexSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>()
-}
+use crate::pypi::merge::{
+    MergeUnion, merge_list_dedup, merge_map_override_left, merge_single_option,
+};
 
 impl PypiOptions {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         index: Option<Url>,
-        extra_indexes: Option<Vec<Url>>,
+        extra_indexes: Option<Vec<PypiExtraIndex>>,
         flat_indexes: Option<Vec<FindLinksUrlOrPath>>,
         no_build_isolation: NoBuildIsolation,
         index_strategy: Option<IndexStrategy>,
+        prerelease_mode: Option<PrereleaseMode>,
         no_build: Option<NoBuild>,
         dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
         no_binary: Option<NoBinary>,
+        skip_wheel_filename_check: Option<bool>,
     ) -> Self {
         Self {
             index_url: index,
@@ -172,9 +247,11 @@ impl PypiOptions {
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
+            prerelease_mode,
             no_build,
             dependency_overrides,
             no_binary,
+            skip_wheel_filename_check,
         }
     }
 
@@ -193,7 +270,11 @@ impl PypiOptions {
                 FindLinksUrlOrPath::Url(url) => Some(url),
             });
 
-        let extra_indexes = self.extra_index_urls.iter().flatten();
+        let extra_indexes = self
+            .extra_index_urls
+            .iter()
+            .flatten()
+            .map(|index| &index.url);
         find_links
             .chain(extra_indexes)
             .chain(std::iter::once(self.index_url.as_ref()).flatten())
@@ -206,101 +287,51 @@ impl PypiOptions {
     /// - Flat indexes are merged and deduplicated, in the order they are
     ///   provided
     pub fn union(&self, other: &PypiOptions) -> Result<PypiOptions, PypiOptionsMergeError> {
-        let index = if let Some(other_index) = other.index_url.clone() {
-            // Allow only one index
-            if let Some(own_index) = self.index_url.clone() {
-                return Err(PypiOptionsMergeError::MultiplePrimaryIndexes {
-                    first: own_index.to_string(),
-                    second: other_index.to_string(),
-                });
-            } else {
-                // Use the other index, because we don't have one
-                Some(other_index)
+        // Single-assignment fields with conflict detection
+        let index = merge_single_option(&self.index_url, &other.index_url, |a, b| {
+            PypiOptionsMergeError::MultiplePrimaryIndexes {
+                first: a.to_string(),
+                second: b.to_string(),
             }
-        } else {
-            // Use our index, because the other doesn't have one
-            self.index_url.clone()
-        };
+        })?;
 
-        // Allow only one index strategy
-        let index_strategy = if let Some(other_index_strategy) = other.index_strategy.clone() {
-            if let Some(own_index_strategy) = &self.index_strategy {
-                return Err(PypiOptionsMergeError::MultipleIndexStrategies {
-                    first: own_index_strategy.to_string(),
-                    second: other_index_strategy.to_string(),
-                });
-            } else {
-                Some(other_index_strategy)
-            }
-        } else {
-            self.index_strategy.clone()
-        };
+        let index_strategy =
+            merge_single_option(&self.index_strategy, &other.index_strategy, |a, b| {
+                PypiOptionsMergeError::MultipleIndexStrategies {
+                    first: a.to_string(),
+                    second: b.to_string(),
+                }
+            })?;
 
-        // Chain together and deduplicate the extra indexes
-        let extra_indexes = self
-            .extra_index_urls
-            .as_ref()
-            // Map for value
-            .map(|extra_indexes| {
-                clone_and_deduplicate(
-                    extra_indexes.iter(),
-                    other.extra_index_urls.clone().unwrap_or_default().iter(),
-                )
-            })
-            .or_else(|| other.extra_index_urls.clone());
+        let prerelease_mode =
+            merge_single_option(&self.prerelease_mode, &other.prerelease_mode, |a, b| {
+                PypiOptionsMergeError::MultiplePrereleaseModes {
+                    first: a.to_string(),
+                    second: b.to_string(),
+                }
+            })?;
 
-        // Chain together and deduplicate the flat indexes
-        let flat_indexes = self
-            .find_links
-            .as_ref()
-            .map(|flat_indexes| {
-                clone_and_deduplicate(
-                    flat_indexes.iter(),
-                    other.find_links.clone().unwrap_or_default().iter(),
-                )
-            })
-            .or_else(|| other.find_links.clone());
+        let skip_wheel_filename_check = merge_single_option(
+            &self.skip_wheel_filename_check,
+            &other.skip_wheel_filename_check,
+            |a, b| PypiOptionsMergeError::MultipleSkipWheelFilenameCheck {
+                first: *a,
+                second: *b,
+            },
+        )?;
 
-        // Merge all the no build isolation packages. We take the union.
-        let no_build_isolation = match (&self.no_build_isolation, &other.no_build_isolation) {
-            (NoBuildIsolation::All, _) | (_, NoBuildIsolation::All) => NoBuildIsolation::All,
-            (NoBuildIsolation::Packages(a), NoBuildIsolation::Packages(b)) => {
-                let mut packages = a.clone();
-                packages.extend(b.iter().cloned());
-                NoBuildIsolation::Packages(packages)
-            }
-        };
+        // Ordered lists, deduplicated
+        let extra_indexes = merge_extra_indexes(&self.extra_index_urls, &other.extra_index_urls)?;
+        let flat_indexes = merge_list_dedup(&self.find_links, &other.find_links);
 
-        // Set the no-build option
-        let no_build = match (self.no_build.as_ref(), other.no_build.as_ref()) {
-            (Some(a), Some(b)) => Some(a.union(b)),
-            (Some(a), None) => Some(a.clone()),
-            (None, Some(b)) => Some(b.clone()),
-            (None, None) => None,
-        };
-        // Set the dependency overrides
-        // notice that default feature comes last in the feature_ext
-        // so we want self overwriting the other
-        // i.e. if same key exists in both, we want the value from `self` to be used
-        // so we extend b with a (a overrides b)
-        let dependency_overrides = match (&self.dependency_overrides, &other.dependency_overrides) {
-            (Some(a), Some(b)) => {
-                let mut overrides = b.clone();
-                overrides.extend(a.into_iter().map(|(k, v)| (k.clone(), v.clone())));
-                Some(overrides)
-            }
-            (Some(a), None) => Some(a.clone()),
-            (None, Some(b)) => Some(b.clone()),
-            (None, None) => None,
-        };
+        // Union-like fields
+        let no_build_isolation = self.no_build_isolation.union(&other.no_build_isolation);
+        let no_build = self.no_build.union(&other.no_build);
+        let no_binary = self.no_binary.union(&other.no_binary);
 
-        // Set the no-binary option
-        let no_binary = match (self.no_binary.as_ref(), other.no_binary.as_ref()) {
-            (Some(a), Some(b)) => Some(a.union(b)),
-            (Some(a), None) => Some(a.clone()),
-            (None, Some(b)) => Some(b.clone()),
-            (None, None) => None,
-        };
+        // Maps with left (self) overriding right (other)
+        let dependency_overrides =
+            merge_map_override_left(&self.dependency_overrides, &other.dependency_overrides);
 
         Ok(PypiOptions {
             index_url: index,
@@ -308,10 +339,67 @@ impl PypiOptions {
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
+            prerelease_mode,
             no_build,
             dependency_overrides,
             no_binary,
+            skip_wheel_filename_check,
         })
+    }
+
+    /// Overlay `other` on top of `self`. Used when applying feature-level pypi
+    /// options on top of a workspace-level base.
+    ///
+    /// - Single-assignment fields: `other` wins when it is set, otherwise `self`.
+    /// - List fields: concatenated and de-duplicated.
+    /// - Union-like fields (`no_build`, `no_binary`, `no_build_isolation`):
+    ///   union of both sides.
+    /// - `dependency_overrides`: `other` keys override `self` keys.
+    ///
+    /// Unlike [`Self::union`], this doesn't error on conflicting single-value
+    /// fields; `other` simply overrides `self`. It only errors on an extra
+    /// index that is listed with different cutoffs.
+    pub fn overlay(&self, other: &PypiOptions) -> Result<PypiOptions, PypiOptionsMergeError> {
+        Ok(PypiOptions {
+            index_url: other.index_url.clone().or_else(|| self.index_url.clone()),
+            index_strategy: other
+                .index_strategy
+                .clone()
+                .or_else(|| self.index_strategy.clone()),
+            prerelease_mode: other.prerelease_mode.or(self.prerelease_mode),
+            skip_wheel_filename_check: other
+                .skip_wheel_filename_check
+                .or(self.skip_wheel_filename_check),
+            extra_index_urls: merge_extra_indexes(&self.extra_index_urls, &other.extra_index_urls)?,
+            find_links: merge_list_dedup(&self.find_links, &other.find_links),
+            no_build_isolation: self.no_build_isolation.union(&other.no_build_isolation),
+            no_build: self.no_build.union(&other.no_build),
+            no_binary: self.no_binary.union(&other.no_binary),
+            dependency_overrides: merge_map_override_left(
+                &other.dependency_overrides,
+                &self.dependency_overrides,
+            ),
+        })
+    }
+}
+
+// Implement the generic `MergeUnion` trait for our union-able types so they can be
+// composed uniformly (including for Option<T> via its MergeUnion impl).
+impl MergeUnion for NoBuild {
+    fn union(&self, other: &Self) -> Self {
+        NoBuild::union(self, other)
+    }
+}
+
+impl MergeUnion for NoBinary {
+    fn union(&self, other: &Self) -> Self {
+        NoBinary::union(self, other)
+    }
+}
+
+impl MergeUnion for NoBuildIsolation {
+    fn union(&self, other: &Self) -> Self {
+        NoBuildIsolation::union(self, other)
     }
 }
 
@@ -323,7 +411,13 @@ impl From<PypiOptions> for rattler_lock::PypiIndexes {
             .unwrap_or(pixi_consts::consts::DEFAULT_PYPI_INDEX_URL.clone());
         Self {
             indexes: std::iter::once(primary_index)
-                .chain(value.extra_index_urls.into_iter().flatten())
+                .chain(
+                    value
+                        .extra_index_urls
+                        .into_iter()
+                        .flatten()
+                        .map(|index| index.url),
+                )
                 .collect(),
             find_links: value
                 .find_links
@@ -362,6 +456,61 @@ impl From<&PypiOptions> for rattler_lock::PypiIndexes {
     }
 }
 
+#[cfg(feature = "rattler_lock")]
+impl From<PrereleaseMode> for rattler_lock::PypiPrereleaseMode {
+    fn from(value: PrereleaseMode) -> Self {
+        match value {
+            PrereleaseMode::Disallow => rattler_lock::PypiPrereleaseMode::Disallow,
+            PrereleaseMode::Allow => rattler_lock::PypiPrereleaseMode::Allow,
+            PrereleaseMode::IfNecessary => rattler_lock::PypiPrereleaseMode::IfNecessary,
+            PrereleaseMode::Explicit => rattler_lock::PypiPrereleaseMode::Explicit,
+            PrereleaseMode::IfNecessaryOrExplicit => {
+                rattler_lock::PypiPrereleaseMode::IfNecessaryOrExplicit
+            }
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<rattler_lock::PypiPrereleaseMode> for PrereleaseMode {
+    fn from(value: rattler_lock::PypiPrereleaseMode) -> Self {
+        match value {
+            rattler_lock::PypiPrereleaseMode::Disallow => PrereleaseMode::Disallow,
+            rattler_lock::PypiPrereleaseMode::Allow => PrereleaseMode::Allow,
+            rattler_lock::PypiPrereleaseMode::IfNecessary => PrereleaseMode::IfNecessary,
+            rattler_lock::PypiPrereleaseMode::Explicit => PrereleaseMode::Explicit,
+            rattler_lock::PypiPrereleaseMode::IfNecessaryOrExplicit => {
+                PrereleaseMode::IfNecessaryOrExplicit
+            }
+        }
+    }
+}
+
+/// Merges two lists of extra indexes, deduplicated by URL in the order they
+/// are provided. The same URL with different cutoffs is ambiguous, so it is an
+/// error.
+fn merge_extra_indexes(
+    a: &Option<Vec<PypiExtraIndex>>,
+    b: &Option<Vec<PypiExtraIndex>>,
+) -> Result<Option<Vec<PypiExtraIndex>>, PypiOptionsMergeError> {
+    if a.is_none() && b.is_none() {
+        return Ok(None);
+    }
+    let mut merged: Vec<PypiExtraIndex> = Vec::new();
+    for index in a.iter().chain(b).flatten() {
+        match merged.iter().find(|existing| existing.url == index.url) {
+            Some(existing) if existing.exclude_newer != index.exclude_newer => {
+                return Err(PypiOptionsMergeError::ConflictingExtraIndexCutoffs {
+                    url: index.url.to_string(),
+                });
+            }
+            Some(_) => {}
+            None => merged.push(index.clone()),
+        }
+    }
+    Ok(Some(merged))
+}
+
 #[derive(Error, Debug)]
 pub enum PypiOptionsMergeError {
     #[error(
@@ -372,6 +521,16 @@ pub enum PypiOptionsMergeError {
         "multiple index strategies are not supported, found both {first} and {second} across multiple pypi options"
     )]
     MultipleIndexStrategies { first: String, second: String },
+    #[error(
+        "multiple prerelease modes are not supported, found both {first} and {second} across multiple pypi options"
+    )]
+    MultiplePrereleaseModes { first: String, second: String },
+    #[error(
+        "multiple skip-wheel-filename-check values are not supported, found both {first} and {second} across multiple pypi options"
+    )]
+    MultipleSkipWheelFilenameCheck { first: bool, second: bool },
+    #[error("extra index {url} is listed with different exclude-newer cutoffs")]
+    ConflictingExtraIndexCutoffs { url: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -443,6 +602,8 @@ impl FromIterator<pep508_rs::PackageName> for NoBuildIsolation {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use url::Url;
 
     use super::{PypiOptions, *};
@@ -453,7 +614,9 @@ mod tests {
         // Create the first set of options
         let opts = PypiOptions {
             index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
-            extra_index_urls: Some(vec![Url::parse("https://example.com/extra").unwrap()]),
+            extra_index_urls: Some(vec![PypiExtraIndex::from_url(
+                Url::parse("https://example.com/extra").unwrap(),
+            )]),
             find_links: Some(vec![
                 FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap()),
@@ -463,43 +626,61 @@ mod tests {
                 "bar".parse().unwrap(),
             ]),
             index_strategy: None,
+            prerelease_mode: None,
             no_build: None,
             dependency_overrides: Some(IndexMap::from_iter([
                 (
                     "pkg1".parse().unwrap(),
-                    PixiPypiSpec::RawVersion("==1.0.0".parse().unwrap()),
+                    PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: "==1.0.0".parse().unwrap(),
+                        index: None,
+                    }),
                 ),
                 (
                     "pkg2".parse().unwrap(),
-                    PixiPypiSpec::RawVersion("==2.0.0".parse().unwrap()),
+                    PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: "==2.0.0".parse().unwrap(),
+                        index: None,
+                    }),
                 ),
             ])),
             no_binary: Default::default(),
+            skip_wheel_filename_check: Some(true),
         };
 
         // Create the second set of options
         let opts2 = PypiOptions {
             index_url: None,
-            extra_index_urls: Some(vec![Url::parse("https://example.com/extra2").unwrap()]),
+            extra_index_urls: Some(vec![PypiExtraIndex::from_url(
+                Url::parse("https://example.com/extra2").unwrap(),
+            )]),
             find_links: Some(vec![
                 FindLinksUrlOrPath::Path("/path/to/flat/index2".into()),
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index2").unwrap()),
             ]),
             no_build_isolation: NoBuildIsolation::from_iter(["foo".parse().unwrap()]),
             index_strategy: None,
+            prerelease_mode: None,
             no_build: Some(NoBuild::All),
             dependency_overrides: Some(IndexMap::from_iter([
                 (
                     "pkg1".parse().unwrap(),
-                    PixiPypiSpec::RawVersion("==1.2.0".parse().unwrap()),
+                    PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: "==1.2.0".parse().unwrap(),
+                        index: None,
+                    }),
                 ),
                 (
                     "pkg3".parse().unwrap(),
-                    PixiPypiSpec::RawVersion("==3.2.0".parse().unwrap()),
+                    PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: "==3.2.0".parse().unwrap(),
+                        index: None,
+                    }),
                 ),
             ])),
 
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Merge the two options
@@ -585,6 +766,31 @@ mod tests {
     }
 
     #[test]
+    fn test_extra_indexes_deduplicated_by_url() {
+        let plain = PypiExtraIndex::from_url(Url::parse("https://internal/simple").unwrap());
+        let zero = PypiExtraIndex {
+            exclude_newer: Some(ExcludeNewer::from_str("0d").unwrap()),
+            ..plain.clone()
+        };
+        let options = |index: &PypiExtraIndex| PypiOptions {
+            extra_index_urls: Some(vec![index.clone()]),
+            ..Default::default()
+        };
+
+        let merged = options(&zero).union(&options(&zero)).unwrap();
+        assert_eq!(merged.extra_index_urls, Some(vec![zero.clone()]));
+
+        assert!(matches!(
+            options(&plain).union(&options(&zero)),
+            Err(PypiOptionsMergeError::ConflictingExtraIndexCutoffs { .. })
+        ));
+        assert!(matches!(
+            options(&plain).overlay(&options(&zero)),
+            Err(PypiOptionsMergeError::ConflictingExtraIndexCutoffs { .. })
+        ));
+    }
+
+    #[test]
     fn test_error_on_multiple_primary_indexes() {
         // Create the first set of options
         let opts = PypiOptions {
@@ -593,9 +799,11 @@ mod tests {
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
+            prerelease_mode: None,
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Create the second set of options
@@ -605,9 +813,11 @@ mod tests {
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
+            prerelease_mode: None,
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Merge the two options
@@ -625,9 +835,11 @@ mod tests {
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::FirstIndex),
+            prerelease_mode: None,
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Create the second set of options
@@ -637,13 +849,51 @@ mod tests {
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
+            prerelease_mode: None,
             no_build: Default::default(),
             dependency_overrides: None,
             no_binary: Default::default(),
+            skip_wheel_filename_check: None,
         };
 
         // Merge the two options
         // This should error because there are two index strategies
+        let merged_opts = opts.union(&opts2);
+        insta::assert_snapshot!(merged_opts.err().unwrap());
+    }
+
+    #[test]
+    fn test_error_on_multiple_prerelease_modes() {
+        // Create the first set of options
+        let opts = PypiOptions {
+            index_url: None,
+            extra_index_urls: None,
+            find_links: None,
+            no_build_isolation: NoBuildIsolation::default(),
+            index_strategy: None,
+            prerelease_mode: Some(PrereleaseMode::Allow),
+            no_build: Default::default(),
+            dependency_overrides: None,
+            no_binary: Default::default(),
+            skip_wheel_filename_check: None,
+        };
+
+        // Create the second set of options
+        let opts2 = PypiOptions {
+            index_url: None,
+            extra_index_urls: None,
+            find_links: None,
+            no_build_isolation: NoBuildIsolation::default(),
+            index_strategy: None,
+            prerelease_mode: Some(PrereleaseMode::Disallow),
+            no_build: Default::default(),
+            dependency_overrides: None,
+            no_binary: Default::default(),
+            skip_wheel_filename_check: None,
+        };
+
+        // Merge the two options
+        // This should error because there are two prerelease modes
         let merged_opts = opts.union(&opts2);
         insta::assert_snapshot!(merged_opts.err().unwrap());
     }

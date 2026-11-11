@@ -1,10 +1,10 @@
-use crate::BinarySpec;
+use crate::{BinarySpec, MatchspecFields, Subdirectory};
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
+use rattler_conda_types::{NamelessMatchSpec, package::CondaArchiveType};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::fmt::Display;
+use std::{fmt::Display, path::Path};
 use url::Url;
 
 /// A specification of a package from a URL. This is used to represent both
@@ -24,6 +24,10 @@ pub struct UrlSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
     pub sha256: Option<Sha256Hash>,
+
+    /// The subdirectory of the package inside the archive
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
 }
 
 impl UrlSpec {
@@ -54,6 +58,8 @@ impl UrlSpec {
                 url: self.url,
                 md5: self.md5,
                 sha256: self.sha256,
+                subdirectory: self.subdirectory,
+                matchspec: MatchspecFields::default(),
             })
         }
     }
@@ -72,32 +78,49 @@ impl UrlSpec {
                 url: self.url,
                 md5: self.md5,
                 sha256: self.sha256,
+                subdirectory: self.subdirectory,
+                matchspec: MatchspecFields::default(),
             })
         }
     }
 
     /// Returns true if the URL points to a binary package.
+    ///
+    /// Detection is purely by file extension (`.conda` or `.tar.bz2`):
+    /// any URL whose last path segment ends in one of these is treated as
+    /// a binary archive at parse time, even if the filename doesn't follow
+    /// the `name-version-build` convention.
     pub fn is_binary(&self) -> bool {
-        ArchiveIdentifier::try_from_url(&self.url).is_some()
+        url_is_binary(&self.url)
     }
+}
+
+/// Returns true if `url` looks like a binary conda archive based on its
+/// path extension (`.conda` or `.tar.bz2`).
+pub(crate) fn url_is_binary(url: &Url) -> bool {
+    url.path_segments()
+        .and_then(Iterator::last)
+        .and_then(|seg| CondaArchiveType::try_from(Path::new(seg)))
+        .is_some()
 }
 
 impl Display for UrlSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
         if let Some(md5) = &self.md5 {
-            write!(f, " md5={:x}", md5)?;
+            write!(f, " md5={}", hex::encode(md5))?;
         }
         if let Some(sha256) = &self.sha256 {
-            write!(f, " sha256={:x}", sha256)?;
+            write!(f, " sha256={}", hex::encode(sha256))?;
         }
         Ok(())
     }
 }
 
-/// A specification of a source archive from a URL.
+/// A specification of a source archive from a URL, optionally constrained
+/// by match-spec selectors (version, build, extras, …).
 #[serde_as]
-#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UrlSourceSpec {
     /// The URL of the package
     pub url: Url,
@@ -111,16 +134,45 @@ pub struct UrlSourceSpec {
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Sha256>>")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sha256: Option<Sha256Hash>,
+
+    /// The subdirectory of the package inside the archive
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
+
+    /// Match-spec selectors applied to the built output (flattened).
+    #[serde(flatten)]
+    pub matchspec: MatchspecFields,
+}
+
+impl UrlSourceSpec {
+    /// Constructs a new [`UrlSourceSpec`] with no matchspec selectors.
+    pub fn new(
+        url: Url,
+        md5: Option<Md5Hash>,
+        sha256: Option<Sha256Hash>,
+        subdirectory: Subdirectory,
+    ) -> Self {
+        Self {
+            url,
+            md5,
+            sha256,
+            subdirectory,
+            matchspec: MatchspecFields::default(),
+        }
+    }
 }
 
 impl Display for UrlSourceSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.url)?;
         if let Some(md5) = &self.md5 {
-            write!(f, " md5={:x}", md5)?;
+            write!(f, " md5={}", hex::encode(md5))?;
         }
         if let Some(sha256) = &self.sha256 {
-            write!(f, " sha256={:x}", sha256)?;
+            write!(f, " sha256={}", hex::encode(sha256))?;
+        }
+        if !self.subdirectory.is_empty() {
+            write!(f, " subdirectory={}", self.subdirectory)?;
         }
         Ok(())
     }
@@ -132,21 +184,40 @@ impl From<UrlSourceSpec> for UrlSpec {
             url: value.url,
             md5: value.md5,
             sha256: value.sha256,
+            subdirectory: value.subdirectory,
         }
     }
 }
 
-/// A specification of a source archive from a URL.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
+/// A specification of a binary conda archive from a URL.
+#[serde_as]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct UrlBinarySpec {
     /// The URL of the package
     pub url: Url,
 
     /// The md5 hash of the archive
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the archive
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Sha256>>")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub sha256: Option<Sha256Hash>,
+}
+
+impl Display for UrlBinarySpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.url)?;
+        if let Some(md5) = &self.md5 {
+            write!(f, " md5={}", hex::encode(md5))?;
+        }
+        if let Some(sha256) = &self.sha256 {
+            write!(f, " sha256={}", hex::encode(sha256))?;
+        }
+        Ok(())
+    }
 }
 
 impl From<UrlBinarySpec> for UrlSpec {
@@ -155,6 +226,8 @@ impl From<UrlBinarySpec> for UrlSpec {
             url: value.url,
             md5: value.md5,
             sha256: value.sha256,
+            // A binary url spec is already a conda package so it cannot have a subdirectory
+            subdirectory: Subdirectory::default(),
         }
     }
 }

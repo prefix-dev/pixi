@@ -1,0 +1,606 @@
+use std::{
+    collections::BTreeSet, collections::HashMap, path::Path, process::ExitCode, str::FromStr,
+};
+
+use clap::{Parser, ValueHint};
+use indexmap::IndexSet;
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic};
+use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_command_dispatcher::offline::exclusions_for_solve;
+use pixi_config::{self, Config, ConfigCli};
+use pixi_core::environment::list::{PackageToOutput, print_package_table};
+use pixi_core::host::{HostDetector, WantedNames, cli_detector_consent};
+use pixi_manifest::PixiPlatformName;
+use pixi_manifest::platform::host::host_subdir;
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_utils::prefix::Prefix;
+use pixi_utils::{
+    EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients,
+    rlimit::try_increase_rlimit_to_sensible,
+};
+use rattler::{
+    install::{IndicatifReporter, Installer},
+    package_cache::PackageCache,
+};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, PackageRecord, Subdir,
+    referenced_virtual_packages,
+};
+use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
+use reqwest_middleware::ClientWithMiddleware;
+use uv_threads::initialize_rayon_once;
+
+use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
+
+/// Run a command in a temporary environment.
+///
+/// Remove the temporary environments with `pixi clean cache --exec`.
+#[derive(Parser, Debug)]
+#[clap(trailing_var_arg = true, arg_required_else_help = true)]
+pub struct Args {
+    /// The executable to run, followed by any arguments.
+    #[clap(num_args = 1.., value_hint = ValueHint::CommandWithArguments)]
+    pub command: Vec<String>,
+
+    /// Matchspecs of package to install.
+    /// If this is not provided, the package is guessed from the command.
+    #[clap(long = "spec", short = 's', value_name = "SPEC")]
+    pub specs: Vec<MatchSpecOrPath>,
+
+    /// Matchspecs of package to install, while also guessing a package
+    /// from the command.
+    #[clap(long, short = 'w', conflicts_with = "specs")]
+    pub with: Vec<MatchSpecOrPath>,
+
+    #[clap(flatten)]
+    channels: ChannelsConfig,
+
+    /// The platform to create the environment for. Defaults to the
+    /// current machine's subdir. Accepts a workspace platform name or a
+    /// bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any
+    /// workspace so the value resolves to a conda subdir either way.
+    #[clap(long, short, value_name = "SUBDIR", value_hint = ValueHint::Other)]
+    pub platform: Option<PixiPlatformName>,
+
+    /// If specified a new environment is always created even if one already
+    /// exists.
+    #[clap(long)]
+    pub force_reinstall: bool,
+
+    /// Before executing the command, list packages in the environment
+    /// Specify `--list=some_regex` to filter the shown packages
+    #[clap(long = "list", num_args = 0..=1, default_missing_value = "", require_equals = true)]
+    pub list: Option<String>,
+
+    /// Disable modification of the PS1 prompt to indicate the temporary environment
+    #[clap(long)]
+    pub no_modify_ps1: bool,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
+}
+
+/// CLI entry point for `pixi exec`
+pub async fn execute(args: Args) -> miette::Result<ExitCode> {
+    let config = Config::try_with_cli_config(&args.config)?;
+    let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
+
+    // `pixi exec` runs without a workspace, so the resolver only has the
+    // bare-subdir fallback to work with. Anything that isn't a valid conda
+    // subdir is rejected before we touch the network.
+    let platform = match &args.platform {
+        Some(name) => resolve_platforms(&IndexSet::default(), std::slice::from_ref(name))?
+            .into_iter()
+            .next()
+            .expect("resolve_platforms preserves length")
+            .subdir(),
+        None => host_subdir(),
+    };
+
+    let mut command_iter = args.command.iter();
+    let command = command_iter.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
+    let (_, client) = build_reqwest_clients(Some(&config), None)?;
+
+    // Determine the specs for installation and for the environment name.
+    let exec_specs = to_exec_match_specs(&args.specs)?;
+    let exec_with = to_exec_match_specs(&args.with)?;
+
+    let mut install_specs = exec_specs.clone();
+    install_specs.extend(exec_with.clone());
+
+    let mut display_names: Vec<String> = args
+        .specs
+        .iter()
+        .filter_map(|spec| spec.display_name())
+        .collect();
+    display_names.extend(args.with.iter().filter_map(|spec| spec.display_name()));
+
+    // Guess a package from the command if no specs were provided at all OR if --with is used
+    let should_guess_package = args.specs.is_empty() || !args.with.is_empty();
+    if should_guess_package {
+        install_specs.push(guess_package_spec(command));
+    }
+
+    // Create the environment to run the command in.
+    let prefix = create_exec_prefix(
+        &args,
+        platform,
+        &install_specs,
+        &cache_dir,
+        &config,
+        &client,
+        should_guess_package,
+    )
+    .await?;
+
+    // Get environment variables from the activation
+    let mut activation_env = run_activation(&prefix).await?;
+
+    // Collect unique package names for environment naming
+    let package_names: BTreeSet<String> = display_names.into_iter().collect();
+
+    if !package_names.is_empty() {
+        let env_name = format!("temp:{}", package_names.into_iter().format(","));
+
+        activation_env.insert("PIXI_ENVIRONMENT_NAME".into(), env_name.clone());
+
+        if !args.no_modify_ps1 && std::env::current_dir().is_ok() {
+            let (prompt_var, prompt_value) = if cfg!(windows) {
+                ("_PIXI_PROMPT", format!("(pixi:{env_name}) $P$G"))
+            } else {
+                ("PS1", format!(r"(pixi:{env_name}) [\w] \$"))
+            };
+
+            activation_env.insert(prompt_var.into(), prompt_value);
+
+            if cfg!(windows) {
+                activation_env.insert("PROMPT".into(), String::from("$P$G"));
+            }
+        }
+    }
+
+    // Ignore CTRL+C so that the child is responsible for its own signal handling.
+    let _ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
+
+    // Spawn the command
+    let mut cmd = std::process::Command::new(command);
+    let command_args_vec: Vec<_> = command_iter.collect();
+    cmd.args(&command_args_vec);
+
+    // On Windows, when using cmd.exe or cmd, we need to pass the full environment
+    // because cmd.exe requires access to all environment variables (including prompt variables)
+    // to properly display the modified prompt
+    if cfg!(windows) && (command.to_lowercase().ends_with("cmd.exe") || command == "cmd") {
+        let mut env = std::env::vars().collect::<HashMap<String, String>>();
+        env.extend(activation_env);
+        cmd.envs(env);
+    } else {
+        cmd.envs(activation_env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    }
+
+    let status = cmd
+        .status()
+        .into_diagnostic()
+        .with_context(|| format!("failed to execute '{}'", command))?;
+
+    // Mirror the child's exit (including signal deaths like SIGSEGV) so the
+    // parent shell sees the same outcome it would if the child had run directly.
+    Ok(process_exit::exit_code_from_status(status))
+}
+
+/// The `exclude-newer` of the configuration can't be applied.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("invalid `exclude-newer` in the pixi configuration")]
+struct InvalidConfiguredExcludeNewer(#[source] pixi_config::InvalidExcludeNewerError);
+
+/// Creates a prefix for the `pixi exec` command.
+pub async fn create_exec_prefix(
+    args: &Args,
+    platform: Subdir,
+    specs: &[MatchSpec],
+    cache_dir: &Path,
+    config: &Config,
+    client: &ClientWithMiddleware,
+    has_guessed_package: bool,
+) -> miette::Result<Prefix> {
+    let specs = specs.to_vec();
+
+    let channels = args
+        .channels
+        .resolve_from_config(config)?
+        .iter()
+        .map(|c| c.base_url.to_string())
+        .collect();
+
+    // The `exclude-newer` of the configuration applies to `pixi exec`, which
+    // has no manifest of its own.
+    let exclude_newer = config
+        .exclude_newer
+        .as_ref()
+        .map(rattler_solve::ExcludeNewer::try_from)
+        .transpose()
+        .map_err(InvalidConfiguredExcludeNewer)?;
+
+    // Hash the configuration as configured, like the backend metadata cache
+    // does, so a relative cutoff such as `7d` keeps reusing the same
+    // environment. The exemptions are hashed as parsed by `rattler_config`.
+    let exclude_newer_toml = config
+        .exclude_newer
+        .as_ref()
+        .map(pixi_config::exclude_newer_to_toml);
+
+    let environment_hash =
+        EnvironmentHash::new(specs.clone(), channels, platform, config.offline())
+            .with_exclude_newer(exclude_newer_toml);
+
+    let dir_prefix = exec_dir_prefix(
+        &specs,
+        args.command.first().map(String::as_str),
+        has_guessed_package,
+    );
+
+    let prefix = Prefix::new(
+        cache_dir
+            .join(pixi_consts::consts::CACHED_ENVS_DIR)
+            .join(environment_hash.name(dir_prefix.as_deref())),
+    );
+
+    // Cross-process install lock. The prefix is content-addressed by
+    // `environment_hash`, so any prior finish here is reusable.
+    let mut env_lock = await_in_progress("acquiring write lock on prefix", |_| {
+        EnvironmentLock::acquire(prefix.root())
+    })
+    .await
+    .into_diagnostic()
+    .context("failed to acquire write lock on prefix")?;
+
+    // Reuse the cached prefix when it is already installed. `--list` lists
+    // the installed packages rather than solving again, as a new solve could
+    // pick newer packages, e.g. with a relative `exclude-newer` cutoff.
+    if !args.force_reinstall && env_lock.current().is_some() {
+        tracing::info!(
+            "reusing existing environment in {}",
+            prefix.root().display()
+        );
+        if let Some(regex) = &args.list {
+            let records = prefix.find_installed_packages()?;
+            list_exec_environment(
+                &specs,
+                records
+                    .iter()
+                    .map(|record| &record.repodata_record.package_record),
+                regex,
+            )?;
+        }
+        return Ok(prefix);
+    }
+
+    // A previous install here crashed; re-link everything below.
+    let reinstall_all = env_lock.was_interrupted();
+
+    // Construct a gateway to get repodata.
+    let gateway = config.gateway().with_client(client.clone()).finish();
+
+    let channels = args.channels.resolve_from_config(config)?;
+    let channel_urls: Vec<ChannelUrl> = channels
+        .iter()
+        .map(|channel| channel.base_url.clone())
+        .collect();
+
+    // Get the repodata for the specs
+    let query_output = await_in_progress("fetching repodata for environment", |_| async {
+        gateway
+            .query(channels, [platform, Subdir::NoArch], specs.clone())
+            .recursive(true)
+            .channel_notices(true)
+            .execute()
+            .await
+            .into_diagnostic()
+    })
+    .await
+    .context("failed to get repodata")?;
+    for notice in &query_output.notices {
+        pixi_reporters::queue_channel_notice(notice);
+    }
+    let repodata = query_output.repodata;
+
+    // Discover registrations for the target, honoring overrides without
+    // executing detectors on a foreign platform.
+    let mut wanted = referenced_virtual_packages(
+        repodata
+            .iter()
+            .flat_map(|subdir| subdir.iter())
+            .map(|record| &record.package_record),
+    );
+    wanted.extend(
+        specs
+            .iter()
+            .filter_map(|spec| spec.name.as_exact())
+            .filter(|name| name.as_normalized().starts_with("__"))
+            .cloned(),
+    );
+    let host = HostDetector::with_gateway(
+        config.clone(),
+        cli_detector_consent(None),
+        client.clone().into(),
+        gateway.clone(),
+    )
+    .detect_for_target(&channel_urls, platform, WantedNames::Only(wanted))
+    .await?;
+    let virtual_packages: Vec<GenericVirtualPackage> = host
+        .platform()
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .solver_virtual_package_records()
+        .into_owned();
+
+    // `pixi exec` solves outside the command dispatcher, so it has to build
+    // the offline exclusions itself rather than inheriting them.
+    let excluded_candidates = exclusions_for_solve(
+        config.offline(),
+        &PackageCache::new(cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR)),
+        repodata.iter().flat_map(|repo_data| repo_data.iter()),
+    )
+    .await
+    .into_diagnostic()
+    .context("failed to read the package cache")?;
+
+    // Solve the environment
+    tracing::info!(
+        "creating environment in {}",
+        dunce::canonicalize(prefix.root())
+            .as_deref()
+            .unwrap_or(prefix.root())
+            .display()
+    );
+    let solve_result = wrap_in_progress("solving environment", || {
+        Solver.solve(SolverTask {
+            specs: specs.clone(),
+            virtual_packages: virtual_packages.clone(),
+            excluded_candidates: excluded_candidates.clone(),
+            exclude_newer: exclude_newer.clone(),
+            ..SolverTask::from_iter(&repodata.clone())
+        })
+    });
+
+    let (solved_records, final_specs) = match solve_result {
+        Ok(records) => (records, specs.to_vec()),
+        Err(err) if has_guessed_package && !args.with.is_empty() => {
+            // If solving failed and we guessed a package while using --with,
+            // try again without the guessed package (last spec)
+            let guessed_package_name = specs[specs.len() - 1]
+                .name
+                .as_exact()
+                .map(|n| n.as_source())
+                .unwrap_or("<unknown>");
+            tracing::debug!(
+                "Solver failed with guessed package '{}', retrying without it: {}",
+                guessed_package_name,
+                err
+            );
+            let records = wrap_in_progress("retrying solve without guessed package", || {
+                Solver.solve(SolverTask {
+                    specs: specs[..specs.len() - 1].to_vec(),
+                    virtual_packages: virtual_packages.clone(),
+                    excluded_candidates: excluded_candidates.clone(),
+                    exclude_newer: exclude_newer.clone(),
+                    ..SolverTask::from_iter(&repodata.clone())
+                })
+            })
+            .into_diagnostic()
+            .context("failed to solve environment even without guessed package")?;
+            (records, specs[..specs.len() - 1].to_vec())
+        }
+        Err(err) => {
+            return Err(err)
+                .into_diagnostic()
+                .context("failed to solve environment");
+        }
+    };
+
+    // Force the initialization of the rayon thread pool to avoid implicit creation
+    // by the Installer.
+    initialize_rayon_once();
+
+    // Try to increase the rlimit to a sensible value for installation.
+    try_increase_rlimit_to_sensible();
+
+    // Mark the prefix dirty for the duration of the install so a crash
+    // is detected next time.
+    env_lock
+        .begin()
+        .await
+        .into_diagnostic()
+        .context("failed to mark prefix install in progress")?;
+
+    // Install the environment. When recovering from an interrupted
+    // install, re-link every package rather than trusting conda-meta.
+    let mut installer = Installer::new()
+        .with_target_platform(platform)
+        .with_download_client(client.clone())
+        .with_reporter(
+            IndicatifReporter::builder()
+                .with_multi_progress(global_multi_progress())
+                .clear_when_done(true)
+                .finish(),
+        )
+        .with_package_cache(PackageCache::new(
+            cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
+        ));
+    if reinstall_all {
+        installer = installer.with_reinstall_packages(
+            solved_records
+                .records
+                .iter()
+                .map(|r| r.package_record.name.clone())
+                .collect(),
+        );
+    }
+    installer
+        .install(prefix.root(), solved_records.records.clone())
+        .await
+        .into_diagnostic()
+        .context("failed to create environment")?;
+
+    let installed_fingerprint =
+        pixi_utils::EnvironmentFingerprint::compute(solved_records.records.iter());
+    env_lock
+        .finish(&installed_fingerprint)
+        .await
+        .into_diagnostic()
+        .context("failed to record prefix install fingerprint")?;
+
+    if let Some(ref regex) = args.list {
+        list_exec_environment(
+            &final_specs,
+            solved_records
+                .records
+                .iter()
+                .map(|record| &record.package_record),
+            regex,
+        )?;
+    }
+
+    Ok(prefix)
+}
+
+fn list_exec_environment<'a>(
+    specs: &[MatchSpec],
+    records: impl IntoIterator<Item = &'a PackageRecord>,
+    regex: &str,
+) -> Result<(), miette::Error> {
+    let regex = (!regex.is_empty()).then_some(regex);
+    let mut packages_to_output = records
+        .into_iter()
+        .map(|record| {
+            PackageToOutput::new(
+                record,
+                specs
+                    .iter()
+                    .filter_map(|spec| spec.name.as_exact()) // Extract exact name if it exists
+                    .contains(&record.name),
+            )
+        })
+        .collect_vec();
+    if let Some(regex) = regex {
+        let regex = regex::Regex::new(regex).into_diagnostic()?;
+        packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
+    }
+    let output_message = if let Some(regex) = regex {
+        format!(
+            "The environment has {} packages filtered by regex `{}`:",
+            console::style(packages_to_output.len()).bold(),
+            regex
+        )
+    } else {
+        format!(
+            "The environment has {} packages:",
+            console::style(packages_to_output.len()).bold()
+        )
+    };
+    packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
+    println!("{output_message}");
+    print_package_table(packages_to_output).into_diagnostic()?;
+    Ok(())
+}
+
+/// Picks the human-readable prefix for the cached env directory:
+/// the single spec's name when there is exactly one, otherwise the guessed
+/// package (when pixi guessed one), otherwise nothing.
+fn exec_dir_prefix(
+    specs: &[MatchSpec],
+    command: Option<&str>,
+    has_guessed_package: bool,
+) -> Option<String> {
+    if let [single] = specs {
+        return single
+            .name
+            .as_exact()
+            .map(|name| name.as_normalized().to_string());
+    }
+    if has_guessed_package {
+        return command.and_then(|c| {
+            guess_package_spec(c)
+                .name
+                .as_exact()
+                .map(|name| name.as_normalized().to_string())
+        });
+    }
+    None
+}
+
+/// This function is used to guess the package name from the command.
+fn guess_package_spec(command: &str) -> MatchSpec {
+    // Replace any illegal character with a dash.
+    // TODO: In the future it would be cool if we look at all packages available
+    //  and try to find the closest match.
+    let command = command.replace(
+        |c| !matches!(c, 'a'..='z'|'A'..='Z'|'0'..='9'|'-'|'_'|'.'),
+        "-",
+    );
+
+    MatchSpec {
+        name: PackageName::from_str(&command)
+            .expect("all illegal characters were removed")
+            .into(),
+        ..Default::default()
+    }
+}
+
+/// Run the activation scripts of the prefix.
+async fn run_activation(
+    prefix: &Prefix,
+) -> miette::Result<std::collections::HashMap<String, String>> {
+    Ok(wrap_in_progress("running activation", move || prefix.run_activation()).await?)
+}
+
+fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpec>> {
+    specs
+        .iter()
+        .cloned()
+        .map(|spec| {
+            spec.into_exec_match_spec()
+                .map_err(|err| miette::miette!(err))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_conda_types::{MatchSpec, ParseStrictness};
+
+    use super::exec_dir_prefix;
+
+    fn spec(s: &str) -> MatchSpec {
+        MatchSpec::from_str(s, ParseStrictness::Lenient).unwrap()
+    }
+
+    // `pixi exec --spec foo cmd`: single spec → use the spec name.
+    #[test]
+    fn single_explicit_spec_wins() {
+        let prefix = exec_dir_prefix(&[spec("rucio-mcp")], Some("sh"), false);
+        assert_eq!(prefix.as_deref(), Some("rucio-mcp"));
+    }
+
+    // `pixi exec cmd`: no spec, package guessed from cmd → use cmd.
+    #[test]
+    fn guessed_only_uses_command() {
+        let prefix = exec_dir_prefix(&[spec("voms-proxy-init")], Some("voms-proxy-init"), true);
+        assert_eq!(prefix.as_deref(), Some("voms-proxy-init"));
+    }
+
+    // `pixi exec --with extra cmd`: guess + extra → use cmd, not "extra".
+    #[test]
+    fn with_uses_command_not_extra_spec() {
+        let prefix = exec_dir_prefix(&[spec("extra"), spec("cmd")], Some("cmd"), true);
+        assert_eq!(prefix.as_deref(), Some("cmd"));
+    }
+
+    // `pixi exec --spec a --spec b cmd`: multiple explicit specs, no guess → no prefix.
+    #[test]
+    fn multiple_explicit_specs_have_no_prefix() {
+        let prefix = exec_dir_prefix(&[spec("foo"), spec("bar")], Some("cmd"), false);
+        assert_eq!(prefix, None);
+    }
+}

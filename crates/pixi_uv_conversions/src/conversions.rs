@@ -4,21 +4,84 @@ use std::{
 };
 
 use crate::GitUrlWithPrefix;
-use miette::IntoDiagnostic;
+use crate::git_url::decode_windows_drive_letter;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
-use pixi_manifest::pypi::pypi_options::{
-    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
+use pixi_manifest::pypi::{
+    ResolvedPypiExcludeNewer,
+    pypi_options::{
+        FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode,
+        PypiExtraIndex, PypiOptions,
+    },
 };
-use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
-use pixi_spec::GitReference as PixiReference;
+use pixi_record::{
+    CondaEnvironmentFingerprint, LockedGitUrl, LockedGitUrlError, PinnedGitCheckout, PinnedGitSpec,
+    PixiRecord,
+};
+use pixi_spec::{ExcludeNewer, GitReference as PixiReference};
+use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
-use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
-use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
-use uv_python::PythonEnvironment;
-use uv_redacted::DisplaySafeUrl;
+use uv_configuration::TrustedHost;
+use uv_distribution_types::{
+    ConfigSettingEntry, ConfigSettings, ExcludeNewerOverride, GitDirectorySourceDist, Index,
+    IndexLocations, IndexUrl,
+};
+use uv_normalize::{InvalidNameError, PackageName};
+use uv_pep508::{VerbatimUrl, VerbatimUrlError};
+use uv_python_interpreter::PythonEnvironment;
+use uv_redacted::SafeUrl;
 
-use crate::{ConversionError, VersionError};
+use crate::{ConversionError, VersionError, WorkspaceAnchor};
+
+/// `config_settings` key carrying the conda-environment fingerprint.
+const CONDA_ENVIRONMENT_CONFIG_SETTING: &str = "pixi-conda-environment";
+
+/// Cache-only key for pixi's implicit `MACOSX_DEPLOYMENT_TARGET`.
+const MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING: &str = "pixi-macos-deployment-target";
+
+/// Builds the [`ConfigSettings`] used to scope the PyPI source-build cache to the
+/// conda environment: a wheel built against one set of conda dependencies is not
+/// reused in an environment that resolves different ones (issue #6226).
+///
+/// The result is `config_settings` (the settings handed to the PEP 517 backend)
+/// with the conda-environment fingerprint layered on top, so the cache key always
+/// reflects the real backend settings as well; should those stop being empty, the
+/// scoping keeps working.
+///
+/// uv folds `config_settings` into the built-wheel cache key, so this is applied
+/// globally. It must only be used as the build context's *cache* settings, never
+/// handed to the build dispatch that invokes the PEP 517 backend, since strict
+/// backends like meson-python reject unknown keys (issue #6271).
+pub fn pypi_cache_config_settings(
+    config_settings: &ConfigSettings,
+    conda_records: &[PixiRecord],
+) -> ConfigSettings {
+    let fingerprint = CondaEnvironmentFingerprint::new(conda_records);
+    let entry =
+        ConfigSettingEntry::from_str(&format!("{CONDA_ENVIRONMENT_CONFIG_SETTING}={fingerprint}"))
+            .expect("the fingerprint is always a valid `KEY=VALUE` config setting");
+    let fingerprint_settings: ConfigSettings = std::iter::once(entry).collect();
+    config_settings.clone().merge(fingerprint_settings)
+}
+
+/// Add pixi's implicit `MACOSX_DEPLOYMENT_TARGET` to uv's source-build cache
+/// key. The variable affects wheel tags, but third-party sdists may not declare
+/// it in `[tool.uv].cache-keys`.
+pub fn pypi_cache_config_settings_with_macos_deployment_target(
+    config_settings: &ConfigSettings,
+    macos_deployment_target: Option<&str>,
+) -> ConfigSettings {
+    let Some(target) = macos_deployment_target else {
+        return config_settings.clone();
+    };
+
+    let entry = ConfigSettingEntry::from_str(&format!(
+        "{MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING}={target}"
+    ))
+    .expect("the macOS deployment target is always a valid `KEY=VALUE` config setting");
+    let target_settings: ConfigSettings = std::iter::once(entry).collect();
+    config_settings.clone().merge(target_settings)
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -72,24 +135,22 @@ pub fn pypi_options_to_index_locations(
     let index = options
         .index_url
         .clone()
-        .map(DisplaySafeUrl::from)
+        .map(SafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
         .into_iter();
 
-    // Convert to list of extra indexes
-    let extra_indexes = options
-        .extra_index_urls
-        .clone()
-        .into_iter()
-        .flat_map(|urls| {
-            urls.into_iter()
-                .map(DisplaySafeUrl::from)
-                .map(VerbatimUrl::from_url)
-                .map(IndexUrl::from)
-                .map(Index::from_extra_index_url)
-        });
+    // Convert to list of extra indexes, carrying any per-index `exclude-newer`
+    // override onto the uv `Index`.
+    let extra_indexes = options.extra_index_urls.clone().into_iter().flatten().map(
+        |PypiExtraIndex { url, exclude_newer }| {
+            let index_url = IndexUrl::from(VerbatimUrl::from_url(SafeUrl::from_url(url)));
+            let mut index = Index::from_extra_index_url(index_url);
+            index.exclude_newer = to_index_exclude_newer_override(exclude_newer);
+            index
+        },
+    );
 
     let flat_indexes = if let Some(flat_indexes) = options.find_links.clone() {
         // Convert to list of flat indexes
@@ -98,7 +159,9 @@ pub fn pypi_options_to_index_locations(
             .map(|url| match url {
                 FindLinksUrlOrPath::Path(relative) => VerbatimUrl::from_path(&relative, base_path)
                     .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative)),
-                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone().into())),
+                FindLinksUrlOrPath::Url(url) => {
+                    Ok(VerbatimUrl::from_url(SafeUrl::from_url(url.clone())))
+                }
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -118,8 +181,12 @@ pub fn pypi_options_to_index_locations(
 }
 
 /// Convert locked indexes to IndexLocations
+///
+/// The lock file only stores the URLs of the indexes, so the per-index
+/// `exclude-newer` overrides are taken from `extra_index_urls` of the manifest.
 pub fn locked_indexes_to_index_locations(
     indexes: &rattler_lock::PypiIndexes,
+    extra_index_urls: &[PypiExtraIndex],
     base_path: &Path,
 ) -> Result<IndexLocations, ConvertFlatIndexLocationError> {
     // Check if the base path is absolute
@@ -134,20 +201,22 @@ pub fn locked_indexes_to_index_locations(
         .indexes
         .first()
         .cloned()
-        .map(DisplaySafeUrl::from)
+        .map(SafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
         .into_iter();
-    let extra_indexes = indexes
-        .indexes
-        .iter()
-        .skip(1)
-        .cloned()
-        .map(DisplaySafeUrl::from)
-        .map(VerbatimUrl::from_url)
-        .map(IndexUrl::from)
-        .map(Index::from_extra_index_url);
+    let extra_indexes = indexes.indexes.iter().skip(1).map(|url| {
+        let index_url = IndexUrl::from(VerbatimUrl::from_url(SafeUrl::from_url(url.clone())));
+        let mut index = Index::from_extra_index_url(index_url);
+        index.exclude_newer = to_index_exclude_newer_override(
+            extra_index_urls
+                .iter()
+                .find(|extra_index| &extra_index.url == url)
+                .and_then(|extra_index| extra_index.exclude_newer),
+        );
+        index
+    });
     let flat_indexes = indexes
         .find_links
         .iter()
@@ -158,7 +227,7 @@ pub fn locked_indexes_to_index_locations(
                 })
             }
             rattler_lock::FindLinksUrlOrPath::Url(url) => {
-                Ok(VerbatimUrl::from_url(url.clone().into()))
+                Ok(VerbatimUrl::from_url(SafeUrl::from_url(url.clone())))
             }
         })
         .collect::<Result<Vec<_>, _>>()?
@@ -242,6 +311,19 @@ pub fn to_index_strategy(
     }
 }
 
+/// Convert pixi `PrereleaseMode` to `uv_resolver::PrereleaseMode`
+pub fn to_prerelease_mode(prerelease_mode: Option<&PrereleaseMode>) -> uv_resolver::PrereleaseMode {
+    match prerelease_mode {
+        Some(PrereleaseMode::Disallow) => uv_resolver::PrereleaseMode::Disallow,
+        Some(PrereleaseMode::Allow) => uv_resolver::PrereleaseMode::Allow,
+        Some(PrereleaseMode::IfNecessary) => uv_resolver::PrereleaseMode::IfNecessary,
+        Some(PrereleaseMode::Explicit) => uv_resolver::PrereleaseMode::Explicit,
+        Some(PrereleaseMode::IfNecessaryOrExplicit) | None => {
+            uv_resolver::PrereleaseMode::IfNecessary
+        }
+    }
+}
+
 pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git_types::GitReference {
     match git_ref {
         PixiGitReference::Branch(branch) => uv_git_types::GitReference::Branch(branch),
@@ -265,6 +347,7 @@ pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git_types::GitOid {
 
 pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiReference {
     match git_reference {
+        uv_git_types::GitReference::Commit(commit) => PixiReference::Rev(commit.to_string()),
         uv_git_types::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
         uv_git_types::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
         uv_git_types::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
@@ -274,10 +357,25 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
     }
 }
 
-/// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
-pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
-    let reference = into_pixi_reference(dist.git.reference().clone());
-
+/// Convert a solved [`GitDirectorySourceDist`] into [`PinnedGitSpec`]
+///
+/// The `original_reference` parameter allows preserving the original git reference
+/// from the manifest (e.g., `Branch("main")`). When uv resolves a git dependency,
+/// it may normalize branch references to `DefaultBranch`, losing the original
+/// branch information. If provided, this original reference will be used instead
+/// of the one from uv's resolution.
+///
+/// If no original reference is provided, which happens for git deps that
+/// aren't top-level workspace deps (e.g. transitive deps coming in through an
+/// editable self-package's `requires_dist`, issue #5661), fall back to
+/// whatever reference uv resolved. That keeps the lock file
+/// `?branch=/?tag=/?rev=` in sync with what the manifest's PEP 508 string
+/// actually says, so the satisfiability check matches without relying on the
+/// no-ref fallback.
+pub fn into_pinned_git_spec(
+    dist: GitDirectorySourceDist,
+    original_reference: Option<PixiReference>,
+) -> PinnedGitSpec {
     // Necessary to convert between our gitsha and uv gitsha.
     let git_sha = PixiGitSha::from_str(
         &dist
@@ -288,30 +386,51 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
     )
     .expect("we expect it to be a valid sha");
 
+    let reference =
+        original_reference.unwrap_or_else(|| into_pixi_reference(dist.git.reference().clone()));
+
     let pinned_checkout = PinnedGitCheckout::new(
         git_sha,
-        dist.subdirectory.map(|sd| sd.to_string_lossy().to_string()),
+        dist.subdirectory
+            .and_then(|sd| pixi_spec::Subdirectory::try_from(sd.to_path_buf()).ok())
+            .unwrap_or_default(),
         reference,
-    );
+    )
+    // Record only an enabled LFS preference: disabled is uv's default and
+    // recording it would churn lock files of projects that never use LFS.
+    .with_lfs(dist.git.lfs().enabled().then_some(true));
 
-    PinnedGitSpec::new(dist.git.repository().clone().into(), pinned_checkout)
+    // `url()` is the original URL; `repository()` is the canonical
+    // (lowercased + `.git`-stripped) form that would corrupt the lockfile
+    // (prefix-dev/pixi#6185). `decode_windows_drive_letter` undoes uv's
+    // percent-encoded drive letters so the lockfile shows `file:///D:/...`.
+    let repository = dist.git.url().clone().into_unsafe_url();
+    PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
+}
+
+/// An error that occurs when converting a [`LockedGitUrl`] into a uv git url.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ParsedGitUrlError {
+    #[error(transparent)]
+    LockedGitUrl(#[from] LockedGitUrlError),
+    #[error(transparent)]
+    GitUrl(#[from] uv_git_types::GitUrlParseError),
 }
 
 /// Convert a locked git url into a parsed git url
 /// [`LockedGitUrl`] is always recorded in the lock file and looks like this:
 /// <git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc>
 ///
-/// [`uv_pypi_types::ParsedGitUrl`] looks like this:
+/// [`uv_pypi_types::ParsedGitDirectoryUrl`] looks like this:
 /// <git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir>
 ///
 /// So we need to convert the locked git url into a parsed git url.
 /// which is used in the uv crate.
 pub fn to_parsed_git_url(
     locked_git_url: &LockedGitUrl,
-) -> miette::Result<uv_pypi_types::ParsedGitUrl> {
+) -> Result<uv_pypi_types::ParsedGitDirectoryUrl, ParsedGitUrlError> {
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
-    // Construct manually [`ParsedGitUrl`] from locked url.
-    let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
+    let parsed_git_url = uv_pypi_types::ParsedGitDirectoryUrl::from_source(
         uv_git_types::GitUrl::from_fields(
             {
                 let mut url = locked_git_url.to_url();
@@ -325,14 +444,32 @@ pub fn to_parsed_git_url(
             },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
-        )
-        .into_diagnostic()?,
-        git_source
-            .subdirectory
-            .map(|s| PathBuf::from(s.as_str()).into_boxed_path()),
+            to_uv_git_lfs(git_source.lfs),
+        )?,
+        if git_source.subdirectory.is_empty() {
+            None
+        } else {
+            Some(
+                git_source
+                    .subdirectory
+                    .as_path()
+                    .to_path_buf()
+                    .into_boxed_path(),
+            )
+        },
     );
 
     Ok(parsed_git_url)
+}
+
+/// Converts a manifest LFS preference into the uv equivalent. uv only knows
+/// on/off, so `None` (no opinion) maps to `Disabled`, uv's default.
+pub fn to_uv_git_lfs(lfs: Option<bool>) -> uv_git_types::GitLfs {
+    if lfs == Some(true) {
+        uv_git_types::GitLfs::Enabled
+    } else {
+        uv_git_types::GitLfs::Disabled
+    }
 }
 
 /// Converts from the open-source variant to the uv-specific variant,
@@ -346,31 +483,159 @@ pub fn to_uv_specifiers(
 pub fn to_requirements<'req>(
     requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
-    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requirements
+    to_requirements_relative_to(requirements, None)
+}
+
+fn write_git_requirement_source(
+    output: &mut String,
+    git: &uv_git_types::GitUrl,
+) -> std::fmt::Result {
+    // `url()`, not `repository()`, preserves the original URL spelling; see #6185.
+    write!(output, " @ git+{}", git.url())?;
+    if let Some(reference) = git.reference().as_str() {
+        write!(output, "@{reference}")?;
+    }
+    Ok(())
+}
+
+/// Same as [`to_requirements`], but re-anchors the `given` on file-URL path/directory
+/// requirements to the workspace root carried by `anchor`.
+///
+/// uv may emit a `given` relative to a nested package's `[tool.uv.sources]`
+/// (e.g. `../pkg-b` inside `workspace/pkg-a`). The pixi lockfile resolves relative paths against
+/// itself (== workspace root), so that `given` mislocates the dep after a round-trip
+/// (#4573). Passing `Some(anchor)` re-anchors the `given` to the workspace root;
+/// passing `None` keeps it as-is.
+pub fn to_requirements_relative_to<'req>(
+    requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
+    anchor: Option<&WorkspaceAnchor<'_>>,
+) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
+    let requirements: Result<Vec<pep508_rs::Requirement>, ConversionError> = requirements
         .map(|requirement| {
-            pep508_rs::Requirement::from_str(&requirement.to_string())
+            let mut verbatim_url = None;
+            // First we convert `uv_distribution_types::Requirement` into a string
+            // The implementation is nearly identical to `requirement.to_string()`.
+            // However, we ignore the uv specific index since
+            // `pep508_rs::Requirement::from_str` isn't able to parse that
+
+            let uv_distribution_types::Requirement {
+                extras,
+                name,
+                source,
+                marker,
+                groups: _groups,
+                scope: _scope,
+                origin: _origin,
+            } = requirement;
+
+            let mut package_string = String::new();
+            write!(&mut package_string, "{name}")?;
+            if !extras.is_empty() {
+                write!(
+                    package_string,
+                    "[{}]",
+                    extras
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )?;
+            }
+            match &source {
+                uv_distribution_types::RequirementSource::Registry {
+                    specifier, index, ..
+                } => {
+                    write!(package_string, "{specifier}")?;
+                    if let Some(index) = index {
+                        // This is the main difference to the `requirement.to_string()`
+                        // We only log this value, but don't put it into the final string
+                        tracing::info!("Ignore specified index '{}' of '{}'", index.url, name);
+                    }
+                }
+                uv_distribution_types::RequirementSource::Url { url, .. } => {
+                    write!(package_string, " @ {url}")?;
+                }
+                uv_distribution_types::RequirementSource::GitDirectory {
+                    url: _,
+                    git,
+                    subdirectory,
+                } => {
+                    write_git_requirement_source(&mut package_string, git)?;
+                    if let Some(subdirectory) = subdirectory {
+                        writeln!(package_string, "#subdirectory={}", subdirectory.display())?;
+                    }
+                }
+                uv_distribution_types::RequirementSource::GitPath {
+                    url: _,
+                    git,
+                    install_path,
+                    ext: _,
+                } => {
+                    write_git_requirement_source(&mut package_string, git)?;
+                    write!(package_string, "#path={}", install_path.display())?;
+                }
+                uv_distribution_types::RequirementSource::Path { url, .. }
+                | uv_distribution_types::RequirementSource::Directory { url, .. } => {
+                    let given = anchor
+                        .and_then(|a| a.relative_given_for_file_url(url))
+                        .or_else(|| url.given().map(str::to_owned));
+                    verbatim_url = given.map(|g| {
+                        pep508_rs::VersionOrUrl::Url(
+                            pep508_rs::VerbatimUrl::from_url(url.to_url().into_unsafe_url())
+                                .with_given(g),
+                        )
+                    });
+                    write!(package_string, " @ {url}")?;
+                }
+            };
+            if let Some(marker) = marker.contents() {
+                write!(package_string, " ; {marker}")?;
+            }
+            let raw_requirement = pep508_rs::Requirement::from_str(&package_string)
                 .map_err(crate::Pep508Error::Pep508Error)
+                .map_err(<ConversionError>::from)?;
+
+            // We need to pass the VerbatimUrl through!
+            Ok(pep508_rs::Requirement {
+                name: raw_requirement.name,
+                extras: raw_requirement.extras,
+                version_or_url: verbatim_url.or(raw_requirement.version_or_url),
+                marker: raw_requirement.marker,
+                origin: raw_requirement.origin,
+            })
         })
         .collect();
 
-    Ok(requirements?)
+    requirements
 }
 
-/// Convert back to PEP508 without the VerbatimParsedUrl
-/// We need this function because we need to convert to the introduced
-/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
+/// Convert uv `Requirement<VerbatimParsedUrl>` to `pep508_rs::Requirement`.
+///
+/// Carries `verbatim.given()` over because `pep508_rs::VerbatimUrl`'s
+/// `Display`/`Serialize` ignore it, so a string round-trip would drop the
+/// original spelling and bake absolute paths into `pixi.lock` (#4680).
 pub fn convert_uv_requirements_to_pep508<'req>(
     requires_dist: impl Iterator<Item = &'req uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
-    // Convert back top PEP508 Requirement<VerbatimUrl>
-    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requires_dist
+    requires_dist
         .map(|r| {
             let requirement = r.to_string();
-            pep508_rs::Requirement::from_str(&requirement).map_err(crate::Pep508Error::Pep508Error)
-        })
-        .collect();
+            let mut converted = pep508_rs::Requirement::from_str(&requirement)
+                .map_err(crate::Pep508Error::Pep508Error)?;
 
-    Ok(requirements?)
+            if let (
+                Some(uv_pep508::VersionOrUrl::Url(uv_url)),
+                Some(pep508_rs::VersionOrUrl::Url(pep_url)),
+            ) = (&r.version_or_url, &mut converted.version_or_url)
+                && let Some(given) = uv_url.verbatim.given()
+            {
+                *pep_url =
+                    pep508_rs::VerbatimUrl::from_url(pep_url.raw().clone()).with_given(given);
+            }
+
+            Ok(converted)
+        })
+        .collect()
 }
 
 /// Converts `uv_normalize::PackageName` to `pep508_rs::PackageName`
@@ -421,6 +686,26 @@ pub fn to_uv_version(
     )
 }
 
+/// Converts the locked [`rattler_lock::PackageHashes`] into the uv
+/// [`uv_pypi_types::HashDigest`] representation.
+pub fn to_uv_hash_digests(hash: &rattler_lock::PackageHashes) -> Vec<uv_pypi_types::HashDigest> {
+    use uv_pypi_types::{Digest, HashDigest};
+
+    let md5_digest =
+        |md5: &rattler_digest::Md5Hash| HashDigest::Md5(Digest::from_bytes((*md5).into()));
+    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| {
+        HashDigest::Sha256(Digest::from_bytes((*sha256).into()))
+    };
+
+    match hash {
+        rattler_lock::PackageHashes::Md5(md5) => vec![md5_digest(md5)],
+        rattler_lock::PackageHashes::Sha256(sha256) => vec![sha256_digest(sha256)],
+        rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => {
+            vec![md5_digest(md5), sha256_digest(sha256)]
+        }
+    }
+}
+
 /// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
 pub fn to_uv_marker_tree(
     marker_tree: &pep508_rs::MarkerTree,
@@ -469,16 +754,564 @@ pub fn to_uv_trusted_host(
     Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
 }
 
-/// Converts a date to a `uv_resolver::ExcludeNewer`
-pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_resolver::ExcludeNewer {
-    let seconds_since_epoch = exclude_newer.timestamp();
-    let nanoseconds = exclude_newer.timestamp_subsec_nanos();
-    let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
-        if seconds_since_epoch < 0 {
-            jiff::Timestamp::MIN
-        } else {
-            jiff::Timestamp::MAX
-        },
-    );
-    uv_resolver::ExcludeNewer::from(timestamp)
+/// Configure insecure hosts for TLS verification bypass
+/// This function handles the logic for when tls_no_verify is enabled,
+/// adding all index hosts to the insecure list as a workaround since UV doesn't have a global SSL disable option
+pub fn configure_insecure_hosts_for_tls_bypass(
+    base_insecure_hosts: Vec<TrustedHost>,
+    tls_no_verify: bool,
+    index_locations: &IndexLocations,
+) -> Vec<TrustedHost> {
+    let mut allow_insecure_hosts = base_insecure_hosts;
+    let mut seen: HashSet<String> = allow_insecure_hosts
+        .iter()
+        .map(|host| host.to_string().to_ascii_lowercase())
+        .collect();
+
+    if tls_no_verify {
+        // When tls_no_verify is enabled, add all index hosts to the insecure list
+        // This is a workaround since UV doesn't have a global SSL disable option
+        //
+        // We use allowed_indexes() instead of known_indexes() because:
+        // - allowed_indexes() returns only indexes that will actually be used for package resolution
+        // - It deduplicates by name, excluding overridden/duplicate index definitions
+        // - This matches uv's authentication behavior and ensures we only bypass TLS for actively used indexes
+        let mut has_pypi_org_index = false;
+
+        let mut push_host = |host: &str, allow_insecure_hosts: &mut Vec<TrustedHost>| {
+            let key = host.to_ascii_lowercase();
+            if seen.insert(key.clone()) {
+                match to_uv_trusted_host(host) {
+                    Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
+                    Err(e) => tracing::warn!("Failed to add host {} as trusted: {}", host, e),
+                }
+            }
+        };
+
+        for index_url in index_locations.allowed_indexes() {
+            if let Some(host) = index_url.url().host_str() {
+                has_pypi_org_index |= host.eq_ignore_ascii_case("pypi.org");
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add hosts from find-links/flat indexes (if they are http/https)
+        for flat_index in index_locations.flat_indexes() {
+            if let Some(host) = flat_index.url().host_str() {
+                push_host(host, &mut allow_insecure_hosts);
+            }
+        }
+
+        // Add the default PyPI download host when using the main PyPI index.
+        if has_pypi_org_index {
+            push_host("files.pythonhosted.org", &mut allow_insecure_hosts);
+        }
+
+        tracing::warn!(
+            "TLS verification is disabled for PyPI operations. This is insecure and should only be used for testing or internal networks."
+        );
+    }
+
+    allow_insecure_hosts
+}
+
+fn to_exclude_newer_timestamp(
+    exclude_newer: chrono::DateTime<chrono::Utc>,
+) -> uv_resolver::ExcludeNewerValue {
+    pixi_spec::to_saturating_jiff_timestamp(exclude_newer).into()
+}
+
+/// Converts a per-index `exclude-newer` override to uv's [`ExcludeNewerOverride`].
+///
+/// `None` means the index inherits the global cutoff, and a cutoff resolves any
+/// relative duration to an absolute timestamp (mirroring the global/per-package
+/// path).
+///
+/// A zero cutoff such as `0d` disables the cutoff for the index. As a cutoff of
+/// now, it would still exclude every release without an upload time.
+fn to_index_exclude_newer_override(
+    exclude_newer: Option<ExcludeNewer>,
+) -> Option<ExcludeNewerOverride> {
+    match exclude_newer? {
+        ExcludeNewer::Duration(duration) if duration.is_zero() => {
+            Some(ExcludeNewerOverride::Disabled)
+        }
+        exclude_newer => Some(ExcludeNewerOverride::Enabled(Box::new(
+            to_exclude_newer_timestamp(exclude_newer.cutoff()),
+        ))),
+    }
+}
+
+/// Converts a resolved PyPI exclude-newer configuration to `uv_resolver::ExcludeNewer`.
+pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver::ExcludeNewer {
+    let to_uv_name = |package: &pep508_rs::PackageName| {
+        PackageName::from_str(package.as_ref())
+            .expect("pep508 package name should be valid uv package name")
+    };
+
+    // Exempt packages have no cutoff at all, which takes precedence over a
+    // deprecated per-package cutoff for the same package.
+    let package_cutoffs = exclude_newer
+        .package_cutoffs
+        .iter()
+        .filter(|(package, _)| !exclude_newer.exempt_packages.contains(*package))
+        .map(|(package, cutoff)| {
+            (
+                to_uv_name(package),
+                uv_resolver::ExcludeNewerOverride::Enabled(Box::new(to_exclude_newer_timestamp(
+                    *cutoff,
+                ))),
+            )
+        })
+        .chain(exclude_newer.exempt_packages.iter().map(|package| {
+            (
+                to_uv_name(package),
+                uv_resolver::ExcludeNewerOverride::Disabled,
+            )
+        }))
+        .map(uv_resolver::ExcludeNewerPackageEntry::from)
+        .collect();
+
+    uv_resolver::ExcludeNewer {
+        global: exclude_newer.cutoff.map(to_exclude_newer_timestamp),
+        package: package_cutoffs,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uv_distribution_types::{Index, IndexUrl};
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_enabled() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            SafeUrl::parse("https://pypi.org/simple/").unwrap(),
+        ));
+        let extra_index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            SafeUrl::parse("https://test-index.example.com/simple/").unwrap(),
+        ));
+
+        let indexes = vec![
+            Index::from_index_url(index_url),
+            Index::from_extra_index_url(extra_index_url),
+        ];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Test with tls_no_verify enabled
+        let base_hosts = vec![];
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            true, // tls_no_verify = true
+            &index_locations,
+        );
+
+        // Should have added both hosts
+        assert_eq!(result.len(), 3);
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"test-index.example.com".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_disabled() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            SafeUrl::parse("https://pypi.org/simple/").unwrap(),
+        ));
+        let indexes = vec![Index::from_index_url(index_url)];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Test with tls_no_verify disabled
+        let base_hosts = vec![];
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            false, // tls_no_verify = false
+            &index_locations,
+        );
+
+        // Should not have added any hosts
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_tls_bypass_preserves_existing() {
+        // Create test index locations
+        let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            SafeUrl::parse("https://pypi.org/simple/").unwrap(),
+        ));
+        let indexes = vec![Index::from_index_url(index_url)];
+        let index_locations = IndexLocations::new(indexes, vec![], false);
+
+        // Start with existing trusted host
+        let existing_host = to_uv_trusted_host("existing.example.com").unwrap();
+        let base_hosts = vec![existing_host];
+
+        let result = configure_insecure_hosts_for_tls_bypass(
+            base_hosts,
+            true, // tls_no_verify = true
+            &index_locations,
+        );
+
+        // Should have preserved existing host and added new one
+        assert_eq!(result.len(), 3);
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"existing.example.com".to_string()));
+        assert!(host_names.contains(&"pypi.org".to_string()));
+        assert!(host_names.contains(&"files.pythonhosted.org".to_string()));
+    }
+
+    #[test]
+    fn test_configure_insecure_hosts_for_flat_index_hosts() {
+        // Flat index hosted on a custom domain should be added when tls_no_verify is enabled
+        let flat_index = Index::from_find_links(IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
+            SafeUrl::parse("https://packages.example.org/simple/").unwrap(),
+        )));
+        let index_locations = IndexLocations::new(vec![], vec![flat_index], true);
+
+        let result = configure_insecure_hosts_for_tls_bypass(vec![], true, &index_locations);
+
+        let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
+        assert!(host_names.contains(&"packages.example.org".to_string()));
+    }
+
+    /// #4680: relative paths must survive the uv -> pep508_rs conversion.
+    #[test]
+    fn relative_path_requirement_round_trip_keeps_given() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project_root = tmp.path();
+        fs_err::create_dir_all(project_root.join("my_subdir")).unwrap();
+
+        let uv_req: uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl> =
+            uv_pep508::Requirement::parse("my-subdir @ ./my_subdir", project_root).unwrap();
+
+        let Some(uv_pep508::VersionOrUrl::Url(url)) = &uv_req.version_or_url else {
+            panic!("expected uv requirement to carry a Url");
+        };
+        assert_eq!(url.verbatim.given(), Some("./my_subdir"));
+
+        let converted = convert_uv_requirements_to_pep508(std::iter::once(&uv_req))
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+
+        match converted.version_or_url {
+            Some(pep508_rs::VersionOrUrl::Url(url)) => {
+                assert_eq!(url.given(), Some("./my_subdir"));
+            }
+            other => panic!("expected a VersionOrUrl::Url, got {other:?}"),
+        }
+    }
+
+    /// Index-bearing registry sources must serialize without uv's
+    /// `(index: <url>)` `Display` suffix; `pep508_rs` rejects it (#6049).
+    #[test]
+    fn to_requirements_strips_index_suffix_from_registry_source() {
+        use std::sync::Arc;
+        use uv_distribution_types::{
+            IndexFormat, IndexMetadata, IndexUrl, Requirement as UvRequirement, RequirementSource,
+        };
+        use uv_pep508::MarkerTree;
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("isaaclab").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            scope: Default::default(),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Registry {
+                specifier: uv_pep440::VersionSpecifiers::empty(),
+                index: Some(IndexMetadata {
+                    url: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(
+                        SafeUrl::parse("https://pypi.nvidia.com/simple/")
+                            .unwrap()
+                            .with_policy(uv_redacted::policy::Stripped),
+                    ))),
+                    format: IndexFormat::Simple,
+                }),
+                conflict: None,
+            },
+            origin: None,
+        };
+        assert!(uv_req.to_string().contains("(index:"));
+
+        let converted = to_requirements(std::iter::once(&uv_req)).unwrap();
+        assert_eq!(converted[0].to_string(), "isaaclab");
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/4573>:
+    /// a requirement that bubbles up out of a nested package's `[tool.uv.sources]`
+    /// (e.g. `../pkg-b` inside `workspace/pkg-a`) carries a `given` relative to that nested
+    /// package, not the workspace. The lockfile resolves relative paths against itself, so the
+    /// writer must re-anchor against the workspace root or the dep is mislocated on load.
+    #[test]
+    fn to_requirements_re_anchors_nested_tool_uv_sources_given() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_a = workspace_root.join("pkg-a");
+        let pkg_b = workspace_root.join("pkg-b");
+        fs_err::create_dir_all(&pkg_a).unwrap();
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        // Mirror what uv produces when lowering pkg-a's [tool.uv.sources]:
+        // url resolved against pkg-a (absolute), given still `../pkg-b`.
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_path("../pkg-b", &pkg_a)
+            .unwrap()
+            .with_given("../pkg-b");
+        assert_eq!(pkg_b_url.given(), Some("../pkg-b"));
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            scope: Default::default(),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        // Without `workspace_root`, the wrongly-anchored `given` is preserved.
+        let preserved = to_requirements(std::iter::once(&uv_req)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &preserved[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("../pkg-b"));
+
+        // With `workspace_root`, the `given` is re-anchored to `./pkg-b`,
+        // which the lockfile will resolve back to the same absolute path.
+        let anchor = WorkspaceAnchor::new(workspace_root);
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("./pkg-b"));
+    }
+
+    /// Absolute `given` (bare `/abs/path`, not `file://`) must survive re-anchoring
+    /// for users who explicitly pin an absolute path.
+    #[test]
+    fn to_requirements_preserves_absolute_given() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_b = tmp.path().join("other").join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        // Simulate a user writing `pkg-b = { path = "/abs/.../pkg-b" }`
+        // uv stores an absolute bare path as the `given`, not a `file://` URL
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_absolute_path(&pkg_b)
+            .unwrap()
+            .with_given(pkg_b.to_str().unwrap());
+        assert!(
+            pkg_b_url
+                .given()
+                .is_some_and(|g| std::path::Path::new(g).is_absolute())
+        );
+        let abs_given = pkg_b_url.given().unwrap().to_owned();
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            scope: Default::default(),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        let anchor = WorkspaceAnchor::new(workspace_root);
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some(abs_given.as_str()));
+    }
+
+    /// Re-anchoring is a no-op when the `given` already resolves against the workspace root.
+    #[test]
+    fn to_requirements_leaves_workspace_relative_given_alone() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_b = workspace_root.join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_path("./pkg-b", workspace_root)
+            .unwrap()
+            .with_given("./pkg-b");
+        assert_eq!(pkg_b_url.given(), Some("./pkg-b"));
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            scope: Default::default(),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        let anchor = WorkspaceAnchor::new(workspace_root);
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("./pkg-b"));
+    }
+
+    /// #6185: lock file URL must keep original casing and `.git` suffix.
+    #[test]
+    fn into_pinned_git_spec_preserves_original_url() {
+        use uv_distribution_types::GitDirectorySourceDist;
+        use uv_git_types::{GitLfs, GitOid, GitReference as UvGitReference, GitUrl as UvGitUrl};
+        use uv_normalize::PackageName;
+        use uv_pep508::VerbatimUrl;
+
+        let original = "https://github.com/VaasuDevanS/cowsay-python.git";
+        let safe_url = SafeUrl::parse(original).unwrap();
+        let commit = GitOid::from_str("dcf7236f0b5ece9ed56e91271486e560526049cf").unwrap();
+
+        let git_url = UvGitUrl::from_commit(
+            safe_url.clone(),
+            UvGitReference::DefaultBranch,
+            commit,
+            GitLfs::Disabled,
+        )
+        .unwrap();
+
+        let dist = GitDirectorySourceDist {
+            name: PackageName::from_str("cowsay").unwrap(),
+            git: Box::new(git_url),
+            subdirectory: None,
+            url: VerbatimUrl::from_url(safe_url),
+        };
+
+        let pinned = into_pinned_git_spec(dist, None);
+
+        assert_eq!(pinned.git.as_str(), original);
+    }
+
+    /// #6271/#6226: the cache settings carry the conda-environment fingerprint on
+    /// top of the given backend settings, so the cache key reflects both.
+    #[test]
+    fn pypi_cache_config_settings_layers_fingerprint_on_base() {
+        use pixi_record::CondaEnvironmentFingerprint;
+
+        let base: ConfigSettings =
+            std::iter::once(ConfigSettingEntry::from_str("backend-key=backend-value").unwrap())
+                .collect();
+        let settings = pypi_cache_config_settings(&base, &[]);
+
+        let rendered = settings.escape_for_python();
+        // The fingerprint of the (here empty) conda environment is present...
+        let expected = CondaEnvironmentFingerprint::new(&[]).to_string();
+        assert!(rendered.contains(CONDA_ENVIRONMENT_CONFIG_SETTING));
+        assert!(rendered.contains(&expected));
+        // ...and the base backend settings are preserved.
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
+    }
+
+    #[test]
+    fn pypi_cache_config_settings_with_macos_deployment_target_layers_on_base() {
+        let base: ConfigSettings =
+            std::iter::once(ConfigSettingEntry::from_str("backend-key=backend-value").unwrap())
+                .collect();
+        let settings = pypi_cache_config_settings_with_macos_deployment_target(&base, Some("12.0"));
+
+        let rendered = settings.escape_for_python();
+        assert!(rendered.contains(MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING));
+        assert!(rendered.contains("12.0"));
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
+
+        let without_target = pypi_cache_config_settings_with_macos_deployment_target(&base, None);
+        let rendered = without_target.escape_for_python();
+        assert!(!rendered.contains(MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING));
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
+    }
+
+    #[test]
+    fn test_per_index_exclude_newer_is_applied() {
+        let options = PypiOptions {
+            extra_index_urls: Some(vec![
+                PypiExtraIndex::from_url("https://inherit/simple".parse().unwrap()),
+                PypiExtraIndex {
+                    url: "https://zero/simple".parse().unwrap(),
+                    exclude_newer: Some(ExcludeNewer::from_str("0d").unwrap()),
+                },
+                PypiExtraIndex {
+                    url: "https://custom/simple".parse().unwrap(),
+                    exclude_newer: Some(ExcludeNewer::from_str("2025-01-01").unwrap()),
+                },
+            ]),
+            ..Default::default()
+        };
+
+        let base_path = std::env::temp_dir();
+        let extra_index_urls = options.extra_index_urls.clone().unwrap();
+        // The lock file only stores the URLs, so installing takes the overrides
+        // from the manifest.
+        let locked_indexes = rattler_lock::PypiIndexes {
+            indexes: std::iter::once("https://pypi.org/simple".parse().unwrap())
+                .chain(extra_index_urls.iter().map(|index| index.url.clone()))
+                .collect(),
+            find_links: Vec::new(),
+        };
+
+        for index_locations in [
+            pypi_options_to_index_locations(&options, &base_path).unwrap(),
+            locked_indexes_to_index_locations(&locked_indexes, &extra_index_urls, &base_path)
+                .unwrap(),
+        ] {
+            let exclude_newer_for = |needle: &str| {
+                index_locations
+                    .indexes()
+                    .find(|index| index.url().to_string().contains(needle))
+                    .and_then(|index| index.exclude_newer.clone())
+            };
+
+            // No override -> inherits the global cutoff.
+            assert_eq!(exclude_newer_for("inherit"), None);
+            // A zero cutoff -> disabled for this index.
+            assert_eq!(
+                exclude_newer_for("zero"),
+                Some(ExcludeNewerOverride::Disabled)
+            );
+            // A value -> enabled with the resolved cutoff for this index.
+            assert!(matches!(
+                exclude_newer_for("custom"),
+                Some(ExcludeNewerOverride::Enabled(_))
+            ));
+        }
+    }
 }

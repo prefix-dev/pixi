@@ -1,0 +1,35 @@
+recipe:
+  name: multi-output
+  version: "0.1.0"
+
+outputs:
+  - package:
+      name: foobar
+
+    build:
+      script:
+        - if: win
+          then: echo "Building foobar" > %PREFIX%/foobar.txt
+          else: echo "Building foobar" > $PREFIX/foobar.txt
+
+  - package:
+      name: bizbar
+
+    build:
+      script:
+        - if: win
+          then: echo "Building bizbar" > %PREFIX%/bizbar.txt
+          else: echo "Building bizbar" > $PREFIX/bizbar.txt
+
+  - package:
+      name: foobar-desktop
+
+    requirements:
+      run:
+        - foobar
+
+    build:
+      script:
+        - if: win
+          then: echo "Building foobar-desktop" > %PREFIX%/foobar-desktop.txt
+          else: echo "Building foobar-desktop" > $PREFIX/foobar-desktop.txt

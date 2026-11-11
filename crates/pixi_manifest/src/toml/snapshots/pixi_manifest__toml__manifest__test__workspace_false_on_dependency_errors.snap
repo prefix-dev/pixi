@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+assertion_line: 1029
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"monorepo\"\n        channels = []\n        platforms = ['linux-64']\n        preview = [\"pixi-build\"]\n\n        [package]\n        name = \"lib\"\n        version = \"0.1.0\"\n\n        [package.build]\n        backend = { name = \"foobar\", version = \"*\" }\n\n        [package.host-dependencies]\n        numpy = { workspace = false }\n        \"#,)"
+---
+  × `workspace` cannot be false
+    ╭─[pixi.toml:16:31]
+ 15 │         [package.host-dependencies]
+ 16 │         numpy = { workspace = false }
+    ·                               ─────
+ 17 │
+    ╰────
+  help: Remove the `workspace = false` entry; inheritance from the workspace is opt-in.

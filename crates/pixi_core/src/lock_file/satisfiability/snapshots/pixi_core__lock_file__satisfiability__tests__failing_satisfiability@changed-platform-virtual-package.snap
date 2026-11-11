@@ -1,0 +1,8 @@
+---
+source: crates/pixi_core/src/lock_file/satisfiability/tests.rs
+assertion_line: 273
+expression: s
+---
+environment 'default' does not satisfy the requirements of the project
+    Diagnostic severity: error
+    Caused by: the workspace platform 'extra' declares virtual packages [__cuda=12.0] but the lock-file was solved with [__cuda=11.0]

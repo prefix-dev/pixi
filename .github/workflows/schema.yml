@@ -6,7 +6,7 @@ on:
       - main
     paths-ignore:
       - "docs/**"
-      - "mkdocs.yml"
+      - "zensical.toml"
       - "*.md"
   workflow_dispatch:
   pull_request:
@@ -15,16 +15,19 @@ on:
       - "schema/**"
       - "**/schema.yml"
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   test-schema:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: prefix-dev/setup-pixi@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          cache: true
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: schema
       - name: Ensure schema is up-to-date
         run: |

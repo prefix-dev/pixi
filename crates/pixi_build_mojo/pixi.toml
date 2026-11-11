@@ -1,0 +1,13 @@
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-rust"
+version = "*"
+
+[package.build.config]
+extra-input-globs = ["src/build_script.j2"]
+
+[package.run-dependencies]
+pixi-build-api-version = ">=7,<8"

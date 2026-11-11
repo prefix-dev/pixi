@@ -1,0 +1,6 @@
+"$schema" = "./../../schema.json"
+
+[workspace]
+channels = ["conda-forge"]
+name = "demo"
+platforms = [{}]

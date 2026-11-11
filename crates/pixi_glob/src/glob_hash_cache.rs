@@ -3,7 +3,6 @@
 //! The input files are deemed not to change between calls.
 use std::{
     collections::BTreeSet,
-    convert::identity,
     hash::Hash,
     path::PathBuf,
     sync::{Arc, Weak},
@@ -21,28 +20,18 @@ pub struct GlobHashKey {
     root: PathBuf,
     /// The glob patterns.
     globs: BTreeSet<String>,
-    /// Additional hash which should invalidate the cache if it changes.
-    additional_hash: Option<Vec<u8>>,
 }
 
 impl GlobHashKey {
     /// Creates a new `GlobHashKey` from the given root directory and glob patterns.
-    pub fn new(
-        root: impl Into<PathBuf>,
-        globs: BTreeSet<String>,
-        additional_hash: Option<Vec<u8>>,
-    ) -> Self {
+    pub fn new(root: impl Into<PathBuf>, globs: BTreeSet<String>) -> Self {
         let mut root = root.into();
         // Ensure that `root` points to a directory, not a file.
         if root.is_file() {
             root = root.parent().expect("Root must be a directory").to_owned();
         }
 
-        Self {
-            root,
-            globs,
-            additional_hash,
-        }
+        Self { root, globs }
     }
 }
 
@@ -86,17 +75,13 @@ impl GlobHashCache {
                     GlobHash::from_patterns(
                         &computation_key.root,
                         computation_key.globs.iter().map(String::as_str),
-                        computation_key.additional_hash,
                     )
                 })
                 .await
-                .map_or_else(
-                    |err| match err.try_into_panic() {
-                        Ok(panic) => std::panic::resume_unwind(panic),
-                        Err(_) => Err(GlobHashError::Cancelled),
-                    },
-                    identity,
-                )?;
+                .unwrap_or_else(|err| match err.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(GlobHashError::Cancelled),
+                })?;
 
                 // Store the result in the cache
                 self.cache.insert(key, HashCacheEntry::Done(result.clone()));
@@ -128,5 +113,10 @@ impl GlobHashCache {
                 }
             }
         }
+    }
+
+    /// Clears all memoized glob hashes. In-flight computations are unaffected.
+    pub fn clear(&self) {
+        self.cache.clear();
     }
 }

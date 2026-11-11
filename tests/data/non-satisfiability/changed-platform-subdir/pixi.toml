@@ -1,0 +1,7 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "changed-platform-subdir"
+platforms = [{ name = "extra", platform = "linux-aarch64" }]
+
+[dependencies]
+_r-mutex = "*"

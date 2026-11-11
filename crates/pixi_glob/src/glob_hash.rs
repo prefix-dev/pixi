@@ -7,11 +7,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use itertools::Itertools;
-use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
+use rattler_digest::{HashingWriter, Sha256, Sha256Hash};
 use thiserror::Error;
 
-use crate::glob_set::{self, GlobSet};
+use crate::{GlobSet, GlobSetError};
 
 /// Contains a hash of the files that match the given glob patterns.
 #[derive(Debug, Clone, Default)]
@@ -25,14 +24,14 @@ pub struct GlobHash {
 #[derive(Error, Debug)]
 #[allow(missing_docs)]
 pub enum GlobHashError {
-    #[error(transparent)]
-    FilterGlobError(#[from] glob_set::GlobSetError),
-
     #[error("during line normalization, failed to access {}", .0.display())]
     NormalizeLineEnds(PathBuf, #[source] io::Error),
 
     #[error("the operation was cancelled")]
     Cancelled,
+
+    #[error(transparent)]
+    GlobSetIgnore(#[from] GlobSetError),
 }
 
 impl GlobHash {
@@ -40,47 +39,47 @@ impl GlobHash {
     pub fn from_patterns<'a>(
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
-        additional_hash: Option<Vec<u8>>,
     ) -> Result<Self, GlobHashError> {
         // If the root is not a directory or does not exist, return an empty map.
         if !root_dir.is_dir() {
             return Ok(Self::default());
         }
 
-        let glob_set = GlobSet::create(globs)?;
-        let mut entries = glob_set
-            .filter_directory(root_dir)
-            .collect::<Result<Vec<_>, _>>()?
+        let glob_set = GlobSet::create(globs);
+        // Collect matching paths and sort deterministically before hashing.
+        let mut paths: Vec<PathBuf> = glob_set
+            .collect_matching(root_dir)?
             .into_iter()
-            .map(|entry| entry.path().to_path_buf())
-            .collect_vec();
-        entries.sort();
+            .map(|m| m.into_path())
+            .collect();
+        paths.sort();
 
         #[cfg(test)]
         let mut matching_files = Vec::new();
 
-        let mut hasher = Sha256::default();
-        for entry in entries {
+        // `digest` no longer exposes an `io::Write` implementation for hashers,
+        // so wrap the hasher in a `HashingWriter` that discards the bytes while
+        // feeding them into the digest.
+        let mut hasher = HashingWriter::<_, Sha256>::new(io::sink());
+        for path in paths {
             // Construct a normalized file path to ensure consistent hashing across
             // platforms. And add it to the hash.
-            let relative_path = entry.strip_prefix(root_dir).unwrap_or(&entry);
+            let relative_path = path.strip_prefix(root_dir).unwrap_or(&path);
             let normalized_file_path = relative_path.to_string_lossy().replace("\\", "/");
-            rattler_digest::digest::Update::update(&mut hasher, normalized_file_path.as_bytes());
+            hasher
+                .write_all(normalized_file_path.as_bytes())
+                .expect("writing to an in-memory hasher is infallible");
 
             #[cfg(test)]
             matching_files.push(normalized_file_path);
 
             // Concatenate the contents of the file to the hash.
-            File::open(&entry)
+            File::open(&path)
                 .and_then(|mut file| normalize_line_endings(&mut file, &mut hasher))
-                .map_err(move |e| GlobHashError::NormalizeLineEnds(entry, e))?;
+                .map_err(move |e| GlobHashError::NormalizeLineEnds(path, e))?;
         }
 
-        if let Some(additional_hash) = additional_hash {
-            rattler_digest::digest::Update::update(&mut hasher, &additional_hash);
-        }
-
-        let hash = hasher.finalize();
+        let (_, hash) = hasher.finalize();
 
         Ok(Self {
             hash,
@@ -188,17 +187,17 @@ mod test {
             .parent()
             .and_then(Path::parent)
             .unwrap();
-        let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied(), None).unwrap();
+        let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied()).unwrap();
         let snapshot = format!(
-            "Globs:\n{}\nHash: {:x}\nMatched files:\n{}",
+            "Globs:\n{}\nHash: {}\nMatched files:\n{}",
             globs
                 .iter()
-                .format_with("\n", |glob, f| f(&format_args!("- {}", glob))),
-            glob_hash.hash,
+                .format_with("\n", |glob, f| f(&format_args!("- {glob}"))),
+            hex::encode(glob_hash.hash),
             glob_hash
                 .matching_files
                 .iter()
-                .format_with("\n", |glob, f| f(&format_args!("- {}", glob)))
+                .format_with("\n", |glob, f| f(&format_args!("- {glob}")))
         );
         insta::assert_snapshot!(testname, snapshot);
     }

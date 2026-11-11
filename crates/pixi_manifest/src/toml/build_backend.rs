@@ -1,0 +1,756 @@
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Range,
+    sync::Once,
+};
+
+use indexmap::IndexMap;
+use pixi_spec::{PixiSpec, SourceLocationSpec, TomlLocationSpec, TomlSpec};
+use pixi_toml::{Same, TomlBTreeSet, TomlFromStr, TomlIndexMap, TomlWith};
+use rattler_conda_types::{Flag, NamedChannelOrUrl, PackageName};
+use std::borrow::Cow;
+use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
+
+use crate::{
+    PackageBuild, TargetSelector, TomlError, WithWarnings,
+    build_system::BuildBackend,
+    error::GenericError,
+    toml::{build_target::TomlPackageBuildTarget, reject_glob_in_package_target},
+    utils::{PixiSpanned, package_map::UniquePackageMap},
+    warning::Deprecation,
+};
+
+#[derive(Debug)]
+pub struct TomlPackageBuild {
+    pub backend: PixiSpanned<TomlBuildBackend>,
+    pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
+    pub additional_dependencies: UniquePackageMap,
+    pub source: Option<SourceLocationSpec>,
+    pub configuration: Option<serde_value::Value>,
+    pub flags: Vec<Flag>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
+    pub warnings: Vec<crate::Warning>,
+
+    pub build_string_prefix: Option<String>,
+    pub build_number: Option<u64>,
+    pub secrets: BTreeSet<String>,
+}
+
+#[derive(Debug)]
+pub struct TomlBuildBackend {
+    pub name: PixiSpanned<rattler_conda_types::PackageName>,
+    pub spec: BackendSpec,
+    pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
+    pub additional_dependencies: UniquePackageMap,
+}
+
+/// Backend spec, direct or inherited from `[workspace.dependencies]`.
+#[derive(Debug)]
+pub enum BackendSpec {
+    Direct(TomlSpec),
+    Inherited {
+        marker_span: Range<usize>,
+        overrides: TomlSpec,
+    },
+}
+
+impl TomlPackageBuild {
+    pub fn into_build_system(
+        self,
+        workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
+    ) -> Result<WithWarnings<PackageBuild>, TomlError> {
+        let backend_name = self.backend.value.name.value.clone();
+        let build_backend_spec = match self.backend.value.spec {
+            // A backend without any spec fields defaults to any version, so that
+            // `backend = { name = "..." }` is equivalent to `version = "*"`.
+            BackendSpec::Direct(toml_spec) if toml_spec.is_empty() => PixiSpec::any(),
+            BackendSpec::Direct(toml_spec) => toml_spec.into_spec().map_err(|e| {
+                TomlError::Generic(
+                    GenericError::new(e.to_string()).with_opt_span(self.backend.span.clone()),
+                )
+            })?,
+            BackendSpec::Inherited {
+                marker_span,
+                overrides,
+            } => crate::utils::inheritable_package_map::resolve_inherited_backend_spec(
+                &backend_name,
+                workspace_dependencies,
+                overrides,
+                marker_span,
+            )?,
+        };
+
+        if build_backend_spec.is_source() {
+            return Err(TomlError::Generic(
+                GenericError::new("build backends cannot be defined as source dependencies")
+                    .with_opt_span(self.backend.span.clone()),
+            ));
+        }
+
+        // Convert the additional dependencies and make sure that they are binary.
+        // Prioritize backend.additional_dependencies over top-level additional_dependencies
+        let additional_dependencies =
+            if !self.backend.value.additional_dependencies.specs.is_empty() {
+                self.backend.value.additional_dependencies.specs
+            } else if !self.additional_dependencies.specs.is_empty() {
+                self.additional_dependencies.specs
+            } else {
+                Default::default()
+            };
+
+        // Determine the channels to use, prioritizing backend.channels over top-level channels
+        let channels = if let Some(backend_channels) = &self.backend.value.channels {
+            if backend_channels.value.is_empty() {
+                return Err(TomlError::Generic(
+                    GenericError::new("No channels specified for the build backend dependencies")
+                        .with_opt_span(backend_channels.span()),
+                ));
+            }
+            Some(backend_channels.value.clone())
+        } else if let Some(legacy_channels) = &self.channels {
+            // Legacy top-level channels which are deprecated for migration purposes
+            if legacy_channels.value.is_empty() {
+                return Err(TomlError::Generic(
+                    GenericError::new("No channels specified for the build backend dependencies")
+                        .with_opt_span(legacy_channels.span()),
+                ));
+            }
+            Some(legacy_channels.value.clone())
+        } else {
+            None
+        };
+
+        // Convert target-specific build config
+        let mut target_config = IndexMap::new();
+        for (selector, target) in self.target {
+            reject_glob_in_package_target(&selector)?;
+            if let Some(config) = target.config {
+                target_config.insert(selector.into_inner(), config);
+            }
+        }
+
+        Ok(WithWarnings {
+            value: PackageBuild {
+                backend: BuildBackend {
+                    name: self.backend.value.name.value,
+                    spec: build_backend_spec,
+                },
+                additional_dependencies,
+                channels,
+                source: self.source,
+                config: self.configuration,
+                flags: self.flags,
+                target_config: if target_config.is_empty() {
+                    None
+                } else {
+                    Some(target_config)
+                },
+                build_string_prefix: self.build_string_prefix,
+                build_number: self.build_number,
+                secrets: self.secrets,
+            },
+            warnings: self.warnings,
+        })
+    }
+}
+
+pub fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
+    Ok(match value.take() {
+        ValueInner::String(s) => serde_value::Value::String(s.to_string()),
+        ValueInner::Integer(i) => serde_value::Value::I64(i),
+        ValueInner::Float(f) => serde_value::Value::F64(f),
+        ValueInner::Boolean(b) => serde_value::Value::Bool(b),
+        ValueInner::Array(mut arr) => {
+            let mut json_arr = Vec::new();
+            for item in &mut arr {
+                json_arr.push(convert_toml_to_serde(item)?);
+            }
+            serde_value::Value::Seq(json_arr)
+        }
+        ValueInner::Table(table) => {
+            let mut map = BTreeMap::new();
+            for (key, mut val) in table {
+                map.insert(
+                    serde_value::Value::String(key.to_string()),
+                    convert_toml_to_serde(&mut val)?,
+                );
+            }
+            serde_value::Value::Map(map)
+        }
+    })
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let name = th.required_s::<TomlFromStr<rattler_conda_types::PackageName>>("name")?;
+        let channels = th
+            .optional_s::<TomlWith<_, Vec<TomlFromStr<_>>>>("channels")
+            .map(|s| PixiSpanned {
+                value: s.value.into_inner(),
+                span: Some(s.span.start..s.span.end),
+            });
+        let additional_dependencies: UniquePackageMap =
+            th.optional("additional-dependencies").unwrap_or_default();
+        let workspace_marker: Option<Spanned<bool>> = th.optional_s("workspace");
+        th.finalize(Some(value))?;
+
+        // Remaining keys are a direct TomlSpec or overrides when workspace=true.
+        let toml_spec: TomlSpec = toml_span::Deserialize::deserialize(value)?;
+
+        let spec = match workspace_marker {
+            None => BackendSpec::Direct(toml_spec),
+            Some(Spanned { value: true, span }) => {
+                // The version and the source location stay owned by the
+                // workspace entry; an inherited backend cannot be repointed.
+                let location = toml_spec.location.as_ref();
+                let owned_field = if toml_spec.version.is_some() {
+                    Some("version")
+                } else if location.is_some_and(|loc| loc.path.is_some()) {
+                    Some("path")
+                } else if location.is_some_and(|loc| loc.git.is_some()) {
+                    Some("git")
+                } else if location.is_some_and(|loc| loc.url.is_some()) {
+                    Some("url")
+                } else {
+                    None
+                };
+                if let Some(owned_field) = owned_field {
+                    return Err(DeserError::from(toml_span::Error {
+                        kind: toml_span::ErrorKind::Custom(
+                            format!("`{owned_field}` is mutually exclusive with `workspace`")
+                                .into(),
+                        ),
+                        span,
+                        line_info: None,
+                    }));
+                }
+                BackendSpec::Inherited {
+                    marker_span: span.start..span.end,
+                    overrides: toml_spec,
+                }
+            }
+            Some(Spanned { value: false, span }) => {
+                return Err(DeserError::from(toml_span::Error {
+                    kind: toml_span::ErrorKind::Custom(
+                        "`workspace` cannot be false; inheritance from the workspace is opt-in"
+                            .into(),
+                    ),
+                    span,
+                    line_info: None,
+                }));
+            }
+        };
+
+        Ok(TomlBuildBackend {
+            name: PixiSpanned::from(Spanned {
+                value: name.value.into_inner(),
+                span: name.span,
+            }),
+            spec,
+            channels,
+            additional_dependencies,
+        })
+    }
+}
+
+static BUILD_CHANNELS_DEPRECATION: Once = Once::new();
+static BOTH_CHANNELS_WARNING: Once = Once::new();
+static BUILD_ADDITIONAL_DEPS_DEPRECATION: Once = Once::new();
+static BOTH_ADDITIONAL_DEPS_WARNING: Once = Once::new();
+
+fn spec_from_spanned_toml_location(
+    spanned_toml: Spanned<TomlLocationSpec>,
+) -> Result<SourceLocationSpec, DeserError> {
+    let span = spanned_toml.span;
+    let source_location_spec = spanned_toml
+        .value
+        .into_source_location_spec()
+        .map_err(|err| {
+            DeserError::from(Error {
+                kind: toml_span::ErrorKind::Custom(Cow::Owned(err.to_string())),
+                span,
+                line_info: None,
+            })
+        })?;
+
+    // The lock file cannot record an LFS preference for build sources, so a
+    // fresh solve and an install from the lock file would behave differently.
+    if let SourceLocationSpec::Git(git) = &source_location_spec
+        && git.lfs.is_some()
+    {
+        return Err(DeserError::from(Error {
+            kind: toml_span::ErrorKind::Custom(Cow::Borrowed(
+                "`lfs` is not supported for build sources",
+            )),
+            span,
+            line_info: None,
+        }));
+    }
+
+    Ok(source_location_spec)
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let mut warnings = Vec::new();
+
+        let build_backend: PixiSpanned<TomlBuildBackend> = th.required_s("backend")?.into();
+        let channels = th
+            .optional_s::<TomlWith<_, Vec<TomlFromStr<_>>>>("channels")
+            .map(|s| PixiSpanned {
+                value: s.value.into_inner(),
+                span: Some(s.span.start..s.span.end),
+            });
+        let additional_dependencies: UniquePackageMap =
+            th.optional("additional-dependencies").unwrap_or_default();
+
+        let source = th
+            .optional_s::<TomlLocationSpec>("source")
+            .map(spec_from_spanned_toml_location)
+            .transpose()?;
+        let flags = th
+            .optional::<TomlWith<_, Vec<TomlFromStr<Flag>>>>("flags")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
+
+        // Try the new "config" key first, then fall back to deprecated "configuration"
+        let configuration = if let Some((_, mut value)) = th.take("config") {
+            Some(convert_toml_to_serde(&mut value)?)
+        } else if let Some((key, mut value)) = th.table.remove_entry("configuration") {
+            warnings.push(Deprecation::renamed_field("configuration", "config", key.span).into());
+            Some(convert_toml_to_serde(&mut value)?)
+        } else {
+            None
+        };
+
+        let target = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
+
+        let build_string_prefix = th.optional("build-string-prefix");
+        let build_number = th.optional("build-number");
+        let secrets = th
+            .optional::<TomlBTreeSet<String>>("secrets")
+            .map(TomlBTreeSet::into_inner)
+            .unwrap_or_default();
+
+        th.finalize(None)?;
+
+        // Issue a warning if both legacy channels and backend.channels are present
+        if let (Some(_), Some(_)) = (&channels, &build_backend.value.channels) {
+            BOTH_CHANNELS_WARNING.call_once(|| {
+                eprintln!("{}Warning: Both top-level 'channels' and 'backend.channels' are specified. Using 'backend.channels'.",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                );
+            });
+        }
+
+        // Issue a migration warning if legacy channels are used
+        if channels.is_some() && build_backend.value.channels.is_none() {
+            BUILD_CHANNELS_DEPRECATION.call_once(|| {
+                eprintln!("{}Warning: Top-level 'channels' in [package.build] is deprecated. Please move to 'backend.channels'.",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                );
+            });
+        }
+
+        // Issue a warning if both legacy additional-dependencies and backend.additional-dependencies are present
+        if !additional_dependencies.specs.is_empty()
+            && !build_backend.value.additional_dependencies.specs.is_empty()
+        {
+            BOTH_ADDITIONAL_DEPS_WARNING.call_once(|| {
+                eprintln!("{}Warning: Both top-level 'additional-dependencies' and 'backend.additional-dependencies' are specified. Using 'backend.additional-dependencies'.",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                );
+            });
+        }
+
+        // Issue a migration warning if legacy additional-dependencies are used
+        if !additional_dependencies.specs.is_empty()
+            && build_backend.value.additional_dependencies.specs.is_empty()
+        {
+            BUILD_ADDITIONAL_DEPS_DEPRECATION.call_once(|| {
+                eprintln!("{}Warning: Top-level 'additional-dependencies' in [package.build] is deprecated. Please move to 'backend.additional-dependencies'.",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                );
+            });
+        }
+
+        Ok(Self {
+            backend: build_backend,
+            channels,
+            additional_dependencies,
+            source,
+            configuration,
+            flags,
+            target,
+            warnings,
+            build_string_prefix,
+            build_number,
+            secrets,
+        })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
+
+    use super::*;
+
+    fn expect_parse_failure(pixi_toml: &str) -> String {
+        let parse_error = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect_err("parsing should fail");
+
+        format_parse_error(pixi_toml, parse_error)
+    }
+
+    #[test]
+    fn test_inherited_backend_rejects_owned_field_overrides() {
+        // The version and the source location of an inherited backend are
+        // owned by the workspace entry.
+        for (field, spec) in [
+            ("version", r#"version = "1.0""#),
+            ("path", r#"path = "./backend""#),
+            ("git", r#"git = "https://github.com/user/repo.git""#),
+            ("url", r#"url = "https://example.com/backend.conda""#),
+        ] {
+            let toml = format!(r#"backend = {{ name = "foobar", workspace = true, {spec} }}"#);
+            let error = expect_parse_failure(&toml);
+            assert!(
+                error.contains(&format!("`{field}` is mutually exclusive with `workspace`")),
+                "unexpected error for `{field}`: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_glob_target_rejected_in_build_target() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            [target."cuda-*"]
+            config = { key = "value" }
+        "#;
+        let error = expect_parse_failure(toml);
+        assert!(
+            error.contains("wildcard target selector")
+                && error.contains("not supported in package targets"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn test_configuration_parsing() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            configuration = { key = "value", other = ["foo", "bar"], integer = 1234, nested = { abc = "def" } }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .expect("parsing should succeed");
+
+        insta::assert_debug_snapshot!(parsed);
+    }
+
+    #[test]
+    fn test_config_parsing() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            config = { key = "value", other = ["foo", "bar"], integer = 1234, nested = { abc = "def" } }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert!(parsed.warnings.is_empty());
+        insta::assert_debug_snapshot!(parsed.value);
+    }
+
+    #[test]
+    fn test_configuration_deprecation_warning() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            configuration = { key = "value" }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.warnings.len(), 1);
+        insta::assert_snapshot!(format_parse_error(
+            toml,
+            parsed.warnings.into_iter().next().unwrap()
+        ));
+    }
+
+    #[test]
+    fn test_omitted_version_defaults_to_any() {
+        let toml = r#"
+            backend = { name = "foobar" }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.value.backend.spec, PixiSpec::any());
+    }
+
+    #[test]
+    fn test_missing_backend() {
+        assert_snapshot!(expect_parse_failure(""));
+    }
+
+    #[test]
+    fn test_missing_name() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+            backend = { version = "12.*" }
+        "#
+        ));
+    }
+
+    #[test]
+    fn test_empty_channels_legacy() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+            backend = { name = "foobar", version = "*" }
+            channels = []
+        "#
+        ));
+    }
+
+    #[test]
+    fn test_additional_build_backend_keys() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+            backend = { name = "foobar", version = "*", sub = "bar" }
+        "#
+        ));
+    }
+
+    #[test]
+    fn test_additional_keys() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+            backend = { name = "foobar", version = "*" }
+            additional = "key"
+        "#
+        ));
+    }
+
+    #[test]
+    fn test_backend_channels_new_format() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*", channels = ["https://prefix.dev/conda-forge"] }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.value.channels.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_backend_channels_legacy_format() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            channels = ["https://prefix.dev/conda-forge"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.value.channels.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_backend_channels_priority() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*", channels = ["https://prefix.dev/pixi-build-backends"] }
+            channels = ["https://prefix.dev/conda-forge"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        // Should use backend.channels, not top-level channels
+        let channels = parsed.value.channels.unwrap();
+        assert_eq!(channels.len(), 1);
+        assert_eq!(
+            channels[0].to_string(),
+            "https://prefix.dev/pixi-build-backends"
+        );
+    }
+
+    #[test]
+    fn test_empty_backend_channels() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+            backend = { name = "foobar", version = "*", channels = [] }
+        "#
+        ));
+    }
+
+    #[test]
+    fn test_backend_additional_dependencies() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*", additional-dependencies = { git = "*" } }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert!(!parsed.value.additional_dependencies.is_empty());
+        assert!(
+            parsed
+                .value
+                .additional_dependencies
+                .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
+        );
+    }
+
+    #[test]
+    fn test_legacy_additional_dependencies() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            additional-dependencies = { git = "*" }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert!(!parsed.value.additional_dependencies.is_empty());
+        assert!(
+            parsed
+                .value
+                .additional_dependencies
+                .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
+        );
+    }
+
+    #[test]
+    fn test_backend_additional_dependencies_priority() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*", additional-dependencies = { rust = "*" } }
+            additional-dependencies = { git = "*" }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        // Should prioritize backend.additional-dependencies
+        assert!(!parsed.value.additional_dependencies.is_empty());
+        assert!(
+            parsed
+                .value
+                .additional_dependencies
+                .contains_key(&"rust".parse::<rattler_conda_types::PackageName>().unwrap())
+        );
+        assert!(
+            !parsed
+                .value
+                .additional_dependencies
+                .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
+        );
+    }
+
+    #[test]
+    fn test_build_flags() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            flags = ["cuda", "blas_openblas"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        let flags = parsed
+            .value
+            .flags
+            .iter()
+            .map(|flag: &Flag| flag.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(flags, vec!["cuda", "blas_openblas"]);
+    }
+
+    #[test]
+    fn test_secrets() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            secrets = ["CARGO_REGISTRY_TOKEN", "SCCACHE_BUCKET"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert_eq!(
+            parsed.value.secrets,
+            ["CARGO_REGISTRY_TOKEN", "SCCACHE_BUCKET"]
+                .into_iter()
+                .map(String::from)
+                .collect()
+        );
+    }
+
+    #[test]
+    fn test_backend_source_path_rejected() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+            backend = { name = "foobar", path = "./local-backend" }
+        "#
+            ),
+            @r#"
+          × build backends cannot be defined as source dependencies
+           ╭─[pixi.toml:2:23]
+         1 │
+         2 │             backend = { name = "foobar", path = "./local-backend" }
+           ·                       ─────────────────────────────────────────────
+         3 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_backend_source_git_rejected() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+            backend = { name = "foobar", git = "https://example.com/repo.git" }
+        "#
+            ),
+            @r#"
+          × build backends cannot be defined as source dependencies
+           ╭─[pixi.toml:2:23]
+         1 │
+         2 │             backend = { name = "foobar", git = "https://example.com/repo.git" }
+           ·                       ─────────────────────────────────────────────────────────
+         3 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_build_string_prefix_and_build_number() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            build-string-prefix = "myprefix"
+            build-number = 42
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        assert_eq!(
+            parsed.value.build_string_prefix.as_deref(),
+            Some("myprefix")
+        );
+        assert_eq!(parsed.value.build_number, Some(42));
+    }
+}

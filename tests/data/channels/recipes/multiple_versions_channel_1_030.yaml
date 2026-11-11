@@ -1,0 +1,27 @@
+recipe:
+  name: multiple-versions-channel
+  version: 1.0.0
+
+context:
+  version: 0.3.0
+outputs:
+  - package:
+      name: package3
+      version: ${{ version }}
+
+    requirements:
+      run_exports:
+        - ${{ pin_subpackage('package3', exact=True) }}
+
+    build:
+      number: 1
+      string: abc
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "echo package3$PKG_VERSION on windows" > $PREFIX/bin/package3.bat
+          else:
+            - echo '#!/bin/sh' > $PREFIX/bin/package3
+            - echo "echo package3$PKG_VERSION on unix" >> $PREFIX/bin/package3
+            - chmod +x $PREFIX/bin/package3

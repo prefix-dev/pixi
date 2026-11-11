@@ -5,13 +5,16 @@
 //! source dependencies and other build steps before the backend is invoked to
 //! build the package.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
-use rattler_conda_types::{ChannelUrl, PackageName, Platform, RepoDataRecord, VersionWithSource};
+use rattler_conda_types::{
+    ChannelUrl, MatchSpec, PackageName, RepoDataRecord, Subdir, VersionWithSource,
+    compression_level::CompressionLevel, package::CondaArchiveType,
+};
 use serde::{Deserialize, Serialize};
+use serde_with::{DefaultOnError, serde_as};
+
+use crate::{ExtraGroupName, InputGlobSet, VariantValue};
 
 pub const METHOD_NAME: &str = "conda/build_v1";
 
@@ -32,6 +35,18 @@ pub struct CondaBuildV1Params {
     /// The path to the host prefix, or `None` if no host prefix is created.
     pub host_prefix: Option<CondaBuildV1Prefix>,
 
+    /// The run dependencies of the package.
+    pub run_dependencies: Option<Vec<CondaBuildV1Dependency>>,
+
+    /// The run constraints of the package.
+    pub run_constraints: Option<Vec<CondaBuildV1Dependency>>,
+
+    /// The run exports
+    pub run_exports: Option<CondaBuildV1RunExports>,
+
+    /// The extra dependency groups of the package, keyed by group name
+    pub extra_dependencies: BTreeMap<ExtraGroupName, Vec<CondaBuildV1Dependency>>,
+
     /// The output to build.
     pub output: CondaBuildV1Output,
 
@@ -49,6 +64,141 @@ pub struct CondaBuildV1Params {
     /// Whether we want to install the package as editable
     // TODO: remove this parameter as soon as we have profiles
     pub editable: Option<bool>,
+
+    /// Archive format and compression level. `None` lets the backend pick.
+    #[serde(default)]
+    pub package_format: Option<CondaPackageFormat>,
+}
+
+/// Archive format paired with its compression level.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaPackageFormat {
+    pub archive_type: CondaArchiveType,
+    #[serde(default)]
+    pub compression_level: CondaCompressionLevel,
+}
+
+impl CondaPackageFormat {
+    /// `.conda` at the cheapest compression. Used for intermediate
+    /// artifacts that get unpacked immediately.
+    pub const fn fast() -> Self {
+        CondaPackageFormat {
+            archive_type: CondaArchiveType::Conda,
+            compression_level: CondaCompressionLevel::Named(NamedCompressionLevel::Lowest),
+        }
+    }
+}
+
+/// Wire-level mirror of `rattler_conda_types::compression_level::
+/// CompressionLevel` with serde and `Hash`.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(untagged)]
+pub enum CondaCompressionLevel {
+    Named(NamedCompressionLevel),
+    /// Numeric level; range depends on the archive type.
+    Numeric(i32),
+}
+
+impl Default for CondaCompressionLevel {
+    fn default() -> Self {
+        CondaCompressionLevel::Named(NamedCompressionLevel::Default)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum NamedCompressionLevel {
+    Lowest,
+    #[default]
+    Default,
+    Highest,
+}
+
+impl From<CondaCompressionLevel> for CompressionLevel {
+    fn from(value: CondaCompressionLevel) -> Self {
+        match value {
+            CondaCompressionLevel::Named(NamedCompressionLevel::Lowest) => CompressionLevel::Lowest,
+            CondaCompressionLevel::Named(NamedCompressionLevel::Default) => {
+                CompressionLevel::Default
+            }
+            CondaCompressionLevel::Named(NamedCompressionLevel::Highest) => {
+                CompressionLevel::Highest
+            }
+            CondaCompressionLevel::Numeric(level) => CompressionLevel::Numeric(level),
+        }
+    }
+}
+
+impl From<CompressionLevel> for CondaCompressionLevel {
+    fn from(value: CompressionLevel) -> Self {
+        match value {
+            CompressionLevel::Lowest => CondaCompressionLevel::Named(NamedCompressionLevel::Lowest),
+            CompressionLevel::Default => {
+                CondaCompressionLevel::Named(NamedCompressionLevel::Default)
+            }
+            CompressionLevel::Highest => {
+                CondaCompressionLevel::Named(NamedCompressionLevel::Highest)
+            }
+            CompressionLevel::Numeric(level) => CondaCompressionLevel::Numeric(level),
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaBuildV1Dependency {
+    /// The match spec of the dependency.
+    pub spec: MatchSpec,
+
+    /// What introduced this dependency? If the value of this field is
+    /// unrecognized, it will default to `None`. This ensures backwards
+    /// compatibility.
+    #[serde_as(as = "DefaultOnError<_>")]
+    pub source: Option<CondaBuildV1DependencySource>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum CondaBuildV1DependencySource {
+    RunExport(CondaBuildV1DependencyRunExportSource),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaBuildV1DependencyRunExportSource {
+    /// The environment from which the run export was taken ("host", or
+    /// "build")
+    pub from: String,
+
+    /// The name of the package that provided the run export.
+    #[serde(rename = "runExport")]
+    pub package_name: PackageName,
+}
+
+#[serde_as]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaBuildV1RunExports {
+    /// weak run exports apply a dependency from host to run
+    pub weak: Vec<CondaBuildV1Dependency>,
+
+    /// strong run exports apply a dependency from build to host and run
+    pub strong: Vec<CondaBuildV1Dependency>,
+
+    /// noarch run exports apply a run export only to noarch packages (other run
+    /// exports are ignored) for example, python uses this to apply a
+    /// dependency on python to all noarch packages, but not to
+    /// the python_abi package
+    pub noarch: Vec<CondaBuildV1Dependency>,
+
+    /// weak constrains apply a constrain dependency from host to run
+    pub weak_constrains: Vec<CondaBuildV1Dependency>,
+
+    /// strong constrains apply a constrain dependency from build to host and
+    /// run
+    pub strong_constrains: Vec<CondaBuildV1Dependency>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -58,7 +208,15 @@ pub struct CondaBuildV1Prefix {
     pub prefix: PathBuf,
 
     /// The platform for which the packages were installed.
-    pub platform: Platform,
+    pub platform: Subdir,
+
+    /// The specs that were used to solve the packages in the prefix.
+    #[serde(default)]
+    pub dependencies: Vec<CondaBuildV1Dependency>,
+
+    /// The constraints that were used to solve the packages in the prefix.
+    #[serde(default)]
+    pub constraints: Vec<CondaBuildV1Dependency>,
 
     /// The packages that are installed in the prefix.
     #[serde(default)]
@@ -71,8 +229,6 @@ pub struct CondaBuildV1PrefixPackage {
     /// The repodata record of the package that was installed in the prefix.
     #[serde(flatten)]
     pub repodata_record: RepoDataRecord,
-    // TODO: Add information about how the package was introduced into the prefix. E.g. it was
-    //  directly requested in the spec, or as a run_export, etc.
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -96,10 +252,10 @@ pub struct CondaBuildV1Output {
     pub build: Option<String>,
 
     /// The subdirectory of the package, e.g. `linux-64`, `osx-64`, etc.
-    pub subdir: Platform,
+    pub subdir: Subdir,
 
     /// The variant configuration for the package.
-    pub variant: BTreeMap<String, String>,
+    pub variant: BTreeMap<String, VariantValue>,
 }
 
 /// Contains the result of the `conda/build_v1` request.
@@ -114,7 +270,18 @@ pub struct CondaBuildV1Result {
     /// The globs that were used as input to the build. If any of the files that
     /// match these globs changes, the package should be considered
     /// "out-of-date".
-    pub input_globs: BTreeSet<String>,
+    ///
+    /// Order is significant: pixi feeds these into a gitignore-style matcher,
+    /// so inclusion patterns must precede any `!`-prefixed exclusions that
+    /// should override them.
+    pub input_globs: Vec<String>,
+
+    /// Optional structured description of the same inputs.  When present,
+    /// pixi uses this in preference to [`Self::input_globs`]; older clients
+    /// fall back to the flat list above.  Backends migrating to this field
+    /// SHOULD populate both for compatibility during the transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<InputGlobSet>>,
 
     /// The normalized name of the package.
     pub name: String,
@@ -126,5 +293,85 @@ pub struct CondaBuildV1Result {
     pub build: String,
 
     /// The subdirectory of the package.
-    pub subdir: Platform,
+    pub subdir: Subdir,
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_conda_types::{MatchSpec, ParseMatchSpecOptions, RepodataRevision};
+
+    use super::{CondaBuildV1Dependency, CondaBuildV1Params};
+
+    /// A `when=` conditional dependency must survive a JSON round-trip across
+    /// the build backend boundary. Guards against representing the spec as a
+    /// string, which would be re-parsed with the legacy syntax surface on the
+    /// receiving side and reject the v3 `when=` bracket key.
+    #[test]
+    fn conditional_dependency_survives_json_roundtrip() {
+        let spec = MatchSpec::from_str(
+            r#"bat[when="python >=3.10"]"#,
+            ParseMatchSpecOptions::default().with_repodata_revision(RepodataRevision::V3),
+        )
+        .unwrap();
+        assert!(
+            spec.condition.is_some(),
+            "the test spec must carry a condition"
+        );
+
+        let dep = CondaBuildV1Dependency {
+            spec: spec.clone(),
+            source: None,
+        };
+        let json = serde_json::to_string(&dep).unwrap();
+        let roundtripped: CondaBuildV1Dependency = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(roundtripped.spec.condition, spec.condition);
+    }
+
+    /// `CondaBuildV1Params::extra_dependencies` carrying a conditional spec
+    /// must round-trip through JSON as well.
+    #[test]
+    fn extra_dependencies_with_condition_survive_json_roundtrip() {
+        let spec = MatchSpec::from_str(
+            r#"bat[when="python >=3.10"]"#,
+            ParseMatchSpecOptions::default().with_repodata_revision(RepodataRevision::V3),
+        )
+        .unwrap();
+        let params = CondaBuildV1Params {
+            channels: vec![],
+            build_prefix: None,
+            host_prefix: None,
+            run_dependencies: None,
+            run_constraints: None,
+            run_exports: None,
+            extra_dependencies: std::collections::BTreeMap::from([(
+                crate::ExtraGroupName::new("test").unwrap(),
+                vec![CondaBuildV1Dependency {
+                    spec: spec.clone(),
+                    source: None,
+                }],
+            )]),
+            output: super::CondaBuildV1Output {
+                name: "pkg".parse().unwrap(),
+                version: None,
+                build: None,
+                subdir: rattler_conda_types::Subdir::NoArch,
+                variant: Default::default(),
+            },
+            work_directory: std::path::PathBuf::from("."),
+            output_directory: None,
+            editable: None,
+            package_format: None,
+        };
+
+        let json = serde_json::to_string(&params).unwrap();
+        let roundtripped: CondaBuildV1Params = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(
+            roundtripped.extra_dependencies[&crate::ExtraGroupName::new("test").unwrap()][0]
+                .spec
+                .condition,
+            spec.condition
+        );
+    }
 }

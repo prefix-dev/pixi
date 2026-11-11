@@ -16,7 +16,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
+  actions: read
 
 env:
   CARGO_INCREMENTAL: 0
@@ -30,15 +32,12 @@ env:
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
   PYTEST_ADDOPTS: "--color=yes"
   PYTHONIOENCODING: utf-8 # necessary to make unicode symbols print correctly on Windows
+  PIXI_NO_TELEMETRY: 1 # keep CI runs of the install scripts out of the install counts
 
   #
-  # Select a profile that is used for building the binary. The profile optimizes for certain use-cases.
-  # For distribution builds we want to reduce the size of the binary as much as possible. Whereas in
-  # regular CI builds we just want the fastest build possible.
-  #
-  # We switch based on the branch that is being built. If it's the main branch or a tag, we use the `dist`.
-  #
-  # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
+  # The cargo profile used to build the binary artifacts. CI uses the `ci`
+  # profile, which favors fast builds over a small binary. The `dist` profile,
+  # which optimizes for binary size, is used for distribution builds elsewhere.
   #
   CARGO_BUILD_PROFILE: ci
 
@@ -52,12 +51,25 @@ jobs:
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
       win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
+      # Version baked into binaries built on main, see "Compute nightly version".
+      nightly_version: ${{ steps.nightly_version.outputs.version }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+      # Binaries built on main are published as nightly releases, so they report
+      # the git describe version, e.g. 0.81.0-65-g619b0a3f6. Only match pixi
+      # release tags, not the pixi-build-* backend tags.
+      - name: Compute nightly version
+        id: nightly_version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          describe="$(git describe --tags --match 'v[0-9]*')"
+          echo "version=${describe#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: changed
         with:
           files_yaml: |
@@ -70,14 +82,14 @@ jobs:
               - "!assets/**"
               - "!**/*.md"
 
-      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: unix_installer_changed
         with:
           files_yaml: |
             code:
               - "install/install.sh"
 
-      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: win_installer_changed
         with:
           files_yaml: |
@@ -85,68 +97,75 @@ jobs:
               - "install/install.ps1"
 
   lint:
+    name: "lint"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          environments: lint
+          persist-credentials: false
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          environments: lefthook
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
       - name: lint (if this step fails, please 'pixi run lint' locally and push the changes)
         run: pixi run lint
+      - name: Check if lint made any changes
+        run: |
+          if ! git diff --quiet; then
+            echo "Error: Linting made changes to the code"
+            echo "Please run 'pixi run lint' locally and commit the changes."
+            git diff
+            exit 1
+          fi
 
   # Check that all the code references are correct.
   check-rustdoc-links:
-    name: "cargo rustdoc | ubuntu"
+    name: "cargo rustdoc"
     needs: determine_changes
     runs-on: ubuntu-latest
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
-          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
-            cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
-          done
-
-  # Checks for dependencies that are not used in the codebase
-  cargo-machete:
-    name: Cargo Machete
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Machete
-        uses: bnjbvr/cargo-machete@b54422fa3319b3cac180f6030b663fe57af51635 # v0.8.0
+          RUSTDOCFLAGS="-Dwarnings -Wunreachable-pub" cargo doc --workspace --all-features --no-deps
 
   # Checks for duplicate version of package
   cargo-vendor:
-    name: Cargo Vendor
+    name: cargo vendor
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: prefix-dev/setup-pixi@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          cache: ${{ github.ref == 'refs/heads/main' }}
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test cargo vendor
         run: cargo vendor --locked
 
   check-cli-docs:
+    name: check cli docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: prefix-dev/setup-pixi@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          environments: "rust-test"
 
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ". -> target/pixi"
+          # Cache namespace, bump to start from empty caches
+          prefix-key: v1-rust
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -175,88 +194,93 @@ jobs:
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-8
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: prefix-dev/setup-pixi@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+          persist-credentials: false
+      - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
         with:
-          workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache: rust
+          path: ~/.rustup
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+          environments: rust-test
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        env:
+          CARGO_TARGET_DIR: target/pixi
+        run: cargo sweep --time 7
 
   cargo-test-macos-aarch64:
     name: "cargo test | macos aarch64"
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: macos-14
+    runs-on: namespace-profile-macos-15-arm64-6
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: prefix-dev/setup-pixi@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+          persist-credentials: false
+      - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
         with:
-          workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache: rust
+          path: ~/.rustup
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+          environments: rust-test
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
-
-  cargo-test-macos-x86_64:
-    name: "cargo test | macos x86_64"
-    timeout-minutes: 30
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: prefix-dev/setup-pixi@main
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
-        with:
-          workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Test pixi
-        run: pixi run test-slow --retries 2
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
         env:
-          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
-          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
+          CARGO_TARGET_DIR: target/pixi
+        run: cargo sweep --time 7
 
   cargo-test-windows:
     name: "cargo test | windows x64"
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: windows_x64_2025_large
+    runs-on: namespace-profile-windows-2022-x86-64-8
     steps:
       # We don't use the dev drive here since we run out of space otherwise
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      - uses: prefix-dev/setup-pixi@main
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
         with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
+          environments: rust-test
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-directories: ${{ env.DEV_DRIVE }}/target
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
           CARGO_TARGET_DIR: ${{ env.DEV_DRIVE }}/target
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
@@ -269,111 +293,289 @@ jobs:
   build-binary-linux-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-8
     name: "build binary | linux x86_64"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@702b1908b5edf30d71a8d1666b724e0f0c6fa035 # v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
+      - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
+        with:
+          cache: rust
+          path: ~/.rustup
+      - uses: rui314/setup-mold@339e96b4ff1f3bd865856ba4cbbe8818a7acb038 # v1
       - name: "Setup musl"
         run: |
-          sudo apt-get install musl-tools
+          sudo apt update
+          sudo apt install musl-tools
           rustup target add x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
       - name: "Build"
         run: >
           cargo build
           --locked
           --target x86_64-unknown-linux-musl
           --profile $CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
+          --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
-          path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          path: |
+            ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+            ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
+          retention-days: 14
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        run: cargo sweep --time 7
+
+  build-binary-linux-aarch64:
+    needs: determine_changes
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    name: "build binary | linux aarch64"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
+      # Use the same Zig cross toolchain as release.yml. The Debian
+      # gcc-aarch64-linux-gnu compiles C dependencies against glibc headers,
+      # which leaves glibc-only symbols such as `__fprintf_chk` unresolved when
+      # linking against musl.
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          environments: release
+          activate-environment: true
+      - name: "Install Rust target"
+        run: rustup target add aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: "Build"
+        run: >
+          cargo zigbuild
+          --locked
+          --target aarch64-unknown-linux-musl
+          --profile $CARGO_BUILD_PROFILE
+          --features pixi/self_update
+          --bin pixi
+      - name: "Upload binary"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: pixi-linux-aarch64-${{ github.sha }}
+          path: ./target/aarch64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          retention-days: 14
+
+  build-binary-linux-riscv64gc:
+    needs: determine_changes
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    name: "build binary | linux riscv64gc"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
+      - uses: rui314/setup-mold@339e96b4ff1f3bd865856ba4cbbe8818a7acb038 # v1
+      - name: "Setup cross-compilation toolchain"
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-riscv64-linux-gnu
+          rustup target add riscv64gc-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: "Build"
+        env:
+          CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER: riscv64-linux-gnu-gcc
+          CC_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-gcc
+        run: >
+          cargo build
+          --locked
+          --target riscv64gc-unknown-linux-gnu
+          --profile $CARGO_BUILD_PROFILE
+          --features self_update
+          --workspace
+      - name: "Upload binary"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: pixi-linux-riscv64gc-${{ github.sha }}
+          path: ./target/riscv64gc-unknown-linux-gnu/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 14
 
   build-binary-macos-aarch64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: macos-14
+    runs-on: namespace-profile-macos-15-arm64-6
     name: "build binary | macos aarch64"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@702b1908b5edf30d71a8d1666b724e0f0c6fa035 # v1
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
+      - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
+        with:
+          cache: rust
+          path: ~/.rustup
       - name: "Build"
         run: >
           cargo build
           --locked
           --profile $CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
+          --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          path: |
+            ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+            ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
           retention-days: 14
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        run: cargo sweep --time 7
 
   build-binary-macos-x86_64:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
-    runs-on: macos-13
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: namespace-profile-macos-15-arm64-6
     name: "build binary | macos x86_64"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@702b1908b5edf30d71a8d1666b724e0f0c6fa035 # v1
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
+      - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
+        with:
+          cache: rust
+          path: ~/.rustup
+      - name: "Install Rust toolchain"
+        run: rustup target add x86_64-apple-darwin
       - name: "Build"
         run: >
           cargo build
           --locked
+          --target x86_64-apple-darwin
           --profile $CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
+          --bin pixi
       - name: "Upload binary"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pixi-macos-x86_64-${{ github.sha }}
-          path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          path: ./target/x86_64-apple-darwin/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 14
 
   build-binary-windows-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: windows_x64_2025_large
+    runs-on: namespace-profile-windows-2022-x86-64-8
     name: "build binary | windows x86_64"
+    env:
+      # RUSTFLAGS overrides the target rustflags in .cargo/config.toml, so keep
+      # the statically linked MSVC CRT here. See build_options.py.
+      RUSTFLAGS: "-D warnings -C target-feature=+crt-static"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
         run: |
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "Build"
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
           cargo build
           --locked
           --profile $env:CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
+          --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
-          path: ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+          path: |
+            ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+            ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*.exe
           retention-days: 14
 
   build-binary-windows-aarch64:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main'  || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
+    if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     # Using windows-latest as it's only run on main, thus speed is not that important
     runs-on: windows-latest
     name: "build binary | windows aarch64"
+    env:
+      # RUSTFLAGS overrides the target rustflags in .cargo/config.toml, so keep
+      # the statically linked MSVC CRT here. See build_options.py.
+      RUSTFLAGS: "-D warnings -C target-feature=+crt-static"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # pixi_consts reads PIXI_VERSION at compile time.
+      - name: Set nightly version
+        if: needs.determine_changes.outputs.nightly_version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${NIGHTLY_VERSION}" >> "$GITHUB_ENV"
+        env:
+          NIGHTLY_VERSION: ${{ needs.determine_changes.outputs.nightly_version }}
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -381,9 +583,10 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
       - name: "Install Rust toolchain"
         run: rustup target add aarch64-pc-windows-msvc
-      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "Build"
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
@@ -391,12 +594,14 @@ jobs:
           --locked
           --target aarch64-pc-windows-msvc
           --profile $env:CARGO_BUILD_PROFILE
-          --features self_update
+          --features pixi/self_update
       - name: "Upload binary"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pixi-windows-aarch64-${{ github.sha }}
-          path: ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+          path: |
+            ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
+            ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*.exe
           retention-days: 14
 
   #
@@ -404,14 +609,16 @@ jobs:
   #
 
   test-pytest-windows-x86_64:
-    timeout-minutes: 10
+    timeout-minutes: 30
     name: Pytest | windows x86_64
     runs-on: windows-latest
     needs: build-binary-windows-x86_64
     env:
       TARGET_RELEASE: "target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -419,7 +626,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -430,54 +637,64 @@ jobs:
       - name: Run pytests
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi run --locked test-integration-ci
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}/pixi-build-rust.exe
 
   test-pytest-macos-aarch64:
-    timeout-minutes: 10
+    timeout-minutes: 30
     name: Pytest | macos aarch64
-    runs-on: macos-14
+    runs-on: namespace-profile-macos-15-arm64-6
     needs: build-binary-macos-aarch64
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
 
       - name: Run integration tests
         run: pixi run --locked test-integration-ci
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
   test-pytest-linux-x86_64:
     timeout-minutes: 10
     name: Pytest | linux x86_64
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     needs: build-binary-linux-x86_64
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
 
       - name: Run integration tests
         run: pixi run --locked test-integration-ci
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
   test-integration-windows-x86_64:
     timeout-minutes: 30
@@ -488,7 +705,9 @@ jobs:
     env:
       TARGET_RELEASE: "target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -496,7 +715,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -505,9 +724,11 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi info
 
-      - name: Run long running integration tests
+      - name: Run extra slow integration tests
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run --locked test-integration-extra-slow-ci
+        run: pixi run --locked test-integration-ci extra_slow
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}/pixi-build-rust.exe
 
       - name: Test examples
         shell: bash
@@ -517,71 +738,72 @@ jobs:
   test-integration-macos-aarch64:
     timeout-minutes: 30
     name: Integration tests | macos aarch64
-    runs-on: macos-14
+    runs-on: namespace-profile-macos-15-arm64-6
     needs: build-binary-macos-aarch64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
 
-      - name: Run long running integration tests
-        run: pixi run --locked test-integration-extra-slow-ci
-
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
+      - name: Run extra slow integration tests
+        run: pixi run --locked test-integration-ci extra_slow
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
       - name: Test examples
         run: bash tests/scripts/test-examples.sh
 
       - name: Test export
-        run: pixi run --locked test-export
+        run: pixi exec --with micromamba==2.4.0 bash tests/scripts/test-export.sh
 
   test-integration-linux-x86_64:
     timeout-minutes: 30
     name: Integration tests | linux x86_64
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     needs: build-binary-linux-x86_64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
 
-      - name: Run long running integration tests
-        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
-        run: pixi run --locked test-integration-ci -m "extra_slow"
-
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
+      - name: Run extra slow integration tests
+        run: pixi run --locked test-integration-ci extra_slow
+        env:
+          PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.TARGET_RELEASE }}/pixi-build-rust
 
       - name: "Test examples"
         run: bash tests/scripts/test-examples.sh
 
       - name: "Test export"
-        run: pixi run --locked test-export
+        run: pixi exec --with micromamba==2.4.0 bash tests/scripts/test-export.sh
 
   test-downstream-windows-x86_64:
     timeout-minutes: 30
@@ -592,7 +814,9 @@ jobs:
     env:
       TARGET_RELEASE: "target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
@@ -600,7 +824,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -612,10 +836,11 @@ jobs:
         run: pixi install -vvv --locked
 
       - name: Checkout Deltares/Ribasim
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: Deltares/Ribasim
           path: ribasim
+          persist-credentials: false
       - name: Copy Deltares/Ribasim to Dev Drive
         run: Copy-Item -Path "${{ github.workspace }}/ribasim" -Destination "${{ env.PIXI_WORKSPACE }}/ribasim" -Recurse
       - name: Install Deltares/Ribasim
@@ -623,10 +848,11 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}/ribasim
 
       - name: Checkout quantco/polarify
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: quantco/polarify
           path: polarify
+          persist-credentials: false
       - name: Copy quantco/polarify to Dev Drive
         run: Copy-Item -Path "${{ github.workspace }}/polarify" -Destination "${{ env.PIXI_WORKSPACE }}/polarify" -Recurse
       - name: Install quantco/polarify
@@ -643,21 +869,23 @@ jobs:
   test-downstream-macos-aarch64:
     timeout-minutes: 15
     name: Downstream tests | macos aarch64
-    runs-on: macos-14
+    runs-on: macos-15
     needs: build-binary-macos-aarch64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
@@ -667,45 +895,52 @@ jobs:
         run: pixi install -vvv --locked
 
       - name: "Checkout Deltares/Ribasim"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: Deltares/Ribasim
           path: ribasim
+          persist-credentials: false
       - name: "Install Deltares/Ribasim"
         run: pixi install -vvv --locked
         working-directory: ribasim
 
       - name: "Checkout quantco/polarify"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: quantco/polarify
           path: polarify
+          persist-credentials: false
       - name: "Install quantco/polarify"
         run: pixi install -vvv --locked
         working-directory: polarify
       - run: pixi info
+        working-directory: polarify
       - run: pixi list
+        working-directory: polarify
       - name: Run downstream polarify environment
         run: pixi run --locked echo "Running downstream polarify environment"
+        working-directory: polarify
 
   test-downstream-linux-x86_64:
     timeout-minutes: 15
     name: Downstream tests | linux x86_64
-    runs-on: 8core_ubuntu_latest_runner
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
     needs: build-binary-linux-x86_64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
       - name: Setup unix binary, add to github path
         run: |
-          chmod a+x ${{ env.TARGET_RELEASE }}/pixi
+          chmod a+x ${{ env.TARGET_RELEASE }}/pixi ${{ env.TARGET_RELEASE }}/pixi-build-*
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi info
@@ -715,36 +950,42 @@ jobs:
         run: pixi install -vvv --locked
 
       - name: "Checkout nerfstudio-project/nerfstudio"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: nerfstudio-project/nerfstudio
           path: nerfstudio
+          persist-credentials: false
       - name: "Install nerfstudio-project/nerfstudio"
-        # Not using locked as their lockfile is not in sync
+        # Not using locked as their lock file is not in sync
         run: pixi install -vvv
         working-directory: nerfstudio
 
       - name: "Checkout Deltares/Ribasim"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: Deltares/Ribasim
           path: ribasim
+          persist-credentials: false
       - name: "Install Deltares/Ribasim"
         run: pixi install -vvv --locked
         working-directory: ribasim
 
       - name: "Checkout quantco/polarify"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: quantco/polarify
           path: polarify
+          persist-credentials: false
       - name: "Install quantco/polarify"
         run: pixi install -vvv --locked
         working-directory: polarify
       - run: pixi info
+        working-directory: polarify
       - run: pixi list
+        working-directory: polarify
       - name: Run downstream polarify environment
         run: pixi run --locked echo "Running downstream polarify environment"
+        working-directory: polarify
   #
   # Install a number of common wheels on some platforms
   #
@@ -757,7 +998,7 @@ jobs:
     with:
       sha: ${{ github.sha }}
       arch: linux-x86_64
-      runs-on: 8core_ubuntu_latest_runner
+      runs-on: ubuntu-latest
 
   test-common-wheels-windows-x86_64:
     name: Wheel Tests | windows x86_64
@@ -777,7 +1018,7 @@ jobs:
     with:
       sha: ${{ github.sha }}
       arch: macos-aarch64
-      runs-on: macos-14
+      runs-on: macos-15
 
   #
   # Test unix installer on some platforms
@@ -786,14 +1027,16 @@ jobs:
   test-install-sh-nix:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-14]
+        os: [ubuntu-latest, macos-15]
     name: install.sh | ${{ matrix.os }}
     needs:
       - determine_changes
     runs-on: ${{ matrix.os }}
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: "Install"
         run: |
           uname -a
@@ -805,12 +1048,16 @@ jobs:
     name: install.sh | alpine linux
     needs:
       - determine_changes
-    runs-on: ubuntu-latest
+    # sudo on ubuntu-26.04 rejects -E, which jirutka/setup-alpine relies on
+    # https://github.com/jirutka/setup-alpine/pull/35
+    runs-on: ubuntu-24.04
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Setup latest Alpine Linux
-        uses: jirutka/setup-alpine@de807bada44fc7dce6bbd00672b92827aa5f3c99 # v1
+        uses: jirutka/setup-alpine@ae3b3ddba35054804fc4a3507b519fa7e8152050 # v1.4.1
       - name: "Install"
         run: |
           uname -a
@@ -824,12 +1071,16 @@ jobs:
     name: install.sh | linux without tar
     needs:
       - determine_changes
-    runs-on: ubuntu-latest
+    # sudo on ubuntu-26.04 rejects -E, which jirutka/setup-alpine relies on
+    # https://github.com/jirutka/setup-alpine/pull/35
+    runs-on: ubuntu-24.04
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Setup latest Alpine Linux
-        uses: jirutka/setup-alpine@cf5fddcea495dcc19c0f991c6f6fa6a7abf3d50a # v1
+        uses: jirutka/setup-alpine@ae3b3ddba35054804fc4a3507b519fa7e8152050 # v1.4.1
       - name: "Install"
         run: |
           uname -a
@@ -848,9 +1099,11 @@ jobs:
     runs-on: windows-latest
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@40677d36a502eb2cf0fb808cc9dec31bf6152638 # v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
           install: unzip
@@ -870,9 +1123,11 @@ jobs:
     runs-on: windows-latest
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@40677d36a502eb2cf0fb808cc9dec31bf6152638 # v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
       - name: "Install"
@@ -892,9 +1147,11 @@ jobs:
     env:
       PIXI_REPOURL: "https://github.com/prefix-dev/pixi/"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@40677d36a502eb2cf0fb808cc9dec31bf6152638 # v2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
       - name: "Before Install"
@@ -907,112 +1164,3 @@ jobs:
       - name: "After Install"
         run: $USERPROFILE/.pixi/bin/pixi.exe --version
         shell: msys2 {0}
-
-  test-build-linux-x86_64:
-    timeout-minutes: 10
-    name: Test pixi-build Linux x86_64
-    runs-on: ubuntu-latest
-    needs: build-binary-linux-x86_64
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        with:
-          repository: prefix-dev/pixi-build-testsuite
-
-      - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
-        with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-
-      - name: Download pixi artifacts
-        run: pixi run download-artifacts pixi --run-id ${{ github.run_id }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download pixi-build-backends artifacts
-        run: pixi run download-artifacts pixi-build-backends
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup binary permissions
-        run: chmod a+x artifacts/pixi*
-
-      - name: Run integration tests
-        run: pixi run --locked test-slow
-        env:
-          PIXI_BIN_DIR: ${{ github.workspace }}/artifacts
-          BUILD_BACKENDS_BIN_DIR: ${{ github.workspace }}/artifacts
-
-  test-build-windows-x86_64:
-    timeout-minutes: 10
-    name: Test pixi-build Windows x86_64
-    runs-on: windows-latest
-    needs: build-binary-windows-x86_64
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        with:
-          repository: prefix-dev/pixi-build-testsuite
-
-      - name: Create Dev Drive
-        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-
-      - name: Copy Git Repo to Dev Drive
-        run: Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
-
-      - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
-        with:
-          manifest-path: ${{ env.PIXI_WORKSPACE }}/pixi.toml
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-
-      - name: Download pixi artifacts
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run download-artifacts pixi --run-id ${{ github.run_id }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download pixi-build-backends artifacts
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run download-artifacts pixi-build-backends
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run integration tests
-        run: pixi run --locked test-slow
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        env:
-          PIXI_BIN_DIR: ${{ env.PIXI_WORKSPACE }}/artifacts
-          BUILD_BACKENDS_BIN_DIR: ${{ env.PIXI_WORKSPACE }}/artifacts
-
-  test-build-macos-aarch64:
-    timeout-minutes: 10
-    name: Test pixi-build macOS aarch64
-    runs-on: macos-14
-    needs: build-binary-macos-aarch64
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        with:
-          repository: prefix-dev/pixi-build-testsuite
-
-      - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
-        with:
-          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-
-      - name: Download pixi artifacts
-        run: pixi run download-artifacts pixi --run-id ${{ github.run_id }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download pixi-build-backends artifacts
-        run: pixi run download-artifacts pixi-build-backends
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup binary permissions
-        run: chmod a+x artifacts/pixi*
-
-      - name: Run integration tests
-        run: pixi run --locked test-slow
-        env:
-          PIXI_BIN_DIR: ${{ github.workspace }}/artifacts
-          BUILD_BACKENDS_BIN_DIR: ${{ github.workspace }}/artifacts

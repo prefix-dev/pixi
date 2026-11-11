@@ -43,6 +43,10 @@ outputs:
       name: package3
       version: ${{ version }}
 
+    requirements:
+      run_exports:
+        - ${{ pin_subpackage('package3', exact=True) }}
+
     build:
       number: 1
       string: abc

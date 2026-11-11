@@ -1,0 +1,37 @@
+[package]
+name = "pixi-build-mojo"
+version = "0.2.9"
+edition.workspace = true
+license.workspace = true
+
+[package.metadata.dist]
+dist = false
+
+[dependencies]
+async-trait = { workspace = true }
+fs-err = { workspace = true }
+indexmap = { workspace = true }
+miette = { workspace = true }
+minijinja = { workspace = true }
+rattler_build_jinja = { workspace = true }
+rattler_build_types = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_virtual_packages = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+
+pixi_build_backend = { workspace = true }
+pixi_build_types = { workspace = true }
+
+rattler_build_recipe = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["filters", "redactions", "yaml"] }
+rstest = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = ["rustls"]
+native-tls = ["pixi_build_backend/native-tls"]
+rustls = ["pixi_build_backend/rustls"]

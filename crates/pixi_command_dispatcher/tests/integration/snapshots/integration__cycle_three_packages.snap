@@ -1,0 +1,37 @@
+---
+source: crates/pixi_command_dispatcher/tests/integration/main.rs
+expression: "format!(\"ERROR:\\n{}\\n\\nTRACE:\\n{}\", format_diagnostic(&error),\nevent_tree.to_string())"
+---
+ERROR:
+  × detected a cyclic dependency:
+
+  │ ┌──→──┐
+  │ |  package_c
+  │ |    requires package_a (host)
+  │ ↑     ↓
+  │ |  package_a
+  │ |    requires package_b (build)
+  │ ↑     ↓
+  │ |  package_b
+  │ |    requires package_c (run)
+  │ └──←──┘
+
+
+TRACE:
+Pixi solve (test@linux-64)
+└── Source metadata (package_a @ package_a)
+    ├── Build backend metadata (package_a)
+    │   └── Instantiate backend (in-memory)
+    └── Source record (package_a @ package_a)
+        └── Pixi solve (Build of package_a in test@linux-64)
+            ├── Source metadata (package_b @ package_b)
+            │   ├── Build backend metadata (package_b)
+            │   │   └── Instantiate backend (in-memory)
+            │   └── Source record (package_b @ package_b)
+            └── Source metadata (package_c @ package_c)
+                ├── Build backend metadata (package_c)
+                │   └── Instantiate backend (in-memory)
+                └── Source record (package_c @ package_c)
+                    └── Pixi solve (Host of package_c in test@linux-64)
+                        └── Source metadata (package_a @ package_a)
+                            └── Source record (package_a @ package_a)

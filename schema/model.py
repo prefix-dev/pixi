@@ -3,31 +3,56 @@
 from __future__ import annotations
 
 import json
+import sys
 from copy import deepcopy
-from pathlib import Path
-import tomllib
-from typing import Annotated, Any, Optional, Literal
 from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast, override
 
+import tomli
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
+    ConfigDict,
     Field,
     PositiveFloat,
     StringConstraints,
 )
 
+if TYPE_CHECKING:
+    from pydantic.config import JsonDict
+
+HERE = Path(__file__).parent
+PIXI_SCHEMA = HERE / "schema.json"
+PYPROJECT_SCHEMA = HERE / "pyproject/schema.json"
+PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject/partial-pixi.json"
+
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
-CARGO_TOML = Path(__file__).parent.parent / "Cargo.toml"
-CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
+CARGO_TOML = Path(__file__).parent.parent / "crates" / "pixi" / "Cargo.toml"
+CARGO_TOML_DATA = tomli.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
-SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
+
+URI_TEMPLATE = "https://pixi.sh/v{}/schema/manifest/{}schema.json"
+
+SCHEMA_URI = URI_TEMPLATE.format(VERSION, "")
+PYPROJECT_SCHEMA_URI = URI_TEMPLATE.format(VERSION, "pyproject/")
+PARTIAL_PYPROJECT_SCHEMA_URI = "https://json.schemastore.org/partial-pixi.json"
 
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
 Sha256Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{64}$")]
 PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
+# Extra-dependency group names follow the conda optional-dependencies naming
+# rules (CEP-0044).
+ExtraName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9._+-]{1,64}$")]
+# Variant flags are non-empty strings with optional `key:value` semantics,
+# allowing a single colon as the separator.
+FlagName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]+(:[a-z0-9_]+)?$")]
+PlatformName = Annotated[
+    str,
+    StringConstraints(pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$", max_length=64),
+]
 Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
@@ -35,7 +60,23 @@ GitUrl = Annotated[
 ]
 ExcludeNewer = Annotated[
     str,
-    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
+    StringConstraints(
+        # Matches either:
+        # - An RFC 3339 timestamp, e.g. YYYY-MM-DDTHH:MM:SSZ or with fractional seconds
+        # - A date, e.g. YYYY-MM-DD
+        # - A duration token sequence accepted by humantime, e.g. 7d, 1h, 30m, 1h30m, 1ms
+        pattern=r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})|\d{4}-\d{2}-\d{2}|(\d+\s*[A-Za-z]+\s*)+)$"
+    ),
+]
+
+AbsoluteExcludeNewer = Annotated[
+    str,
+    StringConstraints(
+        # Matches either:
+        # - An RFC 3339 timestamp, e.g. YYYY-MM-DDTHH:MM:SSZ or with fractional seconds
+        # - A date, e.g. YYYY-MM-DD
+        pattern=r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})|\d{4}-\d{2}-\d{2})$"
+    ),
 ]
 
 
@@ -69,9 +110,100 @@ class Platform(str, Enum):
 
 
 class StrictBaseModel(BaseModel):
-    class Config:
-        extra = "forbid"
-        alias_generator = hyphenize
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", alias_generator=hyphenize)
+
+
+# Family selectors double as `target.<family>.*` keys, so the parser rejects
+# them as platform names; mirror that in the schema. See `family_name_to_selector`
+# in crates/pixi_manifest.
+RESERVED_PLATFORM_NAMES = ["linux", "macos", "osx", "unix", "win"]
+NotReservedPlatformName: Any = {"not": {"enum": RESERVED_PLATFORM_NAMES}}
+
+
+class CudaTable(BaseModel):
+    """The grouped CUDA virtual-package table: `cuda = { driver, arch }`.
+
+    `driver` maps to `__cuda` (equivalent to the bare `cuda = "12.0"` form);
+    `arch` maps to `__cuda_arch` (GPU compute capability) and requires `driver`.
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
+    driver: NonEmptyStr = Field(
+        description="The `__cuda` driver version, e.g. `12.0`.",
+    )
+    arch: NonEmptyStr | None = Field(
+        None,
+        description="The `__cuda_arch` GPU compute capability, e.g. `8.6`. Requires `driver`.",
+    )
+
+
+# AMDGPU target names: decimal major, then one hex digit each for minor and stepping.
+AmdGpuTargetName = Annotated[str, StringConstraints(pattern=r"^gfx[0-9]+[0-9a-fA-F]{2}$")]
+
+
+class WorkspacePlatform(BaseModel):
+    """A workspace platform: a conda subdir plus declared virtual-package
+    guarantees, identified by a workspace-scoped name."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid",
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "patternProperties": {
+                r"^__[a-z0-9][._-]?([a-z0-9]+(\.|-|_|$))*$": {"type": "string"},
+            },
+            "propertyNames": {"maxLength": 64},
+            "anyOf": [
+                {"required": ["name"]},
+                {"required": ["platform"]},
+            ],
+        },
+    )
+
+    name: str | None = Field(
+        None,
+        pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$",
+        max_length=64,
+        json_schema_extra=NotReservedPlatformName,
+        description="The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
+    )
+    platform: Platform | None = Field(
+        None,
+        description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
+    )
+    cuda: NonEmptyStr | CudaTable | None = Field(
+        None,
+        description="Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
+    )
+    amdgpu: Literal[True] | AmdGpuTargetName | None = Field(
+        None,
+        description="Declare the presence-only `__amdgpu` virtual package with `true`, or an AMDGPU target name (e.g. `gfx90a`) to also declare its `__amdgpu_arch`.",
+    )
+    archspec: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86_64_v3`.",
+    )
+    glibc: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
+    )
+    linux: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`.",
+    )
+    macos: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+    )
+    osx: NonEmptyStr | None = Field(
+        None,
+        description="Alias for `macos`: declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+    )
+    windows: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__win` virtual package at the given Windows version, e.g. `10`.",
+    )
 
 
 class WorkspaceInheritance(StrictBaseModel):
@@ -91,16 +223,53 @@ class ChannelInlineTable(StrictBaseModel):
 
     channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this channel only",
+    )
 
 
 Channel = ChannelName | ChannelInlineTable
+
+
+class CondaPypiMapTable(StrictBaseModel):
+    """The mapping configuration for one channel in `conda-pypi-map`."""
+
+    location: AnyHttpUrl | NonEmptyStr | None = Field(
+        None, description="The URL or path to a mapping file with `conda_name: pypi_name` entries"
+    )
+    mapping: dict[NonEmptyStr, NonEmptyStr | list[NonEmptyStr] | Literal[False]] | None = Field(
+        None,
+        description="Inline `conda_name: pypi_name` entries; a list maps one conda package to several PyPI names, `false` marks a package as not available on PyPI. Inline entries override entries from `location`.",
+    )
+    mapping_mode: Literal["overlay", "replace"] | None = Field(
+        None,
+        description="How the project mapping interacts with Pixi's default mapping data: `overlay` (default) applies it on top, `replace` uses it instead",
+    )
+    same_name_heuristic: bool | None = Field(
+        None,
+        description="Whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to true for conda-forge and false for other channels.",
+    )
+
+
+CondaPypiMapEntry = AnyHttpUrl | NonEmptyStr | Literal[False] | CondaPypiMapTable
+CondaPypiMap = dict[ChannelName, CondaPypiMapEntry] | Literal[False]
 
 
 class ChannelPriority(str, Enum):
     """The priority of the channel."""
 
     disabled = "disabled"
+    flexible = "flexible"
     strict = "strict"
+
+
+class SolveStrategy(str, Enum):
+    """The strategy used to solve packages."""
+
+    highest = "highest"
+    lowest = "lowest"
+    lowest_direct = "lowest-direct"
 
 
 PixiBuildFeature = Annotated[
@@ -112,6 +281,36 @@ KnownPreviewFeature = PixiBuildFeature
 # class KnownPreviewFeature(Enum):
 #     """The preview features of the project."""
 #     PixiBuild: Annotated[str, Field(description="Enables building of source records")] = "pixi-build"
+
+
+class ExcludeNewerTable(StrictBaseModel):
+    """The `exclude-newer` cutoff for conda packages together with the releases that are exempt from it."""
+
+    cutoff: ExcludeNewer = Field(
+        ...,
+        examples=["2023-11-03T03:33:12Z", "2026-04-01", "7d"],
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
+    )
+    exemptions: dict[CondaPackageName, NonEmptyStr | ExcludeNewerExemptionTable] | None = Field(
+        None,
+        examples=[{"polars": "==1.43.1", "py-rattler": "*"}],
+        description='Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = "==1.43.1"` exempts that release only and `py-rattler = "*"` exempts every release.',
+    )
+
+
+class PypiExcludeNewerTable(StrictBaseModel):
+    """The `exclude-newer` cutoff for PyPI packages together with the packages that are exempt from it."""
+
+    cutoff: ExcludeNewer | None = Field(
+        None,
+        examples=["2023-11-03T03:33:12Z", "2026-04-01", "7d"],
+        description="Exclude any PyPI package newer than this timestamp or duration. Without a cutoff, the cutoff of `exclude-newer` applies to PyPI packages as well.",
+    )
+    exemptions: dict[PyPIPackageName, Literal["*"]] | None = Field(
+        None,
+        examples=[{"torch": "*"}],
+        description="PyPI packages that are never excluded, regardless of their upload time. Only `*`, which exempts every release of the package, is supported for now.",
+    )
 
 
 class Workspace(StrictBaseModel):
@@ -134,18 +333,49 @@ class Workspace(StrictBaseModel):
     )
     channel_priority: ChannelPriority | None = Field(
         None,
-        examples=["strict", "disabled"],
-        description="The type of channel priority that is used in the solve."
-        "- 'strict': only take the package from the channel it exist in first."
-        "- 'disabled': group all dependencies together as if there is no channel difference.",
+        examples=["strict", "flexible", "disabled"],
+        description="""The type of channel priority that is used in the solve.
+- 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
+- 'disabled': group all dependencies together as if there is no channel difference.""",
     )
-    exclude_newer: ExcludeNewer | None = Field(
+    solve_strategy: SolveStrategy | None = Field(
         None,
-        examples=["2023-11-03", "2023-11-03T03:33:12Z"],
-        description="Exclude any package newer than this date",
+        examples=["lowest", "lowest-direct", "highest"],
+        description="""The strategy that is used in the solve.
+- 'highest': solve all packages to the highest compatible version.
+- 'lowest': solve all packages to the lowest compatible version.
+- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
-    platforms: list[Platform] | None = Field(
-        None, description="The platforms that the project supports"
+    exclude_newer: ExcludeNewer | ExcludeNewerTable | None = Field(
+        None,
+        examples=[
+            "2023-11-03T03:33:12Z",
+            "2026-04-01",
+            "0d",
+            "1 week",
+            "2w",
+            "1 month",
+            "1M",
+            "72h",
+            "72 hours",
+            "1h30m",
+            {"cutoff": "7d", "exemptions": {"polars": "==1.43.1", "py-rattler": "*"}},
+        ],
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m'), or a table with a `cutoff` and `exemptions` for vetted releases.",
+    )
+    pypi_exclude_newer: ExcludeNewer | PypiExcludeNewerTable | None = Field(
+        None,
+        examples=[
+            "2023-11-03T03:33:12Z",
+            "7d",
+            {"exemptions": {"torch": "*"}},
+        ],
+        description="Exclude any PyPI package newer than this timestamp or duration, or a table with a `cutoff` and `exemptions`. Without a `cutoff`, the cutoff of `exclude-newer` applies to PyPI packages as well.",
+    )
+    platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
+        None,
+        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`, `windows`).",
     )
     license: NonEmptyStr | None = Field(
         None,
@@ -164,8 +394,9 @@ class Workspace(StrictBaseModel):
     documentation: AnyHttpUrl | None = Field(
         None, description="The URL of the documentation of the project"
     )
-    conda_pypi_map: dict[ChannelName, AnyHttpUrl | NonEmptyStr] | None = Field(
-        None, description="The `conda` to PyPI mapping configuration"
+    conda_pypi_map: CondaPypiMap | None = Field(
+        None,
+        description="The `conda` to PyPI mapping configuration; `false` disables the mapping entirely",
     )
     pypi_options: PyPIOptions | None = Field(
         None, description="Options related to PyPI indexes for this project"
@@ -176,6 +407,10 @@ class Workspace(StrictBaseModel):
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
     )
+    build_variants_files: list[PathNoBackslash] | None = Field(
+        None,
+        description="Ordered list of variant definition files.",
+    )
     build_variants: dict[NonEmptyStr, list[str]] | None = Field(
         None, description="The build variants of the project"
     )
@@ -184,6 +419,19 @@ class Workspace(StrictBaseModel):
         description="The required version spec for pixi itself to resolve and build the project.",
         examples=[">=0.40"],
     )
+    target: dict[TargetName, WorkspaceTarget] | None = Field(
+        None, description="The workspace targets"
+    )
+    dependencies: Dependencies = Field(
+        None,
+        description=(
+            "Inheritable `conda` dependency pool. Members opt in by writing "
+            "`{ workspace = true }` in any `[package.*-dependencies]` table "
+            "(or in `[package.build.backend]`). Relative `path` specs resolve "
+            "against this manifest and are re-anchored per consuming member."
+        ),
+        examples=[{"numpy": "1.*", "boltons": {"version": ">=24", "channel": "conda-forge"}}],
+    )
 
 
 ########################
@@ -191,8 +439,8 @@ class Workspace(StrictBaseModel):
 ########################
 
 
-class MatchspecTable(StrictBaseModel):
-    """A precise description of a `conda` package version."""
+class MatchspecSelectorTable(StrictBaseModel):
+    """The match spec fields that select `conda` binary package records."""
 
     version: NonEmptyStr | None = Field(
         None,
@@ -212,7 +460,48 @@ class MatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
+    flags: list[NonEmptyStr] | None = Field(
+        None,
+        description="Plain string flags used to select package variants",
+    )
     license: NonEmptyStr | None = Field(None, description="The license of the package")
+    license_family: NonEmptyStr | None = Field(
+        None, description="The license family of the package"
+    )
+    track_features: list[NonEmptyStr] | None = Field(
+        None, description="The track features of the package"
+    )
+
+
+class BinaryMatchspecTable(MatchspecSelectorTable):
+    """A precise description of a `conda` binary package version. Excludes source-location fields."""
+
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Optional extra dependencies to select for the package",
+    )
+    when: When | None = Field(
+        None,
+        description="The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
+    )
+
+
+class ExcludeNewerExemptionTable(MatchspecSelectorTable):
+    """The match spec fields that select the releases exempt from `exclude-newer`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(json_schema_extra={"minProperties": 1})
+
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the package")
+    cutoff: AbsoluteExcludeNewer | None = Field(
+        None,
+        description="Only exempt the matching releases published up to this point in time, an RFC 3339 timestamp or a date. Later releases, e.g. a new build of an exempt version, are subject to the cutoff as usual.",
+        examples=["2026-10-12T08:00:00Z", "2026-10-12"],
+    )
+
+
+class MatchspecTable(BinaryMatchspecTable):
+    """A precise description of a `conda` package version."""
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -225,9 +514,114 @@ class MatchspecTable(StrictBaseModel):
     tag: NonEmptyStr | None = Field(None, description="A git tag to use")
     branch: NonEmptyStr | None = Field(None, description="A git branch to use")
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+    lfs: bool | None = Field(
+        None, description="If `true` Git LFS objects are fetched during the checkout"
+    )
+
+    package: Package | None = Field(
+        None,
+        description=(
+            "An inline package definition for this source dependency, instead of a "
+            "separate `pixi.toml`. The package name is taken from the dependency key "
+            "and the source is taken from this spec, so `name` and `build.source` are "
+            "not set here."
+        ),
+        examples=[{"build": {"backend": {"name": "pixi-build-rust"}}}],
+    )
+
+
+class SourceSpecTable(StrictBaseModel):
+    """A precise description of a source package location."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source package")
+
+    url: NonEmptyStr | None = Field(None, description="The URL to the source package")
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the source package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source package")
+
+    git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+
+class WhenAll(StrictBaseModel):
+    """All conditions must apply."""
+
+    all: list[When] = Field(
+        ..., min_length=1, description="Conditions to combine with a logical AND"
+    )
+
+
+class WhenAny(StrictBaseModel):
+    """Any condition may apply."""
+
+    any: list[When] = Field(
+        ..., min_length=1, description="Conditions to combine with a logical OR"
+    )
+
+
+class WhenPackage(StrictBaseModel):
+    """Expanded package condition syntax.
+
+    Accepts the same matchspec fields as a regular package dependency except
+    for `when` itself, `channel`, and source-location fields (`url`, `git`,
+    `path`, `md5`, `sha256`, ...).
+    """
+
+    package: NonEmptyStr = Field(description="The package name to match")
+    version: NonEmptyStr | None = Field(None, description="Optional version constraint")
+    build: NonEmptyStr | None = Field(None, description="Optional build string matcher")
+    build_number: NonEmptyStr | None = Field(
+        None,
+        description="The build number of the package",
+    )
+    file_name: NonEmptyStr | None = Field(None, description="The file name of the package")
+    subdir: NonEmptyStr | None = Field(
+        None, description="The subdir of the package, also known as platform"
+    )
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Optional extra dependencies to select for the package",
+    )
+    flags: list[NonEmptyStr] | None = Field(
+        None,
+        description="Plain string flags used to select package variants",
+    )
+    license: NonEmptyStr | None = Field(None, description="The license of the package")
+    license_family: NonEmptyStr | None = Field(
+        None, description="The license family of the package"
+    )
+    track_features: list[NonEmptyStr] | None = Field(
+        None, description="The track features of the package"
+    )
+
+
+When = NonEmptyStr | WhenAll | WhenAny | WhenPackage
+
+
+class InheritableMatchspecTable(MatchspecTable):
+    """A spec that may inherit from `[workspace.dependencies]`.
+
+    Setting `workspace = true` pulls the version (and any other unset fields)
+    from the matching `[workspace.dependencies]` entry. Members may layer
+    further attributes on top; restating `version` or the source location
+    (`path`, `git`, `url`) alongside `workspace = true` is an error.
+    """
+
+    workspace: Literal[True] | None = Field(
+        None,
+        description=(
+            "Inherit this spec from `[workspace.dependencies]`. Other fields on "
+            "this table layer on top of the workspace base; `version`, `path`, "
+            "`git` and `url` are mutually exclusive with `workspace`."
+        ),
+    )
 
 
 MatchSpec = NonEmptyStr | MatchspecTable
+InheritableMatchSpec = NonEmptyStr | InheritableMatchspecTable
 CondaPackageName = NonEmptyStr
 
 
@@ -239,33 +633,36 @@ class _PyPIRequirement(StrictBaseModel):
 
 
 class _PyPiGitRequirement(_PyPIRequirement):
-    git: NonEmptyStr = Field(
+    git: NonEmptyStr | None = Field(
         None,
         description="The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
     )
     subdirectory: NonEmptyStr | None = Field(
         None, description="The subdirectory in the repo, a path from the root of the repo."
     )
+    lfs: bool | None = Field(
+        None, description="If `true` Git LFS objects are fetched during the checkout"
+    )
 
 
 class PyPIGitRevRequirement(_PyPiGitRequirement):
-    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to use")
+    rev: NonEmptyStr | None = Field(None, description="A `git` SHA revision to use")
 
 
 class PyPIGitBranchRequirement(_PyPiGitRequirement):
-    branch: Optional[NonEmptyStr] = Field(None, description="A `git` branch to use")
+    branch: NonEmptyStr | None = Field(None, description="A `git` branch to use")
 
 
 class PyPIGitTagRequirement(_PyPiGitRequirement):
-    tag: Optional[NonEmptyStr] = Field(None, description="A `git` tag to use")
+    tag: NonEmptyStr | None = Field(None, description="A `git` tag to use")
 
 
 class PyPIPathRequirement(_PyPIRequirement):
-    path: NonEmptyStr = Field(
+    path: NonEmptyStr | None = Field(
         None,
         description="A path to a local source or wheel",
     )
-    editable: Optional[bool] = Field(
+    editable: bool | None = Field(
         None, description="If `true` the package will be installed as editable"
     )
     subdirectory: NonEmptyStr | None = Field(
@@ -274,14 +671,14 @@ class PyPIPathRequirement(_PyPIRequirement):
 
 
 class PyPIUrlRequirement(_PyPIRequirement):
-    url: NonEmptyStr = Field(
+    url: NonEmptyStr | None = Field(
         None,
         description="A URL to a remote source or wheel",
     )
 
 
 class PyPIVersion(_PyPIRequirement):
-    version: NonEmptyStr = Field(
+    version: NonEmptyStr | None = Field(
         None,
         description="The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
     )
@@ -306,6 +703,10 @@ DependenciesField = Field(
     None,
     description="The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
 )
+ConstraintsField = Field(
+    None,
+    description="The `conda` version constraints. These constrain the versions of packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+)
 HostDependenciesField = Field(
     None,
     description="The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
@@ -319,26 +720,153 @@ RunDependenciesField = Field(
     None,
     description="The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
 )
+RunConstraintsField = Field(
+    None,
+    description="The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+)
 Dependencies = dict[CondaPackageName, MatchSpec] | None
+InheritableDependencies = dict[CondaPackageName, InheritableMatchSpec] | None
+ExtraDependencies = dict[ExtraName, dict[CondaPackageName, MatchSpec]] | None
+
+# Package dependency tables additionally accept conditional sub-tables keyed by
+# `if(<expression>)`, whose value is a nested dependency map. The expression is
+# passed through to rattler-build. Package names cannot contain `(`, so the two
+# forms never collide.
+ConditionalInheritableDependencies = (
+    dict[
+        CondaPackageName,
+        InheritableMatchSpec | dict[CondaPackageName, InheritableMatchSpec],
+    ]
+    | None
+)
+
+
+class PinTable(StrictBaseModel):
+    """The arguments of a pin, mirroring rattler-build's `pin_compatible`/`pin_subpackage`.
+
+    Bounds that are not given fall back to the defaults: `lower-bound = "x.x.x.x.x.x"`
+    (pin to the exact resolved version) and `upper-bound = "x"` (next-major exclusive).
+    """
+
+    lower_bound: NonEmptyStr | None = Field(
+        None,
+        description="Lower bound of the pinned range: a pin expression like `x.x` (number of version segments to keep) or a literal version.",
+        examples=["x.x", "1.2.3"],
+    )
+    upper_bound: NonEmptyStr | None = Field(
+        None,
+        description="Upper bound of the pinned range: a pin expression like `x` (the segment to bump, exclusive) or a literal version.",
+        examples=["x", "9.9"],
+    )
+    exact: bool | None = Field(
+        None,
+        description="Pin the exact version and build string. Cannot be combined with the bounds or `build`.",
+    )
+    build: NonEmptyStr | None = Field(
+        None,
+        description="A build-string matcher to add to the pin, e.g. `mpi_mpich_*`.",
+    )
+
+
+class PinCompatibleSpec(StrictBaseModel):
+    """Pin to a version compatible with the one resolved in the previous environment.
+
+    Mirrors rattler-build's `pin_compatible()`: a `pin-compatible` entry in
+    `run-dependencies` resolves against the host environment, one in
+    `host-dependencies` against the build environment.
+    """
+
+    pin_compatible: Literal[True] | PinTable = Field(
+        ...,
+        description="`true` uses the default bounds; a table configures them.",
+    )
+
+
+class PinSubpackageSpec(StrictBaseModel):
+    """Pin the package itself for its consumers.
+
+    Mirrors rattler-build's `pin_subpackage()`. Only valid in the
+    `run-exports` tables, on an entry named after the package itself.
+    """
+
+    pin_subpackage: Literal[True] | PinTable = Field(
+        ...,
+        description="`true` uses the default bounds; a table configures them.",
+    )
+
+
+PinnableMatchSpec = InheritableMatchSpec | PinCompatibleSpec
+RunExportSpec = InheritableMatchSpec | PinCompatibleSpec | PinSubpackageSpec
+
+# Like `ConditionalInheritableDependencies`, but additionally accepting
+# `pin-compatible` entries (the run- and host-dependency tables) or both pin
+# kinds (the run-export buckets).
+ConditionalPinnableDependencies = (
+    dict[
+        CondaPackageName,
+        PinnableMatchSpec | dict[CondaPackageName, PinnableMatchSpec],
+    ]
+    | None
+)
+ConditionalRunExportDependencies = (
+    dict[
+        CondaPackageName,
+        RunExportSpec | dict[CondaPackageName, RunExportSpec],
+    ]
+    | None
+)
+ConditionalExtraDependencies = (
+    dict[ExtraName, dict[CondaPackageName, MatchSpec | dict[CondaPackageName, MatchSpec]]] | None
+)
+
 
 ################
 # Task section #
 ################
-TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
+class ReservedTaskArgName(str, Enum):
+    """A reserved task arg name."""
+
+    #: a namespace for runtime `pixi` data
+    pixi = "pixi"
+
+
+TaskName = Annotated[
+    NonEmptyStr,
+    Field(pattern=r"^[^\s\$]+$", description="A valid task name."),
+]
+NotReservedSchema: Any = {"not": {"enum": sorted(r.value for r in ReservedTaskArgName)}}
+TaskArgName = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$",
+        description=(
+            "A valid task argument name; may not be any of: "
+            f"""{", ".join(sorted(r.value for r in ReservedTaskArgName))}"""
+        ),
+        json_schema_extra=NotReservedSchema,
+    ),
+]
+TaskArgInlineTable = Annotated[
+    dict[TaskArgName, str],
+    Field(min_length=1, max_length=1, description="A single item task name/value object"),
+]
 
 
 class TaskArgs(StrictBaseModel):
     """The arguments of a task."""
 
-    arg: NonEmptyStr
+    arg: TaskArgName = Field(description="The name of the argument")
     default: str | None = Field(None, description="The default value of the argument")
+    choices: list[str] | None = Field(
+        None, description="Allowed values for the argument", min_length=1
+    )
 
 
 class DependsOn(StrictBaseModel):
     """The dependencies of a task."""
 
-    task: TaskName
-    args: list[NonEmptyStr, dict[NonEmptyStr, NonEmptyStr]] | None = Field(
+    task: TaskName = Field(description="the name of the task to depend on")
+    args: list[str | TaskArgInlineTable] | None = Field(
         None, description="The (positional or named) arguments to pass to the task"
     )
     environment: EnvironmentName | None = Field(
@@ -377,19 +905,26 @@ class TaskInlineTable(StrictBaseModel):
         description="A map of environment variables to values, used in the task, these will be overwritten by the shell.",
         examples=[{"key": "value"}, {"ARGUMENT": "value"}],
     )
+    default_environment: EnvironmentName | None = Field(
+        None,
+        description="A default environment to run the task",
+    )
     description: NonEmptyStr | None = Field(
         None,
         description="A short description of the task",
-        examples=["Build the project"],
     )
     clean_env: bool | None = Field(
         None,
         description="Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
     )
-    args: list[TaskArgs | NonEmptyStr] | None = Field(
+    args: list[TaskArgs | TaskArgName] | None = Field(
         None,
-        description="The arguments to pass to the task",
-        examples=["arg1", "arg2"],
+        description="The arguments to a task",
+        examples=[
+            ["arg1", "arg2"],
+            ["arg", {"arg": "arg2", "default": "2"}],
+            ["arg", {"arg": "arg2", "default": "2", "choices": ["1", "2", "4"]}],
+        ],
     )
 
 
@@ -440,9 +975,60 @@ class Environment(StrictBaseModel):
         None,
         description="The group name for environments that should be solved together",
     )
-    no_default_feature: Optional[bool] = Field(
+    no_default_feature: bool = Field(
         False,
         description="Whether to add the default feature to this environment",
+    )
+    # Inline feature content. Defining any of these synthesizes an implicit
+    # feature that is prepended to the environment's features. `host-dependencies`,
+    # `build-dependencies` and `system-requirements` are intentionally not allowed
+    # here; they belong on a feature.
+    channels: list[Channel] | None = Field(
+        None,
+        description="The `conda` channels that can be considered when solving this environment",
+    )
+    channel_priority: ChannelPriority | None = Field(
+        None,
+        examples=["strict", "flexible", "disabled"],
+        description="""The type of channel priority that is used in the solve.
+- 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
+- 'disabled': group all dependencies together as if there is no channel difference.""",
+    )
+    solve_strategy: SolveStrategy | None = Field(
+        None,
+        examples=["lowest", "lowest-direct", "highest"],
+        description="""The strategy that is used in the solve.
+- 'highest': solve all packages to the highest compatible version.
+- 'lowest': solve all packages to the lowest compatible version.
+- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
+    )
+    platforms: list[Platform | PlatformName] | None = Field(
+        None,
+        description="The platforms that this environment supports. Each entry is either a conda subdir or the name of a workspace platform.",
+    )
+    dependencies: Dependencies = DependenciesField
+    constraints: Dependencies = ConstraintsField
+    pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
+        None, description="The PyPI dependencies of this environment"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+    )
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
+        None, description="The tasks provided by this environment"
+    )
+    activation: Activation | None = Field(
+        None, description="The scripts used on the activation of this environment"
+    )
+    target: dict[TargetName, Target] | None = Field(
+        None,
+        description="Machine-specific aspects of this environment",
+        examples=[{"linux": {"dependencies": {"python": "3.8"}}}],
+    )
+    pypi_options: PyPIOptions | None = Field(
+        None, description="Options related to PyPI indexes for this environment"
     )
 
 
@@ -470,14 +1056,27 @@ class Activation(StrictBaseModel):
 TargetName = NonEmptyStr
 
 
+class WorkspaceTarget(StrictBaseModel):
+    """Target-specific configuration for a workspace"""
+
+    build_variants: dict[NonEmptyStr, list[str]] | None = Field(
+        None, description="The build variants for this workspace target"
+    )
+
+
 class Target(StrictBaseModel):
     """A machine-specific configuration of dependencies and tasks"""
 
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the target"
@@ -499,20 +1098,34 @@ class Feature(StrictBaseModel):
     )
     channel_priority: ChannelPriority | None = Field(
         None,
-        examples=["strict", "disabled"],
-        description="The type of channel priority that is used in the solve."
-        "- 'strict': only take the package from the channel it exist in first."
-        "- 'disabled': group all dependencies together as if there is no channel difference.",
+        examples=["strict", "flexible", "disabled"],
+        description="""The type of channel priority that is used in the solve.
+- 'strict': only take the package from the channel it exist in first.
+- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.
+- 'disabled': group all dependencies together as if there is no channel difference.""",
     )
-    platforms: list[Platform] | None = Field(
+    solve_strategy: SolveStrategy | None = Field(
         None,
-        description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
+        examples=["lowest", "lowest-direct", "highest"],
+        description="""The strategy that is used in the solve.
+- 'highest': solve all packages to the highest compatible version.
+- 'lowest': solve all packages to the lowest compatible version.
+- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
+    platforms: list[Platform | PlatformName] | None = Field(
+        None,
+        description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
+    )
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks provided by this feature"
@@ -556,6 +1169,24 @@ class FindLinksURL(StrictBaseModel):
     )
 
 
+class ExtraIndexInlineTable(StrictBaseModel):
+    """An extra PyPI index with an optional per-index `exclude-newer` override."""
+
+    url: NonEmptyStr = Field(
+        description="The extra index URL",
+        examples=["https://pypi.org/simple"],
+    )
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this index only; "
+        "a zero duration such as `0d` lifts the cutoff entirely, including for releases without an upload time",
+        examples=["2025-01-01", "0d"],
+    )
+
+
+ExtraIndex = NonEmptyStr | ExtraIndexInlineTable
+
+
 class S3Options(StrictBaseModel):
     """Options related to S3 for this project"""
 
@@ -580,12 +1211,16 @@ class PyPIOptions(StrictBaseModel):
         description="PyPI registry that should be used as the primary index",
         examples=["https://pypi.org/simple"],
     )
-    extra_index_urls: list[NonEmptyStr] | None = Field(
+    extra_index_urls: list[ExtraIndex] | None = Field(
         None,
-        description="Additional PyPI registries that should be used as extra indexes",
-        examples=[["https://pypi.org/simple"]],
+        description="Additional PyPI registries that should be used as extra indexes. "
+        "Each entry may be a URL string or an inline table with a per-index `exclude-newer` override.",
+        examples=[
+            ["https://pypi.org/simple"],
+            [{"url": "https://internal/simple", "exclude-newer": "0d"}],
+        ],
     )
-    find_links: list[FindLinksPath | FindLinksURL] = Field(
+    find_links: list[FindLinksPath | FindLinksURL] | None = Field(
         None,
         description="Paths to directory containing",
         examples=[["https://pypi.org/simple"]],
@@ -595,12 +1230,12 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be isolated during the build process",
         examples=[["numpy"], True],
     )
-    index_strategy: (
-        Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
-    ) = Field(
-        None,
-        description="The strategy to use when resolving packages from multiple indexes",
-        examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
+    index_strategy: Literal["first-index", "unsafe-first-match", "unsafe-best-match"] | None = (
+        Field(
+            None,
+            description="The strategy to use when resolving packages from multiple indexes",
+            examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
+        )
     )
     no_build: bool | list[PyPIPackageName] | None = Field(
         None,
@@ -619,11 +1254,48 @@ class PyPIOptions(StrictBaseModel):
         description="Don't use pre-built wheels for these packages",
         examples=["true", "false"],
     )
+    prerelease_mode: (
+        Literal["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"] | None
+    ) = Field(
+        None,
+        description="The strategy to use when considering pre-release versions",
+        examples=["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"],
+    )
+    skip_wheel_filename_check: bool | None = Field(
+        None,
+        description="Skip wheel filename validation, allowing installation of wheels with version mismatches between filename and metadata",
+        examples=[True, False],
+    )
 
 
 #######################
 # The Package section #
 #######################
+
+
+class RunExports(StrictBaseModel):
+    """The run-exports the package declares for its downstream consumers."""
+
+    noarch: ConditionalRunExportDependencies = Field(
+        None,
+        description="The only run-export bucket applied when the consuming output is `noarch`: added to the run dependencies of noarch consumers that depend on this package in `host-dependencies`.",
+    )
+    strong: ConditionalRunExportDependencies = Field(
+        None,
+        description="Added to the run dependencies of consumers that depend on this package in `build-dependencies` or `host-dependencies`.",
+    )
+    weak: ConditionalRunExportDependencies = Field(
+        None,
+        description="Added to the run dependencies of consumers that depend on this package in `host-dependencies`.",
+    )
+    strong_constraints: ConditionalRunExportDependencies = Field(
+        None,
+        description="Added to the run constraints of consumers that depend on this package in `build-dependencies` or `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
+    )
+    weak_constraints: ConditionalRunExportDependencies = Field(
+        None,
+        description="Added to the run constraints of consumers that depend on this package in `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
+    )
 
 
 class Package(StrictBaseModel):
@@ -672,53 +1344,123 @@ class Package(StrictBaseModel):
         description="The URL of the documentation of the project. Can be a URL or { workspace = true } to inherit from workspace",
     )
 
+    publish: bool | None = Field(
+        None,
+        description="Whether a workspace-wide `pixi publish` publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.",
+    )
+
     build: Build = Field(..., description="The build configuration of the package")
 
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    run_dependencies: Dependencies = RunDependenciesField
-
-    target: dict[TargetName, Target] | None = Field(
+    host_dependencies: ConditionalPinnableDependencies = HostDependenciesField
+    build_dependencies: ConditionalInheritableDependencies = BuildDependenciesField
+    run_dependencies: ConditionalPinnableDependencies = RunDependenciesField
+    extra_dependencies: ConditionalExtraDependencies = Field(
         None,
-        description="Machine-specific aspects of the package",
-        examples=[{"linux": {"host-dependencies": {"python": "3.8"}}}],
+        description="Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
+        examples=[{"test": {"pytest": ">=8", "hypothesis": "*"}}],
+    )
+    run_constraints: ConditionalInheritableDependencies = RunConstraintsField
+    run_exports: RunExports | None = Field(
+        None,
+        description="The run-exports this package declares for its consumers, mirroring the conda run-exports mechanism. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+        examples=[{"weak": {"libfoo": ">=1,<2"}}],
     )
 
 
 class BuildTarget(StrictBaseModel):
     """Target-specific build configuration for different platforms"""
 
-    configuration: dict[str, Any] = Field(
+    config: dict[str, Any] | None = Field(
         None, description="Target-specific configuration for the build backend"
     )
 
 
+class SourceLocation(StrictBaseModel):
+    """The location of a package's source code."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source")
+
+    # TODO: url and git source
+    # url: NonEmptyStr | None = Field(None, description="The URL to the source")
+    # md5: Md5Sum | None = Field(None, description="The md5 hash of the source")
+    # sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source")
+
+    git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+
 class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
-    channels: list[Channel] = Field(
-        None, description="The `conda` channels that are used to fetch the build backend from"
+    channels: list[Channel] | None = Field(
+        None,
+        deprecated=True,
+        description="The `conda` channels that are used to fetch the build backend from. Deprecated in favor of `backend.channels`",
+    )
+    flags: list[FlagName] | None = Field(
+        None,
+        description="Plain string flags recorded on built packages for v3 package variant selection",
+        examples=[["cuda", "blas_openblas"]],
     )
     additional_dependencies: Dependencies = Field(
-        None, description="Additional dependencies to install alongside the build backend"
+        None,
+        deprecated=True,
+        description="Additional dependencies to install alongside the build backend. Deprecated in favor of `backend.additional-dependencies`",
     )
-    configuration: dict[str, Any] = Field(
+    config: dict[str, Any] | None = Field(
         None, description="The configuration of the build backend"
     )
     target: dict[TargetName, BuildTarget] | None = Field(
         None,
         description="Target-specific build configuration for different platforms",
-        examples=[{"linux-64": {"configuration": {"key": "value"}}}],
+        examples=[{"linux-64": {"config": {"key": "value"}}}],
+    )
+    source: SourceLocation | None = Field(
+        None,
+        description="The source from which to build the package",
+        examples=[
+            {"path": "project"},
+            {
+                "git": "https://github.com/user/repo.git",
+                "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2",
+                "subdirectory": "subproject/src",
+            },
+        ],
+    )
+    build_string_prefix: NonEmptyStr | None = Field(
+        None, description="An optional prefix to prepend to the auto-generated build string"
+    )
+    build_number: UnsignedInt | None = Field(
+        None, description="The build number to record in the produced package"
+    )
+    secrets: list[NonEmptyStr] | None = Field(
+        None,
+        description=(
+            "Names of environment variables to expose as secrets to the build script. "
+            "Values are read from the host environment at build time; only the names "
+            "live in the manifest. Forwarded to rattler-build's `build.script.secrets`."
+        ),
     )
 
 
-class BuildBackend(MatchspecTable):
-    name: NonEmptyStr = Field(None, description="The name of the build backend package")
-
-
-class PackageTarget(StrictBaseModel):
-    run_dependencies: Dependencies = RunDependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
+class BuildBackend(BinaryMatchspecTable):
+    name: NonEmptyStr | None = Field(None, description="The name of the build backend package")
+    channels: list[Channel] | None = Field(
+        None, description="The `conda` channels that are used to fetch the build backend from"
+    )
+    additional_dependencies: Dependencies = Field(
+        None, description="Additional dependencies to install alongside the build backend"
+    )
+    workspace: Literal[True] | None = Field(
+        None,
+        description=(
+            "Inherit the backend version from `[workspace.dependencies]` using "
+            "`name` as the lookup key. `version`, `path`, `git` and `url` are "
+            "mutually exclusive with `workspace`."
+        ),
+    )
 
 
 #######################
@@ -726,39 +1468,31 @@ class PackageTarget(StrictBaseModel):
 #######################
 
 
-class BaseManifest(StrictBaseModel):
-    """The configuration for a [`pixi`](https://pixi.sh) project."""
-
-    class Config:
-        json_schema_extra = {
-            "$id": SCHEMA_URI,
-            "$schema": SCHEMA_DRAFT,
-            "title": "`pixi.toml` manifest file",
-            "anyOf": [
-                {"required": ["project"]},
-                {"required": ["workspace"]},
-                {"required": ["package"]},
-            ],
-        }
-
-    schema_: str | None = Field(
-        SCHEMA_URI,
-        alias="$schema",
-        title="Schema",
-        description="The schema identifier for the project's configuration",
-        format="uri-reference",
-    )
-
+class BaseManifest(BaseModel):
     workspace: Workspace | None = Field(None, description="The workspace's metadata information")
     project: Workspace | None = Field(None, description="The project's metadata information")
     package: Package | None = Field(None, description="The package's metadata information")
-    dependencies: Dependencies = DependenciesField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
+    dependencies: InheritableDependencies = DependenciesField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    constraints: InheritableDependencies = ConstraintsField
+    exclude_newer: dict[CondaPackageName, ExcludeNewer] | None = Field(
+        None,
+        deprecated=True,
+        description="Workspace-wide per-package `exclude-newer` overrides for conda packages. Deprecated in favor of the `exemptions` of `[workspace.exclude-newer]`",
+    )
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
     )
-    pypi_options: PyPIOptions | None = Field(None, description="Options related to PyPI indexes")
+    pypi_exclude_newer: dict[PyPIPackageName, ExcludeNewer] | None = Field(
+        None,
+        deprecated=True,
+        description="Workspace-wide per-package `exclude-newer` overrides for PyPI packages. Deprecated in favor of the `exemptions` of `[workspace.pypi-exclude-newer]`",
+    )
+    dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None,
+        description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+    )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
     )
@@ -780,12 +1514,97 @@ class BaseManifest(StrictBaseModel):
         description="The targets of the project",
         examples=[{"linux": {"dependencies": {"python": "3.8"}}}],
     )
-    tool: dict[str, Any] = Field(
+    tool: dict[str, Any] | None = Field(
         None, description="Third-party tool configurations, ignored by pixi"
     )
     pypi_options: PyPIOptions | None = Field(
         None,
         description="Options related to PyPI indexes, on the default feature",
+    )
+
+
+ANY_OF_TOP_LEVEL: JsonDict = {
+    "anyOf": [
+        {"required": ["package"]},
+        {"required": ["project"]},
+        {"required": ["workspace"]},
+    ]
+}
+
+
+class PixiTomlManifest(StrictBaseModel, BaseManifest):
+    """The configuration for a [`pixi`](https://pixi.sh) project."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": SCHEMA_URI,
+            "$schema": SCHEMA_DRAFT,
+            "title": "`pixi.toml` manifest file",
+            **ANY_OF_TOP_LEVEL,
+        },
+    )
+
+    schema_: str | None = Field(
+        SCHEMA_URI,
+        alias="$schema",
+        title="Schema",
+        description="The schema identifier for the project's configuration",
+        json_schema_extra={"format": "uri-reference"},
+    )
+
+
+##################################
+# The Manifest in pyproject.toml #
+##################################
+
+
+class PyProjectPixiTool(BaseManifest):
+    """Fields from `pixi.toml` supported in `[tool.pixi]`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(json_schema_extra=ANY_OF_TOP_LEVEL)
+
+
+class PyProjectToolTable(BaseModel):
+    """A `[tool]` table which includes `pixi`."""
+
+    pixi: PyProjectPixiTool | None = Field(None, description="`pixi` configuration")
+
+
+class PyProjectManifest(BaseModel):
+    """A `pyproject.toml` with `[tool.pixi]`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": PYPROJECT_SCHEMA_URI,
+            "$schema": SCHEMA_DRAFT,
+            "title": "`pyproject.toml` manifest file for `pixi`",
+        },
+    )
+
+    tool: PyProjectToolTable | None = Field(
+        None,
+        description=(
+            "Every tool that is used by the project can have users specify"
+            " configuration data as long as they use a sub-table within `[tool]`."
+            " Generally a project can use the subtable `tool.$NAME` if, and only"
+            " if, they own the entry for `$NAME` in the Cheeseshop/PyPI."
+        ),
+    )
+
+
+class PyProjectPartial(PyProjectPixiTool):
+    """The `[tool.pixi]` section of a `pyproject.toml`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": PARTIAL_PYPROJECT_SCHEMA_URI,
+            "$comment": f"Generated from `pixi` v{VERSION}",
+            "$schema": SCHEMA_DRAFT,
+            "title": "`[tool.pixi]` for `pyproject.toml`",
+        },
     )
 
 
@@ -797,7 +1616,7 @@ class BaseManifest(StrictBaseModel):
 class SchemaJsonEncoder(json.JSONEncoder):
     """A custom schema encoder for normalizing schema to be used with TOML files."""
 
-    HEADER_ORDER = [
+    HEADER_ORDER: ClassVar[list[str]] = [
         "$schema",
         "$id",
         "$ref",
@@ -825,35 +1644,36 @@ class SchemaJsonEncoder(json.JSONEncoder):
         "multipleOf",
         "pattern",
     ]
-    FOOTER_ORDER = [
+    FOOTER_ORDER: ClassVar[list[str]] = [
         "examples",
         "$defs",
     ]
-    SORT_NESTED = [
+    SORT_NESTED: ClassVar[list[str]] = [
         "items",
     ]
-    SORT_NESTED_OBJ = [
+    SORT_NESTED_OBJ: ClassVar[list[str]] = [
         "properties",
         "$defs",
     ]
-    SORT_NESTED_MAYBE_OBJ = [
+    SORT_NESTED_MAYBE_OBJ: ClassVar[list[str]] = [
         "additionalProperties",
     ]
-    SORT_NESTED_OBJ_OBJ = [
+    SORT_NESTED_OBJ_OBJ: ClassVar[list[str]] = [
         "patternProperties",
     ]
-    SORT_NESTED_ARR = [
+    SORT_NESTED_ARR: ClassVar[list[str]] = [
         "anyOf",
         "allOf",
         "oneOf",
     ]
 
-    def encode(self, obj):
+    @override
+    def encode(self, o: object):
         """Overload the default ``encode`` behavior."""
-        if isinstance(obj, dict):
-            obj = self.normalize_schema(deepcopy(obj))
+        if isinstance(o, dict):
+            o = self.normalize_schema(cast("dict[str, Any]", deepcopy(o)))
 
-        return super().encode(obj)
+        return super().encode(o)
 
     def normalize_schema(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Recursively normalize and apply an arbitrary sort order to a schema."""
@@ -926,9 +1746,25 @@ class SchemaJsonEncoder(json.JSONEncoder):
         return obj
 
 
+def dump_schema(path: Path, raw: dict[str, Any]) -> None:
+    """Write out a raw Pydantic JSON object to disk."""
+    raw_json = json.dumps(raw, indent=2, cls=SchemaJsonEncoder) + "\n"
+    path.write_text(raw_json, encoding="utf-8", newline="\n")
+    kb = round(len(raw_json) / 1024, 2)
+    print(f"... wrote {kb}kb to {path}", file=sys.stderr)
+
+
+def update_schema_files() -> int:
+    """Generate JSON schema files."""
+    dump_schema(PIXI_SCHEMA, PixiTomlManifest.model_json_schema())
+    dump_schema(PYPROJECT_SCHEMA, PyProjectManifest.model_json_schema())
+    dump_schema(PYPROJECT_PARTIAL_SCHEMA, PyProjectPartial.model_json_schema())
+    return 0
+
+
 ##########################
 # Command Line Interface #
 ##########################
 
 if __name__ == "__main__":
-    print(json.dumps(BaseManifest.model_json_schema(), indent=2, cls=SchemaJsonEncoder))
+    sys.exit(update_schema_files())

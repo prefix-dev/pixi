@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["https://prefix.dev/conda-forge"]
 description = "ultra fast turtlesim installation on multiple platforms"

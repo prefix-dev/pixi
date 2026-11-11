@@ -1,0 +1,12 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=60"]
+
+[project]
+description = "Minimal reproducer for issue #1686: setuptools build-dispatch must not see resolver-overridden packages"
+name = "setuptools-override-repro"
+requires-python = ">=3.9"
+version = "0.1.0"
+
+[tool.setuptools.packages.find]
+where = ["src"]

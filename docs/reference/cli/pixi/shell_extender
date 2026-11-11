@@ -1,3 +1,14 @@
+--8<-- [start:description]
+
+!!! note
+    Never put the `pixi shell` command inside one of your shell's startup files (.profile, .bashrc and the likes):
+    the command starts a new shell without special arguments so the new shell will again execute your startup files,
+    which in turn will again run `pixi shell` and so on, recursively until failure.
+
+    Use [shell-hook](./shell-hook.md) instead if you want to activate a pixi environment when your shell starts.
+
+--8<-- [end:description]
+
 --8<-- [start:example]
 
 ## Examples

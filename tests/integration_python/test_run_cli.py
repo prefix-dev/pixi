@@ -1,23 +1,59 @@
 import json
+import platform
 import shutil
-import sys
 import signal
-import time
 import subprocess
-import tomli_w
-import pytest
+import sys
+import tempfile
+import time
 from pathlib import Path
 
+import pytest
+import tomli
+import tomli_w
+
 from .common import (
+    CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
-    verify_cli_command,
     ExitCode,
     default_env_path,
+    verify_cli_command,
 )
 
-import tempfile
-import os
-import tomli
+
+@pytest.mark.skipif(sys.platform == "win32", reason="clean-env is not supported on Windows")
+@pytest.mark.parametrize("description", [None, "An isolated task"])
+def test_task_add_clean_env(pixi: Path, tmp_pixi_workspace: Path, description: str | None) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + "\n[tasks]\ninherited = 'echo \"probe:$PIXI_ISOLATION_PROBE\"'\n"
+    )
+    command: list[Path | str] = [
+        pixi,
+        "task",
+        "add",
+        "--manifest-path",
+        manifest,
+        "--clean-env",
+    ]
+    if description is not None:
+        command.extend(["--description", description])
+    command.extend(["isolated", 'echo "probe:$PIXI_ISOLATION_PROBE"'])
+    verify_cli_command(command)
+
+    env = {"PIXI_ISOLATION_PROBE": "from-parent-shell"}
+    control = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "inherited"],
+        env=env,
+    )
+    assert control.stdout.strip() == "probe:from-parent-shell"
+
+    output = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "isolated"],
+        env=env,
+    )
+    assert output.stdout.strip() == "probe:"
 
 
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -57,11 +93,76 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
     # Simulate activated shell in environment 'a'
-    env = {"PIXI_IN_SHELL": "true", "PIXI_ENVIRONMENT_NAME": "a"}
+    env = {
+        "PIXI_IN_SHELL": "true",
+        "PIXI_ENVIRONMENT_NAME": "a",
+        "PIXI_WORKSPACE_ROOT": str(tmp_pixi_workspace),
+    }
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains=["a", "a1"],
         env=env,
+    )
+
+
+def test_run_platform_not_in_environment_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A `--platform` the environment doesn't declare is rejected up front --
+    before any solve or emulation warning -- with a clear membership error."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        f"""
+    {EMPTY_BOILERPLATE_PROJECT}
+    [tasks]
+    task = "echo hi"
+    """
+    )
+
+    # A conda subdir that is never a CI host and is not declared above.
+    foreign = "linux-ppc64le" if CURRENT_PLATFORM != "linux-ppc64le" else "linux-s390x"
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", foreign, "task"],
+        ExitCode.FAILURE,
+        stderr_contains=[f"platform '{foreign}' is not part of environment", "default"],
+    )
+
+
+def test_run_wildcard_target_selector_resolves_per_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A `[target."<glob>".tasks]` block applies to every workspace platform
+    whose name matches the glob, and not to the others. Two platforms share
+    the host subdir -- one named `gpu-<host>` (matched by `gpu-*`) and the bare
+    `<host>` (not matched) -- so both are runnable on this machine and the
+    resolved task body differs by `--platform`."""
+    rich = f"gpu-{CURRENT_PLATFORM}"
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        f"""
+[workspace]
+name = "glob-target-test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}", {{ name = "{rich}", platform = "{CURRENT_PLATFORM}" }}]
+
+[tasks]
+hello = "echo default-task"
+
+[target."gpu-*".tasks]
+hello = "echo glob-task"
+"""
+    )
+
+    # The glob matches `gpu-<host>` -> the wildcard target's body wins.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", rich, "hello"],
+        stdout_contains="glob-task",
+        stdout_excludes="default-task",
+    )
+
+    # The bare `<host>` name is not matched by `gpu-*` -> only the default body.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", CURRENT_PLATFORM, "hello"],
+        stdout_contains="default-task",
+        stdout_excludes="glob-task",
     )
 
 
@@ -90,45 +191,40 @@ def test_run_in_shell_project(pixi: Path) -> None:
         """
         manifest_2.write_text(toml)
 
-        base_env = dict(os.environ)
-        base_env.pop("PIXI_IN_SHELL", None)
-        base_env.pop("PIXI_PROJECT_MANIFEST", None)
-        extended_env = base_env | {
+        env = {
             "PIXI_IN_SHELL": "true",
-            "PIXI_PROJECT_MANIFEST": str(manifest_2),
+            "PIXI_WORKSPACE_MANIFEST": str(manifest_2),
         }
 
         # Run task with PIXI_PROJECT_MANIFEST set to manifest_2
         verify_cli_command(
             [pixi, "run", "task"],
             stdout_contains="manifest_2",
-            env=extended_env,
+            env=env,
             cwd=tmp_pixi_workspace,
-            reset_env=True,
         )
 
         # Run with working directory at manifest_1_dir
         verify_cli_command(
             [pixi, "run", "task"],
             stdout_contains="manifest_1",
-            env=base_env,
             cwd=manifest_1_dir,
-            reset_env=True,
         )
 
-        # Run task with PIXI_PROJECT_MANIFEST set to manifest_2 and working directory at manifest_1_dir
+        # Run task with PIXI_WORKSPACE_MANIFEST set to manifest_2 and working directory at manifest_1_dir
         # working directory should win
-        # pixi should warn that it uses the local manifest rather than PIXI_PROJECT_MANIFEST
+        # pixi should warn that it uses the local manifest rather than PIXI_WORKSPACE_MANIFEST
         verify_cli_command(
             [pixi, "run", "task"],
             stdout_contains="manifest_1",
             stderr_contains="manifest_2",
-            env=extended_env,
+            env=env,
             cwd=manifest_1_dir,
             reset_env=True,
         )
 
 
+@pytest.mark.slow
 def test_using_prefix_validation(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
@@ -185,50 +281,6 @@ def test_using_prefix_validation(
         assert Path(file).exists()
 
 
-def test_prefix_revalidation(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = f"""
-    [project]
-    name = "test"
-    channels = ["{dummy_channel_1}"]
-    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-
-    [dependencies]
-    dummy-a = "*"
-    """
-    manifest.write_text(toml)
-
-    # Run the installation
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-    )
-
-    # Validate creation of the pixi file with the hash
-    pixi_file = default_env_path(tmp_pixi_workspace).joinpath("conda-meta").joinpath("pixi")
-    assert pixi_file.exists()
-    assert "environment_lock_file_hash" in pixi_file.read_text()
-
-    # Break environment on purpose
-    dummy_a_meta_files = (
-        default_env_path(tmp_pixi_workspace).joinpath("conda-meta").glob("dummy-a*.json")
-    )
-
-    for file in dummy_a_meta_files:
-        path = Path(file)
-        if path.exists():
-            path.unlink()  # Removes the file
-
-    # Run with revalidation to force reinstallation
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--revalidate", "echo", "hello"],
-        stdout_contains="hello",
-    )
-
-    # Validate that the dummy-a files are reinstalled
-    for file in dummy_a_meta_files:
-        assert Path(file).exists()
-
-
 def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
@@ -246,7 +298,7 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="test123",
     )
 
-    # Validate that without experimental it does not use the cache
+    # Validate that without experimental caching it does not use the cache
     assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
 
     # Enable the experimental cache config
@@ -338,6 +390,24 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
     )
 
 
+def test_run_moved_workspace(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    workspace = tmp_path.joinpath("workspace")
+    moved = tmp_path.joinpath("moved")
+
+    verify_cli_command([pixi, "init", workspace, "--channel", dummy_channel_1])
+    verify_cli_command([pixi, "add", "dummy-a", "--manifest-path", workspace])
+
+    workspace.rename(moved)
+
+    # Environments are non-relocatable, so pixi must refuse to use the moved one
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", moved, "echo", "hi"],
+        ExitCode.FAILURE,
+        stderr_contains="has moved",
+    )
+
+
+@pytest.mark.slow
 def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(EMPTY_BOILERPLATE_PROJECT)
@@ -367,6 +437,7 @@ def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+@pytest.mark.slow
 def test_run_deno(pixi: Path, tmp_pixi_workspace: Path, deno_channel: str) -> None:
     """Ensure that `pixi run deno` will just be forwarded instead of calling pixi"""
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
@@ -959,10 +1030,11 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
-    # If the non existing argument is passed to a filter, minijinja doesn't error
-    # Even though we don't like this behaviour we want to make sure that it stays that way
+    # Non existing arguments with filters should also fail
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
+        ExitCode.FAILURE,
+        stderr_contains="this part can't be replaced",
     )
 
 
@@ -1013,6 +1085,7 @@ def test_task_args_multiple_inputs(pixi: Path, tmp_pixi_workspace: Path) -> None
     )
 
 
+@pytest.mark.slow
 def test_task_environment(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1063,6 +1136,7 @@ def test_task_environment(
     )
 
 
+@pytest.mark.slow
 def test_task_environment_precedence(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1130,6 +1204,7 @@ def test_task_environment_precedence(
     )
 
 
+@pytest.mark.slow
 def test_multiple_dependencies_with_environments(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
@@ -1197,6 +1272,81 @@ def test_multiple_dependencies_with_environments(
     )
 
 
+def test_dependency_unknown_environment_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A dependency on an undefined environment is an error, not a fallback to default."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[tasks]\nfoo = "echo bar"\nbaz = [{ task = "foo", environment = "oops" }]\n'
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "baz"],
+        expected_exit_code=ExitCode.FAILURE,
+        stdout_excludes="bar",
+        stderr_contains="task 'baz' depends on task 'foo' in environment 'oops', which is not defined",
+    )
+
+
+def test_task_add_unknown_default_environment_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--default-environment",
+            "oops",
+            "foo",
+            "echo bar",
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="the environment 'oops' does not exist",
+    )
+    assert manifest_path.read_text() == EMPTY_BOILERPLATE_PROJECT
+
+    # The environment created inline by `--environment` counts as defined.
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--environment",
+            "new",
+            "--default-environment",
+            "new",
+            "foo",
+            "echo bar",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "foo"],
+        stdout_contains="bar",
+    )
+
+
+def test_environment_remove_referenced_by_task_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest = (
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[environments]\nfe = []\n[tasks]\na = "echo a"\nb = [{ task = "a", environment = "fe" }]\n'
+    )
+    manifest_path.write_text(manifest)
+
+    verify_cli_command(
+        [pixi, "workspace", "environment", "remove", "--manifest-path", manifest_path, "fe"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="cannot remove environment 'fe' because tasks refer to it: 'b'",
+    )
+    assert manifest_path.read_text() == manifest
+
+
 def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test that short-circuiting composition works."""
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
@@ -1242,23 +1392,24 @@ def test_task_minijinja_title_filter(pixi: Path, tmp_pixi_workspace: Path) -> No
     manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
 
     manifest_content["tasks"] = {
-        "title-filter": {"cmd": "echo {{ name|title }}", "args": [{"arg": "name"}]},
+        # Quoted in the command, so that the filter sees the words only.
+        "title-filter": {"cmd": "echo '{{ name|title }}'", "args": [{"arg": "name"}]},
     }
 
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"hello world"'],
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", "hello world"],
         stdout_contains="Hello World",
     )
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"hElLo wOrLd"'],
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", "hElLo wOrLd"],
         stdout_contains="Hello World",
     )
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"HELLO WORLD"'],
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", "HELLO WORLD"],
         stdout_contains="Hello World",
     )
 
@@ -1455,6 +1606,262 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
     )
 
 
+def test_task_caching_when_running_already_cached_depends_task(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Test executing the cached task with depends-on should reuse the cache."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    # create the input folder
+    # that will be tests if they are cached hit
+    input_dir = tmp_pixi_workspace.joinpath("inputs")
+    input_dir.mkdir(exist_ok=True)
+
+    input_file = input_dir.joinpath("file1.txt")
+    input_file.write_text("Content for file1")
+
+    toml_content = f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}"]
+
+
+[tasks]
+process-file = {{ cmd = "echo Processing $(cat inputs/file1.txt)", inputs = ["inputs/file1.txt"] }}
+multiple-depends = {{ cmd = "echo hello from depends", depends-on = [{{ task = "process-file" }}] }}
+
+"""
+
+    manifest_path.write_text(toml_content)
+
+    # Run first time without being cached
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "process-file"],
+        stderr_contains=[
+            "Processing $(cat inputs/file1.txt)",
+        ],
+        stderr_excludes=[
+            "cache hit",
+        ],
+    )
+
+    # Should have a cache hit the second time
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "process-file"],
+        stderr_contains=["Processing $(cat inputs/file1.txt)", "cache hit"],
+    )
+
+    # Run the task with depends-on, that should be cached
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_contains=[
+            "file1",
+            "cache hit",
+        ],
+    )
+
+
+@pytest.mark.slow
+def test_caching_multiple_tasks_with_depends_on_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test ``depends-on`` with the same inputs, outputs, but different args, are cached independently.
+
+    This test addresses GitHub issue #4675 where ``pixi run`` would ignore args
+    provided by ``depends-on`` when determining the cache state.
+    """
+    # a "linter" that removes all whitespace
+    cmd = """
+        python -c "import sys, pathlib; p = pathlib.Path('foo.py'); t = p.read_text(); ok = ' ' not in t; (
+            {%- if fix | int -%}print('1 unchanged' if ok else [p.write_text(t.replace(' ', '')), '1 fixed'][1])
+            {%- else -%}sys.exit(([print('1 ok'), 0] if ok else [print('1 issue'), 1])[1])
+            {% endif -%}
+        )"
+    """
+
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "_lint_or_fix": {"args": ["fix"], "cmd": cmd, "inputs": ["foo.py"]},
+        "fix": {"depends-on": [{"task": "_lint_or_fix", "args": [{"fix": "1"}]}]},
+        "lint": {"depends-on": [{"task": "_lint_or_fix", "args": [{"fix": "0"}]}]},
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # create a file with "lint"
+    foo_py = tmp_pixi_workspace.joinpath("foo.py")
+    foo_py.write_text("""print( "foo" )""")
+
+    def _run(
+        args: list[str], rc: ExitCode, stdout: str | None = None, stderr: str | None = None
+    ) -> list[Path]:
+        """Run a task, return the cache paths."""
+        verify_cli_command(
+            [pixi, "run", "--manifest-path", manifest_path, *args],
+            expected_exit_code=rc,
+            stdout_contains=stdout,
+            stderr_contains=stderr,
+        )
+        return sorted((tmp_pixi_workspace / ".pixi/task-cache-v0").glob("*"))
+
+    # warm up cache
+    assert len(_run(["lint"], ExitCode.FAILURE, "1 issue")) == 0, "unexpected cache"
+    assert len(_run(["fix"], ExitCode.SUCCESS, "1 fixed")) == 1, "unexpected cache"
+    warm_cache = _run(["lint"], ExitCode.SUCCESS, "1 ok")
+    assert len(warm_cache) == 2, "unexpected cache"
+    # cache should be stable
+    _run(["fix"], ExitCode.SUCCESS, None, "cache hit")
+    _run(["lint"], ExitCode.SUCCESS, None, "cache hit")
+    # invalidate cache
+    foo_py.write_text("""print( "bar" )""")
+    # rerun
+    _run(["lint"], ExitCode.FAILURE, "1 issue")
+    _run(["fix"], ExitCode.SUCCESS, "1 fixed")
+    _run(["lint"], ExitCode.SUCCESS, "1 ok")
+    # cache should be stable with new text
+    _run(["fix"], ExitCode.SUCCESS, None, "cache hit")
+    final_cache = _run(["lint"], ExitCode.SUCCESS, None, "cache hit")
+    assert final_cache == warm_cache, "cache files were not stable"
+
+
+def test_shell_quoting_run_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that shell quoting works correctly for CLI commands with quotes.
+
+    This test addresses GitHub issue #1979 where pixi run required multiple
+    layers of quoting to avoid shell substitution.
+    """
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(EMPTY_BOILERPLATE_PROJECT)
+
+    # Test Python command with single quotes inside double quotes
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", "print('hello world')"],
+        stdout_contains="hello world",
+    )
+
+    # Test Python command with double quotes inside single quotes
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", 'print("hello world")'],
+        stdout_contains="hello world",
+    )
+
+    # Test Python command with escaped quotes
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", 'print("hello world")'],
+        stdout_contains="hello world",
+    )
+
+    # Test echo command with quotes
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "echo", "hello world"],
+        stdout_contains="hello world",
+    )
+
+    # Test command with arguments containing spaces
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "echo", "hello", "world", "with spaces"],
+        stdout_contains="hello world with spaces",
+    )
+
+
+def test_run_with_environment_variable_priority(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    is_windows = platform.system() == "Windows"
+    script_extension = ".bat" if is_windows else ".sh"
+    script_manifest = tmp_pixi_workspace.joinpath(f"env_setup{script_extension}")
+    toml = f"""
+    [workspace]
+    name = "test"
+    channels = ["{dummy_channel_1}"]
+    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+    [activation.env]
+    MY_ENV = "test123"
+    [target.unix.activation]
+    scripts = ["env_setup.sh"]
+    [target.win-64.activation]
+    scripts = ["env_setup.bat"]
+    [tasks.task]
+    cmd = "echo $MY_ENV"
+    env = {{ MY_ENV = "test456" }}
+    [tasks.foo]
+    cmd = "echo $MY_ENV"
+    [tasks.foobar]
+    cmd = "echo $FOO_PATH"
+    [tasks.bar]
+    cmd = "echo $BAR_PATH"
+    [tasks.outside]
+    cmd = "echo $OUTSIDE_ENV"
+    [dependencies]
+    pixi-foobar = "*"
+    """
+
+    manifest.write_text(toml)
+    # Generate platform-specific script content
+    if is_windows:
+        script_content = """@echo off
+    set "MY_ENV=activation script"
+    set "FOO_PATH=activation_script"
+    """
+    else:
+        script_content = """#!/bin/bash
+    # Activation script for Unix-like systems
+    export MY_ENV="activation script"
+    export FOO_PATH="activation_script"
+    """
+    script_manifest.write_text(script_content)
+
+    # Test 1: task.env > activation.env - should use environment variable defined in specific tasks
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+    )
+
+    # Test 2: activation.env > activation.script - should use activation.env
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foo"],
+        stdout_contains="test123",
+    )
+
+    # Test 3: activation.script > activation scripts from dependencies
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foobar"],
+        stdout_contains="activation_script",
+    )
+
+    # Test 4: activation scripts from dependencies > outside environment variable
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "bar"],
+        stdout_contains="bar",
+        stdout_excludes="outside_env",
+        env={"BAR_PATH": "outside_env"},
+    )
+
+    # Test 5: if nothing specified, use outside environment variable
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "outside"],
+        stdout_contains="outside_env",
+        env={"OUTSIDE_ENV": "outside_env"},
+    )
+
+    # Test 6: activation.env > outside environment variable - should use activation.env
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foo"],
+        stdout_contains="test123",
+        stdout_excludes="outside_env",
+        env={"MY_ENV": "outside_env"},
+    )
+
+    # Test 7: task.env > outside environment variable - should use environment variable defined in specific tasks
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+        stdout_excludes="outside_env",
+        env={"MY_ENV": "outside_env"},
+    )
+
+
+@pytest.mark.slow
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="Signal handling is different on Windows",
@@ -1478,7 +1885,21 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [pixi, "run", "--manifest-path", manifest, "start"], cwd=tmp_data_path
     )
 
-    time.sleep(1)  # wait for the process to start
+    # Wait for the child to install its SIGINT handler. Sleeping a fixed
+    # interval here is flaky on slower runners (notably macOS-aarch64): if the
+    # signal arrives before Python registers the handler, the default action
+    # kills the process with exit code 130 (128 + SIGINT).
+    ready_file = tmp_data_path.joinpath("ready.txt")
+    deadline = time.monotonic() + 30
+    while not ready_file.exists():
+        if process.poll() is not None:
+            raise AssertionError(
+                f"pixi exited before the task became ready (code {process.returncode})"
+            )
+        if time.monotonic() > deadline:
+            process.kill()
+            raise AssertionError("Timed out waiting for the task to install its SIGINT handler")
+        time.sleep(0.1)
 
     # send a SIGINT to the process
     process.send_signal(signal.SIGINT)
@@ -1498,3 +1919,46 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             )
     else:
         raise AssertionError("Output file was not created")
+
+
+@pytest.mark.parametrize("in_out", ["input", "output"])
+def test_task_inputs_outputs_missing_no_initial_cache(
+    pixi: Path, tmp_pixi_workspace: Path, in_out: str
+) -> None:
+    """Test that nothing is cached when inputs/outputs are missing.
+
+    Expected behavior (outputs):
+    - First run: no cache is created and a warning is emitted that no outputs matched.
+    - Second run: still no cache hit (since outputs didn't exist), and warning is emitted again.
+
+    Expected behavior (inputs):
+    - First run: warning about missing inputs; no cache is created (no cache hit next run).
+    - Second run: still no cache hit, since inputs still do not exist.
+    """
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "test": {
+            "cmd": "echo 'running; no files are created'",
+            f"{in_out}s": ["test.txt"],
+        }
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # First invocation: expect NO cache hit and a warning about inputs / missing outputs
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test"],
+        stdout_contains="running; no files are created",
+        stderr_contains=f"No files matched the {in_out} globs",
+        stderr_excludes="cache hit",
+    )
+
+    # Second invocation: still should not be a cache hit
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test"],
+        stdout_contains="running; no files are created",
+        stderr_excludes="cache hit",
+    )

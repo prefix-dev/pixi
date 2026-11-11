@@ -1,21 +1,36 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use indexmap::IndexMap;
+use pixi_build_types::ConditionalExpression;
+use pixi_spec::TomlSpec;
 pub use pixi_toml::TomlFromStr;
 use pixi_toml::{DeserializeAs, Same, TomlIndexMap, TomlWith};
-use rattler_conda_types::Version;
+use rattler_conda_types::{PackageName, Version};
 use thiserror::Error;
-use toml_span::{DeserError, Error, ErrorKind, Span, Spanned, Value, de_helpers::TableHelper};
+use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
 use crate::{
-    PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
+    PackageManifest, Preview, TargetSelector, TomlError, WithWarnings,
     error::GenericError,
     package::Package,
+    target::PackageTarget,
     toml::{
-        TomlPackageBuild, manifest::ExternalWorkspaceProperties, package_target::TomlPackageTarget,
+        TomlPackageBuild, TomlRunExports,
+        manifest::ExternalWorkspaceProperties,
+        package_target::{TomlPackageTarget, TomlRunExportsTarget},
+        reject_glob_in_package_target,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{
+        PixiSpanned,
+        inheritable_package_map::{
+            ConditionalInheritablePackageMap, ConditionalSpecs, InheritablePackageMap,
+        },
+    },
+    warning::Deprecation,
 };
 
 /// Represents a field that can either have a direct value or inherit from
@@ -131,10 +146,15 @@ pub struct TomlPackage {
     pub documentation: Option<WorkspaceInheritableField<Url>>,
 
     // Fields that are package-specific and cannot be inherited
+    pub publish: Option<bool>,
     pub build: TomlPackageBuild,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub host_dependencies: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
+    pub build_dependencies: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
+    pub run_dependencies: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
+    pub extra_dependencies:
+        IndexMap<PixiSpanned<String>, PixiSpanned<ConditionalInheritablePackageMap>>,
+    pub run_constraints: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
+    pub run_exports: Option<TomlRunExports>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
     pub span: Span,
@@ -173,6 +193,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let run_dependencies = th.optional("run-dependencies");
+        let extra_dependencies = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("extra-dependencies")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
+        let run_constraints = th.optional("run-constraints");
+        let run_exports = th.optional("run-exports");
+        let publish = th.optional("publish");
         let build = th.required("build")?;
         let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
@@ -194,6 +221,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             host_dependencies,
             build_dependencies,
             run_dependencies,
+            extra_dependencies,
+            run_constraints,
+            run_exports,
+            publish,
             build,
             target,
             span: value.span,
@@ -218,6 +249,12 @@ pub struct WorkspacePackageProperties {
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
+    /// `[workspace.dependencies]` pool; paths are relative to `workspace_root`.
+    pub dependencies: IndexMap<PackageName, TomlSpec>,
+
+    /// Absolute directory of the workspace manifest. Used to re-base
+    /// `dependencies` path specs against the member's directory.
+    pub workspace_root: Option<PathBuf>,
 }
 
 impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
@@ -233,6 +270,8 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
             homepage: value.homepage,
             repository: value.repository,
             documentation: value.documentation,
+            dependencies: IndexMap::new(),
+            workspace_root: None,
         }
     }
 }
@@ -270,48 +309,11 @@ pub enum PackageError {
 }
 
 impl TomlPackage {
-    /// Helper function to resolve a required field with 3-tier hierarchy:
-    /// 1. Direct value (from package)
-    /// 2. Workspace inheritance (from workspace)
-    /// 3. Package defaults (from [project] section if the manifest is a
-    ///    `pyproject.toml`)
-    /// 4. Error if missing at all levels
-    fn resolve_required_field_with_defaults<T>(
-        field: Option<WorkspaceInheritableField<T>>,
-        workspace_value: Option<T>,
-        default_value: Option<T>,
-        field_name: &'static str,
-        package_span: Span,
-    ) -> Result<T, TomlError> {
-        match field {
-            Some(WorkspaceInheritableField::Value(v)) => Ok(v),
-            Some(WorkspaceInheritableField::Workspace(span)) => workspace_value.ok_or_else(|| {
-                GenericError::new(format!("the workspace does not define a '{}'", field_name))
-                    .with_span(span.into())
-                    .into()
-            }),
-            Some(WorkspaceInheritableField::NotWorkspace(span)) => {
-                Err(workspace_cannot_be_false().with_span(span.into()).into())
-            }
-            None => {
-                // Fall back to package defaults
-                default_value.ok_or(
-                    Error {
-                        kind: ErrorKind::MissingField(field_name),
-                        span: package_span,
-                        line_info: None,
-                    }
-                    .into(),
-                )
-            }
-        }
-    }
-
     /// Helper function to resolve an optional field with 3-tier hierarchy:
     /// 1. Direct value (from package)
     /// 2. Workspace inheritance (from workspace) - ERROR if explicitly
     ///    requested but missing
-    /// 3. Package defaults (from [project] section if the manifest is a
+    /// 3. Package defaults (from `[project]` section if the manifest is a
     ///    `pyproject.toml`)
     /// 4. None if missing at all levels
     fn resolve_optional_field_with_defaults<T>(
@@ -328,8 +330,7 @@ impl TomlPackage {
                 match workspace_value {
                     Some(value) => Ok(Some(value)),
                     None => Err(GenericError::new(format!(
-                        "the workspace does not define a '{}'",
-                        field_name
+                        "the workspace does not define a '{field_name}'"
                     ))
                     .with_span(span.into())
                     .into()),
@@ -349,59 +350,214 @@ impl TomlPackage {
         workspace: WorkspacePackageProperties,
         package_defaults: PackageDefaults,
         preview: &Preview,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
-        let warnings = Vec::new();
+        let mut warnings = Vec::new();
+
+        // Re-base workspace dependency path specs against this member's
+        // directory. The pool itself stores them relative to the workspace root.
+        let workspace_dependencies = rebase_workspace_path_specs(
+            &workspace.dependencies,
+            workspace.workspace_root.as_deref(),
+            root_directory,
+        );
+
+        let build_result = self.build.into_build_system(&workspace_dependencies)?;
+        warnings.extend(build_result.warnings);
 
         // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults →
         // error
-        let name = Self::resolve_required_field_with_defaults(
+        let name = Self::resolve_optional_field_with_defaults(
             self.name,
             workspace.name,
             package_defaults.name,
             "name",
-            self.span,
         )?;
-        let version = Self::resolve_required_field_with_defaults(
+        let version = Self::resolve_optional_field_with_defaults(
             self.version,
             workspace.version,
             package_defaults.version,
             "version",
-            self.span,
         )?;
 
-        let default_package_target = TomlPackageTarget {
-            run_dependencies: self.run_dependencies,
-            host_dependencies: self.host_dependencies,
-            build_dependencies: self.build_dependencies,
-        }
-        .into_package_target(preview)?;
+        // The pin name rules compare against the package's own name as a
+        // `PackageName`. A name that is not a valid conda package name cannot
+        // be built anyway, so it leaves the rules unchecked just like an
+        // unnamed package does.
+        let package_name = name
+            .as_deref()
+            .and_then(|name| PackageName::from_str(name).ok());
 
-        let targets = self
-            .target
-            .into_iter()
-            .map(|(selector, target)| {
-                let target = target.into_package_target(preview)?;
-                Ok::<_, TomlError>((selector, target))
-            })
-            .collect::<Result<_, _>>()?;
+        // Split each package-level dependency table into its unconditional
+        // entries and any `if(<expression>)` sub-tables.
+        let (run_unconditional, run_conditional) = split_section(self.run_dependencies);
+        let (constraints_unconditional, constraints_conditional) =
+            split_section(self.run_constraints);
+        let (host_unconditional, host_conditional) = split_section(self.host_dependencies);
+        let (build_unconditional, build_conditional) = split_section(self.build_dependencies);
+
+        let run_exports = self.run_exports.unwrap_or_default();
+        let (noarch_exports_unconditional, noarch_exports_conditional) =
+            split_section(run_exports.noarch);
+        let (strong_exports_unconditional, strong_exports_conditional) =
+            split_section(run_exports.strong);
+        let (weak_exports_unconditional, weak_exports_conditional) =
+            split_section(run_exports.weak);
+        let (strong_constraints_exports_unconditional, strong_constraints_exports_conditional) =
+            split_section(run_exports.strong_constraints);
+        let (weak_constraints_exports_unconditional, weak_constraints_exports_conditional) =
+            split_section(run_exports.weak_constraints);
+
+        let mut extra_unconditional: IndexMap<
+            PixiSpanned<String>,
+            PixiSpanned<InheritablePackageMap>,
+        > = IndexMap::new();
+        let mut extra_conditional: Vec<(PixiSpanned<String>, ConditionalSpecs)> = Vec::new();
+        for (group, PixiSpanned { value, span }) in self.extra_dependencies {
+            let (unconditional, conditional) = value.into_parts();
+            if !unconditional.is_empty() {
+                extra_unconditional.insert(
+                    group.clone(),
+                    PixiSpanned {
+                        value: unconditional,
+                        span,
+                    },
+                );
+            }
+            for spec in conditional {
+                extra_conditional.push((group.clone(), spec));
+            }
+        }
+
+        // Unconditional entries form the default target.
+        let default_package_target = TomlPackageTarget {
+            run_dependencies: run_unconditional,
+            run_constraints: constraints_unconditional,
+            host_dependencies: host_unconditional,
+            build_dependencies: build_unconditional,
+            extra_dependencies: extra_unconditional,
+            run_exports: TomlRunExportsTarget {
+                noarch: noarch_exports_unconditional,
+                strong: strong_exports_unconditional,
+                weak: weak_exports_unconditional,
+                strong_constraints: strong_constraints_exports_unconditional,
+                weak_constraints: weak_constraints_exports_unconditional,
+            },
+        }
+        .into_package_target(preview, &workspace_dependencies, package_name.as_ref())?;
+
+        // Fold the conditional sub-tables into one `TomlPackageTarget` per
+        // distinct expression, merging across the dependency sections.
+        type SectionField =
+            fn(&mut TomlPackageTarget) -> &mut Option<PixiSpanned<InheritablePackageMap>>;
+        let sections: [(Vec<ConditionalSpecs>, SectionField); 9] = [
+            (run_conditional, |target| &mut target.run_dependencies),
+            (constraints_conditional, |target| {
+                &mut target.run_constraints
+            }),
+            (host_conditional, |target| &mut target.host_dependencies),
+            (build_conditional, |target| &mut target.build_dependencies),
+            (noarch_exports_conditional, |target| {
+                &mut target.run_exports.noarch
+            }),
+            (strong_exports_conditional, |target| {
+                &mut target.run_exports.strong
+            }),
+            (weak_exports_conditional, |target| {
+                &mut target.run_exports.weak
+            }),
+            (strong_constraints_exports_conditional, |target| {
+                &mut target.run_exports.strong_constraints
+            }),
+            (weak_constraints_exports_conditional, |target| {
+                &mut target.run_exports.weak_constraints
+            }),
+        ];
+        let mut conditional_targets: IndexMap<ConditionalExpression, TomlPackageTarget> =
+            IndexMap::new();
+        for (specs, field) in sections {
+            for spec in specs {
+                *field(conditional_targets.entry(spec.expression).or_default()) =
+                    Some(PixiSpanned {
+                        value: spec.specs,
+                        span: Some(spec.value_span),
+                    });
+            }
+        }
+        for (group, spec) in extra_conditional {
+            conditional_targets
+                .entry(spec.expression)
+                .or_default()
+                .extra_dependencies
+                .insert(
+                    group,
+                    PixiSpanned {
+                        value: spec.specs,
+                        span: Some(spec.value_span),
+                    },
+                );
+        }
+
+        // The legacy `[package.target.PLATFORM]` syntax is deprecated but still
+        // supported: each table lowers to the conditional dependency tables for
+        // the equivalent expression. Emit a deprecation warning that spells out
+        // that replacement.
+        for (selector, toml_target) in self.target {
+            reject_glob_in_package_target(&selector)?;
+            let expression = target_selector_expression(&selector.value);
+            warnings.push(
+                Deprecation::package_target(
+                    package_target_replacement_help(expression.as_str(), &toml_target),
+                    selector.span.clone(),
+                )
+                .into(),
+            );
+            if conditional_targets.contains_key(&expression) {
+                return Err(GenericError::new(format!(
+                    "duplicate condition: `[package.target.{}]` is equivalent to `\"if({expression})\"`",
+                    selector.value
+                ))
+                .with_opt_span(selector.span)
+                .with_span_label("this target table lowers to the same condition")
+                .with_help(format!(
+                    "Move the dependencies into the `\"if({expression})\"` tables and remove the `[package.target.{}]` table",
+                    selector.value
+                ))
+                .into());
+            }
+            conditional_targets.insert(expression, toml_target);
+        }
+
+        // `if(...)` conditionals are not platform selectors; they are kept
+        // separate and passed through to rattler-build, which evaluates the
+        // expression.
+        let mut conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget> =
+            IndexMap::new();
+        for (expression, toml_target) in conditional_targets {
+            let target = toml_target.into_package_target(
+                preview,
+                &workspace_dependencies,
+                package_name.as_ref(),
+            )?;
+            conditional_dependencies.insert(expression, target);
+        }
 
         if let Some(WorkspaceInheritableField::Value(Spanned {
             value: license,
             span,
         })) = &self.license
+            && let Err(e) = spdx::Expression::parse(license)
         {
-            if let Err(e) = spdx::Expression::parse(license) {
-                return Err(
-                    GenericError::new("'license' is not a valid SPDX expression")
-                        .with_span((*span).into())
-                        .with_span_label(e.to_string())
-                        .into(),
-                );
-            }
+            return Err(
+                GenericError::new("'license' is not a valid SPDX expression")
+                    .with_span((*span).into())
+                    .with_span_label(e.to_string())
+                    .into(),
+            );
         }
 
-        // Check file existence for resolved paths with 3-tier hierarchy
+        // Check file existence for resolved paths with 3-tier hierarchy.
+        // If root_directory is None, validation is skipped.
         fn check_resolved_file(
             root_directory: Option<&Path>,
             field: Option<WorkspaceInheritableField<Spanned<PathBuf>>>,
@@ -440,14 +596,32 @@ impl TomlPackage {
             }
         }
 
+        // Determine the directory to use for file validation based on build.source:
+        // - If build.source is a git or URL source, pass None to skip validation (files are remote)
+        // - If build.source is a path source, resolve the path and validate against that directory
+        // - If build.source is not set, validate against the manifest directory
+        let file_validation_dir: Option<PathBuf> =
+            match (&build_result.value.source, root_directory) {
+                // Git or URL source: skip validation (files are in remote location)
+                (Some(pixi_spec::SourceLocationSpec::Git(_)), _)
+                | (Some(pixi_spec::SourceLocationSpec::Url(_)), _) => None,
+                // Path source: resolve the path and use that directory for validation
+                (Some(pixi_spec::SourceLocationSpec::Path(path_spec)), root_dir) => {
+                    path_spec.resolve(root_dir).ok()
+                }
+                // No source: use the manifest directory
+                (None, root_dir) => Some(root_dir.to_path_buf()),
+                // No root directory provided: skip validation
+            };
+
         let license_file = check_resolved_file(
-            root_directory,
+            file_validation_dir.as_deref(),
             self.license_file,
             workspace.license_file,
             package_defaults.license_file,
         )?;
         let readme = check_resolved_file(
-            root_directory,
+            file_validation_dir.as_deref(),
             self.readme,
             workspace.readme,
             package_defaults.readme,
@@ -495,11 +669,83 @@ impl TomlPackage {
                     package_defaults.documentation,
                     "documentation",
                 )?,
+                publish: self.publish.unwrap_or(false),
             },
-            build: self.build.into_build_system()?,
-            targets: Targets::from_default_and_user_defined(default_package_target, targets),
+            build: build_result.value,
+            dependencies: default_package_target,
+            conditional_dependencies,
         })
         .with_warnings(warnings))
+    }
+}
+
+/// The conditional expression a deprecated `[package.target.SELECTOR]` table
+/// lowers to.
+///
+/// Platform selectors map to `host_platform == '<platform>'` (the behavior the
+/// legacy syntax already had); family selectors (`unix`/`linux`/`win`/`osx`)
+/// map to the bare rattler-build boolean of the same name. Note that the
+/// `macos` alias maps to `osx`, the only spelling defined in rattler-build's
+/// jinja context.
+fn target_selector_expression(selector: &TargetSelector) -> ConditionalExpression {
+    match selector {
+        TargetSelector::Platform(_) | TargetSelector::Subdir(_) => {
+            ConditionalExpression::new(format!("host_platform == '{selector}'"))
+        }
+        other => ConditionalExpression::new(other.to_string()),
+    }
+}
+
+/// Build the tailored `help` text suggesting the conditional dependency tables
+/// that replace a deprecated `[package.target.SELECTOR]` entry.
+fn package_target_replacement_help(expression: &str, toml_target: &TomlPackageTarget) -> String {
+    let mut lines = Vec::new();
+    let mut push_line = |section: &str| {
+        lines.push(format!("  [package.{section}.\"if({expression})\"]"));
+    };
+    if toml_target.build_dependencies.is_some() {
+        push_line("build-dependencies");
+    }
+    if toml_target.host_dependencies.is_some() {
+        push_line("host-dependencies");
+    }
+    if toml_target.run_dependencies.is_some() {
+        push_line("run-dependencies");
+    }
+    if toml_target.run_constraints.is_some() {
+        push_line("run-constraints");
+    }
+    if !toml_target.extra_dependencies.is_empty() {
+        lines.push(format!(
+            "  [package.extra-dependencies.<group>.\"if({expression})\"]"
+        ));
+    }
+
+    format!(
+        "Move the dependencies under a conditional dependency table instead:\n{}",
+        lines.join("\n")
+    )
+}
+
+/// Split a package-level dependency table into its unconditional entries (which
+/// belong to the default target) and the list of `if(<expression>)` sub-tables.
+/// Returns `None` for the unconditional part when it is empty.
+fn split_section(
+    field: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
+) -> (
+    Option<PixiSpanned<InheritablePackageMap>>,
+    Vec<ConditionalSpecs>,
+) {
+    match field {
+        None => (None, Vec::new()),
+        Some(PixiSpanned { value, span }) => {
+            let (unconditional, conditional) = value.into_parts();
+            let unconditional = (!unconditional.is_empty()).then_some(PixiSpanned {
+                value: unconditional,
+                span,
+            });
+            (unconditional, conditional)
+        }
     }
 }
 
@@ -508,14 +754,95 @@ fn workspace_cannot_be_false() -> GenericError {
         .with_help("By default no fields are inherited from the workspace")
 }
 
+/// Re-anchor `path` entries in workspace `TomlSpec`s from `workspace_root` to
+/// `member_root`. Absolute and `~/` paths are returned unchanged. Returns the
+/// input map verbatim when either root is unknown or the roots are equal.
+fn rebase_workspace_path_specs(
+    specs: &IndexMap<PackageName, TomlSpec>,
+    workspace_root: Option<&Path>,
+    member_root: &Path,
+) -> IndexMap<PackageName, TomlSpec> {
+    let Some(workspace_root) = workspace_root else {
+        return specs.clone();
+    };
+    if workspace_root == member_root
+        || workspace_root.as_os_str().is_empty()
+        || member_root.as_os_str().is_empty()
+    {
+        return specs.clone();
+    }
+    specs
+        .iter()
+        .map(|(name, spec)| {
+            let mut rebased = spec.clone();
+            rebased.rebase_path(workspace_root, member_root);
+            (name.clone(), rebased)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use assert_matches::assert_matches;
+    use fs_err as fs;
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+    use rattler_conda_types::PackageName;
+    use tempfile::TempDir;
 
     use super::*;
-    use crate::toml::FromTomlStr;
+    use crate::{KnownPreviewFlag, SpecType, toml::FromTomlStr};
+    use pixi_build_types::ConditionalExpression;
+
+    /// Parses a manifest using only `Preview::default()` and asserts it succeeds.
+    fn parse_package(input: &str) -> PackageManifest {
+        TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect("expected manifest to parse")
+            .value
+    }
+
+    /// Asserts that the dependency map for `spec_type` contains exactly one
+    /// entry for `name` whose version spec stringifies to `expected`.
+    #[track_caller]
+    fn assert_single_version(
+        deps: &std::collections::HashMap<
+            SpecType,
+            pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
+        >,
+        spec_type: SpecType,
+        name: &str,
+        expected: &str,
+    ) {
+        let entry = deps
+            .get(&spec_type)
+            .unwrap_or_else(|| panic!("missing {spec_type:?} bucket"));
+        let specs = entry
+            .get(&PackageName::from_str(name).unwrap())
+            .unwrap_or_else(|| panic!("missing {name} in {spec_type:?}"));
+        assert_eq!(specs.len(), 1, "expected exactly one spec for {name}");
+        assert_eq!(
+            specs
+                .iter()
+                .next()
+                .unwrap()
+                .as_spec()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            expected,
+        );
+    }
 
     #[must_use]
     fn expect_parse_failure(pixi_toml: &str) -> String {
@@ -565,7 +892,7 @@ mod test {
                     WorkspacePackageProperties::default(),
                     PackageDefaults::default(),
                     &Preview::default(),
-                    Some(path),
+                    path,
                 )
             })
             .unwrap_err();
@@ -597,7 +924,7 @@ mod test {
                     WorkspacePackageProperties::default(),
                     PackageDefaults::default(),
                     &Preview::default(),
-                    Some(path),
+                    path,
                 )
             })
             .unwrap_err();
@@ -610,6 +937,110 @@ mod test {
         5 │
           ╰────
         "###);
+    }
+
+    #[test]
+    fn test_package_extras_dependencies() {
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [extra-dependencies.test]
+        gtest = "*"
+        pytest = ">=8"
+        "#;
+
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let manifest = package
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let test_extra = manifest
+            .dependencies
+            .extra_dependencies
+            .get("test")
+            .expect("test extra exists");
+        let names = test_extra
+            .names()
+            .map(|name| name.as_normalized())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["gtest", "pytest"]);
+    }
+
+    #[test]
+    fn test_package_target_extras_dependencies() {
+        // Per-target extras should land on the matching package target rather
+        // than on the default target.
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target.win.extra-dependencies.test]
+        gtest = "*"
+
+        [target.win.extra-dependencies.bench]
+        criterion = "*"
+        "#;
+
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let manifest = package
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let win_target = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("win"))
+            .expect("win target exists");
+        assert!(win_target.extra_dependencies.contains_key("test"));
+        assert!(win_target.extra_dependencies.contains_key("bench"));
+        // Default target should NOT have the per-target extras.
+        assert!(manifest.dependencies.extra_dependencies.is_empty());
+    }
+
+    #[test]
+    fn test_glob_target_rejected_in_package() {
+        // Wildcard target selectors are only allowed on workspace and feature
+        // targets; package targets resolve by subdir and must reject them.
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target."cuda-*".host-dependencies]
+        cuda = "12"
+        "#;
+
+        let parse_error = TomlPackage::from_toml_str(input)
+            .and_then(|package| {
+                package.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect_err("glob target selector should be rejected in a package");
+        assert_snapshot!(format_parse_error(input, parse_error));
     }
 
     #[test]
@@ -636,11 +1067,11 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
-        assert_eq!(manifest.value.package.name, "workspace-name");
-        assert_eq!(manifest.value.package.version.to_string(), "1.0.0");
+        assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
+        assert_eq!(manifest.value.package.version.unwrap().to_string(), "1.0.0");
         assert_eq!(
             manifest.value.package.description,
             Some("Package description".to_string())
@@ -662,29 +1093,6 @@ mod test {
             package.name,
             Some(WorkspaceInheritableField::NotWorkspace(_))
         );
-    }
-
-    #[test]
-    fn test_missing_name_no_inheritance() {
-        let input = r#"
-        version = "1.0.0"
-
-        [build]
-        backend = { name = "bla", version = "1.0" }
-        "#;
-
-        let package = TomlPackage::from_toml_str(input).unwrap();
-        let workspace = WorkspacePackageProperties::default();
-
-        let parse_error = package
-            .into_manifest(
-                workspace,
-                PackageDefaults::default(),
-                &Preview::default(),
-                None,
-            )
-            .unwrap_err();
-        assert_snapshot!(format_parse_error(input, parse_error));
     }
 
     #[test]
@@ -713,11 +1121,11 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
-        assert_eq!(manifest.value.package.name, "workspace-name");
-        assert_eq!(manifest.value.package.version.to_string(), "2.0.0");
+        assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
+        assert_eq!(manifest.value.package.version.unwrap().to_string(), "2.0.0");
         assert_eq!(
             manifest.value.package.description,
             Some("Workspace description".to_string())
@@ -750,7 +1158,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
@@ -778,7 +1186,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
@@ -804,11 +1212,16 @@ mod test {
         };
 
         let manifest = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap();
         // Should use package defaults for name and version
-        assert_eq!(manifest.value.package.name, "default-name");
-        assert_eq!(manifest.value.package.version.to_string(), "2.0.0");
+        assert_eq!(manifest.value.package.name.unwrap(), "default-name");
+        assert_eq!(manifest.value.package.version.unwrap().to_string(), "2.0.0");
         // Should use direct value for description
         assert_eq!(
             manifest.value.package.description,
@@ -845,35 +1258,21 @@ mod test {
         };
 
         let manifest = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap();
         // Should use workspace values for name and version (overrides defaults)
-        assert_eq!(manifest.value.package.name, "workspace-name");
-        assert_eq!(manifest.value.package.version.to_string(), "3.0.0");
+        assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
+        assert_eq!(manifest.value.package.version.unwrap().to_string(), "3.0.0");
         // Should use package defaults for description (not specified anywhere else)
         assert_eq!(
             manifest.value.package.description,
             Some("Default description".to_string())
         );
-    }
-
-    #[test]
-    fn test_missing_required_field_no_defaults_no_workspace() {
-        let input = r#"
-        version = "1.0.0"
-
-        [build]
-        backend = { name = "bla", version = "1.0" }
-        "#;
-
-        let package = TomlPackage::from_toml_str(input).unwrap();
-        let workspace = WorkspacePackageProperties::default(); // Empty workspace
-        let package_defaults = PackageDefaults::default(); // Empty defaults
-
-        let parse_error = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
-            .unwrap_err();
-        assert_snapshot!(format_parse_error(input, parse_error));
     }
 
     #[test]
@@ -900,8 +1299,1367 @@ mod test {
         };
 
         let parse_error = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
+    }
+
+    #[test]
+    fn test_target_specific_build_config() {
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+
+        [build.config]
+        test = "test_normal"
+
+        [build.target.unix.config]
+        test = "test_unix"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default();
+
+        let parsed = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                Path::new(""),
+            )
+            .unwrap();
+
+        // Now check if we can also parse the deprecated `configuration` key
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+
+        [build.configuration]
+        test = "test_normal"
+
+        [build.target.unix.configuration]
+        test = "test_unix"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default();
+
+        let parsed_deprecated = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                Path::new(""),
+            )
+            .unwrap();
+
+        assert!(!parsed_deprecated.warnings.is_empty());
+        assert_eq!(parsed.value.build, parsed_deprecated.value.build);
+    }
+
+    #[test]
+    fn test_license_file_validation_skipped_for_git_source() {
+        // When build.source is a git source, license-file validation should be skipped
+        // because the file will be in the checked-out source directory, not the manifest directory.
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        source = { git = "https://github.com/example/repo", rev = "abc123" }
+        "#;
+        let path = Path::new("");
+        // This should NOT fail even though LICENSE.txt doesn't exist,
+        // because the source is a git repository.
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                path,
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+    }
+
+    #[test]
+    fn test_license_file_validation_skipped_for_url_source() {
+        // When build.source is a URL source, license-file validation should be skipped
+        // because the file will be in the downloaded/extracted source directory.
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        source = { url = "https://example.com/archive.tar.gz" }
+        "#;
+        let path = Path::new("");
+        // This should NOT fail even though LICENSE.txt doesn't exist,
+        // because the source is a URL.
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                path,
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+    }
+
+    #[test]
+    fn test_readme_validation_skipped_for_git_source() {
+        // When build.source is a git source, readme validation should be skipped
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        readme = "README.md"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        source = { git = "https://github.com/example/repo", branch = "main" }
+        "#;
+        let path = Path::new("");
+        // This should NOT fail even though README.md doesn't exist
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                path,
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+    }
+
+    #[test]
+    fn test_license_file_validation_fails_for_path_source_missing_file() {
+        // When build.source is a path source, license-file validation should still run
+        // and fail if the file doesn't exist in the source directory
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        source = { path = "../some/path" }
+        "#;
+        let path = Path::new("");
+        // This should fail because LICENSE.txt doesn't exist and source is a path
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                path,
+            )
+        });
+        assert!(result.is_err(), "Expected failure for path source");
+    }
+
+    #[test]
+    fn test_license_file_validation_succeeds_without_build_source() {
+        // When no build.source is specified, license-file should be validated
+        // against the manifest directory
+        let temp_dir = TempDir::new().unwrap();
+        let license_path = temp_dir.path().join("LICENSE.txt");
+        fs::write(&license_path, "MIT License").unwrap();
+
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                temp_dir.path(),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+
+        // Verify the license_file path is set correctly
+        let manifest = result.unwrap().value;
+        assert!(manifest.package.license_file.is_some());
+    }
+
+    #[test]
+    fn test_license_file_validation_succeeds_with_path_source() {
+        // When build.source is a path, license-file should be validated
+        // against the resolved path source directory
+        // Create manifest directory
+        let manifest_dir = TempDir::new().unwrap();
+
+        // Create source directory with license file
+        let source_dir = TempDir::new().unwrap();
+        let license_path = source_dir.path().join("LICENSE.txt");
+        fs::write(&license_path, "MIT License").unwrap();
+
+        // Use the source directory path in the manifest.
+        // Replace backslashes with forward slashes for Windows compatibility in TOML strings.
+        let source_path = source_dir.path().to_string_lossy().replace('\\', "/");
+        let input = format!(
+            r#"
+        name = "bla"
+        version = "1.0"
+        license-file = "LICENSE.txt"
+
+        [build]
+        backend = {{ name = "bla", version = "1.0" }}
+        source = {{ path = "{source_path}" }}
+        "#
+        );
+
+        let result = TomlPackage::from_toml_str(&input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                manifest_dir.path(),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+
+        // Verify the license_file path is set correctly
+        let manifest = result.unwrap().value;
+        assert!(manifest.package.license_file.is_some());
+    }
+
+    #[test]
+    fn test_package_dependencies_all_types() {
+        // Each of run-, host-, build-dependencies and run-constraints at the
+        // package level must land in its own SpecType bucket of the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-dependencies]
+        run-dep = "==1.0"
+
+        [host-dependencies]
+        host-dep = "==2.0"
+
+        [build-dependencies]
+        build-dep = "==3.0"
+
+        [run-constraints]
+        constrained = ">=4.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let manifest = parse_package(input);
+        let deps = &manifest.dependencies.dependencies;
+
+        assert_single_version(deps, SpecType::Run, "run-dep", "==1.0");
+        assert_single_version(deps, SpecType::Host, "host-dep", "==2.0");
+        assert_single_version(deps, SpecType::Build, "build-dep", "==3.0");
+        assert_single_version(deps, SpecType::RunConstraints, "constrained", ">=4.0");
+    }
+
+    #[test]
+    fn test_package_target_specific_dependencies() {
+        // Target-specific package dependencies (including run-constraints) must
+        // land in the per-target bucket, not the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-dependencies]
+        shared = "==1.0"
+
+        [target.linux-64.run-dependencies]
+        only-linux = "==2.0"
+
+        [target.linux-64.run-constraints]
+        only-linux-constrained = ">=3.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let manifest = parse_package(input);
+
+        // Default target only has the shared run dep.
+        let default_deps = &manifest.dependencies.dependencies;
+        assert_single_version(default_deps, SpecType::Run, "shared", "==1.0");
+        assert!(
+            !default_deps.contains_key(&SpecType::RunConstraints),
+            "run-constraints should not leak into default target",
+        );
+
+        // The linux-64 target lowers to the equivalent conditional expression.
+        let linux = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("host_platform == 'linux-64'"))
+            .expect("linux-64 target should exist");
+        assert_single_version(&linux.dependencies, SpecType::Run, "only-linux", "==2.0");
+        assert_single_version(
+            &linux.dependencies,
+            SpecType::RunConstraints,
+            "only-linux-constrained",
+            ">=3.0",
+        );
+    }
+
+    #[test]
+    fn test_package_conditional_dependencies() {
+        // `if(<expression>)` keys inside the package dependency tables become
+        // `Expression` targets; plain entries stay on the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-dependencies]
+        shared = "==1.0"
+
+        [build-dependencies."if(host_platform != build_platform)"]
+        cross-tool = "==2.0"
+
+        [host-dependencies."if(host_platform == 'linux-64')"]
+        libgl = "==3.0"
+        "#;
+
+        let manifest = parse_package(input);
+
+        // Plain entry stays on the default target.
+        assert_single_version(
+            &manifest.dependencies.dependencies,
+            SpecType::Run,
+            "shared",
+            "==1.0",
+        );
+
+        // Each `if(...)` block produces a conditional target with only the
+        // matching dependency bucket populated.
+        let cross = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new(
+                "host_platform != build_platform",
+            ))
+            .expect("conditional target should exist");
+        assert_single_version(&cross.dependencies, SpecType::Build, "cross-tool", "==2.0");
+
+        let linux = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("host_platform == 'linux-64'"))
+            .expect("conditional target should exist");
+        assert_single_version(&linux.dependencies, SpecType::Host, "libgl", "==3.0");
+    }
+
+    #[test]
+    fn test_package_conditional_merges_same_expression() {
+        // The same expression used across sections folds into a single target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [build-dependencies."if(host_platform == 'linux-64')"]
+        build-only = "==1.0"
+
+        [run-dependencies."if(host_platform == 'linux-64')"]
+        run-only = "==2.0"
+        "#;
+
+        let manifest = parse_package(input);
+        assert_eq!(
+            manifest.conditional_dependencies.len(),
+            1,
+            "the two sections must merge into one target"
+        );
+
+        let target = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("host_platform == 'linux-64'"))
+            .expect("conditional target should exist");
+        assert_single_version(&target.dependencies, SpecType::Build, "build-only", "==1.0");
+        assert_single_version(&target.dependencies, SpecType::Run, "run-only", "==2.0");
+    }
+
+    #[test]
+    fn test_package_conditional_malformed_expression() {
+        // A key containing `(` that is not a well-formed `if(...)` is rejected.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [build-dependencies."matches(python, '>=3.10')"]
+        foo = "*"
+        "#,
+        ), @r###"
+          × `matches(python, '>=3.10')` is not a valid selector. Wrap the expression in `if(...)`, e.g. `if(host_platform == 'linux-64')`
+           ╭─[pixi.toml:8:30]
+         7 │
+         8 │         [build-dependencies."matches(python, '>=3.10')"]
+           ·                              ─────────────────────────
+         9 │         foo = "*"
+           ╰────
+        "###);
+    }
+
+    #[test]
+    fn test_package_target_emits_deprecation_warning() {
+        // The legacy `[package.target.*]` syntax still parses, but produces a
+        // deprecation warning suggesting the conditional form.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target.linux-64.build-dependencies]
+        foo = "==1.0"
+        "#;
+
+        let mut parsed = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect("legacy target syntax must still parse");
+
+        assert!(
+            !parsed.warnings.is_empty(),
+            "legacy target syntax must emit a deprecation warning"
+        );
+        // The rendered warning names the deprecated table and spells out the
+        // exact conditional syntax to use instead.
+        assert_snapshot!(
+            format_parse_error(input, parsed.warnings.remove(0)),
+            @r#"
+         ⚠ the `[package.target]` tables are deprecated in favor of conditional dependencies
+          ╭─[pixi.toml:8:17]
+        7 │
+        8 │         [target.linux-64.build-dependencies]
+          ·                 ────┬───
+          ·                     ╰── deprecated target selector
+        9 │         foo = "==1.0"
+          ╰────
+         help: Move the dependencies under a conditional dependency table instead:
+                 [package.build-dependencies."if(host_platform == 'linux-64')"]
+        "#
+        );
+
+        // The legacy target still works: it lowers to the equivalent
+        // conditional dependency entry.
+        let linux = parsed
+            .value
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("host_platform == 'linux-64'"))
+            .expect("linux-64 target should lower to a conditional entry");
+        assert_single_version(&linux.dependencies, SpecType::Build, "foo", "==1.0");
+    }
+
+    #[test]
+    fn test_package_target_collides_with_equivalent_conditional() {
+        // A deprecated target table and an explicit `if(...)` table that lower
+        // to the same expression are rejected; silently merging them would hide
+        // a half-finished migration.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-dependencies."if(host_platform == 'linux-64')"]
+        foo = "==1.0"
+
+        [target.linux-64.build-dependencies]
+        bar = "==2.0"
+        "#;
+
+        let parse_error = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error), @r#"
+         × duplicate condition: `[package.target.linux-64]` is equivalent to `"if(host_platform == 'linux-64')"`
+           ╭─[pixi.toml:11:17]
+        10 │
+        11 │         [target.linux-64.build-dependencies]
+           ·                 ────┬───
+           ·                     ╰── this target table lowers to the same condition
+        12 │         bar = "==2.0"
+           ╰────
+         help: Move the dependencies into the `"if(host_platform == 'linux-64')"` tables and remove the `[package.target.linux-64]` table
+        "#);
+    }
+
+    #[test]
+    fn test_package_target_osx_lowers_to_osx_expression() {
+        // `[package.target.osx]` must lower to the rattler-build family boolean
+        // `osx`; `macos` is not defined in rattler-build's jinja context and
+        // would silently evaluate to false.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target.osx.run-dependencies]
+        foo = "==1.0"
+        "#;
+
+        let manifest = parse_package(input);
+        let target = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("osx"))
+            .expect("the osx target must lower to the `osx` conditional expression");
+        assert_single_version(&target.dependencies, SpecType::Run, "foo", "==1.0");
+    }
+
+    #[test]
+    fn test_run_constraints_source_spec_requires_pixi_build() {
+        // Source specs in [package.run-constraints] must be rejected unless the
+        // pixi-build preview is enabled — same gate as the other dependency
+        // tables.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-constraints]
+        local-pkg = { path = "./local" }
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        let rendered = format_parse_error(input, err);
+        assert!(
+            rendered.contains("pixi-build"),
+            "expected pixi-build gating error, got: {rendered}"
+        );
+
+        // With pixi-build enabled the same input parses.
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
+        TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &preview,
+                    Path::new(""),
+                )
+            })
+            .expect("source specs in run-constraints must be allowed when pixi-build is enabled");
+    }
+
+    /// Asserts that a run-export bucket contains exactly one entry for `name`
+    /// whose version spec stringifies to `expected`.
+    #[track_caller]
+    /// Returns the version string of a binary constraint in a run-export
+    /// constraints bucket, panicking on a missing entry or any other spec
+    /// kind.
+    fn constrained_version(
+        bucket: &pixi_spec_containers::DependencyMap<PackageName, crate::PackageConstraintSpec>,
+        name: &str,
+    ) -> String {
+        match bucket
+            .get(&PackageName::from_str(name).unwrap())
+            .and_then(|specs| specs.iter().next())
+            .unwrap_or_else(|| panic!("missing {name} in constraints bucket"))
+        {
+            crate::PackageConstraintSpec::Binary(pixi_spec::BinarySpec::Version(version)) => {
+                version.to_string()
+            }
+            other => panic!("expected a version spec, got {other:?}"),
+        }
+    }
+
+    fn assert_run_export_version(
+        bucket: &pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
+        name: &str,
+        expected: &str,
+    ) {
+        let specs = bucket
+            .get(&PackageName::from_str(name).unwrap())
+            .unwrap_or_else(|| panic!("missing {name} in run-export bucket"));
+        assert_eq!(specs.len(), 1, "expected exactly one spec for {name}");
+        assert_eq!(
+            specs
+                .iter()
+                .next()
+                .unwrap()
+                .as_spec()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            expected,
+        );
+    }
+
+    #[test]
+    fn test_package_run_exports_all_buckets() {
+        // Each `[package.run-exports.<bucket>]` table must land in the matching
+        // bucket of the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.noarch]
+        noarch-dep = "==1.0"
+
+        [run-exports.strong]
+        strong-dep = "==2.0"
+
+        [run-exports.weak]
+        weak-dep = "==3.0"
+
+        [run-exports.strong-constraints]
+        strong-constrained = ">=4.0"
+
+        [run-exports.weak-constraints]
+        weak-constrained = ">=5.0"
+        "#;
+
+        let manifest = parse_package(input);
+        let run_exports = &manifest.dependencies.run_exports;
+
+        assert_run_export_version(&run_exports.noarch, "noarch-dep", "==1.0");
+        assert_run_export_version(&run_exports.strong, "strong-dep", "==2.0");
+        assert_run_export_version(&run_exports.weak, "weak-dep", "==3.0");
+
+        assert_eq!(
+            constrained_version(&run_exports.strong_constraints, "strong-constrained"),
+            ">=4.0"
+        );
+        assert_eq!(
+            constrained_version(&run_exports.weak_constraints, "weak-constrained"),
+            ">=5.0"
+        );
+    }
+
+    #[test]
+    fn test_package_run_exports_conditional() {
+        // An `if(...)` sub-table inside a run-export bucket becomes a
+        // conditional target with only that bucket populated.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak]
+        shared = "==1.0"
+
+        [run-exports.weak."if(host_platform == 'linux-64')"]
+        libgl = "==2.0"
+        "#;
+
+        let manifest = parse_package(input);
+        assert_run_export_version(&manifest.dependencies.run_exports.weak, "shared", "==1.0");
+
+        let linux = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("host_platform == 'linux-64'"))
+            .expect("conditional target should exist");
+        assert_run_export_version(&linux.run_exports.weak, "libgl", "==2.0");
+        assert!(
+            linux.dependencies.is_empty(),
+            "no dependency buckets should be populated"
+        );
+    }
+
+    #[test]
+    fn test_package_run_exports_workspace_inheritance() {
+        // A `{ workspace = true }` entry in a run-export bucket resolves
+        // against the `[workspace.dependencies]` pool.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak]
+        libfoo = { workspace = true }
+        "#;
+
+        let workspace_toml = r#"
+        name = "ws"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        libfoo = "1.*"
+        "#;
+        let workspace = WorkspacePackageProperties {
+            dependencies: crate::toml::TomlWorkspace::from_toml_str(workspace_toml)
+                .expect("workspace must parse")
+                .dependencies
+                .expect("dependencies table")
+                .value
+                .specs,
+            ..Default::default()
+        };
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    workspace,
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect("expected manifest to parse")
+            .value;
+        assert_run_export_version(&manifest.dependencies.run_exports.weak, "libfoo", "1.*");
+    }
+
+    #[test]
+    fn test_package_run_exports_source_spec_requires_pixi_build() {
+        // Source specs in the dependency-style buckets follow the same
+        // pixi-build preview gate as the other dependency tables.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak]
+        local-pkg = { path = "./local" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        let rendered = format_parse_error(input, err);
+        assert!(
+            rendered.contains("pixi-build"),
+            "expected pixi-build gating error, got: {rendered}"
+        );
+
+        // With pixi-build enabled the same input parses and the source spec is
+        // kept.
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
+        let manifest = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &preview,
+                    Path::new(""),
+                )
+            })
+            .expect("source specs in run-exports must parse with pixi-build enabled")
+            .value;
+        let specs = manifest
+            .dependencies
+            .run_exports
+            .weak
+            .get(&PackageName::from_str("local-pkg").unwrap())
+            .expect("local-pkg must be present");
+        assert!(specs.iter().next().unwrap().is_source());
+    }
+
+    #[test]
+    fn test_package_run_exports_rejects_source_in_constraints() {
+        // The constraints buckets only restrict versions; a source spec is
+        // rejected even with pixi-build enabled.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak-constraints]
+        local-pkg = { path = "./local" }
+        "#;
+
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &preview,
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+         × source specs are not supported in run-export constraints
+           ╭─[pixi.toml:9:21]
+         8 │         [run-exports.weak-constraints]
+         9 │         local-pkg = { path = "./local" }
+           ·                     ──────────┬─────────
+           ·                               ╰── source spec specified here
+        10 │
+           ╰────
+         help: A constraint only restricts the version of a package that is installed for another reason; use a version spec instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_rejects_url_spec() {
+        // Url specs are rejected in every run-export bucket; the exported spec
+        // is recorded in the built package where a url is meaningless.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.strong]
+        libbar = { url = "https://example.com/libbar-1.0-h123.conda" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+         × url specs are not supported in `[package.run-exports]`
+           ╭─[pixi.toml:9:18]
+         8 │         [run-exports.strong]
+         9 │         libbar = { url = "https://example.com/libbar-1.0-h123.conda" }
+           ·                  ──────────────────────────┬──────────────────────────
+           ·                                            ╰── url spec specified here
+        10 │
+           ╰────
+         help: Use a version spec or a `path` or `git` source spec instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_rejects_binary_path_spec() {
+        // A path to a package archive would be absolutized into a
+        // machine-local file url in the built package's metadata; rejected in
+        // every bucket, like url specs.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak-constraints]
+        libbar = { path = "./libbar-1.0-h123.conda" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+         × paths to package archives are not supported in `[package.run-exports]`
+           ╭─[pixi.toml:9:18]
+         8 │         [run-exports.weak-constraints]
+         9 │         libbar = { path = "./libbar-1.0-h123.conda" }
+           ·                  ──────────────────┬─────────────────
+           ·                                    ╰── package archive path specified here
+        10 │
+           ╰────
+         help: Use a version spec or a `path` source spec pointing at a source directory instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_rejects_unknown_bucket() {
+        // A typo like `strong-constrains` must be flagged so users don't
+        // silently lose their run-exports.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.strong-constrains]
+        oops = ">=1.0"
+        "#,
+        ), @r#"
+         × Unexpected keys, expected only 'noarch', 'strong', 'weak', 'strong-constraints', 'weak-constraints'
+          ╭─[pixi.toml:8:22]
+        7 │
+        8 │         [run-exports.strong-constrains]
+          ·                      ────────┬────────
+          ·                              ╰── 'strong-constrains' was not expected here
+        9 │         oops = ">=1.0"
+          ╰────
+         help: Did you mean 'strong-constraints'?
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_rejected_in_target() {
+        // The deprecated `[package.target.<selector>]` tables do not support
+        // run-exports; use an `if(...)` sub-table inside the bucket instead.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target.linux-64.run-exports.weak]
+        libfoo = "==1.0"
+        "#,
+        ), @r#"
+         × Unexpected keys, expected only 'run-dependencies', 'run-constraints', 'host-dependencies', 'build-dependencies', 'extra-dependencies'
+          ╭─[pixi.toml:8:26]
+        7 │
+        8 │         [target.linux-64.run-exports.weak]
+          ·                          ─────┬─────
+          ·                               ╰── 'run-exports' was not expected here
+        9 │         libfoo = "==1.0"
+          ╰────
+         help: Did you mean 'run-constraints'?
+        "#);
+    }
+
+    #[test]
+    fn test_readme_validation_succeeds_without_build_source() {
+        // When no build.source is specified, readme should be validated
+        // against the manifest directory
+        let temp_dir = TempDir::new().unwrap();
+        let readme_path = temp_dir.path().join("README.md");
+        fs::write(&readme_path, "# My Package").unwrap();
+
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+        readme = "README.md"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let result = TomlPackage::from_toml_str(input).and_then(|w| {
+            w.into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                temp_dir.path(),
+            )
+        });
+        assert!(result.is_ok(), "Expected success but got: {result:?}");
+
+        // Verify the readme path is set correctly
+        let manifest = result.unwrap().value;
+        assert!(manifest.package.readme.is_some());
+    }
+
+    #[test]
+    fn test_rebase_workspace_path_specs_relativizes_to_member() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("local".parse().unwrap(), path_spec("../shared"));
+
+        let workspace_root = Path::new("/ws");
+        let member_root = Path::new("/ws/members/foo");
+        let rebased = super::rebase_workspace_path_specs(&pool, Some(workspace_root), member_root);
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("local").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("../../../shared")
+        );
+    }
+
+    #[test]
+    fn test_rebase_workspace_path_specs_passes_absolute_through() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("abs".parse().unwrap(), path_spec("/abs/path"));
+
+        let rebased =
+            super::rebase_workspace_path_specs(&pool, Some(Path::new("/ws")), Path::new("/ws/m"));
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("abs").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("/abs/path")
+        );
+    }
+
+    #[test]
+    fn test_rebase_no_op_when_roots_match() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("local".parse().unwrap(), path_spec("../shared"));
+
+        let same = Path::new("/ws");
+        let rebased = super::rebase_workspace_path_specs(&pool, Some(same), same);
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("local").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("../shared")
+        );
+    }
+
+    /// Construct a [`TomlSpec`] carrying only a path location.
+    fn path_spec(path: &str) -> TomlSpec {
+        let mut spec = TomlSpec::empty();
+        spec.location = Some(pixi_spec::TomlLocationSpec {
+            url: None,
+            git: None,
+            path: Some(path.to_string()),
+            branch: None,
+            rev: None,
+            tag: None,
+            lfs: None,
+            subdirectory: None,
+            md5: None,
+            sha256: None,
+        });
+        spec
+    }
+
+    /// Parses a manifest all the way through `into_manifest` and formats the
+    /// error. The pin section matrix is enforced during that lowering, not
+    /// during the TOML parse itself.
+    #[must_use]
+    fn expect_manifest_failure(pixi_toml: &str) -> String {
+        let error = TomlPackage::from_toml_str(pixi_toml)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect_err("expected the manifest to be rejected");
+        format_parse_error(pixi_toml, error)
+    }
+
+    /// The boilerplate around a package manifest body.
+    fn package_manifest(body: &str) -> String {
+        format!(
+            r#"
+        name = "mypkg"
+        version = "0.1.0"
+
+        [build]
+        backend = {{ name = "bla", version = "1.0" }}
+        {body}"#
+        )
+    }
+
+    #[test]
+    fn test_pin_compatible_in_run_and_host_dependencies() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [build-dependencies]
+        cmake = "*"
+
+        [host-dependencies]
+        boltons = ">=2,<3"
+
+        [run-dependencies]
+        boltons = { pin-compatible = true }
+
+        [host-dependencies.zlib]
+        pin-compatible = { lower-bound = "x.x", build = "py*" }
+        "#,
+        ));
+
+        let run = manifest
+            .dependencies
+            .run_dependencies()
+            .expect("run bucket");
+        let boltons = run
+            .get(&PackageName::from_str("boltons").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("boltons in run deps");
+        let crate::PackageDependencySpec::PinCompatible(pin) = boltons else {
+            panic!("expected a pin-compatible entry, got {boltons:?}");
+        };
+        assert_eq!(pin, &pixi_spec::Pin::default());
+
+        let host = manifest
+            .dependencies
+            .host_dependencies()
+            .expect("host bucket");
+        let zlib = host
+            .get(&PackageName::from_str("zlib").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("zlib in host deps");
+        let crate::PackageDependencySpec::PinCompatible(pin) = zlib else {
+            panic!("expected a pin-compatible entry, got {zlib:?}");
+        };
+        assert_eq!(pin.build.as_deref(), Some("py*"));
+    }
+
+    #[test]
+    fn test_pin_subpackage_in_run_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-dependencies]
+        mypkg = { pin-subpackage = true }
+        "#,
+        )), @"
+         × `pin-subpackage` is not allowed in `[package.run-dependencies]`
+           ╭─[pixi.toml:9:17]
+         8 │         [run-dependencies]
+         9 │         mypkg = { pin-subpackage = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-subpackage used here
+        10 │
+           ╰────
+         help: `pin-subpackage` pins the package itself for its consumers and is only supported in the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_compatible_own_name_in_run_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-dependencies]
+        mypkg = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` cannot reference the package's own name
+           ╭─[pixi.toml:9:17]
+         8 │         [run-dependencies]
+         9 │         mypkg = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: `pin-compatible` pins a dependency to the version it resolved to in the build or host environment, and a package is never part of its own; use `pin-subpackage` in `[package.run-exports]` to
+               pin the package itself for consumers
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_build_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [build-dependencies]
+        cmake = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.build-dependencies]`
+           ╭─[pixi.toml:9:17]
+         8 │         [build-dependencies]
+         9 │         cmake = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: The build environment is resolved first, so there is no earlier environment to pin against
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_run_constraints_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-constraints]
+        boltons = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.run-constraints]`
+           ╭─[pixi.toml:9:19]
+         8 │         [run-constraints]
+         9 │         boltons = { pin-compatible = true }
+           ·                   ────────────┬────────────
+           ·                               ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Pins are supported in `[package.run-dependencies]`, `[package.host-dependencies]`, and the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_extra_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [extra-dependencies.dev]
+        boltons = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.extra-dependencies]`
+           ╭─[pixi.toml:9:19]
+         8 │         [extra-dependencies.dev]
+         9 │         boltons = { pin-compatible = true }
+           ·                   ────────────┬────────────
+           ·                               ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Pins are supported in `[package.run-dependencies]`, `[package.host-dependencies]`, and the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_subpackage_in_run_exports() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [run-exports.weak]
+        mypkg = { pin-subpackage = { upper-bound = "x.x" } }
+
+        [run-exports.strong]
+        boltons = { pin-compatible = true }
+        "#,
+        ));
+        let run_exports = &manifest.dependencies.run_exports;
+        let mypkg = run_exports
+            .weak
+            .get(&PackageName::from_str("mypkg").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("mypkg in weak run-exports");
+        assert_matches!(mypkg, crate::PackageDependencySpec::PinSubpackage(_));
+        let boltons = run_exports
+            .strong
+            .get(&PackageName::from_str("boltons").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("boltons in strong run-exports");
+        assert_matches!(boltons, crate::PackageDependencySpec::PinCompatible(_));
+    }
+
+    #[test]
+    fn test_pin_in_run_export_constraints() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [run-exports.strong-constraints]
+        mypkg = { pin-subpackage = { exact = true } }
+
+        [run-exports.weak-constraints]
+        openssl = { pin-compatible = { upper-bound = "x" } }
+        "#,
+        ));
+        let run_exports = &manifest.dependencies.run_exports;
+        let mypkg = run_exports
+            .strong_constraints
+            .get(&PackageName::from_str("mypkg").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("mypkg in strong constraints");
+        assert_matches!(mypkg, crate::PackageConstraintSpec::PinSubpackage(_));
+        let openssl = run_exports
+            .weak_constraints
+            .get(&PackageName::from_str("openssl").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("openssl in weak constraints");
+        assert_matches!(openssl, crate::PackageConstraintSpec::PinCompatible(_));
+    }
+
+    #[test]
+    fn test_pin_subpackage_wrong_name_in_run_exports_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-exports.weak]
+        otherpkg = { pin-subpackage = true }
+        "#,
+        )), @"
+         × `pin-subpackage` can only reference the package's own name (`mypkg`), not `otherpkg`
+           ╭─[pixi.toml:9:20]
+         8 │         [run-exports.weak]
+         9 │         otherpkg = { pin-subpackage = true }
+           ·                    ────────────┬────────────
+           ·                                ╰── pin-subpackage used here
+        10 │
+           ╰────
+         help: Use `mypkg = { pin-subpackage = ... }` to pin this package for its consumers, or `otherpkg = { pin-compatible = ... }` to pin a dependency to the version it resolved to
+        ");
+    }
+
+    #[test]
+    fn test_pin_compatible_own_name_in_run_exports_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-exports.weak]
+        mypkg = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` cannot reference the package's own name (`mypkg`)
+           ╭─[pixi.toml:9:17]
+         8 │         [run-exports.weak]
+         9 │         mypkg = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Use `mypkg = { pin-subpackage = ... }` to pin this package for its consumers
+        ");
     }
 }

@@ -1,22 +1,19 @@
 name: Update Trampoline Binaries
 
 on:
-  push:
-    paths:
-      - "trampoline/**"
-      - ".github/workflows/trampoline.yaml"
-      - "src/global/trampoline.rs"
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "trampoline/**"
-      - ".github/workflows/trampoline.yaml"
-      - "src/global/trampoline.rs"
+  push:
+    branches:
+      - trampoline-build-branch
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   build:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -44,11 +41,11 @@ jobs:
 
           - name: "macOS-x86"
             target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-15-intel
 
           - name: "macOS-arm"
             target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
 
           - name: "Windows"
             target: x86_64-pc-windows-msvc
@@ -60,25 +57,51 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # Fetch full history so we have branch information
+          persist-credentials: false
 
       - name: Set up Rust
-        uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89 # v1
+        uses: taiki-e/setup-cross-toolchain-action@12b7ad4acfa95a1476779d6c06699b96ec1691f8 # v1
         with:
           target: ${{ matrix.target }}
 
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@main
+        uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
         with:
           environments: trampoline
+          cache-write: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build trampoline binary
         run: pixi run build-trampoline --target ${{ matrix.target }}
 
+      - name: Azure login (OIDC)
+        if: runner.os == 'Windows'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Sign Windows trampoline
+        if: runner.os == 'Windows'
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+          files-folder: target/trampoline/${{ matrix.target }}/release
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Compress trampoline binary
+        run: pixi run compress-trampoline --target ${{ matrix.target }}
+
       - name: Upload binary artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: trampoline-${{ matrix.target }}
           path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
@@ -92,10 +115,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Download all binaries
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: trampoline/binaries/
           merge-multiple: true
@@ -104,14 +127,14 @@ jobs:
         run: ls -R trampoline/binaries/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: trampolines
           path: trampoline/binaries/
 
       - name: Commit and push updated binaries
         # Don't run on forks
-        if: github.repository == 'prefix-dev/pixi' && startsWith(github.ref, 'refs/heads')
+        if: github.repository == 'prefix-dev/pixi'
         run: |
           # Set the repository to push to the repository the workflow is running on
           git config user.name "GitHub Actions"

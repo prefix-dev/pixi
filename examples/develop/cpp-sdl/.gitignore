@@ -1,0 +1,5 @@
+# pixi environments
+.pixi
+
+# The build directory
+.build

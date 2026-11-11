@@ -1,0 +1,7 @@
+---
+source: crates/pixi_core/src/lock_file/satisfiability/tests.rs
+expression: s
+---
+environment 'default' does not satisfy the requirements of the project for platform 'win-64'
+    Diagnostic severity: error
+    Caused by: the resolved extra group 'test' of source package 'source' no longer matches what the backend would re-derive from the manifest; added: extra-pkg >=1

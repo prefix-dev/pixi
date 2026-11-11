@@ -1,0 +1,24 @@
+# regression test that pin subpackage works with `my.package`
+context:
+  name: my-package
+  version: 0.1.0
+
+recipe:
+  version: ${{ version }}
+
+build:
+  number: 0
+
+outputs:
+  - package:
+      name: ${{ name }}
+    build:
+      noarch: generic
+
+  - package:
+      name: ${{ name }}-a
+    build:
+      noarch: generic
+    requirements:
+      run:
+        - ${{ pin_subpackage(name, exact=true) }}

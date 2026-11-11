@@ -1,0 +1,4 @@
+[package]
+description = "rust app description"
+name = "rust-app"
+version = "1.2.3"

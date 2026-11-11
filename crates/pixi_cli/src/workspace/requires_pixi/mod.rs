@@ -1,0 +1,55 @@
+use std::process::ExitCode;
+
+pub mod get;
+pub mod set;
+pub mod unset;
+pub mod verify;
+
+use clap::Parser;
+
+use crate::cli_config::WorkspaceConfig;
+
+/// Commands to manage the pixi minimum version requirement.
+#[derive(Parser, Debug)]
+pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
+    pub workspace_config: WorkspaceConfig,
+
+    /// The subcommand to execute
+    #[clap(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Parser, Debug)]
+pub enum Command {
+    /// Get the pixi minimum version requirement.
+    Get,
+    /// Set the pixi minimum version requirement.
+    ///
+    /// Example:
+    /// `pixi workspace requires-pixi set 0.42`
+    Set(set::Args),
+    /// Remove the pixi minimum version requirement.
+    Unset,
+    /// Verify the pixi minimum version requirement.
+    Verify,
+}
+
+pub async fn execute(args: Args) -> miette::Result<ExitCode> {
+    let is_verify = matches!(args.command, Command::Verify);
+    let workspace_locator = crate::workspace_locator()
+        .with_global_config_source(args.config_source.source())
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_ignore_pixi_version_check(!is_verify);
+
+    match args.command {
+        Command::Get => get::execute(workspace_locator.locate().await?).await,
+        Command::Set(args) => set::execute(workspace_locator.locate().await?, args).await,
+        Command::Unset => unset::execute(workspace_locator.locate().await?).await,
+        Command::Verify => return verify::execute(workspace_locator.locate().await.map(|_| ())),
+    }?;
+    Ok(ExitCode::SUCCESS)
+}

@@ -1,12 +1,14 @@
-from pathlib import Path
-import tomllib
-from typing import List
-
-import tomli_w
-from ..common import verify_cli_command, ExitCode, CURRENT_PLATFORM
+import hashlib
 from abc import ABC, abstractmethod
-import pytest
 from dataclasses import dataclass
+from pathlib import Path
+from typing import override
+
+import pytest
+import tomli
+import tomli_w
+
+from ..common import CURRENT_PLATFORM, ExitCode, verify_cli_command
 
 
 @dataclass
@@ -23,6 +25,10 @@ def setup_data(tmp_path: Path) -> SetupData:
     env = {
         "PIXI_HOME": str(pixi_home),
         "HOME": str(data_home),  # Used for macOS and Linux
+        # menuinst follows XDG on Linux and falls back to $HOME/.local/share only when
+        # XDG_DATA_HOME is unset, so override it explicitly to keep the shortcut inside
+        # the per-test data_home.
+        "XDG_DATA_HOME": str(data_home / ".local" / "share"),
         "MENUINST_FAKE_DIRECTORIES": str(data_home),  # Used for Windows
     }
     return SetupData(pixi_home=pixi_home, data_home=data_home, env=env)
@@ -30,41 +36,79 @@ def setup_data(tmp_path: Path) -> SetupData:
 
 class PlatformConfig(ABC):
     @abstractmethod
-    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
         pass
 
     @abstractmethod
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
         """Given the name of a shortcut, return whether it exists or not."""
-        pass
+
+    @abstractmethod
+    def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
+        """Get a hash of the shortcut content for comparison. Raises FileNotFoundError if shortcut doesn't exist."""
 
 
 class LinuxConfig(PlatformConfig):
-    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
-        return [data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"]
+    @override
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"
 
+    @override
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
-        return self._shortcut_paths(data_home, name).pop().is_file()
+        return self.shortcut_path(data_home, name).is_file()
+
+    @override
+    def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
+        shortcut_file = self.shortcut_path(data_home, name)
+        if not shortcut_file.is_file():
+            raise FileNotFoundError(
+                f"Shortcut file {shortcut_file} does not exist or is not a file"
+            )
+        return hashlib.sha256(shortcut_file.read_bytes()).hexdigest()
 
 
 class MacOSConfig(PlatformConfig):
-    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
-        return [data_home / "Applications" / f"{name}.app"]
+    @override
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / "Applications" / f"{name}.app"
 
+    @override
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
-        return self._shortcut_paths(data_home, name).pop().is_dir()
+        return self.shortcut_path(data_home, name).is_dir()
+
+    @override
+    def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
+        shortcut_dir = self.shortcut_path(data_home, name)
+        if not shortcut_dir.is_dir():
+            raise FileNotFoundError(
+                f"Shortcut directory {shortcut_dir} does not exist or is not a directory"
+            )
+
+        # Hash all files in the .app directory recursively
+        hash_md5 = hashlib.sha256()
+        for file_path in sorted(shortcut_dir.rglob("*")):
+            if file_path.is_file():
+                hash_md5.update(file_path.read_bytes())
+        return hash_md5.hexdigest()
 
 
 class WindowsConfig(PlatformConfig):
-    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
-        return [data_home / "Desktop" / f"{name}.lnk"]
+    @override
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / "Desktop" / f"{name}.lnk"
 
+    @override
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
-        for path in self._shortcut_paths(data_home, name):
-            print(path)
-            if not path.is_file():
-                return False
-        return True
+        return self.shortcut_path(data_home, name).is_file()
+
+    @override
+    def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
+        shortcut_file = self.shortcut_path(data_home, name)
+        if not shortcut_file.is_file():
+            raise FileNotFoundError(
+                f"Shortcut file {shortcut_file} does not exist or is not a file"
+            )
+        return hashlib.sha256(shortcut_file.read_bytes()).hexdigest()
 
 
 def get_platform_config(platform: str) -> PlatformConfig:
@@ -93,6 +137,13 @@ def verify_shortcuts_exist(
         )
 
 
+def get_shortcut_content_hash(data_home: Path, name: str) -> str:
+    """Get the hash of a shortcut's content for the current platform."""
+    system = CURRENT_PLATFORM
+    config = get_platform_config(system)
+    return config.get_shortcut_content_hash(data_home, name)
+
+
 def test_sync_creation_and_removal(
     pixi: Path,
     setup_data: SetupData,
@@ -115,7 +166,7 @@ def test_sync_creation_and_removal(
     verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     parsed_toml["envs"]["test"]["shortcuts"] = ["pixi-editor"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
 
@@ -152,7 +203,7 @@ def test_sync_empty_shortcut_list(
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # Set shortcuts to empty list
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     parsed_toml["envs"]["test"]["shortcuts"] = []
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
@@ -181,7 +232,7 @@ def test_sync_removing_environment(
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # Remove environment
-    parsed_toml = tomllib.loads(toml)
+    parsed_toml = tomli.loads(toml)
     del parsed_toml["envs"]["test"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
@@ -264,7 +315,7 @@ def test_install_simple(
 
     # Verify manifest
     manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
@@ -294,7 +345,7 @@ def test_install_no_shortcut(
 
     # Verify manifest
     manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert "shortcuts" not in parsed_toml["envs"]["pixi-editor"]
 
     # Verify shortcut does not exist
@@ -314,7 +365,7 @@ def test_remove_shortcut(
 
     # Verify manifest
     manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
@@ -327,7 +378,7 @@ def test_remove_shortcut(
     )
 
     # Verify removal from manifest
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] != ["pixi-editor"]
 
     # Verify shortcut does not exist
@@ -354,7 +405,7 @@ def test_add_shortcut(
 
     # Verify manifest
     manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"].get("shortcuts") is None
 
     # Verify shortcut exists
@@ -367,8 +418,54 @@ def test_add_shortcut(
     )
 
     # Verify addition to manifest
-    parsed_toml = tomllib.loads(manifest.read_text())
+    parsed_toml = tomli.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
+
+
+def test_update_installs_new_shortcuts(
+    pixi: Path,
+    setup_data: SetupData,
+    shortcuts_channel_1: str,
+) -> None:
+    # Verify shortcuts exist after sync
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            shortcuts_channel_1,
+            "pixi-editor=1.0.0",
+        ],
+        env=setup_data.env,
+    )
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
+
+    # Change version requirement to '*'
+    manifests = setup_data.pixi_home.joinpath("manifests")
+    manifest = manifests.joinpath("pixi-global.toml")
+    manifest_dict = tomli.loads(manifest.read_text())
+    manifest_dict["envs"]["pixi-editor"]["dependencies"]["pixi-editor"] = "*"
+    manifest.write_text(tomli_w.dumps(manifest_dict))
+
+    # Get initial hash before sync
+    initial_hash = get_shortcut_content_hash(setup_data.data_home, "pixi-editor")
+
+    # Run pixi sync (nothing should be updated here)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
+
+    # Verify shortcut content is unchanged
+    current_hash = get_shortcut_content_hash(setup_data.data_home, "pixi-editor")
+    assert current_hash == initial_hash, "Shortcut content should remain unchanged after sync"
+
+    # Run pixi update
+    verify_cli_command([pixi, "global", "update"], env=setup_data.env)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
+
+    # Verify shortcut content has changed after update
+    updated_hash = get_shortcut_content_hash(setup_data.data_home, "pixi-editor")
+    assert updated_hash != initial_hash, "Shortcut content should be updated after update command"

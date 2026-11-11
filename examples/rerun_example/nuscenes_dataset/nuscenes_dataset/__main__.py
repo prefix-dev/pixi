@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
 import pathlib
+import sys
 from typing import Any, Final
 
 import matplotlib
@@ -53,7 +53,7 @@ def ensure_scene_available(root_dir: pathlib.Path, dataset_version: str, scene_n
             print(
                 f"Could not find dataset at {root_dir} and could not automatically download specified scene."
             )
-            exit()
+            sys.exit()
 
     scene_names = [s["name"] for s in nusc.scene]
     if scene_name not in scene_names:

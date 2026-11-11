@@ -1,0 +1,26 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+exclude-newer = "7d"
+platforms = ["osx-arm64", "linux-64", "osx-64", "win-64"]
+preview = ["pixi-build"]
+
+[package]
+name = "foo"
+version = "0.1.0"
+
+[package.build.backend]
+name = "pixi-build-python"
+version = "*"
+
+[package.host-dependencies]
+hatchling = "*"
+
+# Add packages that would be unavailable for the wrong target
+[package.host-dependencies."if(unix)"]
+package-unix = "*"
+
+[package.host-dependencies."if(host_platform == 'win-64')"]
+package-windows = "*"

@@ -1,10 +1,26 @@
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+
 use insta::{assert_snapshot, assert_yaml_snapshot, glob};
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use rattler_conda_types::ChannelConfig;
-use std::path::{Path, PathBuf};
 
 fn discovery_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/discovery")
+}
+
+fn redact_path(value: &str) -> String {
+    let path = PathBuf::from(value);
+    let skipped = path
+        .components()
+        .skip_while(|c| *c != std::path::Component::Normal(OsStr::new("discovery")))
+        .skip(1)
+        .collect::<PathBuf>();
+    let display_skipped = skipped.display();
+    let str_skipped = display_skipped.to_string();
+    let prettified_norm = str_skipped.replace(r"\\", r"/").replace(r"\", r"/");
+    let prettified = prettified_norm.trim_end_matches(['/', '\\']);
+    format!("file://<ROOT>/{prettified}")
 }
 
 /// This macro is used to assert the discovery of a backend and compare it with a snapshot.
@@ -22,9 +38,14 @@ macro_rules! assert_discover_snapshot {
                 // Perform some redaction on fields that contain paths. We need to make them cross-platform compatible.
                 {
                     "[\"init-params\"][\"manifest-path\"]" => insta::dynamic_redaction(|value, _path| {
-                        value.as_str().unwrap().replace("\\", "/")
+                        redact_path(value.as_str().unwrap())
                      }),
-                    "[\"init-params\"][\"source-dir\"]" => "[SOURCE_PATH]",
+                    "[\"init-params\"][\"workspace-root\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                     }),
+                    "[\"init-params\"][\"source-anchor\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                     }),
                 });
             }
             Err(err) => {
@@ -61,7 +82,6 @@ fn test_discovery() {
         })
     });
 }
-
 #[test]
 fn test_non_existing() {
     assert_discover_snapshot!(Path::new("/non-existing"));
@@ -83,4 +103,87 @@ fn test_direct_recipe() {
     }, {
         assert_discover_snapshot ! ( & path);
     });
+}
+
+#[test]
+fn test_direct_package_xml() {
+    let path = dunce::canonicalize(discovery_directory().join("ros-package/package.xml")).unwrap();
+    let source_path_regex = path
+        .parent()
+        .unwrap()
+        .to_string_lossy()
+        .replace(r"\", r"\\\\");
+    insta::with_settings!({
+        filters => vec![
+            (source_path_regex.as_str(), "file://<ROOT>"),
+            (r"\\", r"/"),
+        ],
+    }, {
+        assert_discover_snapshot ! ( & path);
+    });
+}
+
+#[test]
+fn test_ros_discovery_priority() {
+    // Test that ROS packages are discovered after rattler-build recipes
+    // Create a test case with both package.xml and recipe.yaml
+    let path = dunce::canonicalize(discovery_directory().join("ros-priority")).unwrap();
+    let file_path = Path::new(file!()).parent().unwrap();
+    let channel_config = ChannelConfig::default_with_root_dir(file_path.to_owned());
+
+    match DiscoveredBackend::discover(&path, &channel_config, &EnabledProtocols::default()) {
+        Ok(backend) => {
+            // Should discover rattler-build backend, not ROS
+            insta::with_settings!({
+                filters => vec![
+                    (path.to_string_lossy().replace(r"\", r"\\").as_str(), "file://<ROOT>"),
+                    (r"\\", r"/"),
+                ],
+            }, {
+                assert_yaml_snapshot!(backend, {
+                    "[\"init-params\"][\"manifest-path\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                    }),
+                    "[\"init-params\"][\"workspace-root\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                    }),
+                    "[\"init-params\"][\"source-anchor\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                    }),
+                });
+            });
+        }
+        Err(err) => {
+            assert_snapshot!(pixi_test_utils::format_diagnostic(&err));
+        }
+    }
+}
+
+#[test]
+fn test_is_pixi_package_directory() {
+    let dir = |name: &str| dunce::canonicalize(discovery_directory().join(name)).unwrap();
+
+    // A manifest with a package section.
+    assert!(pixi_build_discovery::is_pixi_package_directory(&dir(
+        "simple"
+    )));
+
+    // Workspace-only manifests, with and without a package.xml next to them.
+    assert!(!pixi_build_discovery::is_pixi_package_directory(&dir(
+        "workspace-only"
+    )));
+    assert!(!pixi_build_discovery::is_pixi_package_directory(&dir(
+        "ros-with-workspace"
+    )));
+    assert!(!pixi_build_discovery::is_pixi_package_directory(&dir(
+        "not-a-package"
+    )));
+
+    // No pixi manifest at all.
+    assert!(!pixi_build_discovery::is_pixi_package_directory(&dir(
+        "ros-package"
+    )));
+    assert!(!pixi_build_discovery::is_pixi_package_directory(Path::new(
+        "/non-existing"
+    )));
 }

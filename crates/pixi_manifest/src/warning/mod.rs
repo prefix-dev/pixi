@@ -17,6 +17,23 @@ pub enum Warning {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Generic(#[from] GenericWarning),
+
+    /// A feature is defined in the manifest but not used in any environment.
+    /// Kept as a separate variant so commands that are about to change
+    /// environment membership can filter it out.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnusedFeature(GenericWarning),
+}
+
+impl Warning {
+    pub fn unused_feature(error: GenericError) -> Self {
+        Warning::UnusedFeature(GenericWarning { error })
+    }
+
+    pub fn is_unused_feature(&self) -> bool {
+        matches!(self, Warning::UnusedFeature(_))
+    }
 }
 
 impl From<GenericError> for Warning {

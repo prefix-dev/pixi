@@ -1,0 +1,10 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-dynamic-version"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+dynamic-dep = { path = "./dynamic-dep" }

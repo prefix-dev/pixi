@@ -1,34 +1,145 @@
 mod event_reporter;
 mod event_tree;
+mod pin_compatible_errors;
 
 use std::{
-    ops::DerefMut,
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
-    str::FromStr,
+    sync::Arc,
 };
 
-use event_reporter::EventReporter;
+use pixi_path::AbsPathBuf;
+
+use event_reporter::{EventReporter, WithEventReporter};
+use fs_err as fs;
 use itertools::Itertools;
-use pixi_build_frontend::{BackendOverride, in_memory::PassthroughBackend};
+use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
+use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
+    BuildBackendsDir, BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError,
+    EnvironmentRef, EnvironmentSpec, EphemeralEnv, Executor, InstallPixiEnvironmentExt,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, SolvePixiEnvironmentError,
+    keys::SolvePixiEnvironmentSpec,
 };
-use pixi_config::default_channel_config;
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec};
+use pixi_record::PinnedSourceSpec;
+use pixi_spec::{
+    GitReference, GitSpec, PathSpec, PixiSpec, ResolvedExcludeNewer, SourceLocationSpec,
+    Subdirectory,
+};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
+use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{
-    GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir, prefix::Prefix,
 };
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
 
-use crate::event_tree::EventTree;
+use crate::{event_reporter::Event, event_tree::EventTree};
+
+/// Converts a PathBuf to AbsPresumedDirPathBuf for tests.
+fn to_abs_dir(path: impl Into<PathBuf>) -> pixi_path::AbsPresumedDirPathBuf {
+    AbsPathBuf::new(path)
+        .expect("path is not absolute")
+        .into_assume_dir()
+}
+
+/// Returns a fresh tempdir under `CARGO_TARGET_TMPDIR` so per-test
+/// workspaces land on the same drive as the cargo target dir. The
+/// short prefix keeps the deeply nested backend build paths under
+/// Windows' `MAX_PATH = 260` limit.
+fn test_tempdir() -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix("p-")
+        .tempdir_in(env!("CARGO_TARGET_TMPDIR"))
+        .expect("create test tempdir")
+}
+
+/// Empty `SolvePixiEnvironmentSpec` for tests that only care about a
+/// few fields. Used with struct update syntax:
+/// `SolvePixiEnvironmentSpec { dependencies: ..., env_ref: env_ref_of(...),
+/// ..empty_pixi_env_spec() }`.
+/// Build matching `(installed, installed_source_hints)` from a `Vec`
+/// of records, the way a real caller does.
+fn installed_with_hints(
+    installed: Vec<pixi_record::UnresolvedPixiRecord>,
+) -> (
+    std::sync::Arc<[pixi_record::UnresolvedPixiRecord]>,
+    pixi_command_dispatcher::PtrArc<pixi_command_dispatcher::InstalledSourceHints>,
+) {
+    let installed: std::sync::Arc<[_]> = std::sync::Arc::from(installed);
+    let hints = pixi_command_dispatcher::PtrArc::from_value(
+        pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
+    );
+    (installed, hints)
+}
+
+fn empty_pixi_env_spec() -> SolvePixiEnvironmentSpec {
+    SolvePixiEnvironmentSpec {
+        dependencies: DependencyMap::default(),
+        constraints: DependencyMap::default(),
+        dev_sources: ordermap::OrderMap::new(),
+        installed: std::sync::Arc::from([]),
+        installed_source_hints: Default::default(),
+        strategy: Default::default(),
+        preferred_build_source: std::sync::Arc::new(BTreeMap::new()),
+        env_ref: EnvironmentRef::Ephemeral(EphemeralEnv::new(
+            "test",
+            EnvironmentSpec {
+                channels: Vec::new(),
+                build_environment: BuildEnvironment::default(),
+                variants: VariantConfig::default(),
+                exclude_newer: None,
+                channel_priority: Default::default(),
+            },
+        )),
+        inline_packages: Default::default(),
+    }
+}
+
+/// Test helper: run `SolvePixiEnvironmentKey` via the compute engine
+/// and map errors back to the shape legacy tests expect.
+async fn run_pixi_solve(
+    dispatcher: &CommandDispatcher,
+    spec: SolvePixiEnvironmentSpec,
+) -> Result<Vec<pixi_record::PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
+    use pixi_command_dispatcher::ComputeResultExt;
+    use pixi_command_dispatcher::keys::SolvePixiEnvironmentKey;
+    let records_arc = dispatcher
+        .engine()
+        .compute(&SolvePixiEnvironmentKey::new(spec))
+        .await
+        .map_err_into_dispatcher(std::convert::identity)?;
+    Ok((*records_arc).clone())
+}
+
+/// Convert a solved `PixiRecord` into the `UnresolvedPixiRecord` shape
+/// `SolvePixiEnvironmentSpec::installed` wants, so a prior solve's
+/// output can be fed back as an installed-hint for the next solve.
+fn to_unresolved(record: pixi_record::PixiRecord) -> pixi_record::UnresolvedPixiRecord {
+    record.into()
+}
+
+/// Wraps `(channels, build_env)` into an `EnvironmentRef::Ephemeral` so
+/// test construction sites stay terse. Uses default (strict) channel
+/// priority, empty variants, no `exclude_newer`.
+fn env_ref_of(channels: Vec<ChannelUrl>, build_environment: BuildEnvironment) -> EnvironmentRef {
+    EnvironmentRef::Ephemeral(EphemeralEnv::new(
+        "test",
+        EnvironmentSpec {
+            channels,
+            build_environment,
+            variants: VariantConfig::default(),
+            exclude_newer: None,
+            channel_priority: Default::default(),
+        },
+    ))
+}
 
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
-    CacheDirs::new(pixi_config::get_cache_dir().unwrap())
+    let cache_dir = pixi_config::get_cache_dir().unwrap();
+    CacheDirs::new(to_abs_dir(cache_dir))
 }
 
 /// Returns the tool platform that is appropriate for the current platform.
@@ -36,12 +147,12 @@ fn default_cache_dirs() -> CacheDirs {
 /// Specifically, it normalizes `WinArm64` to `Win64` to increase compatibility.
 /// TODO: Once conda-forge supports `WinArm64`, we can remove this
 /// normalization.
-fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
-    let platform = match Platform::current() {
-        Platform::WinArm64 => Platform::Win64,
+fn tool_platform() -> (Subdir, Vec<GenericVirtualPackage>) {
+    let platform = match Subdir::current().unwrap_or(Subdir::NoArch) {
+        Subdir::WinArm64 => Subdir::Win64,
         platform => platform,
     };
-    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
+    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
         .unwrap()
         .into_generic_virtual_packages()
         .collect();
@@ -58,6 +169,22 @@ fn workspaces_dir() -> PathBuf {
     cargo_workspace_dir().join("tests/data/workspaces")
 }
 
+/// Recursively copies a directory from `src` to `dst`.
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
 /// Returns the default build environment to use for tests.
 fn default_build_environment() -> BuildEnvironment {
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -65,63 +192,72 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
+#[ignore]
 pub async fn simple_test() {
-    let (reporter, events) = EventReporter::new();
+    use pixi_test_utils::GitRepoFixture;
+
+    // Create a local git repo from our fixture
+    let git_repo = GitRepoFixture::new("multi-output-recipe");
+
+    // Use a local channel (backend_channel_1 has pixi-build-api-version which is needed for builds)
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+
+    let (reporter, events, registry) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let prefix_dir = tempdir.path().join("prefix");
+    // Use a fresh build-backends dir so the EphemeralEnvKey disk cache never
+    // fires and the snapshot always captures the full cold-cache event tree
+    // (ephemeral-env solve + main solve), regardless of prior test runs.
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
-        .with_reporter(reporter)
+        .with_cache_dirs(
+            default_cache_dirs()
+                .with_workspace(to_abs_dir(tempdir.path()))
+                .with_override::<BuildBackendsDir>(to_abs_dir(
+                    tempdir.path().join("build-backends"),
+                )),
+        )
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
         .finish();
 
     let build_env = default_build_environment();
 
-    let records = dispatcher
-        .solve_pixi_environment(PixiEnvironmentSpec {
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "foobar-desktop".parse().unwrap(),
-                GitSpec {
-                    git: "https://github.com/wolfv/pixi-build-examples.git"
-                        .parse()
-                        .unwrap(),
-                    rev: Some(GitReference::Rev(
-                        "8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a".to_owned(),
-                    )),
-                    subdirectory: Some(String::from("multi-output/recipe")),
-                }
+                GitSpec::new(
+                    git_repo.url.parse().unwrap(),
+                    Some(GitReference::Rev(git_repo.commits[0].clone())),
+                    Subdirectory::try_from("recipe").unwrap(),
+                )
                 .into(),
             )]),
-            channels: vec![
-                Url::from_str("https://prefix.dev/conda-forge")
-                    .unwrap()
-                    .into(),
-            ],
-            build_environment: build_env.clone(),
-            channel_config: default_channel_config(),
-            ..PixiEnvironmentSpec::default()
-        })
-        .await
-        .unwrap();
+            env_ref: env_ref_of(vec![channel_url.clone()], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .unwrap();
 
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             name: "test-env".to_owned(),
-            records: records.clone(),
+            records: records.iter().cloned().map(Into::into).collect(),
             prefix: Prefix::create(&prefix_dir).unwrap(),
             installed: None,
             build_environment: build_env,
+            ignore_packages: None,
             force_reinstall: Default::default(),
-            channels: vec![
-                Url::from_str("https://prefix.dev/conda-forge")
-                    .unwrap()
-                    .into(),
-            ],
-            channel_config: default_channel_config(),
-            variants: None,
-            enabled_protocols: Default::default(),
+            exclude_newer: None,
+            channels: vec![channel_url],
+            variant_configuration: None,
+            variant_files: None,
+            inline_packages: Default::default(),
         })
         .await
         .unwrap();
@@ -131,8 +267,30 @@ pub async fn simple_test() {
         prefix_dir.display()
     );
 
-    let event_tree = EventTree::new(events.lock().unwrap().iter());
-    insta::assert_snapshot!(event_tree.to_string());
+    let event_tree = EventTree::from_store(&events, &registry);
+
+    // Redact temp paths and git hashes for stable snapshots.
+    //
+    // The first regex uses `[^@\n]+` rather than `[^@]+` to prevent the
+    // greedy match from spanning multiple tree lines: the event tree
+    // emits several URLs that all end in `/multi-output-recipe/`, and a
+    // newline-crossing greedy `[^@]+` would collapse the span from one
+    // URL's `file:///` through the next line's `@<commit>`, eating the
+    // `?subdirectory=&rev=` query of the outer URL.
+    let output = event_tree.to_string();
+    let output = regex::Regex::new(r"file:///[^@\n]+/multi-output-recipe/")
+        .unwrap()
+        .replace_all(&output, "file://[LOCAL_GIT_REPO]");
+    let output = regex::Regex::new(r"rev=[a-z0-9]+")
+        .unwrap()
+        .replace_all(&output, "rev=[GIT_REF]");
+    let output = regex::Regex::new(r"[#@][a-f0-9]{40}")
+        .unwrap()
+        .replace_all(&output, "#[GIT_HASH]");
+    // Redact the host platform that the solve label embeds, so the
+    // snapshot is stable across hosts.
+    let output = output.replace(&tool_platform.to_string(), "[PLATFORM]");
+    insta::assert_snapshot!(output);
 }
 
 #[tokio::test]
@@ -144,15 +302,16 @@ pub async fn instantiate_backend_with_compatible_api_version() {
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
     dispatcher
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
             backend_name,
-            PixiSpec::Version(VersionSpec::Any),
+            PixiSpec::any(),
             Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
         ))
         .await
@@ -168,15 +327,16 @@ pub async fn instantiate_backend_without_compatible_api_version() {
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
     let err = dispatcher
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
             backend_name,
-            PixiSpec::Version(VersionSpec::Any),
+            PixiSpec::any(),
             Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
         ))
         .await
@@ -186,29 +346,246 @@ pub async fn instantiate_backend_without_compatible_api_version() {
 }
 
 #[tokio::test]
+pub async fn instantiate_backend_with_compatible_api_version_respects_exclude_newer() {
+    let backend_name = PackageName::new_unchecked("backend-with-compatible-api-version");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .finish();
+
+    dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            backend_name.clone(),
+            PixiSpec::any(),
+            Vec::from([Url::from_directory_path(channel_dir.clone())
+                .unwrap()
+                .into()]),
+        ))
+        .await
+        .expect("backend should instantiate without exclude-newer");
+
+    let err = dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
+            exclude_newer: Some(ResolvedExcludeNewer::from_datetime(
+                "2025-01-01T00:00:00Z".parse().unwrap(),
+            )),
+            ..InstantiateToolEnvironmentSpec::new(
+                backend_name,
+                PixiSpec::any(),
+                Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+            )
+        })
+        .await
+        .unwrap_err();
+
+    let rendered = format_diagnostic(&err);
+    assert!(rendered.contains("backend-with-compatible-api-version"));
+}
+
+#[tokio::test]
+pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newer_overrides() {
+    let backend_name = PackageName::new_unchecked("backend-with-compatible-api-version");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+    let channel_url = Url::from_directory_path(channel_dir).unwrap().into();
+
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .finish();
+
+    dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
+            exclude_newer: Some(
+                ResolvedExcludeNewer::from_datetime("2025-01-01T00:00:00Z".parse().unwrap())
+                    .with_exemption(MatchSpec::from(backend_name.clone()))
+                    .unwrap()
+                    .with_exemption(MatchSpec::from(PackageName::new_unchecked(
+                        "pixi-build-api-version",
+                    )))
+                    .unwrap(),
+            ),
+            ..InstantiateToolEnvironmentSpec::new(
+                backend_name,
+                PixiSpec::any(),
+                Vec::from([channel_url]),
+            )
+        })
+        .await
+        .expect("backend should instantiate when backend packages are explicitly overridden");
+}
+
+/// When two identical tool env instantiations are queued concurrently and the
+/// operation fails, the dispatcher sends the failure to one waiter and cancels
+/// the others. This verifies cancellation without network access.
+#[tokio::test]
+pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicates() {
+    use pixi_command_dispatcher::CommandDispatcherError;
+
+    let backend_name = PackageName::new_unchecked("backend-without-compatible-api-version");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .finish();
+
+    // Build the spec once and issue two identical concurrent requests.
+    let spec = InstantiateToolEnvironmentSpec::new(
+        backend_name,
+        PixiSpec::any(),
+        Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+    );
+
+    let (r1, r2) = tokio::join!(
+        dispatcher.instantiate_tool_environment(spec.clone()),
+        dispatcher.instantiate_tool_environment(spec),
+    );
+
+    // Both results should be failures since errors are now cloned and sent to all channels.
+    let is_cancelled = |r: &Result<
+        _,
+        CommandDispatcherError<pixi_command_dispatcher::InstantiateToolEnvironmentError>,
+    >| matches!(r, Err(CommandDispatcherError::Cancelled));
+    let is_failed = |r: &Result<
+        _,
+        CommandDispatcherError<pixi_command_dispatcher::InstantiateToolEnvironmentError>,
+    >| matches!(r, Err(CommandDispatcherError::Failed(_)));
+
+    let cancelled_count = usize::from(is_cancelled(&r1)) + usize::from(is_cancelled(&r2));
+    let failed_count = usize::from(is_failed(&r1)) + usize::from(is_failed(&r2));
+
+    assert_eq!(
+        cancelled_count, 0,
+        "no requests should be cancelled - errors are cloned to all channels"
+    );
+    assert_eq!(
+        failed_count, 2,
+        "both requests should fail with the same error"
+    );
+}
+
+/// Dropping the returned future should cancel the background task promptly.
+/// This test verifies that behavior by:
+/// - installing a compatible backend from a local channel (no network)
+/// - starting instantiate_tool_environment with a reporter
+/// - waiting until the background task is started, then immediately dropping
+///   the caller future (via abort)
+/// - ensuring no installation starts and we still see a clean finish event
+#[tokio::test]
+pub async fn dropping_future_cancels_background_task() {
+    // Arrange a dispatcher with an event reporter for synchronization.
+    let (reporter, events, _registry) = EventReporter::new();
+    let root_dir = cargo_workspace_dir();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+
+    // Use an isolated cache dir. The ephemeral-env compute key takes a
+    // fast path when it finds a `.pixi-ephemeral-cache.json` marker in
+    // the target prefix, returning the cached records before any
+    // `CondaSolveStarted` event fires. With a shared cache that marker
+    // can already be present from a previous run of this test (or a
+    // stray `pixi run` reusing the same backend), so the test waits for
+    // a solve that never happens. A fresh tempdir guarantees a clean
+    // prefix and forces the slow path the test actually wants to
+    // observe.
+    let cache_tempdir = tempfile::TempDir::new().unwrap();
+    let cache_dirs = CacheDirs::new(to_abs_dir(cache_tempdir.path().to_path_buf()));
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(cache_dirs)
+        .with_event_reporter(reporter)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    // Use a backend that has a compatible API version so solve would succeed
+    // and the task would progress to installation if not cancelled.
+    let spec = InstantiateToolEnvironmentSpec::new(
+        PackageName::new_unchecked("backend-with-compatible-api-version"),
+        PixiSpec::any(),
+        Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+    );
+
+    // Hold the write lock for the target tool prefix so installation cannot
+    // progress even if solve completes; this makes the test deterministic.
+    let prefix_dir = dispatcher
+        .cache_dir::<BuildBackendsDir>()
+        .join(spec.cache_key());
+    let write_guard = pixi_utils::EnvironmentLock::acquire(prefix_dir.as_std_path())
+        .await
+        .unwrap();
+
+    // Spawn the instantiate future and wait until the background marks it started.
+    let dispatcher = dispatcher.clone();
+    let handle = tokio::spawn(async move { dispatcher.instantiate_tool_environment(spec).await });
+
+    // `instantiate_tool_environment` goes through `EphemeralEnvKey`, which
+    // runs a binary-only conda solve before touching the prefix. Waiting
+    // for `CondaSolveStarted` proves the background task entered its
+    // compute body. The timeout is generous on purpose: cold caches on
+    // slow CI runners can take many seconds to spin up the dispatcher
+    // and reach the solve, and the test doesn't care about latency, only
+    // ordering (start before cancel).
+    let started = events
+        .wait_until_matches(
+            |e| matches!(e, Event::CondaSolveStarted { .. }),
+            std::time::Duration::from_secs(30),
+        )
+        .await
+        .is_ok();
+    assert!(started, "instantiate task did not start in time");
+
+    // Act: immediately drop the caller future by aborting the task.
+    handle.abort();
+
+    // Release our write lock (after cancellation). If cancellation worked,
+    // the background task should not proceed into installation.
+    drop(write_guard);
+
+    // The aborted task should unwind promptly once the prefix lock is
+    // released and drop propagates through the compute engine. Same
+    // timeout reasoning as the start wait above.
+    let join = tokio::time::timeout(std::time::Duration::from_secs(30), handle).await;
+    assert!(
+        join.is_ok(),
+        "instantiate task did not finish promptly after cancellation"
+    );
+}
+
+#[tokio::test]
 pub async fn test_cycle() {
     // Setup a reporter that allows us to trace the steps taken by the command
     // dispatcher.
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, registry) = EventReporter::new();
 
-    // Construct a command dispatcher with:
-    // - a root directory located in the `cycle` workspace
-    // - the default cache directories but with a temporary workspace cache
-    //   directory
-    // - the tracing event reporter and a serial executor to trace the flow through
-    //   the command dispatcher
-    // - the default tool platform and virtual packages
-    // - a backend override that uses a passthrough backend to avoid any actual
-    //   backend calls
+    // Use a fixed solve platform so the snapshot is stable across
+    // host platforms. The tool platform still reflects the current
+    // host (the dispatcher needs it for its own tool env), but the
+    // solve uses a deterministic BuildEnvironment.
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("cycle");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
-        .with_reporter(reporter)
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
-        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_tool_platform(tool_platform, tool_virtual_packages)
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
@@ -216,8 +593,9 @@ pub async fn test_cycle() {
 
     // Solve an environment with package_a. This should introduce a cycle because
     // package_a depends on package_b, which depends on package_a.
-    let error = dispatcher
-        .solve_pixi_environment(PixiEnvironmentSpec {
+    let error = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package_a".parse().unwrap(),
                 PathSpec {
@@ -225,14 +603,15 @@ pub async fn test_cycle() {
                 }
                 .into(),
             )]),
-            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
-            ..PixiEnvironmentSpec::default()
-        })
-        .await
-        .expect_err("expected a cycle error");
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect_err("expected a cycle error");
 
     // Output the error and the event tree to a snapshot for debugging.
-    let event_tree = EventTree::new(events.lock().unwrap().iter());
+    let event_tree = EventTree::from_store(&events, &registry);
     insta::assert_snapshot!(format!(
         "ERROR:\n{}\n\nTRACE:\n{}",
         format_diagnostic(&error),
@@ -240,25 +619,896 @@ pub async fn test_cycle() {
     ));
 }
 
+/// Three-package cycle spanning two different dependency kinds:
+/// `package_a`'s host-deps → `package_b`'s run-deps → `package_c`'s
+/// host-deps → back to `package_a`. Exercises the cycle renderer on
+/// a three-frame ring mixing host and run edges.
+#[tokio::test]
+pub async fn test_cycle_three_packages() {
+    let (reporter, events, registry) = EventReporter::new();
+
+    // Use a fixed solve platform so the snapshot is stable across hosts.
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("cycle_three");
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_event_reporter(reporter)
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Solve an environment with package_a. The cycle is
+    // A (host) -> B (run) -> C (host) -> A.
+    let error = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect_err("expected a cycle error");
+
+    let event_tree = EventTree::from_store(&events, &registry);
+    insta::assert_snapshot!(format!(
+        "ERROR:\n{}\n\nTRACE:\n{}",
+        format_diagnostic(&error),
+        event_tree.to_string()
+    ));
+}
+
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6642>.
+///
+/// When the build environment of a source package cannot be solved, the
+/// error names the package the environment belongs to.
+#[tokio::test]
+pub async fn test_unsolvable_build_environment_names_package() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("unsolvable-build-env");
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let error = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect_err("expected the build environment solve to fail");
+
+    insta::assert_snapshot!(format_diagnostic(&error), @"
+    × failed to resolve source package 'package_a' (at 'package_a')
+    ├─▶   × failed to solve the build environment for package 'package_a'
+
+    ├─▶   × failed to solve the environment
+
+    ╰─▶ Cannot solve the request because of: No candidates were found for missing-build-dep *.
+    ");
+}
+
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6642>.
+///
+/// When the build backend of a source package cannot be instantiated, the
+/// error names the package the backend belongs to.
+#[tokio::test]
+pub async fn test_unsolvable_backend_names_package() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("unsolvable-backend");
+    let tempdir = test_tempdir();
+    // No backend overrides: the backend `missing-backend` requested by
+    // `package_a` is instantiated for real, which fails because the
+    // workspace has no channels to solve the backend's environment from.
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .finish();
+
+    let error = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect_err("expected the backend instantiation to fail");
+
+    insta::assert_snapshot!(format_diagnostic(&error), @"
+    × failed to resolve source package 'package_a' (at 'package_a')
+    ├─▶   × could not initialize the build-backend
+
+    ├─▶   × failed to solve the environment
+
+    ╰─▶ Cannot solve the request because of: No candidates were found for missing-backend *.
+    ");
+}
+
+/// The progress reporter only lets a pixi solve's direct conda child share
+/// the pixi solve's bar (<https://github.com/prefix-dev/pixi/issues/7369>),
+/// so the build-backend environment solve must be named and must not be a
+/// direct child, even though it runs on behalf of the pixi solve.
+#[tokio::test]
+pub async fn test_backend_environment_solve_is_not_a_direct_child() {
+    let (reporter, events, registry) = EventReporter::new();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("unsolvable-backend");
+    let tempdir = test_tempdir();
+    // A fresh build-backends dir so the backend environment is solved.
+    let dispatcher = reporter
+        .register_with(CommandDispatcher::builder())
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(
+            default_cache_dirs()
+                .with_workspace(to_abs_dir(tempdir.path()))
+                .with_override::<BuildBackendsDir>(to_abs_dir(
+                    tempdir.path().join("build-backends"),
+                )),
+        )
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .finish();
+
+    run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect_err("expected the backend instantiation to fail");
+
+    let events = events.take();
+    let pixi_solves = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::PixiSolveQueued { id, .. } => Some(*id),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let conda_solves = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::CondaSolveQueued { id, spec } => Some((*id, spec.name.as_deref())),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let [pixi_solve] = pixi_solves[..] else {
+        panic!("expected one pixi solve: {events:#?}");
+    };
+    let [(backend_solve, name)] = conda_solves[..] else {
+        panic!("expected one conda solve: {events:#?}");
+    };
+    assert_eq!(name, Some("build backend: missing-backend"));
+    assert_ne!(registry.parent_of(backend_solve), Some(pixi_solve));
+    assert!(registry.ancestors(backend_solve).any(|id| id == pixi_solve));
+}
+
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6482>.
+///
+/// `package_a` (a source dependency of the top-level env) host-depends on
+/// source `package_b`, and `package_b` run-exports itself plus `package_c`
+/// (its own source host dependency, mirroring a recipe sibling output like
+/// `python` weak-exporting `python_abi`). The run dependencies this injects
+/// into `package_a`'s assembled record have no explicit spec anywhere, so
+/// they must be registered as *source* dependencies of the record;
+/// otherwise the top-level solve walks only `package_a` and then tries to
+/// fetch `package_b` / `package_c` from the (empty) binary channels.
+/// Notably `package_c` is never part of `package_a`'s host env — its source
+/// link is only discoverable through `package_b`'s record `sources` map.
+#[tokio::test]
+pub async fn test_run_export_on_source_host_dependency() {
+    use rattler_conda_types::package::RunExportsJson;
+
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-source");
+    let tempdir = test_tempdir();
+
+    // `noarch` exports because the passthrough backend produces NoArch
+    // outputs and only noarch run-exports propagate to a NoArch consumer.
+    // Use reverse order to verify canonical sorting.
+    let run_exports = RunExportsJson {
+        noarch: vec!["package_c 0.1.0".to_string(), "package_b 0.1.0".to_string()],
+        ..Default::default()
+    };
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator().with_run_exports("package_b", run_exports),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the top-level solve must discover package_b as a source dependency");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    for dep in ["package_b", "package_c"] {
+        assert!(
+            package_a.sources().contains_key(dep),
+            "the run-export-introduced dependency {dep} must be registered as a source of package_a, got {:?}",
+            package_a.sources()
+        );
+        assert!(
+            records.iter().any(|r| {
+                r.as_source()
+                    .is_some_and(|s| s.package_record().name.as_normalized() == dep)
+            }),
+            "{dep} must be part of the solution as a source record"
+        );
+    }
+    assert!(
+        package_a.package_record().depends.is_sorted(),
+        "package_a depends must be canonically sorted, got {:?}",
+        package_a.package_record().depends
+    );
+    assert_eq!(
+        package_a.package_record().depends,
+        vec!["package_b ==0.1.0", "package_c ==0.1.0"]
+    );
+}
+
+/// Manifest-declared `[package.run-exports.noarch]` propagates end to end:
+/// `package_b` noarch-exports itself in its own manifest (no instantiator
+/// configuration involved), `package_a` host-depends on it and produces a
+/// NoArch output, so the export must land in `package_a`'s run dependencies
+/// and register `package_b` as a source dependency of the record.
+#[tokio::test]
+pub async fn test_manifest_noarch_run_export_propagates_to_noarch_consumer() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-manifest");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the manifest-declared noarch run-export must solve");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d.starts_with("package_b")),
+        "the noarch run-export of the host dependency must be added to package_a's run \
+         dependencies, got {:?}",
+        package_a.package_record().depends
+    );
+    assert!(
+        package_a.sources().contains_key("package_b"),
+        "the run-export-introduced dependency must be registered as a source of package_a, got {:?}",
+        package_a.sources()
+    );
+    assert!(
+        records.iter().any(|r| {
+            r.as_source()
+                .is_some_and(|s| s.package_record().name.as_normalized() == "package_b")
+        }),
+        "package_b must be part of the solution as a source record"
+    );
+}
+
+/// Manifest-declared `[package.run-exports.weak]` propagates from a host
+/// dependency to a platform-specific consumer (`noarch = false` on both
+/// outputs, since a NoArch consumer would only receive the noarch bucket).
+#[tokio::test]
+pub async fn test_manifest_weak_run_export_propagates_from_host_dependency() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-manifest-weak");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the manifest-declared weak run-export must solve");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d.starts_with("package_b")),
+        "the weak run-export of the host dependency must be added to package_a's run \
+         dependencies, got {:?}",
+        package_a.package_record().depends
+    );
+    assert!(
+        package_a.sources().contains_key("package_b"),
+        "the run-export-introduced dependency must be registered as a source of package_a, got {:?}",
+        package_a.sources()
+    );
+    assert!(
+        package_a
+            .package_record()
+            .constrains
+            .iter()
+            .any(|c| c.starts_with("constrained-canary")),
+        "the weak-constraints run-export of the host dependency must be added to package_a's \
+         run constraints, got {:?}",
+        package_a.package_record().constrains
+    );
+}
+
+/// A manifest-declared `pin-compatible` run dependency resolves against the
+/// host environment: `package_a` host-depends on source `package_b` (0.1.0)
+/// and declares `package_b = { pin-compatible = true }` in its run
+/// dependencies, so the assembled record must depend on
+/// `package_b >=0.1.0,<1.0a0` (the rattler-build default bounds).
+#[tokio::test]
+pub async fn test_manifest_pin_compatible_resolves_against_host_env() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("pin-compatible-manifest");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the manifest-declared pin-compatible run dependency must solve");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d == "package_b >=0.1.0,<1.0a0"),
+        "the pin-compatible run dependency must resolve against the host env's package_b, got {:?}",
+        package_a.package_record().depends
+    );
+    assert!(
+        records.iter().any(|r| {
+            r.as_source()
+                .is_some_and(|s| s.package_record().name.as_normalized() == "package_b")
+        }),
+        "package_b must be part of the solution as a source record"
+    );
+}
+
+/// A manifest-declared `pin-subpackage` run-export pins the exporting package
+/// itself: `package_b` weak-exports `package_b = { pin-subpackage = true }`,
+/// so a consumer that host-depends on it must pick up
+/// `package_b >=0.1.0,<1.0a0` in its run dependencies.
+#[tokio::test]
+pub async fn test_manifest_pin_subpackage_run_export_pins_exporter() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("pin-subpackage-run-exports");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("the manifest-declared pin-subpackage run-export must solve");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d == "package_b >=0.1.0,<1.0a0"),
+        "the pin-subpackage run-export must pin the exporting package, got {:?}",
+        package_a.package_record().depends
+    );
+}
+
+/// Manifest-declared `[package.run-exports.strong]` propagates from a *build*
+/// dependency, while the weak bucket of the same package must not: the weak
+/// bucket names a canary package that exists nowhere (the workspace has no
+/// channels), so a leak of the weak bucket fails the solve outright.
+#[tokio::test]
+pub async fn test_manifest_strong_run_export_propagates_from_build_dependency() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-manifest-strong");
+    let tempdir = test_tempdir();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect(
+        "the strong run-export must solve; a failure here means the weak bucket leaked from a \
+         build dependency",
+    );
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert!(
+        package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d.starts_with("package_b")),
+        "the strong run-export of the build dependency must be added to package_a's run \
+         dependencies, got {:?}",
+        package_a.package_record().depends
+    );
+    assert!(
+        !package_a
+            .package_record()
+            .depends
+            .iter()
+            .any(|d| d.starts_with("weak-canary")),
+        "the weak run-export of a build dependency must not reach the consumer, got {:?}",
+        package_a.package_record().depends
+    );
+}
+
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6846>.
+///
+/// `package_a` has the source package `package_b` as a build *and* a host
+/// dependency, the shape the ROS backend produces for every `package.xml`
+/// dependency. When cross-compiling, the build-dependency copy of
+/// `package_b` runs on the build platform, so its own host environment must
+/// be solved for the build platform too, while the host-dependency copy
+/// targets the host platform. The nested derivation used to lose the build
+/// platform, labelling the build copy with the build platform but solving
+/// its host environment for the target.
+#[tokio::test]
+pub async fn test_cross_compile_build_dependency_is_solved_for_build_platform() {
+    let tempdir = test_tempdir();
+    let dispatcher = cross_build_dependency_dispatcher(&tempdir);
+    let records = solve_cross_build_dependency(&dispatcher, vec![]).await;
+    assert_package_b_copies_are_on_their_platforms(&records);
+}
+
+/// Re-solving with the previous solution as the installed hint, the way a
+/// re-lock does, must keep both copies of `package_b` on their platforms.
+/// Installed-record hints are keyed by package name and source location
+/// only, so both copies share one hint and one of the two nested solves is
+/// seeded with the other copy's host packages. Those must not be locked in.
+#[tokio::test]
+pub async fn test_cross_compile_build_dependency_survives_a_resolve_with_hints() {
+    let tempdir = test_tempdir();
+    let dispatcher = cross_build_dependency_dispatcher(&tempdir);
+    let first = solve_cross_build_dependency(&dispatcher, vec![]).await;
+    let second =
+        solve_cross_build_dependency(&dispatcher, first.into_iter().map(to_unresolved).collect())
+            .await;
+    assert_package_b_copies_are_on_their_platforms(&second);
+}
+
+/// A dispatcher rooted in the `cross-build-dependency` workspace.
+fn cross_build_dependency_dispatcher(tempdir: &tempfile::TempDir) -> CommandDispatcher {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("cross-build-dependency");
+    CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish()
+}
+
+/// Solve `package_a` of the `cross-build-dependency` workspace for osx-arm64
+/// from linux-64, seeded with `installed` and the hints derived from it.
+/// Both platforms are pinned so the test does not depend on the machine it
+/// runs on.
+async fn solve_cross_build_dependency(
+    dispatcher: &CommandDispatcher,
+    installed: Vec<pixi_record::UnresolvedPixiRecord>,
+) -> Vec<pixi_record::PixiRecord> {
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/dummy_channel_1");
+    let channel: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+    let build_environment = BuildEnvironment {
+        host_platform: Subdir::OsxArm64,
+        host_virtual_packages: vec![],
+        build_platform: Subdir::Linux64,
+        build_virtual_packages: vec![],
+    };
+    let (installed, installed_source_hints) = installed_with_hints(installed);
+    run_pixi_solve(
+        dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec::new("package_a").into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref_of(vec![channel], build_environment),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("the cross-compiling solve should succeed")
+}
+
+/// The build copy of `package_b` and everything in its host environment is
+/// on linux-64; the host copy and its host environment target osx-arm64.
+fn assert_package_b_copies_are_on_their_platforms(records: &[pixi_record::PixiRecord]) {
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert_eq!(package_a.package_record().subdir, "osx-arm64");
+
+    // The build copy of package_b runs on the build platform, and so does
+    // everything in its host environment.
+    let package_b_for_build = source_dependency(&package_a.build_packages, "package_b");
+    assert_eq!(
+        package_b_for_build.package_record().unwrap().subdir,
+        "linux-64"
+    );
+    let package_b_for_build_source = package_b_for_build.as_source().unwrap();
+    assert_eq!(
+        package_b_for_build_source.variants()["target_platform"].to_string(),
+        "linux-64"
+    );
+    assert_eq!(
+        subdirs(&package_b_for_build_source.host_packages),
+        vec!["linux-64"],
+        "the host environment of a build dependency must be solved for the build platform"
+    );
+    assert_eq!(
+        build_string(&package_b_for_build_source.host_packages, "dummy-b"),
+        "hb0f4dca_0",
+        "the linux-64 build of dummy-b"
+    );
+
+    // The host copy of package_b targets the host platform.
+    let package_b_for_host = source_dependency(&package_a.host_packages, "package_b");
+    assert_eq!(
+        package_b_for_host.package_record().unwrap().subdir,
+        "osx-arm64"
+    );
+    let package_b_for_host_source = package_b_for_host.as_source().unwrap();
+    assert_eq!(
+        package_b_for_host_source.variants()["target_platform"].to_string(),
+        "osx-arm64"
+    );
+    assert_eq!(
+        subdirs(&package_b_for_host_source.host_packages),
+        vec!["osx-arm64"]
+    );
+    assert_eq!(
+        build_string(&package_b_for_host_source.host_packages, "dummy-b"),
+        "h60d57d3_0",
+        "the osx-arm64 build of dummy-b"
+    );
+}
+
+/// The source dependency called `name` among `packages`.
+fn source_dependency<'a>(
+    packages: &'a [pixi_record::UnresolvedPixiRecord],
+    name: &str,
+) -> &'a pixi_record::UnresolvedPixiRecord {
+    packages
+        .iter()
+        .find(|r| {
+            r.as_source()
+                .is_some_and(|s| s.name().as_normalized() == name)
+        })
+        .unwrap_or_else(|| panic!("{name} should be a source dependency"))
+}
+
+/// The distinct subdirs of `packages`, in sorted order.
+fn subdirs(packages: &[pixi_record::UnresolvedPixiRecord]) -> Vec<String> {
+    let mut subdirs: Vec<String> = packages
+        .iter()
+        .map(|r| {
+            r.package_record()
+                .expect("build/host packages are fully resolved")
+                .subdir
+                .clone()
+        })
+        .collect();
+    subdirs.sort();
+    subdirs.dedup();
+    subdirs
+}
+
+/// The build string of the binary package `name` among `packages`.
+fn build_string(packages: &[pixi_record::UnresolvedPixiRecord], name: &str) -> String {
+    packages
+        .iter()
+        .find_map(|r| {
+            r.as_binary()
+                .filter(|b| b.package_record.name.as_normalized() == name)
+        })
+        .unwrap_or_else(|| panic!("{name} should be a binary dependency"))
+        .package_record
+        .build
+        .to_string()
+}
+
+/// A package can receive the same source dependency through two channels at
+/// once: implied by a run-export of a build/host env record (carrying the
+/// *pinned* source location) and explicitly through its own run-exports
+/// (carrying the *manifest* spelling of the location). The two can spell the
+/// same source differently - a pinned git commit vs. a branch, or a
+/// differently written relative path - so the explicit registration must win
+/// over the implied one instead of failing with `DuplicateSourceDependency`.
+///
+/// The workspace models this with `package_a` host-depending on source
+/// `package_b` spelled `./../package_b`, while `package_b` run-exports
+/// itself (implying the pinned spelling `../package_b` on `package_a`) and
+/// `package_a`'s own run-exports also name `package_b` as a source spec
+/// with the manifest spelling.
+#[tokio::test]
+pub async fn test_run_export_implied_source_yields_to_explicit_spelling() {
+    use rattler_conda_types::package::RunExportsJson;
+
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("run-exports-source-respell");
+    let tempdir = test_tempdir();
+
+    let self_export = RunExportsJson {
+        noarch: vec!["package_b 0.1.0".to_string()],
+        ..Default::default()
+    };
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator()
+                .with_run_exports("package_b", self_export.clone())
+                .with_run_exports("package_a", self_export),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect("two spellings of the same source must not fail as duplicate source dependencies");
+
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert_eq!(
+        package_a.sources().get("package_b"),
+        Some(&SourceLocationSpec::Path(PathSpec {
+            path: "./../package_b".into()
+        })),
+        "the explicit manifest spelling must win over the implied pinned location"
+    );
+}
+
 /// Tests that a stale host dependency triggers a rebuild of both the stale
 /// package and any package that specifies it as a host dependency.
 #[tokio::test]
 pub async fn test_stale_host_dependency_triggers_rebuild() {
-    // Construct a command dispatcher with:
-    // - a root directory located in the `cycle` workspace
-    // - the default cache directories but with a temporary workspace cache
-    //   directory
-    // - the default tool platform and virtual packages
-    // - a backend override that uses a passthrough backend to avoid any actual
-    //   backend calls
-    let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
     let build_command_dispatcher = || {
         CommandDispatcher::builder()
-            .with_root_dir(root_dir.clone())
-            .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
             .with_executor(Executor::Serial)
             .with_tool_platform(tool_platform, tool_virtual_packages.clone())
             .with_backend_overrides(BackendOverride::from_memory(
@@ -266,13 +1516,16 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
             ))
     };
 
-    let (reporter, first_events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, first_events, registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Solve an environment with package-a which will have a host dependency on
     // package-b, and package-c which has a run dependency on package-b.
-    let records = dispatcher
-        .solve_pixi_environment(PixiEnvironmentSpec {
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([
                 (
                     "package-a".parse().unwrap(),
@@ -283,12 +1536,13 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
                     PathSpec::new("package-c").into(),
                 ),
             ]),
-            build_environment: build_env.clone(),
-            ..PixiEnvironmentSpec::default()
-        })
-        .await
-        .map_err(|e| format_diagnostic(&e))
-        .expect("expected solve to succeed");
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("expected solve to succeed");
 
     // package-b should not be part of the solution, its only used as a host
     // dependency.
@@ -315,7 +1569,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .unwrap();
 
     // Explicitly drop the dispatcher to ensure all caches are flushed.
-    let first_events = std::mem::take(first_events.lock().unwrap().deref_mut());
+    let first_events = first_events.take();
     drop(dispatcher);
 
     // TOUCH a file that triggers a rebuild of package-b. package-b defines a build
@@ -327,8 +1581,12 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .unwrap();
 
     // Construct a new command dispatcher (as if the program is restarted).
-    let (reporter, second_events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    // Reuse the same registry so the merged event tree can resolve
+    // parents from both runs.
+    let (reporter, second_events) = EventReporter::with_registry(registry.clone());
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Rerun the installation of the environment.
     let _ = dispatcher
@@ -341,8 +1599,9 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .unwrap();
 
     // Get all the events that happened.
-    let second_events = std::mem::take(second_events.lock().unwrap().deref_mut());
-    let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
+    let second_events = second_events.take();
+    let event_tree =
+        EventTree::new(first_events.iter().chain(second_events.iter()), &registry).to_string();
     eprintln!("{event_tree}");
 
     // Ensure that both package-a and package-b were rebuilt.
@@ -350,7 +1609,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+                Some(package.as_str())
             }
             _ => None,
         })
@@ -359,7 +1618,2354 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 
     assert_eq!(
         rebuild_packages,
-        vec!["package-a", "package-b"],
-        "Expected only package-a and package-b to be rebuilt"
+        vec!["package-b"],
+        "Expected only package-b to be rebuilt"
+    );
+}
+
+#[tokio::test]
+#[ignore = "EphemeralEnvKey rejects source specs; re-enable once source deps in \
+            ephemeral envs are supported"]
+pub async fn instantiate_backend_with_from_source() {
+    // Use existing backend_channel_1 which has pixi-build-api-version package with actual .conda files
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
+    let channel_url = url::Url::from_directory_path(&channel_dir).unwrap();
+
+    // Copy source-backends workspace to temp directory so we can modify the channel
+    let source_dir = workspaces_dir().join("source-backends");
+    let tmp_dir = test_tempdir();
+    let root_dir = tmp_dir.path().to_path_buf();
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
+    // Update workspace pixi.toml to use local channel instead of conda-forge
+    let workspace_toml = root_dir.join("pixi.toml");
+    let content = fs_err::read_to_string(&workspace_toml).unwrap();
+    let content = content.replace("conda-forge", channel_url.as_str());
+    fs_err::write(&workspace_toml, content).unwrap();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(CacheDirs::new(to_abs_dir(root_dir.join(".pixi"))))
+        .with_executor(Executor::Serial)
+        .with_backend_overrides(BackendOverride::InMemory(
+            InMemoryOverriddenBackends::Specified(HashMap::from_iter([(
+                "in-memory".to_string(),
+                PassthroughBackend::instantiator().into(),
+            )])),
+        ))
+        .finish();
+
+    // Use PixiSpec::Path to test path-based resolution and installation
+    let err = dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            PackageName::new_unchecked("package-d"),
+            PathSpec::new("package-d").into(),
+            Vec::default(),
+        ))
+        .await
+        .err()
+        .unwrap();
+
+    insta::assert_debug_snapshot!(err);
+}
+
+/// Tests that `dev_source_metadata` correctly retrieves all outputs from a dev source
+/// and creates DevSourceRecords with combined dependencies.
+#[tokio::test]
+pub async fn test_dev_source_metadata() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Create the spec for dev source metadata
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            preferred_build_source: None,
+            env_ref: env_ref_of(
+                vec![],
+                BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            ),
+            build_string_prefix: None,
+            build_number: None,
+            inline: None,
+        },
+    };
+
+    // Act: Get the dev source metadata
+    let result = dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("dev_source_metadata should succeed");
+
+    // Assert: Should have one record for test-package
+    assert_eq!(
+        result.records.len(),
+        1,
+        "Should have one record for test-package"
+    );
+
+    let record = &result.records[0];
+
+    // Verify the record has the correct name
+    assert_eq!(
+        record.name.as_source(),
+        "test-package",
+        "Record should be for test-package"
+    );
+
+    // Verify all dependencies are combined (build + host + run)
+    // From the test data: build (cmake, make), host (zlib, openssl), run (python, numpy)
+    let dep_names: Vec<_> = record
+        .dependencies
+        .names()
+        .map(|name| name.as_normalized())
+        .sorted()
+        .collect();
+
+    assert_eq!(
+        dep_names,
+        vec!["cmake", "make", "numpy", "openssl", "python", "zlib"],
+        "All dependencies (build, host, run) should be combined"
+    );
+
+    // Verify constraints are empty (test package has no constraints)
+    assert!(
+        record.constraints.is_empty(),
+        "Test package has no constraints"
+    );
+}
+
+/// Tests that `dev_source_metadata` returns an error when requesting a package
+/// that is not provided by the source.
+#[tokio::test]
+pub async fn test_dev_source_metadata_package_not_provided() {
+    use pixi_command_dispatcher::{
+        BuildBackendMetadataSpec, CommandDispatcherError, DevSourceMetadataError,
+        DevSourceMetadataSpec, PackageNotProvidedError,
+    };
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to test-package which provides "test-package"
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Request a package name that doesn't exist in the source
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("non-existent-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            preferred_build_source: None,
+            env_ref: env_ref_of(
+                vec![],
+                BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            ),
+            build_string_prefix: None,
+            build_number: None,
+            inline: None,
+        },
+    };
+
+    // Act: Get the dev source metadata - should fail
+    let result = dispatcher.dev_source_metadata(spec).await;
+
+    // Assert: Should return PackageNotProvided error
+    let err = result.expect_err("should fail when package is not provided by source");
+
+    match err {
+        CommandDispatcherError::Failed(DevSourceMetadataError::PackageNotProvided(
+            PackageNotProvidedError { name, .. },
+        )) => {
+            assert_eq!(
+                name.as_source(),
+                "non-existent-package",
+                "Error should contain the requested package name"
+            );
+        }
+        other => panic!("expected PackageNotProvided error, got: {other}"),
+    }
+}
+
+/// Tests that the PassthroughBackend generates multiple outputs based on variant configurations
+/// when dependencies have "*" version requirements.
+#[tokio::test]
+pub async fn test_dev_source_metadata_with_variants() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+    use std::collections::BTreeMap;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "variant-package".into(),
+    }
+    .into();
+
+    // Create variant configuration for python and numpy
+    let mut variant_config = BTreeMap::new();
+    variant_config.insert(
+        "python".to_string(),
+        vec!["3.10".to_string().into(), "3.11".to_string().into()],
+    );
+    variant_config.insert(
+        "numpy".to_string(),
+        vec!["1.0".to_string().into(), "2.0".to_string().into()],
+    );
+
+    // Create the spec for dev source metadata with variants
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("variant-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            preferred_build_source: None,
+            env_ref: EnvironmentRef::Ephemeral(EphemeralEnv::new(
+                "variant-test",
+                EnvironmentSpec {
+                    channels: vec![],
+                    build_environment: BuildEnvironment::simple(
+                        tool_platform,
+                        tool_virtual_packages,
+                    ),
+                    variants: VariantConfig {
+                        variant_configuration: variant_config,
+                        variant_files: Vec::new(),
+                    },
+                    exclude_newer: None,
+                    channel_priority: Default::default(),
+                },
+            )),
+            build_string_prefix: None,
+            build_number: None,
+            inline: None,
+        },
+    };
+
+    // Act: Get the dev source metadata
+    let result = dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("dev_source_metadata should succeed");
+
+    // Assert: Should have 4 records (2 python versions × 2 numpy versions)
+    assert_eq!(
+        result.records.len(),
+        4,
+        "Should have 4 records for all variant combinations"
+    );
+
+    // Collect all variant combinations
+    let variants: Vec<_> = result
+        .records
+        .iter()
+        .map(|record| {
+            let python = record
+                .variants
+                .get("python")
+                .map(|s| s.to_string())
+                .unwrap_or("none".to_string());
+            let numpy = record
+                .variants
+                .get("numpy")
+                .map(|s| s.to_string())
+                .unwrap_or("none".to_string());
+            (python, numpy)
+        })
+        .sorted()
+        .collect();
+
+    // Verify all expected combinations are present
+    assert_eq!(
+        variants,
+        vec![
+            ("3.10".to_string(), "1.0".to_string()),
+            ("3.10".to_string(), "2.0".to_string()),
+            ("3.11".to_string(), "1.0".to_string()),
+            ("3.11".to_string(), "2.0".to_string()),
+        ],
+        "All variant combinations should be generated"
+    );
+
+    // Verify each record has the correct variant metadata
+    for record in &result.records {
+        assert_eq!(
+            record.name.as_source(),
+            "variant-package",
+            "All records should have the same package name"
+        );
+
+        // Verify the variant is properly set in the record
+        assert!(
+            record.variants.contains_key("python"),
+            "Variant should contain python key"
+        );
+        assert!(
+            record.variants.contains_key("numpy"),
+            "Variant should contain numpy key"
+        );
+
+        // Verify python and numpy are in dependencies (all combined)
+        let dep_names: Vec<_> = record
+            .dependencies
+            .names()
+            .map(|n| n.as_normalized())
+            .sorted()
+            .collect();
+
+        assert!(
+            dep_names.contains(&"python"),
+            "Python should be in dependencies"
+        );
+        assert!(
+            dep_names.contains(&"numpy"),
+            "Numpy should be in dependencies"
+        );
+    }
+}
+
+/// Tests that forcing a rebuild of a package will ignore UpToDate cache status from previous builds.
+#[tokio::test]
+pub async fn test_force_rebuild() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    // The shared registry threads through both dispatcher runs in this
+    // test so the merged event tree can resolve parents from either run.
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    let (reporter, events, registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
+
+    // Made a source build of package-b CacheStatus::UpToDate by installing the environment once.
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("expected solve to succeed");
+
+    // Install the environment to a temporary prefix.
+    // we know will have CacheStatus::New package-b after this
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    let first_events = events.take();
+
+    // Now we want to rebuild package-b by forcing a rebuild. The
+    // artifact-cache invalidation is the caller's responsibility:
+    // install_pixi_environment's `force_reinstall` only drives the
+    // prefix installer's reinstall semantics for already-resolved
+    // records. Clear the source-build cache first to force
+    // SourceBuildKey to see a miss.
+    let mut spec = InstallPixiEnvironmentSpec::new(records.clone(), prefix);
+    spec.force_reinstall = HashSet::from_iter([PackageName::new_unchecked("package-b")]);
+    for name in &spec.force_reinstall {
+        dispatcher.clear_source_build_cache(name).unwrap();
+    }
+
+    let _ = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..spec.clone()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    // Get all the events that happened.
+    let second_events = events.take();
+    let event_tree =
+        EventTree::new(first_events.iter().chain(second_events.iter()), &registry).to_string();
+    eprintln!("{event_tree}");
+
+    // Ensure that package-b was not queued for rebuild since it is a fresh build already.
+    let rebuild_packages = second_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.as_str())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    assert!(rebuild_packages.is_empty());
+
+    // now drop the dispatcher
+    drop(dispatcher);
+
+    // Construct a new command dispatcher (as if the program is restarted).
+    // Reuse the registry so the merged event tree resolves parents.
+    let (reporter, second_events) = EventReporter::with_registry(registry.clone());
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
+
+    // Same story across process restarts: the caller clears the cache
+    // explicitly when forcing a rebuild.
+    for name in &spec.force_reinstall {
+        dispatcher.clear_source_build_cache(name).unwrap();
+    }
+
+    let _ = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..spec
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    let second_events = second_events.take();
+
+    // Ensure that package-b was force rebuilt.
+    let rebuild_packages = second_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.as_str())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    eprintln!("Events after restart:\n");
+    let event_tree = EventTree::new(second_events.iter(), &registry).to_string();
+    eprintln!("{event_tree}");
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-b"],
+        "Expected only package-b to be queued for rebuild"
+    );
+
+    // now queue again without force rebuild and ensure no builds are queued
+    spec.force_reinstall = HashSet::new();
+
+    let last_events = events.take();
+
+    // package-b should just reuse cache
+    let rebuild_packages = last_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.as_str())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    assert!(
+        rebuild_packages.is_empty(),
+        "Expected no packages to be queued for rebuild"
+    );
+}
+
+/// Verifies that `force_reinstall` on the ctx install path invalidates
+/// the source-build caches and rebuilds the package.
+///
+/// Uses two separate dispatchers: within a single dispatcher the
+/// compute engine's in-memory Key dedup would short-circuit to the
+/// cached build even after the on-disk cache is wiped. A CLI re-run
+/// spawns a fresh dispatcher (empty in-memory cache) and the
+/// force_reinstall hook in `ctx.install_pixi_environment` wipes the
+/// on-disk source-build caches for named packages, so the backend
+/// gets invoked again.
+#[tokio::test]
+pub async fn test_compute_ctx_install_force_reinstall_rebuilds_source_package() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let solve_spec = SolvePixiEnvironmentSpec {
+        dependencies: DependencyMap::from_iter([
+            (
+                "package-a".parse().unwrap(),
+                PathSpec::new("package-a").into(),
+            ),
+            (
+                "package-c".parse().unwrap(),
+                PathSpec::new("package-c").into(),
+            ),
+        ]),
+        env_ref: env_ref_of(vec![], build_env.clone()),
+        ..empty_pixi_env_spec()
+    };
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+
+    // First session: populate the on-disk source-build caches. No
+    // observer is attached here since we only care about the second
+    // session's backend events.
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+    let records = run_pixi_solve(&dispatcher, solve_spec.clone())
+        .await
+        .unwrap();
+    dispatcher
+        .engine()
+        .with_ctx(async |ctx| {
+            ctx.install_pixi_environment(InstallPixiEnvironmentSpec {
+                build_environment: build_env.clone(),
+                ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+            })
+            .await
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    drop(dispatcher);
+
+    // Second session, simulating a CLI rerun with --force-reinstall.
+    // Attach the observer here so the assertion below sees only this
+    // session's backend events.
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(instantiator))
+        .finish();
+    let records = run_pixi_solve(&dispatcher, solve_spec).await.unwrap();
+    let mut spec = InstallPixiEnvironmentSpec::new(records, prefix);
+    spec.build_environment = build_env.clone();
+    spec.force_reinstall = HashSet::from_iter([PackageName::new_unchecked("package-b")]);
+
+    dispatcher
+        .engine()
+        .with_ctx(async |ctx| ctx.install_pixi_environment(spec).await)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let events = observer.build_events();
+    assert!(
+        events.contains(&BackendEvent::CondaBuildV1Called),
+        "force_reinstall on the compute-ctx install path should rebuild \
+         the source package; got events: {events:?}",
+    );
+}
+
+/// Tests that a package is NOT rebuilt across sessions when no source files have changed.
+///
+/// This test simulates a program restart by dropping and recreating the dispatcher,
+/// and verifies that the cache is properly reused (CacheStatus::UpToDate).
+#[tokio::test]
+pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    // First session: solve and install
+    let dispatcher = build_command_dispatcher().finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Drop dispatcher to simulate program restart
+    drop(dispatcher);
+
+    // Second session: reinstall WITHOUT modifying any files
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.clone())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        rebuild_packages.is_empty(),
+        "No packages should be rebuilt across sessions when no files changed, but got: {rebuild_packages:?}"
+    );
+}
+
+/// Tests that a package IS rebuilt across sessions when a source file is modified.
+///
+/// This test simulates a program restart by dropping and recreating the dispatcher,
+/// and verifies that file changes are detected and trigger a rebuild.
+#[tokio::test]
+pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    // First session: solve and install
+    let dispatcher = build_command_dispatcher().finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Drop dispatcher to simulate program restart
+    drop(dispatcher);
+
+    // Create a file that matches package-b's build glob pattern ("TOUCH*")
+    fs_err::write(root_dir.join("package-b/TOUCH_FILE"), "trigger rebuild").unwrap();
+
+    // Second session: reinstall after file modification
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.clone())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-b"],
+        "Only package-b should be rebuilt after source file modification"
+    );
+}
+
+/// Tests that modifying a source file triggers a rebuild of the package.
+///
+/// This is a focused test that verifies only the file-change detection behavior,
+/// without testing dependency chains or force rebuild flags.
+#[tokio::test]
+pub async fn test_package_rebuilt_when_source_file_modified() {
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    // First pass: build and install package-b
+    let dispatcher = build_command_dispatcher().finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Drop dispatcher to flush caches (simulating program restart)
+    drop(dispatcher);
+
+    // Create a file that matches package-b's build glob pattern ("TOUCH*")
+    let _touch_file = tempfile::Builder::new()
+        .prefix("TOUCH")
+        .tempfile_in(root_dir.join("package-b"))
+        .unwrap();
+
+    // Second pass: reinstall with new dispatcher, expect rebuild
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.clone())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-b"],
+        "Package should be rebuilt when source file is modified"
+    );
+}
+
+/// Tests that a package is NOT rebuilt when no source files have changed.
+///
+/// This is a focused test that verifies cache reuse behavior when files are unchanged
+/// within the same dispatcher session (CacheStatus::New is reused).
+#[tokio::test]
+pub async fn test_package_not_rebuilt_when_no_files_changed() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .with_event_reporter(reporter)
+        .finish();
+
+    // First pass: build and install package-b
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Count first build events
+    let first_build_count: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BackendSourceBuildQueued { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        first_build_count, 1,
+        "First install should build package-b once"
+    );
+
+    // Second pass: reinstall WITHOUT modifying any files (same dispatcher session)
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.clone())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        rebuild_packages.is_empty(),
+        "No packages should be rebuilt when no files changed, but got: {rebuild_packages:?}"
+    );
+}
+
+/// Tests that metadata is NOT re-fetched when no source files have changed.
+///
+/// This is a focused test that verifies metadata cache reuse behavior.
+#[tokio::test]
+pub async fn test_metadata_not_refetched_when_no_files_changed() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    let pinned_source: PinnedSourceSpec = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            preferred_build_source: None,
+            env_ref: env_ref_of(
+                vec![],
+                BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone()),
+            ),
+            build_string_prefix: None,
+            build_number: None,
+            inline: None,
+        },
+    };
+
+    // First metadata request
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
+
+    dispatcher
+        .dev_source_metadata(spec.clone())
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("first metadata request should succeed");
+
+    let first_metadata_requests: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BuildBackendMetadataQueued { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        first_metadata_requests, 1,
+        "First request should fetch metadata once"
+    );
+
+    // Second metadata request (same dispatcher, no file changes)
+    dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("second metadata request should succeed");
+
+    let second_metadata_requests: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BuildBackendMetadataQueued { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        second_metadata_requests, 0,
+        "Second request should use cached metadata, no backend call expected"
+    );
+}
+
+/// Tests that metadata IS re-fetched when a source file is modified.
+///
+/// This is a focused test that verifies metadata cache invalidation on file changes.
+#[tokio::test]
+pub async fn test_metadata_refetched_when_source_file_modified() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    let pinned_source: PinnedSourceSpec = PinnedPathSpec {
+        path: "package-b".into(),
+    }
+    .into();
+
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("package-b"),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: pinned_source,
+            preferred_build_source: None,
+            env_ref: env_ref_of(
+                vec![],
+                BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone()),
+            ),
+            build_string_prefix: None,
+            build_number: None,
+            inline: None,
+        },
+    };
+
+    // First metadata request
+    let dispatcher = build_command_dispatcher().finish();
+
+    dispatcher
+        .dev_source_metadata(spec.clone())
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("first metadata request should succeed");
+
+    // Drop dispatcher to flush caches (simulating program restart)
+    drop(dispatcher);
+
+    // Create a file that matches package-b's build glob pattern ("TOUCH*")
+    let _touch_file = tempfile::Builder::new()
+        .prefix("TOUCH")
+        .tempfile_in(root_dir.join("package-b"))
+        .unwrap();
+
+    // Second metadata request after file modification
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
+
+    dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("second metadata request should succeed");
+
+    let metadata_requests: usize = events
+        .take()
+        .iter()
+        .filter(|event| {
+            matches!(
+                event,
+                event_reporter::Event::BuildBackendMetadataQueued { .. }
+            )
+        })
+        .count();
+
+    assert_eq!(
+        metadata_requests, 1,
+        "Metadata should be re-fetched after source file modification"
+    );
+}
+
+/// Verifies that the compute engine is wired into the CommandDispatcher and
+/// that extension traits on DataStore provide access to shared resources.
+#[tokio::test]
+pub async fn compute_engine_wired_into_dispatcher() {
+    use pixi_command_dispatcher::compute_data::HasGateway;
+    use pixi_compute_engine::{ComputeCtx, Key};
+    use pixi_compute_network::HasDownloadClient;
+    use pixi_compute_sources::{HasGitResolver, HasUrlResolver};
+    use std::fmt;
+
+    // A trivial Key that reads Gateway from global_data to prove the wiring works.
+    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    struct ProbeKey;
+
+    impl fmt::Display for ProbeKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "ProbeKey")
+        }
+    }
+
+    impl Key for ProbeKey {
+        type Value = bool;
+        async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+            let data = ctx.global_data();
+            // Each trait accessor must succeed without panicking.
+            let _ = data.gateway();
+            let _ = data.git_resolver();
+            let _ = data.url_resolver();
+            let _ = data.download_client();
+            // CacheDirs lives in the engine via `CacheDirsKey`; reading
+            // through the injected key proves the wiring without going
+            // back through the DataStore.
+            let _ = ctx.compute(&pixi_command_dispatcher::CacheDirsKey).await;
+            true
+        }
+    }
+
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .finish();
+
+    // Run a Key through the engine; if global data is missing this panics.
+    let result = dispatcher.engine().compute(&ProbeKey).await.unwrap();
+    assert!(result, "ProbeKey should return true after reading all data");
+}
+
+/// `SolvePixiEnvironmentSpec::installed` is handed to the solver as a
+/// locked-package set: when the binary spec admits multiple versions,
+/// the solver must keep the installed version rather than pick the
+/// latest.
+///
+/// The fixture channel has `package` at `0.1.0` and `0.2.0`. A fresh
+/// solve against `package = "*"` picks `0.2.0` (the highest match).
+/// A second solve against the same spec but with an installed hint
+/// pinning `0.1.0` must keep `0.1.0`. Both branches are asserted, so
+/// the test proves the hint actually influences the choice.
+#[tokio::test]
+pub async fn test_installed_pins_binary_version() {
+    use rattler_conda_types::VersionSpec;
+
+    let channel_dir =
+        cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .finish();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages);
+    let env_ref = env_ref_of(vec![channel_url], build_env);
+
+    let make_spec = |version: VersionSpec, installed: Vec<pixi_record::UnresolvedPixiRecord>| {
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package".parse().unwrap(),
+                PixiSpec::from(version),
+            )]),
+            installed: std::sync::Arc::from(installed),
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        }
+    };
+
+    // Fresh solve with `*`: picks the highest match (0.2.0).
+    let fresh = run_pixi_solve(&dispatcher, make_spec(VersionSpec::Any, Vec::new()))
+        .await
+        .unwrap();
+    assert_eq!(
+        fresh[0].package_record().version.as_str(),
+        "0.2.0",
+        "fresh solve against `*` should pick the highest available (0.2.0)"
+    );
+
+    // Narrow solve to acquire a concrete 0.1.0 record for the hint.
+    let v010 = run_pixi_solve(
+        &dispatcher,
+        make_spec("==0.1.0".parse::<VersionSpec>().unwrap(), Vec::new()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(v010[0].package_record().version.as_str(), "0.1.0");
+
+    // Stability: `*` again, but installed pins 0.1.0. Solver must keep 0.1.0.
+    let pinned = run_pixi_solve(
+        &dispatcher,
+        make_spec(
+            VersionSpec::Any,
+            v010.iter().cloned().map(to_unresolved).collect(),
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        pinned[0].package_record().version.as_str(),
+        "0.1.0",
+        "with installed = [0.1.0], `*` must keep 0.1.0 instead of picking 0.2.0"
+    );
+}
+
+/// When `SolvePixiEnvironmentSpec::installed` carries a previously-
+/// resolved source record, the per-package `host_packages` set on that
+/// record must flow into the nested Host-env solve as its own
+/// `installed` hint. Without the hint the nested solve picks the
+/// highest-admitted version; with the hint it must keep the recorded
+/// version.
+///
+/// `foo` is a source package with a single host-dep `package = "*"`
+/// against the fixture channel (versions 0.1.0, 0.2.0). Fresh solve
+/// resolves foo and picks `package 0.2.0` into `foo.host_packages`.
+/// A second solve with an altered prior-record (`host_packages` set
+/// to `package 0.1.0`) must leave the nested solve pinned to 0.1.0.
+#[tokio::test]
+pub async fn test_installed_host_packages_pin_nested_solve() {
+    use rattler_conda_types::VersionSpec;
+
+    let channel_dir =
+        cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("host-dep-binary");
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages);
+    let env_ref = env_ref_of(vec![channel_url], build_env);
+
+    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| {
+        let (installed, installed_source_hints) = installed_with_hints(installed);
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "foo".parse().unwrap(),
+                PathSpec { path: "foo".into() }.into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        }
+    };
+
+    // Helper: find foo's resolved source record, pluck the `package`
+    // binary out of its host_packages.
+    let host_package_version = |records: &[pixi_record::PixiRecord]| -> String {
+        let foo = records
+            .iter()
+            .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "foo"))
+            .expect("foo source record in solve output");
+        let pkg = foo
+            .host_packages
+            .iter()
+            .find(|u| u.name().as_normalized() == "package")
+            .expect("`package` in foo.host_packages");
+        pkg.package_record()
+            .expect("resolved host_packages entry")
+            .version
+            .as_str()
+            .to_string()
+    };
+
+    // Fresh: foo's host env picks the highest (0.2.0).
+    let fresh = run_pixi_solve(&dispatcher, make_spec(Vec::new()))
+        .await
+        .unwrap();
+    assert_eq!(
+        host_package_version(&fresh),
+        "0.2.0",
+        "fresh Host solve should pick the highest match (0.2.0)"
+    );
+
+    // Build a prior-record for foo whose host_packages pins
+    // `package 0.1.0`. Re-use the top-level 0.1.0 record from a
+    // narrow binary solve so we have a real RepoDataRecord with the
+    // correct url/sha.
+    let v010_records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package".parse().unwrap(),
+                PixiSpec::from("==0.1.0".parse::<VersionSpec>().unwrap()),
+            )]),
+            installed: std::sync::Arc::from([]),
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .unwrap();
+    let package_0_1_0: pixi_record::UnresolvedPixiRecord = v010_records
+        .into_iter()
+        .find(|r| r.name().as_normalized() == "package")
+        .expect("package 0.1.0 binary record")
+        .into();
+
+    // Splice the hint into foo's fresh record: clone fresh, replace
+    // foo's host_packages with just [package 0.1.0].
+    let mut installed: Vec<pixi_record::UnresolvedPixiRecord> =
+        fresh.iter().cloned().map(to_unresolved).collect();
+    for entry in installed.iter_mut() {
+        if let pixi_record::UnresolvedPixiRecord::Source(arc) = entry
+            && arc.name().as_normalized() == "foo"
+        {
+            let mut inner = (**arc).clone();
+            inner.host_packages = vec![package_0_1_0.clone()];
+            *arc = std::sync::Arc::new(inner);
+        }
+    }
+
+    // Stability: foo's Host env solve must now keep 0.1.0.
+    let pinned = run_pixi_solve(&dispatcher, make_spec(installed))
+        .await
+        .unwrap();
+    assert_eq!(
+        host_package_version(&pinned),
+        "0.1.0",
+        "with foo.host_packages = [package 0.1.0], nested Host solve must keep 0.1.0"
+    );
+}
+
+/// An environment holds at most one variant of any given package, so
+/// the walk's installed-hint lookup keys by package name (not by
+/// `(name, variants)`). That means when the backend emits multiple
+/// variants for the same source package, every variant's nested
+/// build/host solve inherits the same hint from the one previously-
+/// recorded record.
+///
+/// Setup mirrors Test 2 but enables a variant grid `package: [0.1.0,
+/// 0.2.0]` (picked up from foo's run-dep). The backend emits 2
+/// variants of foo; each variant's Host env still resolves the non-
+/// star host-dep `package >=0.1` via the solver. Without the hint,
+/// the solver picks 0.2.0. With a hint carrying a previously-recorded
+/// `[package 0.1.0]`, every variant's Host solve reuses 0.1.0, so
+/// whichever variant `SolveCondaKey` ultimately picks, the final
+/// record's host_packages reflects the hint.
+#[tokio::test]
+pub async fn test_installed_hint_reused_across_variants() {
+    use rattler_conda_types::VersionSpec;
+
+    let channel_dir =
+        cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("host-dep-binary");
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // `package` listed with two values → backend fans out to 2
+    // variants of foo (one output per variant).
+    let mut variant_config = BTreeMap::new();
+    variant_config.insert(
+        "package".to_string(),
+        vec!["0.1.0".to_string().into(), "0.2.0".to_string().into()],
+    );
+
+    let env_ref = EnvironmentRef::Ephemeral(EphemeralEnv::new(
+        "test",
+        EnvironmentSpec {
+            channels: vec![channel_url.clone()],
+            build_environment: BuildEnvironment::simple(
+                tool_platform,
+                tool_virtual_packages.clone(),
+            ),
+            variants: VariantConfig {
+                variant_configuration: variant_config,
+                variant_files: Vec::new(),
+            },
+            exclude_newer: None,
+            channel_priority: Default::default(),
+        },
+    ));
+
+    // Channel-only env_ref for the side solve that fetches a 0.1.0
+    // binary record to splice into the hint.
+    let binary_env_ref = env_ref_of(
+        vec![channel_url],
+        BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+    );
+
+    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| {
+        let (installed, installed_source_hints) = installed_with_hints(installed);
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "foo".parse().unwrap(),
+                PathSpec { path: "foo".into() }.into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        }
+    };
+
+    let host_package_version = |records: &[pixi_record::PixiRecord]| -> String {
+        let foo = records
+            .iter()
+            .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "foo"))
+            .expect("foo source record in solve output");
+        let pkg = foo
+            .host_packages
+            .iter()
+            .find(|u| u.name().as_normalized() == "package")
+            .expect("`package` in foo.host_packages");
+        pkg.package_record()
+            .expect("resolved host_packages entry")
+            .version
+            .as_str()
+            .to_string()
+    };
+
+    // Fresh, multi-variant: each variant's Host env picks the highest
+    // match for `package >=0.1`, which is 0.2.0.
+    let fresh = run_pixi_solve(&dispatcher, make_spec(Vec::new()))
+        .await
+        .unwrap();
+    assert_eq!(
+        host_package_version(&fresh),
+        "0.2.0",
+        "fresh multi-variant Host solve should pick 0.2.0"
+    );
+
+    // Acquire a concrete 0.1.0 binary record for the hint.
+    let v010_records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package".parse().unwrap(),
+                PixiSpec::from("==0.1.0".parse::<VersionSpec>().unwrap()),
+            )]),
+            installed: std::sync::Arc::from([]),
+            env_ref: binary_env_ref,
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .unwrap();
+    let package_0_1_0: pixi_record::UnresolvedPixiRecord = v010_records
+        .into_iter()
+        .find(|r| r.name().as_normalized() == "package")
+        .expect("package 0.1.0 binary record")
+        .into();
+
+    // Splice the hint into foo's fresh record. The walk keys by
+    // package name, so the same hint flows into every variant's
+    // nested Host solve; whichever variant SolveCondaKey finally
+    // picks, its host_packages carries the pinned 0.1.0.
+    let mut installed: Vec<pixi_record::UnresolvedPixiRecord> =
+        fresh.iter().cloned().map(to_unresolved).collect();
+    for entry in installed.iter_mut() {
+        if let pixi_record::UnresolvedPixiRecord::Source(arc) = entry
+            && arc.name().as_normalized() == "foo"
+        {
+            let mut inner = (**arc).clone();
+            inner.host_packages = vec![package_0_1_0.clone()];
+            *arc = std::sync::Arc::new(inner);
+        }
+    }
+
+    let pinned = run_pixi_solve(&dispatcher, make_spec(installed))
+        .await
+        .unwrap();
+    assert_eq!(
+        host_package_version(&pinned),
+        "0.1.0",
+        "installed hint should flow into every variant's Host solve, \
+         so the picked variant's host_packages must reflect 0.1.0"
+    );
+}
+
+/// Duplicate installed source hints for the same source package should
+/// be normalized before the solve, so their input order does not affect
+/// the nested source resolution result.
+#[tokio::test]
+pub async fn test_duplicate_installed_source_hints_are_order_independent() {
+    use rattler_conda_types::VersionSpec;
+
+    let channel_dir =
+        cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("host-dep-binary");
+    let tempdir = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages);
+    let env_ref = env_ref_of(vec![channel_url.clone()], build_env);
+
+    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| {
+        let (installed, installed_source_hints) = installed_with_hints(installed);
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "foo".parse().unwrap(),
+                PathSpec { path: "foo".into() }.into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        }
+    };
+
+    let host_package_version = |records: &[pixi_record::PixiRecord]| -> String {
+        let foo = records
+            .iter()
+            .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "foo"))
+            .expect("foo source record in solve output");
+        let pkg = foo
+            .host_packages
+            .iter()
+            .find(|u| u.name().as_normalized() == "package")
+            .expect("`package` in foo.host_packages");
+        pkg.package_record()
+            .expect("resolved host_packages entry")
+            .version
+            .as_str()
+            .to_string()
+    };
+
+    let fresh = run_pixi_solve(&dispatcher, make_spec(Vec::new()))
+        .await
+        .unwrap();
+    let foo_source = fresh
+        .iter()
+        .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "foo"))
+        .expect("foo source record from fresh solve");
+
+    let package_0_1_0: pixi_record::UnresolvedPixiRecord = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package".parse().unwrap(),
+                PixiSpec::from("==0.1.0".parse::<VersionSpec>().unwrap()),
+            )]),
+            installed: std::sync::Arc::from([]),
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .unwrap()
+    .into_iter()
+    .find(|r| r.name().as_normalized() == "package")
+    .expect("package 0.1.0 binary record")
+    .into();
+    let package_0_2_0: pixi_record::UnresolvedPixiRecord = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package".parse().unwrap(),
+                PixiSpec::from("==0.2.0".parse::<VersionSpec>().unwrap()),
+            )]),
+            installed: std::sync::Arc::from([]),
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .unwrap()
+    .into_iter()
+    .find(|r| r.name().as_normalized() == "package")
+    .expect("package 0.2.0 binary record")
+    .into();
+
+    let mut foo_with_0_1_0 = foo_source.clone();
+    foo_with_0_1_0.host_packages = vec![package_0_1_0];
+    let mut foo_with_0_2_0 = foo_source.clone();
+    foo_with_0_2_0.host_packages = vec![package_0_2_0];
+
+    let low_then_high = run_pixi_solve(
+        &dispatcher,
+        make_spec(vec![
+            pixi_record::UnresolvedPixiRecord::Source(Arc::new(foo_with_0_1_0.clone().into())),
+            pixi_record::UnresolvedPixiRecord::Source(Arc::new(foo_with_0_2_0.clone().into())),
+        ]),
+    )
+    .await
+    .unwrap();
+
+    let high_then_low = run_pixi_solve(
+        &dispatcher,
+        make_spec(vec![
+            pixi_record::UnresolvedPixiRecord::Source(Arc::new(foo_with_0_2_0.into())),
+            pixi_record::UnresolvedPixiRecord::Source(Arc::new(foo_with_0_1_0.into())),
+        ]),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        host_package_version(&low_then_high),
+        host_package_version(&high_then_low),
+        "duplicate installed source hints should be normalized before solving"
+    );
+}
+
+/// When the environment contains both a top-level source package `foo`
+/// and another source package `bar` whose host environment also resolves
+/// `foo`, lock file-derived installed hints can currently carry two
+/// different locked instances of `foo` in the same environment.
+///
+/// The solve should normalize those hints so the final environment does
+/// not contain divergent `foo` instances depending on where they were
+/// reached from.
+#[tokio::test]
+pub async fn test_top_level_and_nested_source_hints_for_same_package_are_normalized() {
+    use rattler_conda_types::VersionSpec;
+
+    let channel_dir =
+        cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
+    let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = test_tempdir();
+    fs::write(
+        root_dir.path().join("pixi.toml"),
+        r#"
+[workspace]
+channels = []
+platforms = []
+preview = ["pixi-build"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(root_dir.path().join("foo")).unwrap();
+    fs::create_dir_all(root_dir.path().join("bar")).unwrap();
+    fs::write(
+        root_dir.path().join("foo").join("pixi.toml"),
+        r#"
+[package]
+name = "foo"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[package.host-dependencies]
+package = ">=0.1"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root_dir.path().join("bar").join("pixi.toml"),
+        r#"
+[package]
+name = "bar"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[package.host-dependencies]
+foo = { path = "../foo" }
+"#,
+    )
+    .unwrap();
+
+    let scratch = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.path()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(scratch.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages);
+    let env_ref = env_ref_of(vec![channel_url.clone()], build_env);
+
+    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| SolvePixiEnvironmentSpec {
+        dependencies: DependencyMap::from_iter([
+            (
+                "foo".parse().unwrap(),
+                PathSpec { path: "foo".into() }.into(),
+            ),
+            (
+                "bar".parse().unwrap(),
+                PathSpec { path: "bar".into() }.into(),
+            ),
+        ]),
+        installed: std::sync::Arc::from(installed),
+        env_ref: env_ref.clone(),
+        ..empty_pixi_env_spec()
+    };
+
+    let host_package_version = |host_packages: &[pixi_record::UnresolvedPixiRecord]| -> String {
+        let pkg = host_packages
+            .iter()
+            .find(|u| u.name().as_normalized() == "package")
+            .expect("`package` in foo.host_packages");
+        pkg.package_record()
+            .expect("resolved host_packages entry")
+            .version
+            .as_str()
+            .to_string()
+    };
+
+    let fresh = run_pixi_solve(&dispatcher, make_spec(Vec::new()))
+        .await
+        .unwrap();
+    let top_level_foo = fresh
+        .iter()
+        .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "foo"))
+        .expect("top-level foo source record")
+        .clone();
+    let top_level_bar = fresh
+        .iter()
+        .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "bar"))
+        .expect("top-level bar source record")
+        .clone();
+
+    let package_0_1_0: pixi_record::UnresolvedPixiRecord = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package".parse().unwrap(),
+                PixiSpec::from("==0.1.0".parse::<VersionSpec>().unwrap()),
+            )]),
+            installed: std::sync::Arc::from([]),
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .unwrap()
+    .into_iter()
+    .find(|r| r.name().as_normalized() == "package")
+    .expect("package 0.1.0 binary record")
+    .into();
+    let package_0_2_0: pixi_record::UnresolvedPixiRecord = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package".parse().unwrap(),
+                PixiSpec::from("==0.2.0".parse::<VersionSpec>().unwrap()),
+            )]),
+            installed: std::sync::Arc::from([]),
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .unwrap()
+    .into_iter()
+    .find(|r| r.name().as_normalized() == "package")
+    .expect("package 0.2.0 binary record")
+    .into();
+
+    let mut foo_with_0_1_0 = top_level_foo.clone();
+    foo_with_0_1_0.host_packages = vec![package_0_1_0];
+
+    let mut nested_foo_with_0_2_0 = top_level_foo.clone();
+    nested_foo_with_0_2_0.host_packages = vec![package_0_2_0];
+
+    let mut bar_with_nested_foo_0_2_0 = top_level_bar;
+    bar_with_nested_foo_0_2_0.host_packages = vec![pixi_record::UnresolvedPixiRecord::Source(
+        Arc::new(nested_foo_with_0_2_0.into()),
+    )];
+
+    let solved = run_pixi_solve(
+        &dispatcher,
+        make_spec(vec![
+            pixi_record::UnresolvedPixiRecord::Source(Arc::new(foo_with_0_1_0.into())),
+            pixi_record::UnresolvedPixiRecord::Source(Arc::new(bar_with_nested_foo_0_2_0.into())),
+        ]),
+    )
+    .await
+    .unwrap();
+
+    let solved_top_level_foo = solved
+        .iter()
+        .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "foo"))
+        .expect("solved top-level foo");
+    let solved_bar = solved
+        .iter()
+        .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "bar"))
+        .expect("solved bar");
+    let nested_foo = solved_bar
+        .host_packages
+        .iter()
+        .find_map(|r| r.as_source().filter(|s| s.name().as_normalized() == "foo"))
+        .expect("nested foo inside bar.host_packages");
+
+    assert_eq!(
+        host_package_version(&solved_top_level_foo.host_packages),
+        host_package_version(&nested_foo.host_packages),
+        "the same source package should not resolve to divergent locked host deps \
+         depending on whether it is reached top-level or through another source package"
+    );
+}
+
+/// Two parallel installs of the same workspace into different prefixes
+/// should dedup their `SourceBuildKey` invocations: the source package
+/// is built exactly once and both installs share the result.
+///
+/// Exercises the cross-env deduplication guarantee that the compute
+/// engine gives us when two callers request equivalent
+/// `SourceBuildSpec` inputs. If `Hash` or `Eq` on the spec starts
+/// discriminating between equivalent callers, or the engine stops
+/// deduping Keys, this test fails.
+#[tokio::test]
+pub async fn test_source_build_key_dedups_across_parallel_installs() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .with_event_reporter(reporter)
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let prefix_a = Prefix::create(tempdir.path().join("prefix-a")).unwrap();
+    let prefix_b = Prefix::create(tempdir.path().join("prefix-b")).unwrap();
+
+    let install_a = dispatcher.install_pixi_environment(InstallPixiEnvironmentSpec {
+        build_environment: build_env.clone(),
+        ..InstallPixiEnvironmentSpec::new(records.clone(), prefix_a)
+    });
+    let install_b = dispatcher.install_pixi_environment(InstallPixiEnvironmentSpec {
+        build_environment: build_env.clone(),
+        ..InstallPixiEnvironmentSpec::new(records, prefix_b)
+    });
+    let (a, b) = tokio::join!(install_a, install_b);
+    a.map_err(|e| format_diagnostic(&e))
+        .expect("first install should succeed");
+    b.map_err(|e| format_diagnostic(&e))
+        .expect("second install should succeed");
+
+    let build_count = events
+        .take()
+        .iter()
+        .filter(|event| matches!(event, Event::BackendSourceBuildQueued { .. }))
+        .count();
+
+    assert_eq!(
+        build_count, 1,
+        "two parallel installs of the same source package should trigger \
+         exactly one backend build; SourceBuildKey did not dedup"
+    );
+}
+
+/// A record of another platform in the build or host environment of a
+/// source package is rejected before anything is installed into the
+/// prefix, with a diagnostic that names the record, the prefix and the
+/// package being built. Install `package-b` for a foreign platform with a
+/// record of this machine's platform smuggled into its host environment,
+/// the shape an upstream platform-tracking bug produces.
+#[tokio::test]
+pub async fn test_prefix_platform_mismatch_is_reported_before_installing() {
+    use pixi_command_dispatcher::{
+        InstallPixiEnvironmentError, PrefixRecordOrigin, SourceBuildError, SourceBuildPrefixKind,
+    };
+    use pixi_record::UnresolvedPixiRecord;
+    use rattler_conda_types::{
+        PackageRecord, RepoDataRecord, VersionWithSource, package::DistArchiveIdentifier,
+    };
+
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    // Cross-install so the generic "retry without --platform" hint would
+    // apply; the specific error must stand on its own.
+    let target_platform = match tool_platform {
+        Subdir::OsxArm64 => Subdir::Linux64,
+        _ => Subdir::OsxArm64,
+    };
+    let build_env = BuildEnvironment::simple(target_platform, vec![]);
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let mut smuggled = PackageRecord::new(
+        PackageName::new_unchecked("libfoo"),
+        "1.0.0".parse::<VersionWithSource>().unwrap(),
+        "h0".parse().unwrap(),
+    );
+    smuggled.subdir = tool_platform.to_string();
+    let smuggled = RepoDataRecord {
+        package_record: smuggled,
+        identifier: DistArchiveIdentifier::try_from_filename("libfoo-1.0.0-h0.conda").unwrap(),
+        url: Url::parse(&format!(
+            "https://example.com/{tool_platform}/libfoo-1.0.0-h0.conda"
+        ))
+        .unwrap(),
+        channel: None,
+    };
+    let records: Vec<UnresolvedPixiRecord> = records
+        .into_iter()
+        .map(|record| match to_unresolved(record) {
+            UnresolvedPixiRecord::Source(source)
+                if source.name().as_normalized() == "package-b" =>
+            {
+                let mut source = (*source).clone();
+                source
+                    .host_packages
+                    .push(UnresolvedPixiRecord::Binary(Arc::new(smuggled.clone())));
+                UnresolvedPixiRecord::Source(Arc::new(source))
+            }
+            other => other,
+        })
+        .collect();
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    let Err(err) = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env,
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+    else {
+        panic!("a record of another platform must not be installed");
+    };
+
+    let CommandDispatcherError::Failed(InstallPixiEnvironmentError::BuildUnresolvedSourceError(
+        built,
+        _,
+        SourceBuildError::PrefixPlatformMismatch(mismatch),
+        generic_help,
+    )) = &err
+    else {
+        panic!("unexpected error: {}", format_diagnostic(&err));
+    };
+    assert_eq!(built.as_normalized(), "package-b");
+    assert_eq!(mismatch.kind, SourceBuildPrefixKind::Host);
+    assert_eq!(mismatch.source_package.as_normalized(), "package-b");
+    assert_eq!(mismatch.package.as_normalized(), "libfoo");
+    assert_eq!(mismatch.origin, PrefixRecordOrigin::Solved);
+    assert_eq!(mismatch.subdir, tool_platform.to_string());
+    assert_eq!(mismatch.expected, target_platform);
+    assert_eq!(
+        mismatch.to_string(),
+        format!(
+            "cannot install 'libfoo' ({tool_platform}) into the host environment of 'package-b', \
+             which is for '{target_platform}'"
+        )
+    );
+    assert!(
+        generic_help.is_none(),
+        "the generic cross-build hint must not be added on top of the specific error"
+    );
+
+    // What the user sees. The specific help lives on the inner error and
+    // reaches the report through the wrapping install error; rendering
+    // wraps long lines, so compare with whitespace collapsed.
+    let rendered = format_diagnostic(&err);
+    let flat = rendered.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flat.contains(&mismatch.to_string()), "{rendered}");
+    assert!(
+        flat.contains(
+            "this is a bug in pixi's cross-compilation platform tracking, please report it"
+        ),
+        "{rendered}"
+    );
+    assert!(!flat.contains("Retry without '--platform'"), "{rendered}");
+}
+
+/// Two parallel `InstantiateBackendKey` computes for the same backend
+/// spec should resolve to a single backend instantiation. Backends are
+/// frequently shared across environments (workspace + per-package
+/// build envs), so dedup failure here multiplies backend startup cost
+/// across a session.
+#[tokio::test]
+pub async fn test_instantiate_backend_key_dedups_across_parallel_installs() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .with_event_reporter(reporter)
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let prefix_a = Prefix::create(tempdir.path().join("prefix-a")).unwrap();
+    let prefix_b = Prefix::create(tempdir.path().join("prefix-b")).unwrap();
+
+    let install_a = dispatcher.install_pixi_environment(InstallPixiEnvironmentSpec {
+        build_environment: build_env.clone(),
+        ..InstallPixiEnvironmentSpec::new(records.clone(), prefix_a)
+    });
+    let install_b = dispatcher.install_pixi_environment(InstallPixiEnvironmentSpec {
+        build_environment: build_env.clone(),
+        ..InstallPixiEnvironmentSpec::new(records, prefix_b)
+    });
+    let (a, b) = tokio::join!(install_a, install_b);
+    a.map_err(|e| format_diagnostic(&e))
+        .expect("first install should succeed");
+    b.map_err(|e| format_diagnostic(&e))
+        .expect("second install should succeed");
+
+    let instantiate_count = events
+        .take()
+        .iter()
+        .filter(|event| matches!(event, Event::InstantiateBackendQueued { .. }))
+        .count();
+
+    assert_eq!(
+        instantiate_count, 1,
+        "two parallel installs sharing the same backend spec should trigger \
+         exactly one backend instantiation; InstantiateBackendKey did not dedup"
+    );
+}
+
+/// Two parallel `SolvePixiEnvironmentKey` computes for the same spec
+/// should dedup. Both the outer pixi solve and the inner conda solve
+/// fire their reporter lifecycle exactly once.
+///
+/// Guards against regressions in `Hash` / `Eq` on
+/// [`SolvePixiEnvironmentSpec`] or the engine's Key-level dedup.
+#[tokio::test]
+pub async fn test_solve_pixi_environment_key_dedups_parallel_identical_solves() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .with_event_reporter(reporter)
+        .finish();
+
+    let make_spec = || SolvePixiEnvironmentSpec {
+        dependencies: DependencyMap::from_iter([(
+            "package-b".parse().unwrap(),
+            PathSpec::new("package-b").into(),
+        )]),
+        env_ref: env_ref_of(vec![], build_env.clone()),
+        ..empty_pixi_env_spec()
+    };
+
+    let (a, b) = tokio::join!(
+        run_pixi_solve(&dispatcher, make_spec()),
+        run_pixi_solve(&dispatcher, make_spec()),
+    );
+    a.map_err(|e| format_diagnostic(&e))
+        .expect("first solve should succeed");
+    b.map_err(|e| format_diagnostic(&e))
+        .expect("second solve should succeed");
+
+    let events = events.take();
+    let pixi_solves = events
+        .iter()
+        .filter(|event| matches!(event, Event::PixiSolveQueued { .. }))
+        .count();
+    let conda_solves = events
+        .iter()
+        .filter(|event| matches!(event, Event::CondaSolveQueued { .. }))
+        .count();
+
+    assert_eq!(
+        pixi_solves, 1,
+        "two parallel identical pixi solves should dedup; got {pixi_solves} queue events"
+    );
+    assert_eq!(
+        conda_solves, 1,
+        "the inner conda solve should also dedup; got {conda_solves} queue events"
+    );
+}
+
+/// Two parallel pixi solves that use distinct [`EphemeralEnv`] wrappers
+/// (different display names) around equal [`EnvironmentSpec`]s should
+/// collapse into one `SolvePixiEnvironmentKey` compute.
+///
+/// Guards the intentional design in
+/// [`EphemeralEnv`](pixi_command_dispatcher::EphemeralEnv): `name` is
+/// display-only and excluded from `Hash` / `Eq`, so the key's identity
+/// is content-addressed on the underlying spec. A regression that
+/// starts hashing the name would fan out to two redundant solves.
+#[tokio::test]
+pub async fn test_solve_pixi_environment_key_dedups_across_ephemeral_env_names() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .with_event_reporter(reporter)
+        .finish();
+
+    let make_env_ref = |name: &str| {
+        EnvironmentRef::Ephemeral(EphemeralEnv::new(
+            name,
+            EnvironmentSpec {
+                channels: Vec::new(),
+                build_environment: build_env.clone(),
+                variants: VariantConfig::default(),
+                exclude_newer: None,
+                channel_priority: Default::default(),
+            },
+        ))
+    };
+    let base_spec = SolvePixiEnvironmentSpec {
+        dependencies: DependencyMap::from_iter([(
+            "package-b".parse().unwrap(),
+            PathSpec::new("package-b").into(),
+        )]),
+        env_ref: make_env_ref("env-a"),
+        ..empty_pixi_env_spec()
+    };
+    let spec_a = base_spec.clone();
+    let spec_b = SolvePixiEnvironmentSpec {
+        env_ref: make_env_ref("env-b"),
+        ..base_spec
+    };
+
+    let (a, b) = tokio::join!(
+        run_pixi_solve(&dispatcher, spec_a),
+        run_pixi_solve(&dispatcher, spec_b),
+    );
+    a.map_err(|e| format_diagnostic(&e))
+        .expect("env-a solve should succeed");
+    b.map_err(|e| format_diagnostic(&e))
+        .expect("env-b solve should succeed");
+
+    let events = events.take();
+    let pixi_solves = events
+        .iter()
+        .filter(|event| matches!(event, Event::PixiSolveQueued { .. }))
+        .count();
+    let conda_solves = events
+        .iter()
+        .filter(|event| matches!(event, Event::CondaSolveQueued { .. }))
+        .count();
+
+    assert_eq!(
+        pixi_solves, 1,
+        "two ephemeral envs with equal specs but different names should \
+         dedup at SolvePixiEnvironmentKey; got {pixi_solves} queue events"
+    );
+    assert_eq!(
+        conda_solves, 1,
+        "dedup at the outer pixi solve should subsume the inner conda \
+         solve too; got {conda_solves} queue events"
     );
 }

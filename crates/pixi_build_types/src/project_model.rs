@@ -1,6 +1,6 @@
 //! This module is a collection of types that represent a pixi package in a
 //! protocol format that can be sent over the wire.
-//! We need to vendor a lot of the types, and simplify them in some cases, so
+//! We need to vendor a lot of the types and simplify them in some cases so
 //! that we have a stable protocol that can be used to communicate in the build
 //! tasks.
 //!
@@ -8,79 +8,46 @@
 //! and backwards compatibility. The idea for **backwards compatibility** is
 //! that we try not to break this in pixi as much as possible. So as long as
 //! older pixi TOMLs keep loading, we can send them to the backend.
-//!
-//! In regards to forwards compatibility, we want to be able to keep converting
-//! to all versions of the `VersionedProjectModel` as much as possible.
-//!
-//! This is why we append a `V{version}` to the type names, to indicate the
-//! version of the protocol.
-//!
-//! Only the whole ProjectModel is versioned explicitly in an enum.
-//! When making a change to one of the types, be sure to add another enum
-//! declaration if it is breaking.
-use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
-
+use crate::ExtraGroupName;
 use ordermap::OrderMap;
-use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
+use pixi_stable_hash::{IsDefault, StableHashBuilder};
+use rattler_conda_types::{
+    BuildNumber, BuildNumberSpec, Flag, MatchSpecCondition, StringMatcher, Version, VersionSpec,
+};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
+use std::hash::Hasher;
+use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
 use url::Url;
 
-use crate::stable_hash::{IsDefault, StableHashBuilder};
-
-/// Enum containing all versions of the project model.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "version", content = "data")]
-#[serde(rename_all = "camelCase")]
-pub enum VersionedProjectModel {
-    /// Version 1 of the project model.
-    #[serde(rename = "1")]
-    V1(ProjectModelV1),
-    // When adding don't forget to update the highest_version function
-}
-
-impl VersionedProjectModel {
-    /// Highest version of the project model.
-    pub fn highest_version() -> u32 {
-        // increase this when adding a new version
-        1
-    }
-
-    /// Move into the v1 type, returns None if the version is not v1.
-    pub fn into_v1(self) -> Option<ProjectModelV1> {
-        match self {
-            VersionedProjectModel::V1(v) => Some(v),
-            // Add this once we have more versions
-            //_ => None,
-        }
-    }
-
-    /// Returns a reference to the v1 type, returns None if the version is not
-    /// v1.
-    pub fn as_v1(&self) -> Option<&ProjectModelV1> {
-        match self {
-            VersionedProjectModel::V1(v) => Some(v),
-            // Add this once we have more versions
-            //_ => None,
-        }
-    }
-}
-
-/// The source package name of a package. Not normalized per se.
-pub type SourcePackageName = String;
+pub use rattler_conda_types::SourcePackageName;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectModelV1 {
+pub struct ProjectModel {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>,
+
+    /// An optional prefix to prepend to the auto-generated build string.
+    pub build_string_prefix: Option<String>,
+
+    /// The build number configured by the user.
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<u64>"))]
+    pub build_number: Option<BuildNumber>,
 
     /// The version of the project
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub version: Option<Version>,
 
     /// An optional project description
     pub description: Option<String>,
+
+    /// V3 package variant flags declared by the source package.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<Vec<String>>"))]
+    pub build_flags: Option<Vec<Flag>>,
 
     /// Optional authors
     pub authors: Option<Vec<String>>,
@@ -105,105 +72,308 @@ pub struct ProjectModelV1 {
 
     /// The target of the project, this may contain
     /// platform specific configurations.
-    pub targets: Option<TargetsV1>,
+    pub targets: Option<Targets>,
+
+    /// Names of environment variables that should be exposed as secrets to
+    /// the build script. Backends forward these into the generated
+    /// `build.script.secrets` so rattler-build performs the host-env
+    /// passthrough at build time. Stored as a set: order is not observable
+    /// and changing it should not invalidate caches.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub secrets: std::collections::BTreeSet<String>,
 }
 
-impl From<ProjectModelV1> for VersionedProjectModel {
-    fn from(value: ProjectModelV1) -> Self {
-        VersionedProjectModel::V1(value)
+impl IsDefault for ProjectModel {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self)
     }
 }
 
-/// Represents a target selector. Currently, we only support explicit platform
-/// selection.
+/// A free-form conditional selector expression that is passed through to
+/// rattler-build, e.g. `host_platform == build_platform`. This is the bare
+/// inner text of an `if(<expression>)` selector key, without the wrapper.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+pub struct ConditionalExpression(String);
+
+impl ConditionalExpression {
+    /// Creates a new conditional expression from its bare inner text.
+    pub fn new(expression: impl Into<String>) -> Self {
+        Self(expression.into())
+    }
+
+    /// Returns the bare inner expression without the `if(...)` wrapper.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consumes the expression and returns the inner string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl Display for ConditionalExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for ConditionalExpression {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+/// Represents a platform-based target selector.
+///
+/// Dependencies no longer use platform selectors; they are carried as
+/// conditional `if(<expression>)` entries in [`Targets::conditional`]. This
+/// type only keys the per-target backend configuration
+/// (`[package.build.target.<selector>]`) in the initialize request.
 #[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq)]
-pub enum TargetSelectorV1 {
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+pub enum TargetSelector {
     // Platform specific configuration
     Unix,
     Linux,
     Win,
     MacOs,
+    Subdir(String),
     Platform(String),
-    // TODO: Add minijinja coolness here.
 }
 
-impl Display for TargetSelectorV1 {
+impl Display for TargetSelector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TargetSelectorV1::Unix => write!(f, "unix"),
-            TargetSelectorV1::Linux => write!(f, "linux"),
-            TargetSelectorV1::Win => write!(f, "win"),
-            TargetSelectorV1::MacOs => write!(f, "macos"),
-            TargetSelectorV1::Platform(p) => write!(f, "{}", p),
+            TargetSelector::Unix => write!(f, "unix"),
+            TargetSelector::Linux => write!(f, "linux"),
+            TargetSelector::Win => write!(f, "win"),
+            TargetSelector::MacOs => write!(f, "macos"),
+            TargetSelector::Subdir(s) => write!(f, "{s}"),
+            TargetSelector::Platform(p) => write!(f, "{p}"),
         }
     }
 }
-impl FromStr for TargetSelectorV1 {
+impl FromStr for TargetSelector {
     type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "unix" => Ok(TargetSelectorV1::Unix),
-            "linux" => Ok(TargetSelectorV1::Linux),
-            "win" => Ok(TargetSelectorV1::Win),
-            "macos" => Ok(TargetSelectorV1::MacOs),
-            _ => Ok(TargetSelectorV1::Platform(s.to_string())),
+            "unix" => Ok(TargetSelector::Unix),
+            "linux" => Ok(TargetSelector::Linux),
+            "win" => Ok(TargetSelector::Win),
+            // `macos` (wire form) and `osx` (conda subdir family).
+            "macos" | "osx" => Ok(TargetSelector::MacOs),
+            other => {
+                let other = other.to_string();
+                if rattler_conda_types::Subdir::from_str(&other).is_ok() {
+                    Ok(TargetSelector::Subdir(other))
+                } else {
+                    Ok(TargetSelector::Platform(s.to_string()))
+                }
+            }
+        }
+    }
+}
+
+impl Hash for TargetSelector {
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            TargetSelector::Unix => 0u8.hash(state),
+            TargetSelector::Linux => 1u8.hash(state),
+            TargetSelector::Win => 2u8.hash(state),
+            TargetSelector::MacOs => 3u8.hash(state),
+            TargetSelector::Subdir(s) => {
+                4u8.hash(state);
+                s.hash(state);
+            }
+            TargetSelector::Platform(p) => {
+                5u8.hash(state);
+                p.hash(state);
+            }
         }
     }
 }
 
 /// A collect of targets including a default target.
+///
+/// Platform-specific dependencies are carried exclusively as conditional
+/// `if(<expression>)` entries; the frontend lowers the deprecated
+/// `[package.target.<platform>]` tables to the equivalent expression before
+/// sending the project model.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct TargetsV1 {
-    pub default_target: Option<TargetV1>,
+pub struct Targets {
+    pub default_target: Option<Target>,
 
-    /// We use an [`OrderMap`] to preserve the order in which the items where
-    /// defined in the manifest.
-    pub targets: Option<OrderMap<TargetSelectorV1, TargetV1>>,
+    /// Conditional `if(<expression>)` dependencies. The expression is passed
+    /// through to rattler-build, which evaluates it; pixi does not. Keyed by the
+    /// bare inner expression without the `if(...)` wrapper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, Target>>")
+    )]
+    pub conditional: Option<OrderMap<ConditionalExpression, Target>>,
 }
 
-impl TargetsV1 {
+impl Targets {
     /// Check if this targets struct is effectively empty (contains no
     /// meaningful data that should affect the hash).
     pub fn is_empty(&self) -> bool {
         let has_meaningless_default_target =
             self.default_target.as_ref().is_none_or(|t| t.is_empty());
-        let has_only_empty_targets = self.targets.as_ref().is_none_or(|t| t.is_empty());
+        let has_only_empty_conditional = self.conditional.as_ref().is_none_or(|t| t.is_empty());
 
-        has_meaningless_default_target && has_only_empty_targets
+        has_meaningless_default_target && has_only_empty_conditional
     }
 }
 
-impl IsDefault for TargetsV1 {
-    fn is_default(&self) -> bool {
-        self.is_empty()
-    }
-}
+impl IsDefault for Targets {
+    type Item = Self;
 
-impl<T: IsDefault> IsDefault for Option<T> {
-    fn is_default(&self) -> bool {
-        match self {
-            None => true,
-            Some(value) => value.is_default(),
-        }
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
     }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct TargetV1 {
+pub struct Target {
     /// Host dependencies of the project
-    pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 
     /// Build dependencies of the project
-    pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 
     /// Run dependencies of the project
-    pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Run constraints of the project
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub run_constraints: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Extra groups declared by the source package for this target.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            with = "Option<std::collections::HashMap<String, std::collections::HashMap<String, PackageSpec>>>"
+        )
+    )]
+    pub extra_dependencies:
+        Option<OrderMap<ExtraGroupName, OrderMap<SourcePackageName, PackageSpec>>>,
+
+    /// Run-exports declared by the source package for this target.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_exports: Option<RunExports>,
 }
 
-impl TargetV1 {
+/// The run-exports a source package declares for its consumers, split into the
+/// five conda run-export buckets.
+///
+/// The dependency buckets (`noarch`, `strong` and `weak`) reuse
+/// [`PackageSpec`], including its pin variants: a run-export may be a binary
+/// or source spec, a self-referential [`PackageSpec::PinSubpackage`], or a
+/// [`PackageSpec::PinCompatible`] against one of the exporter's dependencies.
+/// The constraints buckets only restrict versions and are therefore limited
+/// to [`ConstraintSpec`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RunExports {
+    /// The only bucket applied when the consuming output is `noarch`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub noarch: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from build and host dependencies to run dependencies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub strong: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from host dependencies to run dependencies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub weak: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Applied from build and host dependencies to run constraints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, ConstraintSpec>>")
+    )]
+    pub strong_constraints: Option<OrderMap<SourcePackageName, ConstraintSpec>>,
+
+    /// Applied from host dependencies to run constraints.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, ConstraintSpec>>")
+    )]
+    pub weak_constraints: Option<OrderMap<SourcePackageName, ConstraintSpec>>,
+}
+
+impl RunExports {
+    /// Check if every bucket is effectively empty (contains no meaningful data
+    /// that should affect the hash).
+    pub fn is_empty(&self) -> bool {
+        let RunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+        noarch.as_ref().is_none_or(|d| d.is_empty())
+            && strong.as_ref().is_none_or(|d| d.is_empty())
+            && weak.as_ref().is_none_or(|d| d.is_empty())
+            && strong_constraints.as_ref().is_none_or(|d| d.is_empty())
+            && weak_constraints.as_ref().is_none_or(|d| d.is_empty())
+    }
+}
+
+impl IsDefault for RunExports {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
+    }
+}
+
+impl Target {
     /// Check if this target is effectively empty (contains no meaningful data
     /// that should affect the hash).
     pub fn is_empty(&self) -> bool {
@@ -213,79 +383,283 @@ impl TargetV1 {
             .is_none_or(|d| d.is_empty());
         let has_no_host_deps = self.host_dependencies.as_ref().is_none_or(|d| d.is_empty());
         let has_no_run_deps = self.run_dependencies.as_ref().is_none_or(|d| d.is_empty());
+        let has_no_run_constraints = self.run_constraints.as_ref().is_none_or(|d| d.is_empty());
+        let has_no_extra_dependencies = self
+            .extra_dependencies
+            .as_ref()
+            .is_none_or(|e| e.is_empty() || e.values().all(|deps| deps.is_empty()));
+        let has_no_run_exports = self.run_exports.as_ref().is_none_or(|r| r.is_empty());
 
-        has_no_build_deps && has_no_host_deps && has_no_run_deps
+        has_no_build_deps
+            && has_no_host_deps
+            && has_no_run_deps
+            && has_no_run_constraints
+            && has_no_extra_dependencies
+            && has_no_run_exports
     }
 }
 
-impl IsDefault for TargetV1 {
-    fn is_default(&self) -> bool {
-        self.is_empty()
+impl IsDefault for Target {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub enum PackageSpecV1 {
+pub enum PackageSpec {
     /// This is a binary dependency
-    Binary(Box<BinaryPackageSpecV1>),
+    Binary(Box<BinaryPackageSpec>),
     /// This is a dependency on a source package
-    Source(SourcePackageSpecV1),
+    Source(SourcePackageSpec),
+    /// Pin to a version that is compatible with a version from the "previous" environment
+    PinCompatible(PinCompatibleSpec),
+    /// Pin to the version and build of the package that declares this spec.
+    /// Only valid where the entry's name equals the declaring package's own
+    /// name, typically in run-exports.
+    PinSubpackage(PinSubpackageSpec),
+}
+
+impl From<BinaryPackageSpec> for PackageSpec {
+    fn from(value: BinaryPackageSpec) -> Self {
+        PackageSpec::Binary(Box::new(value))
+    }
+}
+
+impl From<VersionSpec> for PackageSpec {
+    fn from(value: VersionSpec) -> Self {
+        PackageSpec::Binary(Box::new(value.into()))
+    }
+}
+
+/// A package spec that can be used for constraints.
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum ConstraintSpec {
+    /// A binary package constraint (version spec)
+    Binary(Box<BinaryPackageSpec>),
+    /// Constrain to a version that is compatible with a version from the
+    /// "previous" environment
+    PinCompatible(PinCompatibleSpec),
+    /// Constrain to the version and build of the package that declares this
+    /// spec. Only valid where the entry's name equals the declaring package's
+    /// own name, typically in run-export constraints.
+    PinSubpackage(PinSubpackageSpec),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PinCompatibleSpec {
+    /// A minimum pin to a version, using `x.x.x...` as syntax
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lower_bound: Option<PinBound>,
+
+    /// A pin to a version, using `x.x.x...` as syntax
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upper_bound: Option<PinBound>,
+
+    /// If an exact pin is given, we pin the exact version & hash
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exact: bool,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<String>,
+}
+
+/// The arguments of a self-referential `pin_subpackage`. Structurally
+/// identical to [`PinCompatibleSpec`]; a separate type so the two pin kinds
+/// stay distinguishable in the schema and can evolve independently.
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PinSubpackageSpec {
+    /// A minimum pin to a version, using `x.x.x...` as syntax
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lower_bound: Option<PinBound>,
+
+    /// A pin to a version, using `x.x.x...` as syntax
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upper_bound: Option<PinBound>,
+
+    /// If an exact pin is given, we pin the exact version & hash
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exact: bool,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<String>,
+}
+
+/// A pin expression string like "x", "x.x", "x.x.x", etc.
+///
+/// This represents the number of version segments to pin.
+/// For example, "x.x" means pin the major and minor version.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(transparent)]
+pub struct PinExpression(
+    #[cfg_attr(feature = "schemars", schemars(regex(pattern = r"^x(\.x)*$")))] pub String,
+);
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum PinBound {
+    Expression(PinExpression),
+    Version(#[cfg_attr(feature = "schemars", schemars(with = "String"))] Version),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct NamedSpecV1<T> {
+pub struct NamedSpec<T> {
+    #[cfg_attr(feature = "schemars", schemars(with = "String"))]
     pub name: SourcePackageName,
 
     #[serde(flatten)]
     pub spec: T,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub enum SourcePackageSpecV1 {
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SourcePackageSpec {
+    #[serde(flatten)]
+    pub location: SourcePackageLocationSpec,
+    /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
+    pub version: Option<VersionSpec>,
+    /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
+    pub build: Option<StringMatcher>,
+    /// The build number of the package
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
+    pub build_number: Option<BuildNumberSpec>,
+    /// Optional extra dependencies to select for the package.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extras: Option<Vec<String>>,
+    /// Plain string flags used to select package variants.
+    #[serde_as(as = "Option<Vec<DisplayFromStr>>")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<Vec<String>>"))]
+    pub flags: Option<Vec<StringMatcher>>,
+    /// The subdir of the channel
+    pub subdir: Option<String>,
+    /// The license of the package
+    pub license: Option<String>,
+    /// The condition under which this match spec applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<serde_json::Value>"))]
+    pub condition: Option<MatchSpecCondition>,
+}
+
+impl From<PathSpec> for SourcePackageSpec {
+    fn from(value: PathSpec) -> Self {
+        Self {
+            location: SourcePackageLocationSpec::Path(value),
+            version: None,
+            build: None,
+            build_number: None,
+            extras: None,
+            flags: None,
+            subdir: None,
+            license: None,
+            condition: None,
+        }
+    }
+}
+
+impl From<UrlSpec> for SourcePackageSpec {
+    fn from(value: UrlSpec) -> Self {
+        Self {
+            location: SourcePackageLocationSpec::Url(value),
+            version: None,
+            build: None,
+            build_number: None,
+            extras: None,
+            flags: None,
+            subdir: None,
+            license: None,
+            condition: None,
+        }
+    }
+}
+
+impl From<GitSpec> for SourcePackageSpec {
+    fn from(value: GitSpec) -> Self {
+        Self {
+            location: SourcePackageLocationSpec::Git(value),
+            version: None,
+            build: None,
+            build_number: None,
+            extras: None,
+            flags: None,
+            subdir: None,
+            license: None,
+            condition: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum SourcePackageLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
     /// either represent a source or binary package depending on the archive
     /// type.
-    Url(UrlSpecV1),
+    Url(UrlSpec),
 
     /// The spec is represented as a git repository. The package represents a
     /// source distribution of some kind.
-    Git(GitSpecV1),
+    Git(GitSpec),
 
     /// The spec is represented as a local path. The package should be retrieved
     /// from the local filesystem. The package can be either a source or binary
     /// package.
-    Path(PathSpecV1),
+    Path(PathSpec),
 }
 
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct UrlSpecV1 {
+pub struct UrlSpec {
     /// The URL of the package
     pub url: Url,
 
     /// The md5 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub sha256: Option<Sha256Hash>,
+
+    /// The subdirectory of the package in the archive
+    pub subdirectory: Option<String>,
 }
 
-impl std::fmt::Debug for UrlSpecV1 {
+impl std::fmt::Debug for UrlSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut debug_struct = f.debug_struct("UrlSpecV1");
+        let mut debug_struct = f.debug_struct("UrlSpec");
 
         debug_struct.field("url", &self.url);
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5));
+            debug_struct.field("md5", &hex::encode(md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256));
+            debug_struct.field("sha256", &hex::encode(sha256));
         }
         debug_struct.finish()
     }
@@ -293,30 +667,39 @@ impl std::fmt::Debug for UrlSpecV1 {
 
 /// A specification of a package from a git repository.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct GitSpecV1 {
+pub struct GitSpec {
     /// The git url of the package which can contain git+ prefixes.
     pub git: Url,
 
     /// The git revision of the package
-    pub rev: Option<GitReferenceV1>,
+    pub rev: Option<GitReference>,
 
     /// The git subdirectory of the package
     pub subdirectory: Option<String>,
+
+    /// Whether to fetch Git LFS objects for the checkout. `None` falls
+    /// back to the deprecated `PIXI_GIT_LFS` environment variable and
+    /// otherwise leaves pointer files.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub lfs: Option<bool>,
 }
 
 /// A specification of a package from a path
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct PathSpecV1 {
+pub struct PathSpec {
     /// The path to the package
     pub path: String,
 }
 
 /// A reference to a specific commit in a git repository.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub enum GitReferenceV1 {
+pub enum GitReference {
     /// The HEAD commit of a branch.
     Branch(String),
 
@@ -333,35 +716,50 @@ pub enum GitReferenceV1 {
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct BinaryPackageSpecV1 {
+pub struct BinaryPackageSpec {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub version: Option<VersionSpec>,
     /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub build: Option<StringMatcher>,
     /// The build number of the package
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub build_number: Option<BuildNumberSpec>,
     /// Match the specific filename of the package
     pub file_name: Option<String>,
+    /// Optional extra dependencies to select for the package.
+    pub extras: Option<Vec<String>>,
+    /// Plain string flags used to select package variants.
+    #[serde_as(as = "Option<Vec<DisplayFromStr>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<Vec<String>>"))]
+    pub flags: Option<Vec<StringMatcher>>,
     /// The channel of the package
     pub channel: Option<Url>,
     /// The subdir of the channel
     pub subdir: Option<String>,
     /// The md5 hash of the package
     #[serde_as(as = "Option<SerializableHash<Md5>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub md5: Option<Md5Hash>,
     /// The sha256 hash of the package
     #[serde_as(as = "Option<SerializableHash<Sha256>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
     pub sha256: Option<Sha256Hash>,
     /// The URL of the package, if it is available
     pub url: Option<Url>,
     /// The license of the package
     pub license: Option<String>,
+    /// The condition under which this match spec applies.
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<serde_json::Value>"))]
+    pub condition: Option<MatchSpecCondition>,
 }
 
-impl From<VersionSpec> for BinaryPackageSpecV1 {
+impl From<VersionSpec> for BinaryPackageSpec {
     fn from(value: VersionSpec) -> Self {
         Self {
             version: Some(value),
@@ -370,7 +768,7 @@ impl From<VersionSpec> for BinaryPackageSpecV1 {
     }
 }
 
-impl From<&VersionSpec> for BinaryPackageSpecV1 {
+impl From<&VersionSpec> for BinaryPackageSpec {
     fn from(value: &VersionSpec) -> Self {
         Self {
             version: Some(value.clone()),
@@ -379,7 +777,7 @@ impl From<&VersionSpec> for BinaryPackageSpecV1 {
     }
 }
 
-impl std::fmt::Debug for BinaryPackageSpecV1 {
+impl std::fmt::Debug for BinaryPackageSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("NamelessMatchSpecV1");
 
@@ -395,6 +793,12 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
         if let Some(file_name) = &self.file_name {
             debug_struct.field("file_name", file_name);
         }
+        if let Some(extras) = &self.extras {
+            debug_struct.field("extras", extras);
+        }
+        if let Some(flags) = &self.flags {
+            debug_struct.field("flags", flags);
+        }
         if let Some(channel) = &self.channel {
             debug_struct.field("channel", channel);
         }
@@ -402,10 +806,13 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
             debug_struct.field("subdir", subdir);
         }
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5));
+            debug_struct.field("md5", &hex::encode(md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256));
+            debug_struct.field("sha256", &hex::encode(sha256));
+        }
+        if let Some(condition) = &self.condition {
+            debug_struct.field("condition", condition);
         }
 
         debug_struct.finish()
@@ -413,15 +820,18 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 }
 
 // Custom Hash implementations that skip default values for stability
-impl Hash for ProjectModelV1 {
+impl Hash for ProjectModel {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let ProjectModelV1 {
+        let ProjectModel {
             name,
+            build_string_prefix,
+            build_number,
             version,
             description,
+            build_flags,
             authors,
             license,
             license_file,
@@ -430,10 +840,14 @@ impl Hash for ProjectModelV1 {
             repository,
             documentation,
             targets,
+            secrets,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("authors", authors)
+            .field("build_string_prefix", build_string_prefix)
+            .field("build_number", build_number)
+            .field("build_flags", build_flags)
             .field("description", description)
             .field("documentation", documentation)
             .field("homepage", homepage)
@@ -442,96 +856,117 @@ impl Hash for ProjectModelV1 {
             .field("name", name)
             .field("readme", readme)
             .field("repository", repository)
+            .field("secrets", secrets)
             .field("targets", targets)
             .field("version", version)
             .finish(state);
     }
 }
 
-impl Hash for TargetSelectorV1 {
-    /// Custom hash implementation that uses discriminant values to keep the
-    /// hash as stable as possible when adding new enum variants.
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            TargetSelectorV1::Unix => 0u8.hash(state),
-            TargetSelectorV1::Linux => 1u8.hash(state),
-            TargetSelectorV1::Win => 2u8.hash(state),
-            TargetSelectorV1::MacOs => 3u8.hash(state),
-            TargetSelectorV1::Platform(p) => {
-                4u8.hash(state);
-                p.hash(state);
-            }
-        }
-    }
-}
-
-impl Hash for TargetsV1 {
+impl Hash for Targets {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let TargetsV1 {
+        let Targets {
             default_target,
-            targets,
+            conditional,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("default_target", default_target)
-            .field("targets", targets)
+            .field("conditional", conditional)
             .finish(state);
     }
 }
 
-impl Hash for TargetV1 {
+impl Hash for Target {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let TargetV1 {
+        let Target {
             build_dependencies,
             host_dependencies,
             run_dependencies,
+            run_constraints,
+            extra_dependencies,
+            run_exports,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("build_dependencies", build_dependencies)
+            .field("extra_dependencies", extra_dependencies)
             .field("host_dependencies", host_dependencies)
             .field("run_dependencies", run_dependencies)
+            .field("run_constraints", run_constraints)
+            .field("run_exports", run_exports)
             .finish(state);
     }
 }
 
-impl Hash for PackageSpecV1 {
+impl Hash for RunExports {
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let RunExports {
+            noarch,
+            strong,
+            weak,
+            strong_constraints,
+            weak_constraints,
+        } = self;
+
+        StableHashBuilder::<H>::new()
+            .field("noarch", noarch)
+            .field("strong", strong)
+            .field("strong_constraints", strong_constraints)
+            .field("weak", weak)
+            .field("weak_constraints", weak_constraints)
+            .finish(state);
+    }
+}
+
+impl Hash for PackageSpec {
     /// Custom hash implementation that uses discriminant values to keep the
     /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            PackageSpecV1::Binary(spec) => {
+            PackageSpec::Binary(spec) => {
                 0u8.hash(state);
                 spec.hash(state);
             }
-            PackageSpecV1::Source(spec) => {
+            PackageSpec::Source(spec) => {
                 1u8.hash(state);
+                spec.hash(state);
+            }
+            PackageSpec::PinCompatible(spec) => {
+                2u8.hash(state);
+                spec.hash(state);
+            }
+            PackageSpec::PinSubpackage(spec) => {
+                3u8.hash(state);
                 spec.hash(state);
             }
         }
     }
 }
 
-impl Hash for SourcePackageSpecV1 {
+impl Hash for ConstraintSpec {
     /// Custom hash implementation that uses discriminant values to keep the
     /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            SourcePackageSpecV1::Url(spec) => {
+            Self::Binary(spec) => {
                 0u8.hash(state);
                 spec.hash(state);
             }
-            SourcePackageSpecV1::Git(spec) => {
+            Self::PinCompatible(spec) => {
                 1u8.hash(state);
                 spec.hash(state);
             }
-            SourcePackageSpecV1::Path(spec) => {
+            Self::PinSubpackage(spec) => {
                 2u8.hash(state);
                 spec.hash(state);
             }
@@ -539,22 +974,141 @@ impl Hash for SourcePackageSpecV1 {
     }
 }
 
-impl Hash for UrlSpecV1 {
+impl Hash for PinCompatibleSpec {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let PinCompatibleSpec {
+            lower_bound,
+            upper_bound,
+            exact,
+            build,
+        } = self;
+
+        StableHashBuilder::<H>::new()
+            .field("lower_bound", lower_bound)
+            .field("upper_bound", upper_bound)
+            .field("exact", exact)
+            .field("build", build)
+            .finish(state);
+    }
+}
+
+impl Hash for PinSubpackageSpec {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let PinSubpackageSpec {
+            lower_bound,
+            upper_bound,
+            exact,
+            build,
+        } = self;
+
+        StableHashBuilder::<H>::new()
+            .field("lower_bound", lower_bound)
+            .field("upper_bound", upper_bound)
+            .field("exact", exact)
+            .field("build", build)
+            .finish(state);
+    }
+}
+
+impl Hash for PinBound {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            PinBound::Expression(expr) => {
+                0u8.hash(state);
+                expr.hash(state);
+            }
+            PinBound::Version(ver) => {
+                1u8.hash(state);
+                ver.hash(state);
+            }
+        }
+    }
+}
+
+impl IsDefault for PinBound {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self)
+    }
+}
+
+impl Hash for SourcePackageSpec {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let Self {
+            location,
+            version,
+            build,
+            build_number,
+            extras,
+            flags,
+            subdir,
+            license,
+            condition,
+        } = self;
+
+        // Hash the location first to ensure compatibility with older versions.
+        location.hash(state);
+
+        // Add the new fields using StableHashBuilder for forward/backward
+        // compatibility.
+        let condition = condition.as_ref().map(ToString::to_string);
+        StableHashBuilder::<H>::new()
+            .field("build", build)
+            .field("build_number", build_number)
+            .field("condition", &condition)
+            .field("extras", extras)
+            .field("flags", flags)
+            .field("license", license)
+            .field("subdir", subdir)
+            .field("version", version)
+            .finish(state);
+    }
+}
+
+impl Hash for SourcePackageLocationSpec {
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Url(spec) => {
+                0u8.hash(state);
+                spec.hash(state);
+            }
+            Self::Git(spec) => {
+                1u8.hash(state);
+                spec.hash(state);
+            }
+            Self::Path(spec) => {
+                2u8.hash(state);
+                spec.hash(state);
+            }
+        }
+    }
+}
+
+impl Hash for UrlSpec {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let UrlSpecV1 { url, md5, sha256 } = self;
+        let UrlSpec {
+            url,
+            md5,
+            sha256,
+            subdirectory,
+        } = self;
 
         StableHashBuilder::<H>::new()
             .field("md5", md5)
             .field("sha256", sha256)
             .field("url", url)
+            .field("subdirectory", subdirectory)
             .finish(state);
     }
 }
 
-impl Hash for GitSpecV1 {
+impl Hash for GitSpec {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
@@ -563,59 +1117,66 @@ impl Hash for GitSpecV1 {
             .field("git", &self.git)
             .field("rev", &self.rev)
             .field("subdirectory", &self.subdirectory)
+            .field("lfs", &self.lfs)
             .finish(state);
     }
 }
 
-impl Hash for PathSpecV1 {
+impl Hash for PathSpec {
     /// Custom hash implementation to keep the hash as stable as possible.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let PathSpecV1 { path } = self;
+        let PathSpec { path } = self;
 
         path.hash(state);
     }
 }
 
-impl Hash for GitReferenceV1 {
+impl Hash for GitReference {
     /// Custom hash implementation that uses discriminant values to keep the
     /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            GitReferenceV1::Branch(b) => {
+            GitReference::Branch(b) => {
                 0u8.hash(state);
                 b.hash(state);
             }
-            GitReferenceV1::Tag(t) => {
+            GitReference::Tag(t) => {
                 1u8.hash(state);
                 t.hash(state);
             }
-            GitReferenceV1::Rev(r) => {
+            GitReference::Rev(r) => {
                 2u8.hash(state);
                 r.hash(state);
             }
-            GitReferenceV1::DefaultBranch => {
+            GitReference::DefaultBranch => {
                 3u8.hash(state);
             }
         }
     }
 }
 
-impl IsDefault for GitReferenceV1 {
-    fn is_default(&self) -> bool {
-        false // Never skip GitReferenceV1 fields
+impl IsDefault for GitReference {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip GitReferenceV1 fields
     }
 }
 
-impl Hash for BinaryPackageSpecV1 {
+impl Hash for BinaryPackageSpec {
     /// Custom hash implementation using StableHashBuilder to ensure different
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let condition = self.condition.as_ref().map(ToString::to_string);
         StableHashBuilder::<H>::new()
             .field("build", &self.build)
             .field("build_number", &self.build_number)
             .field("channel", &self.channel)
+            .field("condition", &condition)
+            .field("extras", &self.extras)
             .field("file_name", &self.file_name)
+            .field("flags", &self.flags)
             .field("license", &self.license)
             .field("md5", &self.md5)
             .field("sha256", &self.sha256)
@@ -633,18 +1194,30 @@ mod tests {
     use super::*;
 
     fn calculate_hash<T: Hash>(obj: &T) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         obj.hash(&mut hasher);
         hasher.finish()
     }
 
     #[test]
+    fn test_conditional_expression_roundtrip() {
+        // A conditional expression carries its bare inner text and displays it
+        // verbatim.
+        let expression = ConditionalExpression::new("host_platform == build_platform");
+        assert_eq!(expression.to_string(), "host_platform == build_platform");
+        assert_eq!(expression.as_str(), "host_platform == build_platform");
+    }
+
+    #[test]
     fn test_hash_stability_with_default_values() {
         // Create a minimal ProjectModelV1 instance
-        let mut project_model = ProjectModelV1 {
-            name: "test-project".to_string(),
+        let mut project_model = ProjectModel {
+            name: Some("test-project".to_string()),
+            build_number: None,
+            build_string_prefix: None,
             version: None,
             description: None,
+            build_flags: None,
             authors: None,
             license: None,
             license_file: None,
@@ -653,28 +1226,32 @@ mod tests {
             repository: None,
             documentation: None,
             targets: None,
+            secrets: std::collections::BTreeSet::new(),
         };
 
         let hash1 = calculate_hash(&project_model);
 
-        // Add empty targets field - with corrected implementation, this should NOT
+        // Add an empty targets field - with corrected implementation, this should NOT
         // change hash because we only include discriminants for
         // non-default/non-empty values
-        project_model.targets = Some(TargetsV1 {
+        project_model.targets = Some(Targets {
             default_target: None,
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash2 = calculate_hash(&project_model);
 
-        // Add a target with empty dependencies - this should also NOT change hash
-        let empty_target = TargetV1 {
+        // Add a target with empty dependencies - this should also NOT change the hash
+        let empty_target = Target {
             host_dependencies: Some(OrderMap::new()),
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
+            run_constraints: Some(OrderMap::new()),
+            extra_dependencies: None,
+            run_exports: None,
         };
-        project_model.targets = Some(TargetsV1 {
+        project_model.targets = Some(Targets {
             default_target: Some(empty_target),
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
 
@@ -697,10 +1274,13 @@ mod tests {
     #[test]
     fn test_hash_changes_with_meaningful_values() {
         // Create a minimal ProjectModelV1 instance
-        let mut project_model = ProjectModelV1 {
-            name: "test-project".to_string(),
+        let mut project_model = ProjectModel {
+            name: Some("test-project".to_string()),
+            build_number: None,
+            build_string_prefix: None,
             version: None,
             description: None,
+            build_flags: None,
             authors: None,
             license: None,
             license_file: None,
@@ -709,6 +1289,7 @@ mod tests {
             repository: None,
             documentation: None,
             targets: None,
+            secrets: std::collections::BTreeSet::new(),
         };
 
         let hash1 = calculate_hash(&project_model);
@@ -719,16 +1300,22 @@ mod tests {
 
         // Add a real dependency (should change hash)
         let mut deps = OrderMap::new();
-        deps.insert("python".to_string(), PackageSpecV1::Binary(Box::default()));
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::from(BinaryPackageSpec::default()),
+        );
 
-        let target_with_deps = TargetV1 {
+        let target_with_deps = Target {
             host_dependencies: Some(deps),
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
+            run_constraints: Some(OrderMap::new()),
+            extra_dependencies: None,
+            run_exports: None,
         };
-        project_model.targets = Some(TargetsV1 {
+        project_model.targets = Some(Targets {
             default_target: Some(target_with_deps),
-            targets: Some(OrderMap::new()),
+            conditional: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
 
@@ -746,11 +1333,11 @@ mod tests {
 
     #[test]
     fn test_binary_package_spec_hash_stability() {
-        let spec1 = BinaryPackageSpecV1::default();
+        let spec1 = BinaryPackageSpec::default();
         let hash1 = calculate_hash(&spec1);
 
         // Create another default spec with explicit None values
-        let spec2 = BinaryPackageSpecV1 {
+        let spec2 = BinaryPackageSpec {
             version: None,
             build: None,
             build_number: None,
@@ -761,6 +1348,7 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
+            ..Default::default()
         };
         let hash2 = calculate_hash(&spec2);
 
@@ -771,7 +1359,7 @@ mod tests {
         );
 
         // Add a meaningful value
-        let spec3 = BinaryPackageSpecV1 {
+        let spec3 = BinaryPackageSpec {
             file_name: Some("test.tar.bz2".to_string()),
             ..Default::default()
         };
@@ -786,8 +1374,8 @@ mod tests {
     #[test]
     fn test_enum_variant_hash_stability() {
         // Test PackageSpecV1 enum variants
-        let binary_spec = PackageSpecV1::Binary(Box::default());
-        let source_spec = PackageSpecV1::Source(SourcePackageSpecV1::Path(PathSpecV1 {
+        let binary_spec = PackageSpec::from(BinaryPackageSpec::default());
+        let source_spec = PackageSpec::Source(SourcePackageSpec::from(PathSpec {
             path: "test".to_string(),
         }));
 
@@ -801,7 +1389,7 @@ mod tests {
         );
 
         // Same variant with same content should have same hash
-        let binary_spec2 = PackageSpecV1::Binary(Box::default());
+        let binary_spec2 = PackageSpec::from(BinaryPackageSpec::default());
         let hash3 = calculate_hash(&binary_spec2);
 
         assert_eq!(
@@ -810,28 +1398,42 @@ mod tests {
         );
     }
 
-    fn create_sample_target_v1() -> TargetV1 {
-        TargetV1 {
+    fn create_sample_target_v1() -> Target {
+        Target {
             host_dependencies: Some(OrderMap::from([(
-                "host_dep1".to_string(),
-                PackageSpecV1::Binary(Box::default()),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "host_dep1",
+                )),
+                PackageSpec::from(BinaryPackageSpec::default()),
             )])),
             build_dependencies: Some(OrderMap::from([(
-                "build_dep1".to_string(),
-                PackageSpecV1::Binary(Box::default()),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "build_dep1",
+                )),
+                PackageSpec::from(BinaryPackageSpec::default()),
             )])),
             run_dependencies: Some(OrderMap::from([(
-                "run_dep1".to_string(),
-                PackageSpecV1::Binary(Box::default()),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "run_dep1",
+                )),
+                PackageSpec::from(BinaryPackageSpec::default()),
             )])),
+            run_constraints: Some(OrderMap::from([(
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "run_const1",
+                )),
+                PackageSpec::Binary(Box::default()),
+            )])),
+            extra_dependencies: None,
+            run_exports: None,
         }
     }
 
     #[test]
     fn serialize_targets_v1_with_default_target() {
-        let targets = TargetsV1 {
+        let targets = Targets {
             default_target: Some(create_sample_target_v1()),
-            targets: None,
+            conditional: None,
         };
 
         let serialized = serde_json::to_string(&targets).unwrap();
@@ -840,33 +1442,19 @@ mod tests {
     }
 
     #[test]
-    fn serialize_targets_v1_with_multiple_targets() {
-        let platform_strs = [
-            "unix",
-            "win",
-            "macos",
-            "linux-64",
-            "linux-arm64",
-            "linux-ppc64le",
-            "osx-64",
-            "osx-arm64",
-            "win-64",
-            "win-arm64",
-        ];
+    fn serialize_targets_v1_with_conditional_targets() {
+        let expressions = ["unix", "win", "osx", "host_platform == 'linux-64'"];
 
-        let targets = TargetsV1 {
+        let targets = Targets {
             default_target: None,
-            targets: Some(
-                platform_strs
+            conditional: Some(
+                expressions
                     .iter()
-                    .map(|s| {
-                        let selector = match *s {
-                            "unix" => TargetSelectorV1::Unix,
-                            "win" => TargetSelectorV1::Win,
-                            "macos" => TargetSelectorV1::MacOs,
-                            other => TargetSelectorV1::Platform(other.to_string()),
-                        };
-                        (selector, create_sample_target_v1())
+                    .map(|expression| {
+                        (
+                            ConditionalExpression::new(*expression),
+                            create_sample_target_v1(),
+                        )
                     })
                     .collect(),
             ),
@@ -874,21 +1462,20 @@ mod tests {
 
         let serialized = serde_json::to_string(&targets).unwrap();
 
-        for platform in platform_strs {
-            assert!(serialized.contains(platform), "Missing: {}", platform);
+        for expression in expressions {
+            assert!(serialized.contains(expression), "Missing: {expression}");
         }
     }
 
     #[test]
     fn deserialize_targets_v1_with_empty_fields() {
         let json = r#"{
-            "defaultTarget": null,
-            "targets": null
+            "defaultTarget": null
         }"#;
 
-        let deserialized: TargetsV1 = serde_json::from_str(json).unwrap();
+        let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_none());
-        assert!(deserialized.targets.is_none());
+        assert!(deserialized.conditional.is_none());
     }
 
     #[test]
@@ -903,7 +1490,7 @@ mod tests {
                 "buildDependencies": null,
                 "runDependencies": null
             },
-            "targets": {
+            "conditional": {
                 "unix": {
                     "hostDependencies": null,
                     "buildDependencies": null,
@@ -912,15 +1499,48 @@ mod tests {
             }
         }"#;
 
-        let deserialized: TargetsV1 = serde_json::from_str(json).unwrap();
+        let deserialized: Targets = serde_json::from_str(json).unwrap();
         assert!(deserialized.default_target.is_some());
-        assert!(deserialized.targets.is_some());
         assert!(
             deserialized
-                .targets
+                .conditional
                 .unwrap()
-                .contains_key(&TargetSelectorV1::Unix)
+                .contains_key(&ConditionalExpression::new("unix"))
         );
+    }
+
+    /// Regression test for the copy-paste bug where `is_empty()` checked
+    /// `self.run_dependencies` twice instead of once for each field. A target
+    /// populated only via `run_constraints` must not report itself as empty,
+    /// otherwise `IsDefault::is_non_default` filters it out and the constraints
+    /// silently disappear from the project model.
+    #[test]
+    fn test_target_is_empty_only_run_constraints() {
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(Box::default()),
+        );
+
+        let target = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: Some(deps),
+            extra_dependencies: None,
+            run_exports: None,
+        };
+        assert!(!target.is_empty());
+
+        let empty = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: None,
+            extra_dependencies: None,
+            run_exports: None,
+        };
+        assert!(empty.is_empty());
     }
 
     #[test]
@@ -929,32 +1549,54 @@ mod tests {
         // different hashes
 
         let mut deps = OrderMap::new();
-        deps.insert("python".to_string(), PackageSpecV1::Binary(Box::default()));
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::from(BinaryPackageSpec::default()),
+        );
 
         // Same dependency in host_dependencies
-        let target1 = TargetV1 {
+        let target1 = Target {
             host_dependencies: Some(deps.clone()),
             build_dependencies: None,
             run_dependencies: None,
+            run_constraints: None,
+            extra_dependencies: None,
+            run_exports: None,
         };
 
         // Same dependency in run_dependencies
-        let target2 = TargetV1 {
+        let target2 = Target {
             host_dependencies: None,
             build_dependencies: None,
             run_dependencies: Some(deps.clone()),
+            run_constraints: None,
+            extra_dependencies: None,
+            run_exports: None,
         };
 
         // Same dependency in build_dependencies
-        let target3 = TargetV1 {
+        let target3 = Target {
             host_dependencies: None,
             build_dependencies: Some(deps.clone()),
             run_dependencies: None,
+            run_constraints: None,
+            extra_dependencies: None,
+            run_exports: None,
+        };
+        // Same dependency in run_constraints
+        let target4 = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: Some(deps.clone()),
+            extra_dependencies: None,
+            run_exports: None,
         };
 
         let hash1 = calculate_hash(&target1);
         let hash2 = calculate_hash(&target2);
         let hash3 = calculate_hash(&target3);
+        let hash4 = calculate_hash(&target4);
 
         assert_ne!(
             hash1, hash2,
@@ -968,16 +1610,28 @@ mod tests {
             hash2, hash3,
             "Same dependency in run vs build should produce different hashes"
         );
+        assert_ne!(
+            hash1, hash4,
+            "Same dependency in host vs run_constraints should produce different hashes"
+        );
+        assert_ne!(
+            hash2, hash4,
+            "Same dependency in build vs run_constraints should produce different hashes"
+        );
+        assert_ne!(
+            hash3, hash4,
+            "Same dependency in run vs run_constraints should produce different hashes"
+        );
 
         // Test with TargetsV1 as well
-        let targets1 = TargetsV1 {
+        let targets1 = Targets {
             default_target: Some(target1),
-            targets: None,
+            conditional: None,
         };
 
-        let targets2 = TargetsV1 {
+        let targets2 = Targets {
             default_target: Some(target2),
-            targets: None,
+            conditional: None,
         };
 
         let targets_hash1 = calculate_hash(&targets1);
@@ -989,18 +1643,152 @@ mod tests {
         );
     }
 
+    /// A target populated only via run-exports must not report itself as
+    /// empty, otherwise `IsDefault::is_non_default` filters it out and the
+    /// run-exports silently disappear from the project model.
+    #[test]
+    fn test_target_is_empty_only_run_exports() {
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(Box::default()),
+        );
+
+        let target = Target {
+            run_exports: Some(RunExports {
+                weak: Some(deps),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(!target.is_empty());
+
+        // An empty run-exports struct does not make the target non-empty.
+        let empty = Target {
+            run_exports: Some(RunExports::default()),
+            ..Default::default()
+        };
+        assert!(empty.is_empty());
+    }
+
+    /// Empty run-exports must hash identically to absent run-exports so that
+    /// introducing the field does not invalidate existing caches; populated
+    /// run-exports must change the hash, and each bucket must hash
+    /// differently.
+    #[test]
+    fn test_run_exports_hash_stability() {
+        let base = create_sample_target_v1();
+        let hash_base = calculate_hash(&base);
+
+        let with_empty = Target {
+            run_exports: Some(RunExports::default()),
+            ..create_sample_target_v1()
+        };
+        assert_eq!(
+            hash_base,
+            calculate_hash(&with_empty),
+            "empty run-exports must not change the target hash"
+        );
+
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(Box::default()),
+        );
+        let mut constraints = OrderMap::new();
+        constraints.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            ConstraintSpec::Binary(Box::default()),
+        );
+
+        let buckets = [
+            RunExports {
+                noarch: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                strong: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                weak: Some(deps.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                strong_constraints: Some(constraints.clone()),
+                ..Default::default()
+            },
+            RunExports {
+                weak_constraints: Some(constraints.clone()),
+                ..Default::default()
+            },
+        ];
+        let hashes: Vec<u64> = buckets
+            .into_iter()
+            .map(|run_exports| {
+                calculate_hash(&Target {
+                    run_exports: Some(run_exports),
+                    ..create_sample_target_v1()
+                })
+            })
+            .collect();
+
+        for hash in &hashes {
+            assert_ne!(
+                hash_base, *hash,
+                "populated run-exports must change the target hash"
+            );
+        }
+        for (i, a) in hashes.iter().enumerate() {
+            for (j, b) in hashes.iter().enumerate() {
+                if i != j {
+                    assert_ne!(
+                        a, b,
+                        "the same package in different run-export buckets must hash differently"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The serialized form uses camelCase bucket names and omits absent
+    /// buckets, matching the rest of the wire format.
+    #[test]
+    fn serialize_run_exports_camel_case() {
+        let mut constraints = OrderMap::new();
+        constraints.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("libfoo")),
+            ConstraintSpec::Binary(Box::default()),
+        );
+        let target = Target {
+            run_exports: Some(RunExports {
+                strong_constraints: Some(constraints),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let serialized = serde_json::to_string(&target).unwrap();
+        assert!(serialized.contains("runExports"));
+        assert!(serialized.contains("strongConstraints"));
+        assert!(
+            !serialized.contains("weakConstraints"),
+            "absent buckets must be omitted"
+        );
+    }
+
     #[test]
     fn test_hash_collision_bug_project_model() {
         // Test the same issue in ProjectModelV1
-        let project1 = ProjectModelV1 {
-            name: "test".to_string(),
+        let project1 = ProjectModel {
+            name: Some("test".to_string()),
             description: Some("test description".to_string()),
             license: None,
             ..Default::default()
         };
 
-        let project2 = ProjectModelV1 {
-            name: "test".to_string(),
+        let project2 = ProjectModel {
+            name: Some("test".to_string()),
             description: None,
             license: Some("test description".to_string()),
             ..Default::default()

@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+assertion_line: 979
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"monorepo\"\n        channels = []\n        platforms = ['linux-64']\n        preview = [\"pixi-build\"]\n\n        [package]\n        name = \"lib\"\n        version = \"0.1.0\"\n\n        [package.build]\n        backend = { name = \"foobar\", version = \"*\" }\n\n        [package.host-dependencies]\n        ghost = { workspace = true }\n        \"#,)"
+---
+  × the workspace does not define `ghost` in `[workspace.dependencies]`
+    ╭─[pixi.toml:16:31]
+ 15 │         [package.host-dependencies]
+ 16 │         ghost = { workspace = true }
+    ·                               ────
+ 17 │
+    ╰────
+  help: Add the package to `[workspace.dependencies]` in the workspace `pixi.toml`.

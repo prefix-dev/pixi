@@ -1,0 +1,128 @@
+---
+source: crates/pixi_cli/src/tree.rs
+assertion_line: 469
+expression: "render_pypi_tree(manifest, Platform::Linux64)"
+input_file: examples/pypi/pixi.toml
+---
+├── black 24.8.0 
+│   ├── click 8.1.7 
+│   ├── mypy_extensions 1.0.0 
+│   ├── packaging 24.1 
+│   ├── pathspec 0.12.1 
+│   ├── platformdirs 4.2.2 
+│   ├── ipython 8.26.0 (extra: jupyter)
+│   │   ├── decorator 5.1.1 
+│   │   ├── jedi 0.19.1 
+│   │   │   └── parso 0.8.4 
+│   │   ├── matplotlib_inline 0.1.7 
+│   │   │   └── traitlets 5.14.3 
+│   │   ├── prompt_toolkit 3.0.47 
+│   │   │   └── wcwidth 0.2.13 
+│   │   ├── pygments 2.18.0 
+│   │   ├── stack_data 0.6.3 
+│   │   │   ├── executing 2.0.1 
+│   │   │   ├── asttokens 2.4.1 
+│   │   │   │   └── six 1.16.0 
+│   │   │   └── pure_eval 0.2.3 
+│   │   ├── traitlets 5.14.3  (*)
+│   │   ├── typing_extensions 4.12.2 
+│   │   └── pexpect 4.9.0 
+│   │       └── ptyprocess 0.7.0 
+│   └── tokenize_rt 6.0.0 (extra: jupyter)
+├── env_test_package 0.0.3 
+├── flask 3.0.3 
+│   ├── werkzeug 3.0.4 
+│   │   └── markupsafe 2.1.5 
+│   ├── jinja2 3.1.4 
+│   │   └── markupsafe 2.1.5  (*)
+│   ├── itsdangerous 2.2.0 
+│   ├── click 8.1.7  (*)
+│   └── blinker 1.8.2 
+├── plot_antenna 1.8 
+│   ├── matplotlib 3.9.2 
+│   │   ├── contourpy 1.3.0 
+│   │   │   └── numpy  
+│   │   ├── cycler 0.12.1 
+│   │   ├── fonttools 4.53.1 
+│   │   ├── kiwisolver 1.4.5 
+│   │   ├── numpy   (*)
+│   │   ├── packaging 24.1  (*)
+│   │   ├── pillow 10.4.0 
+│   │   ├── pyparsing 3.1.4 
+│   │   └── python_dateutil 2.9.0.post0 
+│   │       └── six 1.16.0  (*)
+│   ├── numpy   (*)
+│   ├── pandas 2.2.2 
+│   │   ├── numpy   (*)
+│   │   ├── python_dateutil 2.9.0.post0  (*)
+│   │   ├── pytz 2024.1 
+│   │   └── tzdata 2024.1 
+│   └── plotly 5.23.0 
+│       ├── tenacity 9.0.0 
+│       └── packaging 24.1  (*)
+├── pyboy 1.6.6 
+│   ├── numpy   (*)
+│   ├── pysdl2 0.9.16 
+│   └── pysdl2_dll 2.30.2 
+├── pycosat 0.6.6 
+├── pyliblzfse 0.4.1 
+├── pytest_timeout 2.4.0 
+│   └── pytest 9.0.3 
+│       ├── iniconfig 2.3.0 
+│       ├── packaging 24.1  (*)
+│       ├── pluggy 1.6.0 
+│       └── pygments 2.18.0  (*)
+└── tensorflow 2.14.0 
+    ├── absl_py 2.1.0 
+    ├── astunparse 1.6.3 
+    │   ├── wheel 0.44.0 
+    │   └── six 1.16.0  (*)
+    ├── flatbuffers 24.3.25 
+    ├── gast 0.6.0 
+    ├── google_pasta 0.2.0 
+    │   └── six 1.16.0  (*)
+    ├── h5py 3.11.0 
+    │   └── numpy   (*)
+    ├── libclang 18.1.1 
+    ├── ml_dtypes 0.2.0 
+    │   └── numpy   (*)
+    ├── numpy   (*)
+    ├── opt_einsum 3.3.0 
+    │   └── numpy   (*)
+    ├── packaging 24.1  (*)
+    ├── protobuf 4.25.4 
+    ├── setuptools 74.0.0 
+    ├── six 1.16.0  (*)
+    ├── termcolor 2.4.0 
+    ├── typing_extensions 4.12.2  (*)
+    ├── wrapt 1.14.1 
+    ├── tensorflow_io_gcs_filesystem 0.37.1 
+    ├── grpcio 1.66.1 
+    ├── tensorboard 2.14.1 
+    │   ├── absl_py 2.1.0  (*)
+    │   ├── grpcio 1.66.1  (*)
+    │   ├── google_auth 2.34.0 
+    │   │   ├── cachetools 5.5.0 
+    │   │   ├── pyasn1_modules 0.4.0 
+    │   │   │   └── pyasn1 0.6.0 
+    │   │   └── rsa 4.9 
+    │   │       └── pyasn1 0.6.0  (*)
+    │   ├── google_auth_oauthlib 1.0.0 
+    │   │   ├── google_auth 2.34.0  (*)
+    │   │   └── requests_oauthlib 2.0.0 
+    │   │       ├── oauthlib 3.2.2 
+    │   │       └── requests 2.32.3 
+    │   │           ├── charset_normalizer 3.3.2 
+    │   │           ├── idna 3.8 
+    │   │           ├── urllib3 2.2.2 
+    │   │           └── certifi 2024.7.4 
+    │   ├── markdown 3.7 
+    │   ├── numpy   (*)
+    │   ├── protobuf 4.25.4  (*)
+    │   ├── requests 2.32.3  (*)
+    │   ├── setuptools 74.0.0  (*)
+    │   ├── six 1.16.0  (*)
+    │   ├── tensorboard_data_server 0.7.2 
+    │   └── werkzeug 3.0.4  (*)
+    ├── tensorflow_estimator 2.14.0 
+    └── keras 2.14.0

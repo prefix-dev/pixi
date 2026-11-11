@@ -1,0 +1,20 @@
+[workspace]
+channels = ["https://conda.anaconda.org/extras-test"]
+platforms = ["linux-64"]
+
+# `my-package` advertises two extra groups in its repodata
+# (`extra_depends = { foo: [dep-foo], bar: [dep-bar] }`). Two environments select
+# a different extra each and share a solve group. The lock file must satisfy this
+# manifest: the reachability walk has to follow each package's `extra_depends`
+# for the extra its environment selected, otherwise `dep-foo` / `dep-bar` are
+# flagged as unused locked packages.
+
+[feature.foo.dependencies]
+my-package = { version = "*", extras = ["foo"] }
+
+[feature.bar.dependencies]
+my-package = { version = "*", extras = ["bar"] }
+
+[environments]
+env-bar = { features = ["bar"], solve-group = "shared" }
+env-foo = { features = ["foo"], solve-group = "shared" }

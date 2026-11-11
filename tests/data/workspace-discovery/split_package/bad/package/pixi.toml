@@ -1,8 +1,0 @@
-# This file should error because the workspace doesnt define a name.
-# [package]
-# name = "test_build_conda_package"
-# version = "1.0.0"
-
-[package.build.backend]
-name = "pixi-build-rattler-build"
-version = "0.1.*"

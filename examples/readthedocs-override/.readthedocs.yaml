@@ -1,4 +1,4 @@
-\version: 2
+version: 2
 build:
   os: ubuntu-22.04
   tools:

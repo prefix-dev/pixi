@@ -1,0 +1,23 @@
+version: 7
+platforms:
+- name: linux-64
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/build-tool-1.0.0-h0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/host-lib-2.0.0-h0.conda
+      - conda_source: my-package[12345678] @ git+https://github.com/example/my-package.git?tag=v0.1.0#abc123def456abc123def456abc123def456abc1
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/build-tool-1.0.0-h0.conda
+- conda: https://conda.anaconda.org/conda-forge/linux-64/host-lib-2.0.0-h0.conda
+- conda_source: my-package[12345678] @ git+https://github.com/example/my-package.git?tag=v0.1.0#abc123def456abc123def456abc123def456abc1
+  version: 0.1.0
+  build: py_0
+  subdir: noarch
+  build_packages:
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/build-tool-1.0.0-h0.conda
+  host_packages:
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/host-lib-2.0.0-h0.conda

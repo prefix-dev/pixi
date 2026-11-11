@@ -1,6 +1,8 @@
 <!-- Keep in sync with https://github.com/quantco/pixi-pack/blob/main/README.md -->
 
-[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes a Pixi environment and packs it into a compressed archive that can be shipped to the target machine. The corresponding `pixi-unpack` tool can be used to unpack the archive and install the environment.
+[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes an environment
+and packs it into a compressed archive that can be shipped to the target machine. The corresponding
+`pixi-unpack` tool can be used to unpack the archive and recreate an environment.
 
 Both tools can be installed via
 
@@ -76,6 +78,20 @@ pixi-pack --platform win-64
 !!! note
     You can only unpack a pack on a system that has the same platform as the pack was created for.
 
+### Named platforms
+
+If your `pixi.toml` defines named platforms (requires a lockfile in version 7 or later), you can pack them by name.
+
+```toml
+platforms = [{ name = "jetson", platform = "linux-aarch64", cuda = "13" }]
+```
+
+```bash
+pixi-pack --platform jetson
+```
+
+You can still pass the underlying conda platform (e.g. `linux-aarch64`) as long as only one named platform uses it; otherwise `pixi-pack` asks you to use one of the platform names instead.
+
 ### Self-Extracting Binaries
 
 You can create a self-extracting binary that contains the packed environment and a script that unpacks the environment.
@@ -107,7 +123,7 @@ This can be useful if you want to distribute the environment to users that don't
 
 #### Custom pixi-unpack executable path
 
-When creating a self-extracting binary, you can specify a custom path or URL to a `pixi-unpack` executable to avoid downloading it from the [default location](https://github.com/Quantco/pixi-pack/releases/download).
+When creating a self-extracting binary, you can specify a custom path or URL to a `pixi-unpack` executable to avoid downloading it from the [default location](https://github.com/Quantco/pixi-pack/releases/latest).
 
 You can provide one of the following as the `--pixi-unpack-source`:
 
@@ -140,7 +156,8 @@ You can inject additional packages into the environment that are not specified i
 pixi-pack --inject local-package-1.0.0-hbefa133_0.conda pixi.toml
 ```
 
-This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use `pixi.lock` from the workspace.
+This can be particularly useful if you build the package itself and want to include the built package
+in the environment but still want to use `pixi.lock` from the workspace.
 
 ### PyPi support
 
@@ -202,7 +219,7 @@ Using a cache is particularly useful when:
 
 - Creating multiple packs with overlapping dependencies
 - Working with large packages that take time to download
-- Operating in environments with limited bandwidth
+- Operating on machines with limited bandwidth
 - Running CI/CD pipelines where package caching can significantly improve build times
 
 ### Unpacking Without pixi-pack

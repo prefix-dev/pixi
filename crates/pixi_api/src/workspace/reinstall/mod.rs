@@ -1,0 +1,102 @@
+use fancy_display::FancyDisplay;
+use itertools::Itertools;
+use pixi_core::{
+    InstallFilter, UpdateLockFileOptions, Workspace,
+    environment::{LockFileSource, LockFileUsage, get_lock_file_and_prefixes},
+    lock_file::{ReinstallEnvironment, UpdateMode},
+};
+use std::sync::Arc;
+
+use crate::interface::Interface;
+
+mod options;
+
+pub use options::ReinstallOptions;
+
+pub async fn reinstall<I: Interface>(
+    interface: &I,
+    workspace: &Workspace,
+    options: ReinstallOptions,
+    lock_file_usage: LockFileUsage,
+    progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
+) -> miette::Result<()> {
+    // Install either:
+    //
+    // 1. some specific environments
+    // 2. all environments
+    // 3. default environment (if no environments are specified)
+    let envs = if let ReinstallEnvironment::Some(envs) = options.reinstall_environments {
+        envs.into_iter().collect()
+    } else if options.reinstall_environments == ReinstallEnvironment::All {
+        workspace
+            .environments()
+            .iter()
+            .map(|env| env.name().to_string())
+            .collect()
+    } else {
+        vec![workspace.default_environment().name().to_string()]
+    };
+
+    let environments = envs
+        .into_iter()
+        .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Update the prefixes by reinstalling `options.reinstall_packages`
+    get_lock_file_and_prefixes(
+        &environments,
+        options.target_platform.as_ref(),
+        progress.cloned(),
+        UpdateMode::Revalidate,
+        LockFileSource::Update(UpdateLockFileOptions {
+            lock_file_usage,
+            no_install: false,
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
+        }),
+        options.reinstall_packages,
+        &InstallFilter::default(),
+    )
+    .await?;
+
+    let installed_envs: Vec<_> = environments.iter().map(|env| env.name().clone()).collect();
+
+    // Message what's installed
+    let detached_envs_message =
+        if let Ok(Some(path)) = workspace.config().detached_environments_dir() {
+            format!(" in '{}'", console::style(path.display()).bold())
+        } else {
+            "".to_string()
+        };
+
+    let is_cli = interface.is_cli().await;
+    let installed_envs_names: Vec<String> = installed_envs
+        .iter()
+        .map(|env| {
+            if is_cli {
+                env.fancy_display().to_string()
+            } else {
+                env.to_string()
+            }
+        })
+        .collect();
+
+    if installed_envs.len() == 1 {
+        interface
+            .success(&format!(
+                "The {} environment has been re-installed{}.",
+                installed_envs_names[0], detached_envs_message
+            ))
+            .await;
+    } else {
+        interface
+            .success(&format!(
+                "The following environments have been re-installed: {}\t{}",
+                installed_envs_names.iter().join(", "),
+                detached_envs_message
+            ))
+            .await;
+    }
+
+    Ok(())
+}

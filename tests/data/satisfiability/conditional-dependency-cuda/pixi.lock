@@ -1,0 +1,25 @@
+version: 7
+platforms:
+- name: linux-64-cuda
+  subdir: linux-64
+  virtual-packages:
+  - __cuda=12
+- name: linux-64
+  subdir: linux-64
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/cond-test/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/cond-test/noarch/base-package-1.0.0-0.conda
+      linux-64-cuda:
+      - conda: https://conda.anaconda.org/cond-test/noarch/base-package-1.0.0-0.conda
+      - conda: https://conda.anaconda.org/cond-test/noarch/gpu-package-1.0.0-0.conda
+packages:
+- conda: https://conda.anaconda.org/cond-test/noarch/base-package-1.0.0-0.conda
+  sha256: cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe
+  md5: cafebabecafebabecafebabecafebabe
+- conda: https://conda.anaconda.org/cond-test/noarch/gpu-package-1.0.0-0.conda
+  sha256: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+  md5: deadbeefdeadbeefdeadbeefdeadbeef

@@ -21,7 +21,7 @@ pixi update --no-install boto3 # (9)!
 5. This will update the `pre-commit` package in the `lint`, `schema`, and `docs` environments.
 6. This will update the `mlx` package in the `osx-arm64` platform.
 7. This will update the `numpy` package in the `linux-64` and `osx-64` platforms.
-8. This will show the packages that would be updated without actually updating them in the lockfile
-9. This will update the `boto3` package in the manifest and lockfile, without installing it in an environment.
+8. This will show the packages that would be updated without actually updating them in the lock file
+9. This will update the `boto3` package in the manifest and lock file, without installing it in an environment.
 
 --8<-- [end:example]

@@ -1,0 +1,9 @@
+[workspace]
+channels = ["conda-forge"]
+name = "source-extra-dependency"
+platforms = ["win-64"]
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[dependencies]
+source = { path = "source" }

@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [constraints]\n        my-package = { path = \"../my-package\" }\n        \"#,)"
+---
+  × source specifications are not supported in `[constraints]`, but 'my-package' is a source specification
+   ╭─[pixi.toml:7:22]
+ 6 │         [constraints]
+ 7 │         my-package = { path = "../my-package" }
+   ·                      ─────────────┬────────────
+   ·                                   ╰── source specification specified here
+ 8 │
+   ╰────
+  help: constraints only apply to packages resolved from channels, not source packages

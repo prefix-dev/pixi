@@ -1,0 +1,38 @@
+[package]
+name = "pixi-build-r"
+version = "0.2.1"
+edition.workspace = true
+description = "R build backend for Pixi"
+license.workspace = true
+
+[package.metadata.dist]
+dist = false
+
+[dependencies]
+async-trait = { workspace = true }
+fs-err = { workspace = true }
+indexmap = { workspace = true }
+miette = { workspace = true }
+minijinja = { workspace = true }
+once_cell = { workspace = true }
+rattler_conda_types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+
+pixi_build_backend = { workspace = true }
+pixi_build_types = { workspace = true }
+
+rattler_build_recipe = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["filters", "redactions", "yaml"] }
+rstest = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+tempfile = { workspace = true }
+
+[features]
+default = ["rustls"]
+native-tls = ["pixi_build_backend/native-tls"]
+rustls = ["pixi_build_backend/rustls"]

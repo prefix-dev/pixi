@@ -1,0 +1,763 @@
+//! Helpers for assembling a single [`SourceRecord`] from a backend
+//! [`CondaOutput`] plus a pinned source location, called by
+//! [`ResolveSourcePackageKey`](super::ResolveSourcePackageKey) once per
+//! variant. [`nested_solve`] also installs the cycle guard for the
+//! recursive `SolvePixiEnvironmentKey` -> RSP chain and renders any
+//! detected cycle as `(package, CycleEnvironment)` frames.
+
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
+
+use itertools::Either;
+use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_compute_engine::ComputeCtx;
+use pixi_compute_reporters::OperationId;
+use pixi_record::{
+    FullSourceRecordData, PinnedSourceSpec, PixiRecord, SourceRecord, UnresolvedPixiRecord,
+};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
+use pixi_spec_containers::DependencyMap;
+use pixi_variant::VariantValue;
+use rattler_conda_types::{PackageName, PackageRecord, Subdir, package::RunExportsJson};
+use rattler_solve::SolveStrategy;
+
+use crate::{
+    BuildBackendMetadataSpec, BuildEnvOf, DerivedEnvKind, EnvironmentRef, InstalledSourceHints,
+    PtrArc, SourceRecordError, SourceRecordReporterSpec,
+    build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports, convert_extra_dependencies},
+    compute_data::{HasGateway, HasSourceRecordReporter},
+    cycle::CycleEnvironment,
+    injected_config::ChannelConfigKey,
+    keys::solve_pixi_environment::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
+    reporter::SourceRecordReporter,
+};
+use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
+use pixi_manifest::InlineContentHash;
+
+/// Resolve one variant's [`SourceRecord`] from an assembled
+/// [`CondaOutput`] + pinned source location.
+///
+/// Solves the build env, extracts build run-exports, solves the host
+/// env, extracts host run-exports, then assembles the final record
+/// with merged run dependencies.
+///
+/// `preferred_build_source` is the FULL pin map, propagated verbatim
+/// into the nested build/host env solves so pins for every package
+/// in the subtree remain visible.
+///
+/// Reports progress via `Arc<dyn SourceRecordReporter>` set on the engine `DataStore`, if any.
+pub(super) async fn assemble_source_record(
+    ctx: &mut ComputeCtx,
+    source: &PinnedSourceCodeLocation,
+    output: &CondaOutput,
+    preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
+    env_ref: &EnvironmentRef,
+    installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_content_hash: Option<InlineContentHash>,
+) -> Result<Arc<SourceRecord>, SourceRecordError> {
+    // Reporter lifecycle for this variant's source-record assembly.
+    // Build a `SourceRecordReporterSpec` from the data flowing through here so
+    // the reporter gets a familiar shape. Dedup fields
+    // (`exclude_newer`) are set to `None`: the RSP path doesn't carry
+    // that value directly and the reporter uses the spec only for
+    // display.
+    let reporter_spec = SourceRecordReporterSpec {
+        package: output.metadata.name.clone(),
+        variants: output
+            .metadata
+            .variant
+            .iter()
+            .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
+            .collect(),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: source.manifest_source().clone(),
+            preferred_build_source: preferred_build_source.get(&output.metadata.name).cloned(),
+            env_ref: env_ref.clone(),
+            build_string_prefix: None,
+            build_number: None,
+            inline: None,
+        },
+        exclude_newer: None,
+    };
+    let reporter_arc: Option<Arc<dyn SourceRecordReporter>> =
+        ctx.global_data().source_record_reporter().cloned();
+    let lifecycle = ReporterLifecycle::<SourceRecordReporterLifecycle>::queued(
+        reporter_arc.as_deref(),
+        &reporter_spec,
+    );
+    // Scope nested computes (build/host env `nested_solve`s) under this
+    // source-record's id so their events attribute to the record being
+    // assembled.
+    let active_id = lifecycle.id();
+    let _lifecycle = lifecycle.start();
+
+    let work = assemble_source_record_inner(
+        ctx,
+        source,
+        output,
+        preferred_build_source,
+        env_ref,
+        installed_source_hints,
+        inline_content_hash,
+    );
+    match active_id {
+        Some(id) => id.scope_active(work).await,
+        None => work.await,
+    }
+}
+
+#[allow(clippy::result_large_err)]
+async fn assemble_source_record_inner(
+    ctx: &mut ComputeCtx,
+    source: &PinnedSourceCodeLocation,
+    output: &CondaOutput,
+    preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
+    env_ref: &EnvironmentRef,
+    installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_content_hash: Option<InlineContentHash>,
+) -> Result<Arc<SourceRecord>, SourceRecordError> {
+    let source_location = SourceLocationSpec::from(source.manifest_source().clone());
+    let source_anchor = SourceAnchor::from(source_location.clone());
+    let channel_config = ctx.compute(&ChannelConfigKey).await;
+    let pkg_name = output.metadata.name.clone();
+
+    // Look up this `(package, source_location)`'s install hint. The
+    // nested build / host solves use it as their prior-resolution
+    // seed; the full `installed_source_hints` still flows through
+    // for deeper layers.
+    let (installed_build_packages, installed_host_packages): (
+        Arc<[UnresolvedPixiRecord]>,
+        Arc<[UnresolvedPixiRecord]>,
+    ) = match installed_source_hints.get(&pkg_name, &source_location) {
+        Some(hint) => (
+            Arc::clone(&hint.build_packages),
+            Arc::clone(&hint.host_packages),
+        ),
+        None => (Arc::from([]), Arc::from([])),
+    };
+
+    let mut compatibility_map = HashMap::new();
+    let build_dependencies = output
+        .build_dependencies
+        .as_ref()
+        .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
+        .transpose()
+        .map_err(SourceRecordError::from)?
+        .unwrap_or_default();
+
+    let mut build_records = nested_solve(
+        ctx,
+        &pkg_name,
+        preferred_build_source,
+        env_ref,
+        DerivedEnvKind::Build,
+        CycleEnvironment::Build,
+        build_dependencies.clone(),
+        Arc::clone(&installed_build_packages),
+        installed_source_hints,
+    )
+    .await?;
+
+    // Clone the gateway handle so we don't hold an immutable borrow
+    // on `ctx` across the subsequent mutable-borrow calls (another
+    // nested solve).
+    let gateway = ctx.global_data().gateway().clone();
+    let build_run_exports = build_dependencies
+        .extract_run_exports(
+            &mut build_records,
+            &output.ignore_run_exports,
+            &gateway,
+            None,
+        )
+        .await
+        .map_err(|err| {
+            SourceRecordError::RunExportsExtraction(String::from("build"), Arc::new(err))
+        })?;
+
+    compatibility_map.extend(
+        build_records
+            .iter()
+            .map(|record| (record.package_record().name.clone(), record)),
+    );
+
+    let host_dependencies = output
+        .host_dependencies
+        .as_ref()
+        .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compatibility_map))
+        .transpose()
+        .map_err(SourceRecordError::from)?
+        .unwrap_or_default()
+        .extend_with_run_exports_from_build(&build_run_exports);
+
+    let mut host_records = nested_solve(
+        ctx,
+        &pkg_name,
+        preferred_build_source,
+        env_ref,
+        DerivedEnvKind::Host,
+        CycleEnvironment::Host,
+        host_dependencies.clone(),
+        Arc::clone(&installed_host_packages),
+        installed_source_hints,
+    )
+    .await?;
+
+    let host_run_exports = host_dependencies
+        .extract_run_exports(
+            &mut host_records,
+            &output.ignore_run_exports,
+            &gateway,
+            None,
+        )
+        .await
+        .map_err(|err| {
+            SourceRecordError::RunExportsExtraction(String::from("host"), Arc::new(err))
+        })?;
+
+    compatibility_map.extend(
+        host_records
+            .iter()
+            .map(|record| (record.package_record().name.clone(), record)),
+    );
+
+    let run_dependencies = Dependencies::new(&output.run_dependencies, None, &compatibility_map)
+        .map_err(SourceRecordError::from)?
+        .extend_with_run_exports_from_build_and_host(
+            host_run_exports,
+            build_run_exports,
+            output.metadata.subdir,
+        );
+
+    /// A source location in the `sources` bookkeeping, tagged with how it
+    /// was registered. Explicit registrations come from source specs the
+    /// backend declared (run deps, the record's own run-exports, extras)
+    /// and carry the manifest spelling; implied ones are derived from
+    /// pinned build/host env records and may spell the same source
+    /// differently (a pinned commit vs. a branch, or a differently written
+    /// relative path).
+    enum RegisteredSource {
+        Explicit(SourceLocationSpec),
+        Implied(SourceLocationSpec),
+    }
+
+    let mut sources: HashMap<PackageName, RegisteredSource> = HashMap::new();
+
+    // Record a source-typed PixiSpec's location into `sources`, erroring
+    // if the same package is explicitly registered from two different
+    // locations. An explicit registration replaces an implied one, so the
+    // outcome does not depend on which of the two is encountered first.
+    // Only the location is tracked; the matchspec selectors live on the
+    // dependency itself.
+    fn track_source(
+        sources: &mut HashMap<PackageName, RegisteredSource>,
+        name: &PackageName,
+        spec: &PixiSpec,
+    ) -> Result<(), SourceRecordError> {
+        if let Either::Left(source) = spec.clone().into_source_or_binary() {
+            let location = source.location;
+            match sources.entry(name.clone()) {
+                std::collections::hash_map::Entry::Occupied(mut entry) => match entry.get() {
+                    RegisteredSource::Explicit(existing) => {
+                        if existing != &location {
+                            return Err(SourceRecordError::DuplicateSourceDependency {
+                                package: name.clone(),
+                                source1: Box::new(existing.clone()),
+                                source2: Box::new(location.clone()),
+                            });
+                        }
+                    }
+                    RegisteredSource::Implied(_) => {
+                        entry.insert(RegisteredSource::Explicit(location));
+                    }
+                },
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(RegisteredSource::Explicit(location));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // Stringify a PixiSpec dep map into a `Vec<String>`, threading source
+    // locations through `track_source` for the per-source bookkeeping.
+    let stringify_pixi_specs = |specs: DependencyMap<PackageName, PixiSpec>,
+                                sources: &mut HashMap<PackageName, RegisteredSource>|
+     -> Result<Vec<String>, SourceRecordError> {
+        let mut result = specs
+            .into_specs()
+            .map(|(name, spec)| {
+                track_source(sources, &name, &spec)?;
+                Ok(spec
+                    .to_match_spec(&name, &channel_config)
+                    .map_err(SourceRecordError::from)?
+                    .to_string())
+            })
+            .collect::<Result<Vec<_>, SourceRecordError>>()?;
+        result.sort_unstable();
+        Ok(result)
+    };
+
+    let stringify_binary_specs =
+        |specs: DependencyMap<PackageName, BinarySpec>| -> Result<Vec<String>, SourceRecordError> {
+            let mut result = specs
+                .into_specs()
+                .map(|(name, spec)| {
+                    Ok(spec
+                        .to_match_spec(&name, &channel_config)
+                        .map_err(SourceRecordError::from)?
+                        .to_string())
+                })
+                .collect::<Result<Vec<_>, SourceRecordError>>()?;
+            result.sort_unstable();
+            Ok(result)
+        };
+
+    let mut depends = run_dependencies
+        .dependencies
+        .clone()
+        .into_specs()
+        .map(|(name, withspec)| {
+            if withspec.source.is_none() {
+                track_source(&mut sources, &name, &withspec.value)?;
+            }
+
+            // Register implied source dependencies leniently (an explicit
+            // source spec wins, no matter whether it is registered through
+            // the run deps above or through the record's own run-exports or
+            // extras later):
+            // - a run-export-introduced source spec carries the pinned
+            //   location of the build/host env record it was extracted
+            //   from, which can spell the same source differently than an
+            //   explicit spec (e.g. a pinned commit vs. a branch);
+            // - a binary-shaped run dep on a package that was built from
+            //   source in this record's build/host envs (e.g. `python
+            //   >=3.12` while the host env holds a source-built python)
+            //   must resolve to that same source at install time — the
+            //   package was linked against it.
+            // Pinned locations are workspace-root-relative while `sources`
+            // entries are read relative to this record's manifest, so
+            // relativize first.
+            if !sources.contains_key(&name) {
+                let implied_location = match withspec.value.clone().into_source_or_binary() {
+                    Either::Left(source) if withspec.source.is_some() => Some(source.location),
+                    Either::Left(_) => None,
+                    Either::Right(_) => compatibility_map.get(&name).and_then(|r| match r {
+                        PixiRecord::Source(source) => {
+                            Some(SourceLocationSpec::from(source.manifest_source().clone()))
+                        }
+                        PixiRecord::Binary(_) => None,
+                    }),
+                };
+                if let Some(location) =
+                    implied_location.and_then(|loc| source_anchor.relativize_location(loc))
+                {
+                    sources.insert(name.clone(), RegisteredSource::Implied(location));
+                }
+            }
+
+            Ok(withspec
+                .value
+                .to_match_spec(&name, &channel_config)
+                .map_err(SourceRecordError::from)?
+                .to_string())
+        })
+        .collect::<Result<Vec<_>, SourceRecordError>>()?;
+    depends.sort_unstable();
+
+    let mut constrains = run_dependencies
+        .constraints
+        .into_specs()
+        .map(|(name, withspec)| {
+            Ok(withspec
+                .value
+                .to_match_spec(&name, &channel_config)
+                .map_err(SourceRecordError::from)?
+                .to_string())
+        })
+        .collect::<Result<Vec<_>, SourceRecordError>>()?;
+    constrains.sort_unstable();
+
+    let run_exports_pixi =
+        PixiRunExports::try_from_protocol(&output.run_exports, &compatibility_map)
+            .map_err(SourceRecordError::from)?;
+
+    let run_exports = RunExportsJson {
+        weak: stringify_pixi_specs(run_exports_pixi.weak, &mut sources)?,
+        strong: stringify_pixi_specs(run_exports_pixi.strong, &mut sources)?,
+        noarch: stringify_pixi_specs(run_exports_pixi.noarch, &mut sources)?,
+        weak_constrains: stringify_binary_specs(run_exports_pixi.weak_constrains)?,
+        strong_constrains: stringify_binary_specs(run_exports_pixi.strong_constrains)?,
+    };
+
+    // Resolve the extra groups the same way as run dependencies,
+    // threading source specs through `track_source` so a source dependency
+    // pulled in by an extra is registered as a source of this record.
+    let extra_depends =
+        convert_extra_dependencies(&output.extra_dependencies, None, &compatibility_map)
+            .map_err(SourceRecordError::from)?
+            .into_iter()
+            .map(|(group, specs)| {
+                Ok((
+                    group.into_inner(),
+                    stringify_pixi_specs(specs, &mut sources)?,
+                ))
+            })
+            .collect::<Result<BTreeMap<String, Vec<String>>, SourceRecordError>>()?;
+
+    let package_record = PackageRecord {
+        size: None,
+        sha256: None,
+        md5: None,
+        timestamp: None,
+        indexed_timestamp: None,
+        attestations_sha256: None,
+        platform: output
+            .metadata
+            .subdir
+            .only_platform()
+            .map(ToString::to_string),
+        arch: output
+            .metadata
+            .subdir
+            .arch()
+            .as_ref()
+            .map(ToString::to_string),
+        name: output.metadata.name.clone(),
+        // Validated when the backend returned its outputs.
+        build: output.metadata.build.clone(),
+        version: output.metadata.version.clone(),
+        build_number: output.metadata.build_number,
+        license: output.metadata.license.clone(),
+        subdir: output.metadata.subdir.to_string(),
+        license_family: output.metadata.license_family.clone(),
+        noarch: output.metadata.noarch,
+        constrains,
+        depends,
+        run_exports: Some(run_exports),
+        purls: output
+            .metadata
+            .purls
+            .as_ref()
+            .map(|purls| purls.iter().cloned().collect()),
+        python_site_packages_path: output.metadata.python_site_packages_path.clone(),
+        features: None,
+        track_features: output.metadata.track_features.clone(),
+        legacy_bz2_md5: None,
+        legacy_bz2_size: None,
+        extra_depends,
+        flags: output.metadata.flags.clone(),
+    };
+
+    let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources
+        .into_iter()
+        .map(|(name, source)| {
+            let (RegisteredSource::Explicit(location) | RegisteredSource::Implied(location)) =
+                source;
+            (name.as_source().to_string(), location)
+        })
+        .collect();
+
+    // `SourceRecord::new` derives `identifier_hash` from the contents.
+    // Source deps in build/host_packages were assembled by earlier
+    // recursive invocations of this function, so their own hashes are
+    // already filled — the bottom-up invariant holds.
+    let record = SourceRecord::new(
+        FullSourceRecordData {
+            package_record,
+            sources: sources_by_str,
+        },
+        source.manifest_source().clone(),
+        source.build_source().cloned(),
+        output
+            .metadata
+            .variant
+            .iter()
+            .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
+            .collect(),
+        // Carry the resolved build / host env package sets forward.
+        // Downstream consumers (lock file writer, installer) need
+        // the exact packages this source was built against, not just
+        // their aggregated run-exports.
+        build_records
+            .into_iter()
+            .map(pixi_record::UnresolvedPixiRecord::from)
+            .collect(),
+        host_records
+            .into_iter()
+            .map(pixi_record::UnresolvedPixiRecord::from)
+            .collect(),
+        // `pixi_record` is below `pixi_manifest` in the dependency graph and
+        // cannot name `InlineContentHash`, so unwrap to the raw `u64` here, at
+        // the one crate boundary where the newtype can no longer travel.
+        inline_content_hash.map(InlineContentHash::as_u64),
+    );
+
+    Ok(Arc::new(record))
+}
+
+/// Solve a nested build/host environment for a source record.
+///
+/// Constructs a [`Derived`](EnvironmentRef::Derived) env_ref off of
+/// `env_ref` and delegates to [`SolvePixiEnvironmentKey`]. `installed`
+/// is the per-source build/host package set from the outer record
+/// (lock file state), used as the solver's pinning hint so previously
+/// recorded versions stay stable across re-resolutions.
+///
+/// `preferred_build_source` is the full pin map (propagated verbatim
+/// from the outer solve) so pins for source deps reachable from the
+/// nested build/host env are honoured.
+#[allow(clippy::too_many_arguments)]
+async fn nested_solve(
+    ctx: &mut ComputeCtx,
+    pkg_name: &PackageName,
+    preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
+    env_ref: &EnvironmentRef,
+    kind: DerivedEnvKind,
+    cycle_env: CycleEnvironment,
+    dependencies: Dependencies,
+    installed: Arc<[UnresolvedPixiRecord]>,
+    installed_source_hints: &PtrArc<InstalledSourceHints>,
+) -> Result<Vec<PixiRecord>, SourceRecordError> {
+    if dependencies.dependencies.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let nested_env_ref = env_ref.derived(pkg_name.clone(), kind);
+    // The hint describes a locked copy of this package, but hints are keyed
+    // by name and source location only, while a package that is a build
+    // dependency of one package and a host dependency of another is
+    // resolved once per platform. The hint may therefore belong to the
+    // copy of the other platform. The solver treats installed records as
+    // locked candidates and would pick them, so keep only the records that
+    // fit the platform this environment is solved for.
+    let host_platform = ctx
+        .compute(&BuildEnvOf(nested_env_ref.clone()))
+        .await
+        .host_platform;
+    let installed = installed_records_for_platform(installed, host_platform);
+
+    let nested_spec = SolvePixiEnvironmentSpec {
+        dependencies: dependencies
+            .dependencies
+            .into_specs()
+            .map(|(name, withspec)| (name, withspec.value))
+            .collect(),
+        constraints: dependencies
+            .constraints
+            .into_specs()
+            .map(|(name, withspec)| (name, withspec.value))
+            .collect(),
+        dev_sources: Default::default(),
+        // Per-source build / host env `installed` hint: the packages
+        // the outer record's [`SourceRecord::build_packages`] /
+        // [`SourceRecord::host_packages`] captured on a previous
+        // resolution. Passing these keeps solver output stable when
+        // the graph is unchanged; empty on first-ever resolution.
+        installed,
+        installed_source_hints: installed_source_hints.clone(),
+        strategy: SolveStrategy::default(),
+        preferred_build_source: Arc::clone(preferred_build_source),
+        env_ref: nested_env_ref,
+        // A nested build/host env solves binary/source build deps; inline
+        // definitions apply only to the consumer's direct dependencies.
+        inline_packages: Default::default(),
+    };
+
+    // Wrap the nested SolvePixiEnvironmentKey call in a cycle
+    // guard. If resolving this build/host env forms a cycle back to
+    // a source we're already resolving, the engine's detector fires
+    // this guard and we get `Err(CycleError)` rather than hanging
+    // or surfacing a raw `ComputeError::Cycle` at the top-level
+    // `engine.compute` boundary. The cycle path carries type-erased
+    // keys; we pull `(PackageName, CycleEnvironment)` frames out of
+    // `ResolveSourcePackageKey`s along the path via `Key::provide`
+    // (see that key's impl), and fall back to a one-frame Cycle
+    // rooted at this call site if the path turns up no such frames.
+    let pkg_name_for_cycle = pkg_name.clone();
+    let guarded = ctx
+        .with_cycle_guard(async |cctx| {
+            cctx.compute(&SolvePixiEnvironmentKey::new(nested_spec))
+                .await
+        })
+        .await;
+
+    let compute_result = match guarded {
+        Ok(value) => value,
+        Err(cycle) => {
+            return Err(SourceRecordError::Cycle(render_cycle(
+                &cycle,
+                Some((pkg_name_for_cycle, cycle_env)),
+            )));
+        }
+    };
+
+    let records = compute_result.map_err(|err| match err {
+        // A cycle caught inside SPEK's body surfaces here as
+        // `SolvePixiEnvironmentError::Cycle`; preserve its identity
+        // so callers (and tests) see `SourceRecordError::Cycle` and
+        // not a wrapping "solve the build/host environment" error.
+        crate::SolvePixiEnvironmentError::Cycle(cycle) => SourceRecordError::Cycle(cycle),
+        other => match cycle_env {
+            CycleEnvironment::Build => SourceRecordError::SolveBuildEnvironment {
+                package: pkg_name.clone(),
+                error: Box::new(other),
+            },
+            CycleEnvironment::Host | CycleEnvironment::Run => {
+                SourceRecordError::SolveHostEnvironment {
+                    package: pkg_name.clone(),
+                    error: Box::new(other),
+                }
+            }
+        },
+    })?;
+
+    Ok((*records).clone())
+}
+
+/// Build a [`crate::Cycle`] (the existing box-drawing error type) from a
+/// compute-engine [`pixi_compute_engine::CycleError`]. Walks the ring of
+/// `AnyKey` frames and asks each one for a [`SourceCycleFrame`] (provided
+/// by `ResolveSourcePackageKey::provide`). Frames that don't supply one
+/// (e.g. `SolvePixiEnvironmentKey` frames between RSP frames) are
+/// skipped.
+///
+/// If `fallback` is `Some` and no RSP frames were found on the ring,
+/// it is appended so even a path with no RSP frames produces a
+/// non-empty rendering.
+pub(crate) fn render_cycle(
+    cycle: &pixi_compute_engine::CycleError,
+    fallback: Option<(PackageName, CycleEnvironment)>,
+) -> crate::Cycle {
+    let mut stack = Vec::new();
+    for key in &cycle.path {
+        // Non-RSP frames (SPEK, SMK, etc.) don't provide
+        // SourceCycleFrame; skip.
+        if let Some(frame) = key.request_value::<SourceCycleFrame>() {
+            stack.push((frame.package, frame.env));
+        }
+    }
+    if stack.is_empty()
+        && let Some(fb) = fallback
+    {
+        stack.push(fb);
+    }
+    crate::Cycle { stack }
+}
+
+/// Per-frame cycle metadata exposed by
+/// `ResolveSourcePackageKey::provide`. The cycle-path walker in
+/// [`render_cycle`] pulls one of these per RSP frame on the ring.
+#[derive(Clone, Debug)]
+pub(crate) struct SourceCycleFrame {
+    pub package: PackageName,
+    pub env: CycleEnvironment,
+}
+
+/// `LifecycleKind` for [`assemble_source_record`].
+struct SourceRecordReporterLifecycle;
+
+impl LifecycleKind for SourceRecordReporterLifecycle {
+    type Reporter<'r> = dyn SourceRecordReporter + 'r;
+    type Id = OperationId;
+    type Env = SourceRecordReporterSpec;
+
+    fn queue<'r>(
+        reporter: Option<&'r Self::Reporter<'r>>,
+        env: &Self::Env,
+    ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
+        reporter.map(|r| Active {
+            reporter: r,
+            id: r.on_queued(env),
+        })
+    }
+
+    fn on_started<'r>(active: &Active<'r, Self::Reporter<'r>, Self::Id>) {
+        active.reporter.on_started(active.id);
+    }
+
+    fn on_finished<'r>(active: Active<'r, Self::Reporter<'r>, Self::Id>) {
+        active.reporter.on_finished(active.id);
+    }
+}
+
+/// The records of `installed` that can be part of an environment solved
+/// for `platform`: records of that platform, `noarch` records, and records
+/// whose subdir is not a known platform (those are not ours to judge).
+fn installed_records_for_platform(
+    installed: Arc<[UnresolvedPixiRecord]>,
+    platform: Subdir,
+) -> Arc<[UnresolvedPixiRecord]> {
+    let fits = |record: &UnresolvedPixiRecord| match record
+        .package_record()
+        .and_then(|record| record.subdir.parse::<Subdir>().ok())
+    {
+        Some(subdir) => subdir == Subdir::NoArch || subdir == platform,
+        None => true,
+    };
+    if installed.iter().all(fits) {
+        return installed;
+    }
+    installed
+        .iter()
+        .filter(|record| fits(record))
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_conda_types::{RepoDataRecord, VersionWithSource, package::DistArchiveIdentifier};
+    use url::Url;
+
+    use super::*;
+
+    fn binary(name: &str, subdir: &str) -> UnresolvedPixiRecord {
+        let mut package_record = PackageRecord::new(
+            PackageName::new_unchecked(name),
+            "1.0.0".parse::<VersionWithSource>().unwrap(),
+            "h0".parse().unwrap(),
+        );
+        package_record.subdir = subdir.into();
+        UnresolvedPixiRecord::Binary(Arc::new(RepoDataRecord {
+            package_record,
+            identifier: DistArchiveIdentifier::try_from_filename(&format!("{name}-1.0.0-h0.conda"))
+                .unwrap(),
+            url: Url::parse(&format!(
+                "https://example.com/{subdir}/{name}-1.0.0-h0.conda"
+            ))
+            .unwrap(),
+            channel: None,
+        }))
+    }
+
+    fn names(records: &[UnresolvedPixiRecord]) -> Vec<&str> {
+        records.iter().map(|r| r.name().as_normalized()).collect()
+    }
+
+    #[test]
+    fn records_of_the_platform_noarch_and_unknown_subdirs_are_kept() {
+        let installed: Arc<[_]> = Arc::from([
+            binary("libfoo", "linux-64"),
+            binary("pyfoo", "noarch"),
+            binary("mystery", "not-a-platform"),
+        ]);
+        let kept = installed_records_for_platform(installed.clone(), Subdir::Linux64);
+        assert!(
+            Arc::ptr_eq(&kept, &installed),
+            "nothing to drop, nothing copied"
+        );
+    }
+
+    #[test]
+    fn records_of_another_platform_are_dropped() {
+        let installed: Arc<[_]> = Arc::from([
+            binary("libfoo", "linux-64"),
+            binary("dummy-b", "osx-arm64"),
+            binary("pyfoo", "noarch"),
+        ]);
+        let kept = installed_records_for_platform(installed, Subdir::Linux64);
+        assert_eq!(names(&kept), ["libfoo", "pyfoo"]);
+    }
+}

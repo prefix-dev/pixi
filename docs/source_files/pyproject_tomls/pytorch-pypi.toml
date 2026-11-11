@@ -1,10 +1,13 @@
+#:tombi toml-version = "v1.0.0"
+# The Python packaging ecosystem parses this file with TOML 1.0 parsers
+
 # --8<-- [start:minimal]
 [project]
 name = "pytorch-pypi"
 # We need a python version that is compatible with pytorch
 requires-python = ">= 3.11,<3.13"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "linux-64", "win-64"]
 

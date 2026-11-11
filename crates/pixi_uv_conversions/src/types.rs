@@ -1,11 +1,6 @@
-// use uv_normalize::PackageName;
-// use pep508_rs::PackageName;
-
 use std::error::Error;
 use std::fmt::{Debug, Display};
-use std::path::PathBuf;
 use thiserror::Error;
-use uv_distribution_filename::ExtensionError;
 use uv_pep440::VersionSpecifierBuildError;
 
 #[derive(Debug)]
@@ -19,13 +14,13 @@ pub enum NameError {
 impl Display for NameError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NameError::PepNameError(e) => write!(f, "Failed to convert to pep name {}", e),
-            NameError::UvNameError(e) => write!(f, "Failed to convert to uv name  {}", e),
+            NameError::PepNameError(e) => write!(f, "Failed to convert to pep name {e}"),
+            NameError::UvNameError(e) => write!(f, "Failed to convert to uv name  {e}"),
             NameError::PepExtraNameError(e) => {
-                write!(f, "Failed to convert to uv extra name  {}", e)
+                write!(f, "Failed to convert to uv extra name  {e}")
             }
             NameError::UvExtraNameError(e) => {
-                write!(f, "Failed to convert to uv extra name  {}", e)
+                write!(f, "Failed to convert to uv extra name  {e}")
             }
         }
     }
@@ -52,10 +47,10 @@ impl Display for VersionSpecifiersError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             VersionSpecifiersError::PepVersionError(e) => {
-                write!(f, "Failed to convert to pep version {}", e)
+                write!(f, "Failed to convert to pep version {e}")
             }
             VersionSpecifiersError::UvVersionError(e) => {
-                write!(f, "Failed to convert to uv version  {}", e)
+                write!(f, "Failed to convert to uv version  {e}")
             }
         }
     }
@@ -79,8 +74,8 @@ pub enum Pep508Error {
 impl Display for Pep508Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Pep508Error::Pep508Error(e) => write!(f, "Failed to convert {}", e),
-            Pep508Error::UvPep508(e) => write!(f, "Failed to convert to convert {}", e),
+            Pep508Error::Pep508Error(e) => write!(f, "Failed to convert {e}"),
+            Pep508Error::UvPep508(e) => write!(f, "Failed to convert to convert {e}"),
         }
     }
 }
@@ -103,8 +98,8 @@ pub enum VersionError {
 impl Display for VersionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VersionError::PepError(e) => write!(f, "Failed to convert {}", e),
-            VersionError::UvError(e) => write!(f, "Failed to convert to convert {}", e),
+            VersionError::PepError(e) => write!(f, "Failed to convert {e}"),
+            VersionError::UvError(e) => write!(f, "Failed to convert to convert {e}"),
         }
     }
 }
@@ -142,6 +137,6 @@ pub enum ConversionError {
     #[error(transparent)]
     TrustedHostError(#[from] uv_configuration::TrustedHostError),
 
-    #[error("expected an archive but found path")]
-    ExpectedArchiveButFoundPath(PathBuf, #[source] ExtensionError),
+    #[error(transparent)]
+    FmtError(#[from] std::fmt::Error),
 }

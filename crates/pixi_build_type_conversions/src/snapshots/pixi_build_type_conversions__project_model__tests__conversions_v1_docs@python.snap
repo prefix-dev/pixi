@@ -1,57 +1,63 @@
 ---
 source: crates/pixi_build_type_conversions/src/project_model.rs
+assertion_line: 327
 expression: project_model
 ---
 {
-  "version": "1",
-  "data": {
-    "name": "python_rich",
-    "version": "0.1.0",
-    "description": null,
-    "authors": null,
-    "license": null,
-    "licenseFile": null,
-    "readme": null,
-    "homepage": null,
-    "repository": null,
-    "documentation": null,
-    "targets": {
-      "defaultTarget": {
-        "hostDependencies": {
-          "hatchling": {
-            "binary": {
-              "version": "==1.26.3",
-              "build": null,
-              "buildNumber": null,
-              "fileName": null,
-              "channel": null,
-              "subdir": null,
-              "md5": null,
-              "sha256": null,
-              "url": null,
-              "license": null
-            }
-          }
-        },
-        "buildDependencies": {},
-        "runDependencies": {
-          "rich": {
-            "binary": {
-              "version": "13.9.*",
-              "build": null,
-              "buildNumber": null,
-              "fileName": null,
-              "channel": null,
-              "subdir": null,
-              "md5": null,
-              "sha256": null,
-              "url": null,
-              "license": null
-            }
+  "name": "python_rich",
+  "buildStringPrefix": null,
+  "buildNumber": null,
+  "version": "0.1.0",
+  "description": null,
+  "authors": null,
+  "license": null,
+  "licenseFile": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "targets": {
+    "defaultTarget": {
+      "hostDependencies": {
+        "hatchling": {
+          "binary": {
+            "version": "==1.26.3",
+            "build": null,
+            "buildNumber": null,
+            "fileName": null,
+            "extras": null,
+            "flags": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null,
+            "url": null,
+            "license": null,
+            "condition": null
           }
         }
       },
-      "targets": {}
+      "buildDependencies": {},
+      "runDependencies": {
+        "rich": {
+          "binary": {
+            "version": "13.9.*",
+            "build": null,
+            "buildNumber": null,
+            "fileName": null,
+            "extras": null,
+            "flags": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null,
+            "url": null,
+            "license": null,
+            "condition": null
+          }
+        }
+      },
+      "runConstraints": {}
     }
   }
 }

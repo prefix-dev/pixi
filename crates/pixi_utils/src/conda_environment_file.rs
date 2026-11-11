@@ -1,16 +1,50 @@
 use itertools::Itertools;
-use miette::{Context, Diagnostic, IntoDiagnostic, NamedSource, SourceSpan};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use pixi_config::Config;
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
+use rattler_conda_types::{
+    MatchSpec, NamedChannelOrUrl, ParseMatchSpecError, ParseStrictness::Lenient,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::{io::BufRead, path::Path, str::FromStr};
 use thiserror::Error;
 
+/// An error that occurs when reading or converting a conda environment file.
+#[derive(Debug, Error, Diagnostic)]
+pub enum CondaEnvFileError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Yaml(#[from] Box<YamlParseError>),
+
+    #[error("Can't parse '{spec}' as conda dependency")]
+    CondaDependency {
+        spec: String,
+        #[source]
+        source: ParseMatchSpecError,
+    },
+
+    #[error("can't parse '{channel}' as channel")]
+    Channel {
+        channel: String,
+        #[source]
+        source: url::ParseError,
+    },
+
+    #[error("Can't parse '{requirement}' as pypi dependency")]
+    PypiDependency {
+        requirement: String,
+        #[source]
+        source: Box<pep508_rs::Pep508Error>,
+    },
+}
+
 #[derive(Debug, Error)]
 #[error("Failed to parse '{path}' as a conda environment file")]
-struct YamlParseError {
+pub struct YamlParseError {
     #[source]
     source: serde_yaml::Error,
     src: NamedSource<String>,
@@ -65,10 +99,14 @@ pub struct CondaEnvFile {
 #[serde(untagged)]
 pub enum CondaEnvDep {
     Conda(String),
-    Pip { pip: Vec<String> },
+    Pip {
+        #[serde(default)]
+        pip: Option<Vec<String>>,
+    },
 }
 
-type ParsedDependencies = (
+/// The conda dependencies, PyPI dependencies and channels of an environment file.
+pub type ParsedDependencies = (
     Vec<MatchSpec>,
     Vec<pep508_rs::Requirement>,
     Vec<NamedChannelOrUrl>,
@@ -91,14 +129,11 @@ impl CondaEnvFile {
         self.variables.clone()
     }
 
-    pub fn from_path(path: &Path) -> miette::Result<Self> {
-        let file = fs_err::File::open(path).into_diagnostic()?;
+    pub fn from_path(path: &Path) -> Result<Self, CondaEnvFileError> {
+        let file = fs_err::File::open(path)?;
         let reader = std::io::BufReader::new(file);
 
-        let lines = reader
-            .lines()
-            .collect::<Result<Vec<String>, _>>()
-            .into_diagnostic()?;
+        let lines = reader.lines().collect::<Result<Vec<String>, _>>()?;
         let mut s = String::new();
         for line in lines {
             if line.contains("- sel(") {
@@ -113,8 +148,7 @@ impl CondaEnvFile {
             Ok(env_file) => env_file,
             Err(e) => {
                 let src = NamedSource::new(path.display().to_string(), s.to_string());
-                let error = YamlParseError::new(src, e, path.to_path_buf());
-                return Err(miette::Report::new(error));
+                return Err(Box::new(YamlParseError::new(src, e, path.to_path_buf())).into());
             }
         };
         Ok(env_file)
@@ -123,11 +157,8 @@ impl CondaEnvFile {
     pub fn to_manifest(
         self: CondaEnvFile,
         config: &Config,
-    ) -> miette::Result<(
-        Vec<MatchSpec>,
-        Vec<pep508_rs::Requirement>,
-        Vec<NamedChannelOrUrl>,
-    )> {
+    ) -> Result<ParsedDependencies, CondaEnvFileError> {
+        // TODO: should we be applying `config.channel_config` for parsed channels too?
         let mut channels = parse_channels(self.channels().clone());
         let (conda_deps, pip_deps, extra_channels) =
             parse_dependencies(self.dependencies().clone())?;
@@ -142,35 +173,47 @@ impl CondaEnvFile {
     }
 }
 
-fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependencies> {
-    let mut conda_deps = vec![];
-    let mut pip_deps = vec![];
-    let mut picked_up_channels = vec![];
+fn parse_dependencies(deps: Vec<CondaEnvDep>) -> Result<ParsedDependencies, CondaEnvFileError> {
+    let mut conda_deps = Vec::new();
+    let mut pip_deps = Vec::new();
+    let mut picked_up_channels = Vec::new();
     for dep in deps {
         match dep {
             CondaEnvDep::Conda(d) => {
-                let match_spec = MatchSpec::from_str(&d, Lenient)
-                    .into_diagnostic()
-                    .wrap_err(format!("Can't parse '{}' as conda dependency", d))?;
+                let match_spec = MatchSpec::from_str(&d, Lenient).map_err(|source| {
+                    CondaEnvFileError::CondaDependency {
+                        spec: d.clone(),
+                        source,
+                    }
+                })?;
                 if let Some(channel) = &match_spec.channel {
-                    // TODO: This is a bit hacky, we should probably have a better way to handle this.
                     picked_up_channels.push(
-                        NamedChannelOrUrl::from_str(channel.name())
-                            .into_diagnostic()
-                            .wrap_err(format!("Can't parse '{}' as channel", channel.name()))?,
+                        // named channels are given a url with default channel config in `MatchSpec::from_str`
+                        NamedChannelOrUrl::from_str(channel.base_url.as_str()).map_err(
+                            |source| CondaEnvFileError::Channel {
+                                channel: channel.base_url.to_string(),
+                                source,
+                            },
+                        )?,
                     );
                 }
                 conda_deps.push(match_spec);
             }
-            CondaEnvDep::Pip { pip } => pip_deps.extend(
-                pip.iter()
-                    .map(|dep| {
-                        pep508_rs::Requirement::from_str(dep)
-                            .into_diagnostic()
-                            .wrap_err(format!("Can't parse '{}' as pypi dependency", dep))
-                    })
-                    .collect::<miette::Result<Vec<_>>>()?,
-            ),
+            CondaEnvDep::Pip { pip } => {
+                let pip = pip.unwrap_or_default();
+                pip_deps.extend(
+                    pip.iter()
+                        .map(|dep| {
+                            pep508_rs::Requirement::from_str(dep).map_err(|source| {
+                                CondaEnvFileError::PypiDependency {
+                                    requirement: dep.clone(),
+                                    source: Box::new(source),
+                                }
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            }
         }
     }
 
@@ -196,7 +239,7 @@ fn parse_channels(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
 mod tests {
     use std::{io::Write, path::Path, str::FromStr};
 
-    use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
+    use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, ParseStrictness::Strict};
 
     use super::*;
 
@@ -225,13 +268,16 @@ mod tests {
         let (_file, path) = f.into_parts();
 
         let conda_env_file_data = CondaEnvFile::from_path(&path).unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(
+            std::env::current_dir().expect("Could not get current directory"),
+        );
 
         assert_eq!(conda_env_file_data.name(), Some("pixi_example_project"));
         assert_eq!(
             conda_env_file_data.channels(),
             &vec![
                 NamedChannelOrUrl::from_str("conda-forge").unwrap(),
-                NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap()
+                NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap(),
             ]
         );
 
@@ -243,7 +289,20 @@ mod tests {
             vec![
                 NamedChannelOrUrl::from_str("conda-forge").unwrap(),
                 NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap(),
-                NamedChannelOrUrl::from_str("pytorch").unwrap(),
+                NamedChannelOrUrl::from_str(
+                    Channel::from_str("pytorch", &channel_config)
+                        .unwrap()
+                        .base_url
+                        .as_str()
+                )
+                .unwrap(),
+                NamedChannelOrUrl::from_str(
+                    Channel::from_str("conda-forge", &channel_config)
+                        .unwrap()
+                        .base_url
+                        .as_str()
+                )
+                .unwrap(),
             ]
         );
 
@@ -280,7 +339,7 @@ mod tests {
 
         let entries = match fs_err::read_dir(test_files_path) {
             Ok(entries) => entries,
-            Err(e) => panic!("Failed to read directory: {}", e),
+            Err(e) => panic!("Failed to read directory: {e}"),
         };
 
         let mut paths = Vec::new();
@@ -377,5 +436,16 @@ mod tests {
                 ("MY_EMPTY_VAR".to_string(), "".to_string())
             ])
         );
+    }
+
+    #[test]
+    fn test_invalid_yaml_keeps_source_span() {
+        let f = tempfile::NamedTempFile::new().unwrap();
+        fs_err::write(f.path(), "name: test\nchannels: 12\n").unwrap();
+
+        let err = CondaEnvFile::from_path(f.path()).unwrap_err();
+        assert!(matches!(err, CondaEnvFileError::Yaml(_)));
+        assert!(err.source_code().is_some());
+        assert_eq!(err.labels().unwrap().count(), 1);
     }
 }

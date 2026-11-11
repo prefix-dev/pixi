@@ -1,7 +1,8 @@
 use std::{path::PathBuf, str::FromStr};
 
 use indexmap::IndexSet;
-use pixi_toml::{TomlEnum, TomlFromStr, TomlIndexMap, TomlWith};
+use pixi_spec::ExcludeNewer;
+use pixi_toml::{TomlEnum, TomlFromStr, TomlIndexMap};
 use toml_span::{
     DeserError, ErrorKind, Value,
     de_helpers::{TableHelper, expected},
@@ -10,8 +11,48 @@ use toml_span::{
 use url::Url;
 
 use crate::pypi::pypi_options::{
-    FindLinksUrlOrPath, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
+    FindLinksUrlOrPath, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode, PypiExtraIndex,
+    PypiOptions,
 };
+
+/// Layout of an extra index url in a toml file.
+///
+/// Supports the following formats:
+///
+/// ```toml
+/// extra-index-urls = [
+///     "https://pypi.org/simple",
+///     { url = "https://internal/simple", exclude-newer = "0d" },
+///     { url = "https://other/simple", exclude-newer = "2025-01-01" },
+/// ]
+/// ```
+impl<'de> toml_span::Deserialize<'de> for PypiExtraIndex {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::String(str) => {
+                let url = Url::parse(&str).map_err(|e| toml_span::Error {
+                    kind: ErrorKind::Custom(e.to_string().into()),
+                    span: value.span,
+                    line_info: None,
+                })?;
+                Ok(PypiExtraIndex {
+                    url,
+                    exclude_newer: None,
+                })
+            }
+            inner @ ValueInner::Table(_) => {
+                let mut th = TableHelper::new(&mut Value::with_span(inner, value.span))?;
+                let url = th.required::<TomlFromStr<_>>("url")?.into_inner();
+                let exclude_newer = th
+                    .optional::<TomlFromStr<ExcludeNewer>>("exclude-newer")
+                    .map(TomlFromStr::into_inner);
+                th.finalize(None)?;
+                Ok(PypiExtraIndex { url, exclude_newer })
+            }
+            other => Err(expected("a string or table", other, value.span).into()),
+        }
+    }
+}
 
 /// A helper struct to deserialize a [`pep508_rs::PackageName`] from a TOML
 /// string.
@@ -114,13 +155,14 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
         let index_url = th
             .optional::<TomlFromStr<_>>("index-url")
             .map(TomlFromStr::into_inner);
-        let extra_index_urls = th
-            .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("extra-index-urls")
-            .map(|x| x.into_inner());
+        let extra_index_urls = th.optional("extra-index-urls");
         let find_links = th.optional("find-links");
         let no_build_isolation = th.optional("no-build-isolation").unwrap_or_default();
         let index_strategy = th
             .optional::<TomlEnum<_>>("index-strategy")
+            .map(TomlEnum::into_inner);
+        let prerelease_mode = th
+            .optional::<TomlEnum<PrereleaseMode>>("prerelease-mode")
             .map(TomlEnum::into_inner);
 
         let no_build = th.optional::<NoBuild>("no-build");
@@ -130,6 +172,8 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
 
         let no_binary = th.optional::<NoBinary>("no-binary");
 
+        let skip_wheel_filename_check = th.optional::<bool>("skip-wheel-filename-check");
+
         th.finalize(None)?;
 
         Ok(Self {
@@ -138,9 +182,11 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             find_links,
             no_build_isolation,
             index_strategy,
+            prerelease_mode,
             no_build,
             dependency_overrides,
             no_binary,
+            skip_wheel_filename_check,
         })
     }
 }
@@ -276,7 +322,9 @@ mod test {
             deserialized_options,
             PypiOptions {
                 index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
-                extra_index_urls: Some(vec![Url::parse("https://example.com/extra").unwrap()]),
+                extra_index_urls: Some(vec![PypiExtraIndex::from_url(
+                    Url::parse("https://example.com/extra").unwrap()
+                )]),
                 find_links: Some(vec![
                     FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                     FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap())
@@ -286,16 +334,66 @@ mod test {
                     "pkg2".parse().unwrap()
                 ]),
                 index_strategy: None,
+                prerelease_mode: None,
                 no_build: Default::default(),
                 dependency_overrides: Some(indexmap::IndexMap::from_iter([(
                     PypiPackageName::from_str("numpy").unwrap(),
-                    pixi_pypi_spec::PixiPypiSpec::RawVersion(
-                        pixi_pypi_spec::VersionOrStar::from_str(">=2.0.0").unwrap()
-                    )
+                    pixi_pypi_spec::PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Registry {
+                        version: pixi_pypi_spec::VersionOrStar::from_str(">=2.0.0").unwrap(),
+                        index: None,
+                    })
                 )]),),
                 no_binary: Default::default(),
+                skip_wheel_filename_check: None,
             },
         );
+    }
+
+    #[test]
+    fn test_deserialize_extra_index_urls_with_exclude_newer() {
+        let toml_str = r#"
+            extra-index-urls = [
+                "https://pypi.org/simple",
+                { url = "https://internal/simple" },
+                { url = "https://internal/simple", exclude-newer = "0d" },
+                { url = "https://other/simple", exclude-newer = "2025-01-01" },
+            ]
+        "#;
+        let options = PypiOptions::from_toml_str(toml_str).unwrap();
+        let extra = options.extra_index_urls.unwrap();
+        assert_eq!(extra.len(), 4);
+        assert_eq!(
+            extra[0],
+            PypiExtraIndex::from_url("https://pypi.org/simple".parse().unwrap())
+        );
+        assert_eq!(extra[1].exclude_newer, None);
+        assert_eq!(
+            extra[2].exclude_newer,
+            Some(ExcludeNewer::from_str("0d").unwrap())
+        );
+        assert_eq!(
+            extra[3].exclude_newer,
+            Some(ExcludeNewer::from_str("2025-01-01").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_extra_index_exclude_newer_bool_is_error() {
+        let input =
+            r#"extra-index-urls = [{ url = "https://internal/simple", exclude-newer = false }]"#;
+        assert_snapshot!(format_parse_error(
+            input,
+            PypiOptions::from_toml_str(input).unwrap_err()
+        ));
+    }
+
+    #[test]
+    fn test_extra_index_missing_url_is_error() {
+        let input = r#"extra-index-urls = [{ exclude-newer = "0d" }]"#;
+        assert_snapshot!(format_parse_error(
+            input,
+            PypiOptions::from_toml_str(input).unwrap_err()
+        ));
     }
 
     #[test]
@@ -309,6 +407,7 @@ mod test {
         ]
         no-build-isolation = ["sigma"]
         index-strategy = "first-index"
+        prerelease-mode = "allow"
         no-build = true
         no-binary = ["package1", "package2"]
         "#;

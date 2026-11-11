@@ -1,0 +1,8 @@
+[workspace]
+channels = ["conda-forge"]
+name = "mismatch-pypi-prerelease-mode"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[pypi-options]
+prerelease-mode = "allow"

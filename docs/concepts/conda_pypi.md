@@ -19,6 +19,7 @@ The simplified process is as follows:
 
 
 ## Tool Comparison
+
 Here is a non-exhaustive comparison of the features of conda and PyPI ecosystems.
 
 | Feature | Conda | PyPI |
@@ -30,7 +31,7 @@ Here is a non-exhaustive comparison of the features of conda and PyPI ecosystems
 | Package index | [`conda-forge`](https://prefix.dev/channels/conda-forge), [`bioconda`](https://prefix.dev/channels/bioconda), and more | [pypi.org](https://pypi.org) |
 
 ## `uv` by Astral
-Pixi uses the [`uv`](https:://github.com/astral-sh/uv) library to handle PyPI packages.
+Pixi uses the [`uv`](https://github.com/astral-sh/uv) library to handle PyPI packages.
 Pixi doesn't install `uv` (the tool) itself: because both tools are built in Rust, it is used as a library.
 
 We're extremely grateful to the [Astral](https://astral.sh) team for their work on `uv`, which is a great library that allows us to handle PyPI packages in a much better way than before.
@@ -44,7 +45,7 @@ Initially, next to `pixi` we were building a library called `rip` which had the 
 Because Pixi supports both ecosystems, it currently needs two different solvers to handle the dependencies.
 
 - The [`resolvo`](https://github.com/prefix-dev/resolvo) library is used to solve the conda dependencies. Implemented in [`rattler`](https://github.com/conda/rattler).
-- The [`PubGrub`](https://github.com/pubgrub-rs/pubgrub) library is used to solve the PyPI dependencies. Implemented in [`uv`](https:://github.com/astral-sh/uv).
+- The [`PubGrub`](https://github.com/pubgrub-rs/pubgrub) library is used to solve the PyPI dependencies. Implemented in [`uv`](https://github.com/astral-sh/uv).
 
 !!! Note
     The holy grail of Pixi is to have a single solver that can handle both ecosystems.
@@ -55,6 +56,10 @@ Because PyPI packages need a base environment to install into, we need to use th
 Pixi first runs the conda (`rattler`) solver, which will resolve the conda dependencies.
 Then it maps the conda packages to PyPI packages, using [`parselmouth`](https://github.com/prefix-dev/parselmouth).
 Then it runs the PyPI (`uv`) solver, which will resolve the remaining PyPI dependencies.
+
+!!! tip "Explore the mapping"
+    You can browse the conda-to-PyPI name mapping that `parselmouth` provides using the
+    [parselmouth mapping browser](https://prefix-dev.github.io/parselmouth/).
 
 The consequence is that Pixi will install the conda package (and not the PyPI package) if both are available and specified as dependencies.
 
@@ -99,3 +104,143 @@ In this example, Pixi will first resolve the conda dependencies and install the 
 Then, since `numpy` is not specified as a conda dependency, Pixi will resolve the PyPI dependencies and install the `numpy` PyPI package.
 
 To override or change the mapping of conda packages to PyPI packages, you can use the [`conda-pypi-map`](../reference/pixi_manifest.md#conda-pypi-map-optional) field in the `pixi.toml` file.
+
+### Overriding the name mapping
+
+`conda-pypi-map` layers your entries on top of the default mapping.
+For each package, Pixi first consults your entries and falls back to the default mapping only when your mapping does not mention the package.
+As a final fallback, Pixi can assume that the conda package name is also the PyPI package name. This same-name heuristic is enabled by default for conda-forge and for the [conda-pypi](https://github.com/conda/conda-pypi) channel, and can be enabled explicitly for other channels.
+Packages from the conda-pypi channel are PyPI wheels, so Pixi derives their PURL from the package name directly and never consults the default mapping for them.
+
+This means fixing a single incorrectly mapped package is a one-liner:
+
+```toml title="pixi.toml"
+[workspace.conda-pypi-map]
+conda-forge = { mapping = { pytorch = "torch" } }
+```
+
+If you want your mapping to replace Pixi's default mapping data for a channel, use `mapping-mode = "replace"`:
+
+```toml title="pixi.toml"
+[workspace.conda-pypi-map]
+conda-forge = { location = "full-mapping.json", mapping-mode = "replace" }
+```
+
+### Mapping order
+
+For each conda package, Pixi derives PyPI names in this order:
+
+1. If `conda-pypi-map = false`, no PyPI names are derived.
+2. If the package's channel is disabled with `<channel> = false`, no PyPI names are derived for that channel.
+3. If the package's channel has a project-defined mapping, Pixi consults it first. Inline entries override entries loaded from `location`.
+4. If the package is explicitly marked as not available on PyPI (`false` in TOML, or `null`/`[]` in JSON), lookup stops and no PURL is emitted.
+5. If the package is missing from a project-defined mapping, `mapping-mode = "overlay"` falls back to the default mapping data. With `mapping-mode = "replace"`, Pixi skips the default mapping data for that channel.
+6. If fallback is allowed, Pixi consults the default prefix.dev mapping.
+7. If `same-name-heuristic` is enabled for the package's channel, Pixi may finally use the conda package name as the PyPI package name. This defaults to enabled for conda-forge and the conda-pypi channel and disabled for other channels.
+
+### Offline and firewall-restricted environments
+
+The default mapping is fetched from `conda-mapping.prefix.dev`.
+If that host is unreachable in your environment, you have several options:
+
+- `conda-pypi-map = false` disables all conda-to-PyPI PURL derivation, including the offline same-name heuristic.
+- `<channel> = false` disables all conda-to-PyPI PURL derivation for one channel.
+- `mapping-mode = "replace"` with your own local mapping file avoids default mapping lookups for that channel. Add `same-name-heuristic = false` if you also want to disable same-name guesses.
+- `conda-forge = { mapping-mode = "replace" }` preserves the legacy no-default-lookup behavior while keeping the conda-forge same-name heuristic.
+
+A mapping fetched from a URL `location` is cached using standard HTTP cache semantics (honoring the server's `Cache-Control`/`ETag`), so a fresh copy is served from disk and a stale one is revalidated cheaply. If a refresh fails (e.g. you are offline), the previously fetched copy is reused with a warning; this protects you offline once the cache has been populated at least once.
+
+For example, you can pin the full conda-forge name mapping that `parselmouth` publishes:
+
+```toml title="pixi.toml"
+[workspace.conda-pypi-map]
+conda-forge = { location = "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json", mapping-mode = "replace" }
+```
+
+!!! note
+    Use the `raw.githubusercontent.com` URL. The regular `github.com/.../blob/...` page serves HTML, not JSON.
+
+### PyPI overrides vs conda constraints
+
+PyPI's [`pypi-options.dependency-overrides`](../advanced/override.md)
+fills a similar role to conda [`constraints`](../reference/pixi_manifest.md#constraints): both can
+steer transitive dependencies without adding a new direct dependency.
+
+The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
+the requirement used for that package during PyPI resolution.
+
+Package-specific `exclude-newer` exemptions are configured separately from both mechanisms:
+
+- use the `exemptions` of [`[workspace.exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for conda packages
+- use the `exemptions` of [`[workspace.pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for PyPI packages
+
+PyPI still does not have a conda-style per-channel cutoff. When you use a separate package index,
+pin the package with `index = "..."` and exempt it in `[workspace.pypi-exclude-newer]`.
+
+### Pinned package conflicts
+
+When trying to install conda and PyPI dependencies,
+such as with the following `pixi.toml` manifest:
+
+```toml title="pixi.toml"
+[dependencies]
+typing_extensions = "*"
+
+[pypi-dependencies]
+typing_extensions = "==4.14"
+```
+
+you might encounter the following error message:
+
+```
+Error:   × failed to solve the pypi requirements of environment 'default' for platform 'osx-arm64'
+  ├─▶ failed to resolve pypi dependencies
+  ╰─▶ Because you require typing-extensions==4.14 and typing-extensions==4.15.0, we can conclude that your requirements are unsatisfiable.
+  help: The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:
+        typing-extensions==4.15.0
+```
+
+This is due to the (current) two-stage solve.
+First, the conda dependencies are resolved.
+As any version (`*`) of `typing_extensions` is valid,
+it resolves to the latest available (`4.15.0` in this case).
+Then, the PyPI dependencies are resolved (`typing_extensions == 4.14`),
+with the constraints of the already resolved conda dependencies (`typing_extensions == 4.15.0`).
+These two dependencies are incompatible and the solve fails.
+
+While this might be a trivial case,
+it is less obvious when the packages are not explicit dependencies:
+
+```toml title="pixi.toml"
+[dependencies]
+some-conda-package = "*"  #  depends on any typing-extensions
+
+[pypi-dependencies]
+some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
+```
+
+which produces the following solve error:
+
+```
+Error:   × failed to solve the pypi requirements of environment 'default' for platform 'osx-arm64'
+  ├─▶ failed to resolve pypi dependencies
+  ╰─▶ Because some-pypi-dependency==0.1.0 depends on typing-extensions<4.15 and typing-extensions==4.15.0, we can conclude that some-pypi-dependency==0.1.0
+      cannot be used.
+      And because only some-pypi-dependency==0.1.0 is available and you require some-pypi-dependency, we can conclude that your requirements are unsatisfiable.
+  help: The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:
+        typing-extensions==4.15.0
+```
+
+A solution in this case would be to add to the conda constraints `typing-extensions < 4.15`,
+that is, the same constraint imposed by the PyPI package(s):
+
+```toml title="pixi.toml"
+[dependencies]
+some-conda-package = "*"  #  depends on any typing-extensions
+
+[constraints]
+typing_extensions = "<4.15"  # bring some-pypi-package pypi constraint to conda
+
+[pypi-dependencies]
+some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.15
+```

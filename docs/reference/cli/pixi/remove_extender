@@ -10,6 +10,7 @@ pixi remove --build cmake
 pixi remove --pypi requests
 pixi remove --platform osx-64 --build clang
 pixi remove --feature featurex clang
+pixi remove --environment dev clang
 pixi remove --feature featurex --platform osx-64 clang
 pixi remove --feature featurex --platform osx-64 --build clang
 pixi remove --no-install numpy

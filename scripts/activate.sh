@@ -1,6 +1,12 @@
 # Ignore requiring a shebang as this is a script meant to be sourced
 # shellcheck disable=SC2148
 
+# The conda rust compiler packages set CARGO_BUILD_TARGET, which makes cargo
+# emit binaries into a target-triple subdirectory of the target directory.
+# The scripts and tests of this workspace expect them directly in
+# $CARGO_TARGET_DIR/{debug,release}, so let cargo default to the host target.
+unset CARGO_BUILD_TARGET
+
 # Setup the mold linker when targeting x86_64-unknown-linux-gnu
 # The additional link flags are there to make perf work correctly when profiling: https://github.com/flamegraph-rs/flamegraph#linux
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="clang"

@@ -1,6 +1,6 @@
 [project]
 channels = ["conda-forge"]
-name = "binary-spec-source-record"
+name = "source"
 platforms = ["win-64"]
 preview = ["pixi-build"]
 

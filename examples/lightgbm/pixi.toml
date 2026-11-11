@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["fkt <deepthought@postech.ac.kr>"]
 channels = ["conda-forge"]
 description = "LightGBM demo for machine learning project"

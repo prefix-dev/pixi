@@ -2,51 +2,35 @@
 title: Home
 template: home.html
 ---
-
-![pixi logo](assets/banner.svg)
-
-## Why Pixi?
+# Pixi
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
-<div class="feature-grid">
-    <a href="workspace/lockfile">
-      <div class="feature-card">
-              <strong>🔄 Reproducibility</strong>
-              <p>Isolated, easily recreated environments with lockfiles built-in</p>
-      </div>
-    </a>
-    <a href="workspace/advanced_tasks/">
-      <div class="feature-card">
-          <strong>🛠️ Tasks</strong>
-          <p>Manage complex pipelines effortlessly.</p>
-      </div>
-    </a>
-    <a href="workspace/multi_platform_configuration/">
-      <div class="feature-card">
-          <strong>🌐 Multi Platform</strong>
-          <p>Works on Linux, macOS, Windows, and more.</p>
-      </div>
-    </a>
-    <a href="workspace/multi_environment/">
-      <div class="feature-card">
-          <strong>🧩 Multi Environment</strong>
-          <p>Compose multiple environments in one manifest.</p>
-      </div>
-    </a>
-    <a href="python/tutorial/">
-      <div class="feature-card">
-          <strong>🐍 Python</strong>
-          <p>Support for <code>pyproject.toml</code> and PyPI through uv.</p>
-      </div>
-    </a>
-    <a href="global_tools/introduction/">
-      <div class="feature-card">
-          <strong>🌍 Global Tools</strong>
-          <p>Install global tools, safely isolated. Replacing <code>apt</code>, <code>homebrew</code>, <code>winget</code></p>
-      </div>
-    </a>
-</div>
+## Highlights
+
+- [🔄 **Reproducibility**](workspace/lock_file.md)  
+  Isolated, easily recreated environments with lock files built-in
+
+- [🛠️ **Tasks**](workspace/advanced_tasks.md)  
+  Manage complex pipelines effortlessly.
+
+- [🌐 **Multi Platform**](workspace/multi_platform_configuration.md)  
+  Works on Linux, macOS, Windows, and more.
+
+- [🧩 **Multiple Environments**](workspace/multi_environment.md)  
+  Compose multiple environments in one manifest.
+
+- [🐍 **Python**](python/tutorial.md)  
+  Support for `pyproject.toml` and PyPI through uv.
+
+- [💾 **Disk Efficient**](workspace/environment.md#de-duplication)
+  Environments share files through hard links or reflinks, so packages are stored only once.
+
+- [🌍 **Global Tools**](global_tools/introduction.md)
+  Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
+
+- [🤖 **Robotics**](robotics.md)
+  First-class ROS 2 support via RoboStack — cross-platform, reproducible robotics development.
 
 ---
 
@@ -58,7 +42,7 @@ Project setup is a breeze with Pixi.
 pixi init hello-world
 cd hello-world
 pixi add python
-pixi run python -c "print('Hello World!')"
+pixi run python -c 'print("Hello World!")'
 ```
 
 ![Pixi Demo](assets/vhs-tapes/pixi_project_demo_light.gif#only-light)
@@ -75,7 +59,7 @@ pixi global install gh nvim ipython btop ripgrep
 
 ---
 
-## What is the difference with Pixi?
+## How Tools Compare to Pixi
 
 | Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv |
 |-----------------------------|------|-------|-----|--------|----|
@@ -83,7 +67,7 @@ pixi global install gh nvim ipython btop ripgrep
 | Supports Multiple Languages | ✅    | ✅     | ❌   | ❌      | ❌  |
 | Lockfiles                   | ✅    | ❌     | ❌   | ✅      | ✅  |
 | Task runner                 | ✅    | ❌     | ❌   | ❌      | ❌  |
-| Project Management          | ✅    | ❌     | ❌   | ✅      | ✅  |
+| Workspace Management        | ✅    | ❌     | ❌   | ✅      | ✅  |
 
 ---
 
@@ -93,10 +77,10 @@ Pixi defaults to the **biggest Conda package repository**, [conda-forge](https:/
 **30,000 packages**.
 
 - **Python**: [`python`](https://prefix.dev/channels/conda-forge/packages/python), [`scikit-learn`](https://prefix.dev/channels/conda-forge/packages/scikit-learn), [`pytorch`](https://prefix.dev/channels/conda-forge/packages/pytorch)
-- **C/C++**: [`clang`](https://prefix.dev/channels/conda-forge/packages/clang), [`boost`](https://prefix.dev/channels/conda-forge/packages/boost-cpp), [`opencv`](https://prefix.dev/channels/conda-forge/packages/opencv), [`ninja`](https://prefix.dev/channels/conda-forge/packages/ninja)
+- **C/C++**: [`clang`](https://prefix.dev/channels/conda-forge/packages/clang), [`boost`](https://prefix.dev/channels/conda-forge/packages/libboost-devel), [`opencv`](https://prefix.dev/channels/conda-forge/packages/opencv), [`ninja`](https://prefix.dev/channels/conda-forge/packages/ninja)
 - **Java**: [`openjdk`](https://prefix.dev/channels/conda-forge/packages/openjdk), [`gradle`](https://prefix.dev/channels/conda-forge/packages/gradle), [`maven`](https://prefix.dev/channels/conda-forge/packages/maven)
 - **Rust**: [`rust`](https://prefix.dev/channels/conda-forge/packages/rust), [`cargo-edit`](https://prefix.dev/channels/conda-forge/packages/cargo-edit), [`cargo-insta`](https://prefix.dev/channels/conda-forge/packages/cargo-insta)
-- **Node.js**: [`nodejs`](https://prefix.dev/channels/conda-forge/packages/nodejs), [`pnpm`](https://prefix.dev/channels/conda-forge/packages/pnpm), [`eslint`](https://prefix.dev/channels/conda-forge/packages/eslint)
+- **Node.js**: [`nodejs`](https://prefix.dev/channels/conda-forge/packages/nodejs), [`bun`](https://prefix.dev/channels/conda-forge/packages/bun), [`pnpm`](https://prefix.dev/channels/conda-forge/packages/pnpm), [`eslint`](https://prefix.dev/channels/conda-forge/packages/eslint)
 - **Cli Tools**: [`git`](https://prefix.dev/channels/conda-forge/packages/git), [`gh`](https://prefix.dev/channels/conda-forge/packages/gh), [`ripgrep`](https://prefix.dev/channels/conda-forge/packages/ripgrep), [`make`](https://prefix.dev/channels/conda-forge/packages/make)
 
 And browse the thousands more on [prefix.dev](https://prefix.dev/), or host [your own channels](https://prefix.dev/channels/)
@@ -136,17 +120,17 @@ To install `pixi`, run:
 
 === "Python"
     1. **Initialize a workspace:**
-    ```
-    pixi init hello-world
-    cd hello-world
-    ```
-    2. **Add dependencies:**
+        ```
+        pixi init hello-world
+        cd hello-world
+        ```
+    2. **Add dependencies into the default environment:**
         ```
         pixi add cowpy python
         ```
     3. **Create your script:**
         ```py title="hello.py"
-        --8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
+        --8 < --"docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
         ```
     5. **Add a task:**
         ```
@@ -167,7 +151,7 @@ To install `pixi`, run:
                     ||----w |
                     ||     ||
         ```
-    7. **Entry the environment shell:**
+    7. **Enter the shell into the environment:**
         ```
         pixi shell
         python hello.py
@@ -181,12 +165,12 @@ To install `pixi`, run:
         ```
         pixi init pixi-rust
         cd pixi-rust
-    ```
+        ```
     2. **Add dependencies:**
         ```
         pixi add rust
         ```
-    3. **Create your project:**
+    3. **Create your workspace:**
         ```
         pixi run cargo init
         ```

@@ -1,59 +1,89 @@
 # The Configuration of Pixi Itself
 
-Apart from the [project specific configuration](../reference/pixi_manifest.md) Pixi supports configuration options which
-are not required for the project to work but are local to the machine.
+Apart from the [workspace specific configuration](../reference/pixi_manifest.md) Pixi supports configuration options which
+are not required for the workspace to work but are local to the machine.
 The configuration is loaded in the following order:
 
 === "Linux"
 
     | **Priority** | **Location**                                                           | **Comments**                                          |
     |--------------|------------------------------------------------------------------------|-------------------------------------------------------|
-    | 7            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
-    | 6            | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
-    | 5            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
-    | 4            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
-    | 3            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
-    | 2            | `$HOME/.config/pixi/config.toml`                                       | User-specific configuration                           |
-    | 1            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
+    | 11           | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
+    | 10           | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
+    | 9            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
+    | 8            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
+    | 7            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
+    | 6            | `$HOME/.config/pixi/config.toml`                                       | User-specific configuration                           |
+    | 5            | `$RATTLER_HOME/config.toml`                                            | Shared configuration, only when `RATTLER_HOME` is set |
+    | 4            | `$XDG_CONFIG_HOME/rattler/config.toml`                                 | Shared XDG compliant user-specific configuration      |
+    | 3            | `$HOME/.config/rattler/config.toml`                                    | Shared user-specific configuration                    |
+    | 2            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
+    | 1            | `/etc/rattler/config.toml`                                             | Shared system-wide configuration                      |
 
 === "macOS"
 
     | **Priority** | **Location**                                                           | **Comments**                                          |
     |--------------|------------------------------------------------------------------------|-------------------------------------------------------|
-    | 7            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
-    | 6            | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
-    | 5            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
-    | 4            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
-    | 3            | `$HOME/Library/Application Support/pixi/config.toml`                   | User-specific configuration                           |
-    | 2            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
-    | 1            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
+    | 11           | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
+    | 10           | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
+    | 9            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
+    | 8            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
+    | 7            | `$HOME/Library/Application Support/pixi/config.toml`                   | User-specific configuration                           |
+    | 6            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
+    | 5            | `$RATTLER_HOME/config.toml`                                            | Shared configuration, only when `RATTLER_HOME` is set |
+    | 4            | `$HOME/Library/Application Support/rattler/config.toml`                | Shared user-specific configuration                    |
+    | 3            | `$XDG_CONFIG_HOME/rattler/config.toml`                                 | Shared XDG compliant user-specific configuration      |
+    | 2            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
+    | 1            | `/etc/rattler/config.toml`                                             | Shared system-wide configuration                      |
 
 === "Windows"
 
     | **Priority** | **Location**                                                           | **Comments**                                          |
     |--------------|------------------------------------------------------------------------|-------------------------------------------------------|
-    | 6            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
-    | 5            | `your_project\.pixi\config.toml`                                       | Project-specific configuration                        |
-    | 4            | `%PIXI_HOME%\config.toml`                                              | Global configuration in `PIXI_HOME`.                  |
-    | 3            | `%USERPROFILE%\.pixi\config.toml`                                      | Global configuration in the user home directory.      |
-    | 2            | `%APPDATA%\pixi\config.toml`                                           | User-specific configuration                           |
-    | 1            | `C:\ProgramData\pixi\config.toml`                                      | System-wide configuration                             |
+    | 9            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
+    | 8            | `your_project\.pixi\config.toml`                                       | Project-specific configuration                        |
+    | 7            | `%PIXI_HOME%\config.toml`                                              | Global configuration in `PIXI_HOME`.                  |
+    | 6            | `%USERPROFILE%\.pixi\config.toml`                                      | Global configuration in the user home directory.      |
+    | 5            | `%APPDATA%\pixi\config.toml`                                           | User-specific configuration                           |
+    | 4            | `%RATTLER_HOME%\config.toml`                                           | Shared configuration, only when `RATTLER_HOME` is set |
+    | 3            | `%APPDATA%\rattler\config.toml`                                        | Shared user-specific configuration                    |
+    | 2            | `C:\ProgramData\pixi\config.toml`                                      | System-wide configuration                             |
+    | 1            | `C:\ProgramData\rattler\config.toml`                                   | Shared system-wide configuration                      |
 
 !!! note
-The highest priority wins. If a configuration file is found in a higher priority location, the values from the
-configuration read from lower priority locations are overwritten.
+    The highest priority wins. If a configuration file is found in a higher priority location, the values from the
+    configuration read from lower priority locations are overwritten.
 
 !!! note
-To find the locations where `pixi` looks for configuration files, run
-`pixi info -vvv`.
+    To find the locations where `pixi` looks for configuration files, run
+    `pixi info -vvv`.
+
+### Configuration shared with other rattler-based tools
+
+The `rattler` locations are read by every rattler-based tool, so a setting placed there applies to Pixi and `rattler-build` alike.
+They accept only the options that all of these tools understand, such as `default-channels`, `mirrors`, `s3-options`, `index-config` and `concurrency`.
+Options that only Pixi knows, like `shell` or `detached-environments`, belong in a `pixi` location; in a `rattler` file Pixi ignores them and warns about it.
+`pixi config set --shared`, `unset --shared` and `edit --shared` operate on the user-level `rattler` file and refuse keys that are not shared by all tools.
+
+### Skipping or overriding config discovery
+
+Two global flags (and their environment-variable equivalents) let you opt out
+of the system and user-level config layers — the project-local
+`<project>/.pixi/config.toml` is always merged on top:
+
+- `--no-config` / `PIXI_NO_CONFIG=1` — skip all system and user-level config
+  files. Useful in CI, scripts, and tests that need to be insulated from a
+  developer's machine-wide settings.
+- `--config-file <PATH>` / `PIXI_CONFIG_FILE=<PATH>` — load only the given
+  file as the global layer instead of searching the locations above.
 
 ## Configuration options
 
 ??? info "Naming convention in configuration"
-In Pixi `0.20.1` and older the global configuration options used `snake_case` which
-we've changed to `kebab-case` for consistency with the rest of the configuration.
-For backwards compatibility, the following configuration options can still be written
-in `snake_case`:
+    In Pixi `0.20.1` and older the global configuration options used `snake_case` which
+    we've changed to `kebab-case` for consistency with the rest of the configuration.
+    For backwards compatibility, the following configuration options can still be written
+    in `snake_case`:
 
     - `default_channels`
     - `change_ps1`
@@ -66,16 +96,39 @@ The following reference describes all available configuration options.
 
 ### `default-channels`
 
-The default channels to select when running `pixi init` or `pixi global install`.
-This defaults to only conda-forge.
+The `default-channels` provide fallback channels for commands that do not obtain channels from an existing workspace or
+environment. Whether they are used depends on the command, rather than the directory from which it is invoked. Examples
+include `pixi init`, `pixi exec`, creating an environment with `pixi global install`, and running `pixi search` when no
+workspace is discovered. This defaults to only `conda-forge`.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:default-channels"
 ```
 
 !!! note
-The `default-channels` are only used when initializing a new project. Once initialized the `channels` are used from the
-project manifest.
+    Commands that operate on an existing workspace use the channels from its manifest rather than `default-channels`.
+    For example, `pixi search` uses the effective channels of the workspace's default environment when it discovers a
+    workspace. Workspace-independent commands such as `pixi exec` still use `default-channels` when invoked from a
+    workspace directory.
+
+### `exclude-newer`
+
+The `exclude-newer` configuration that new manifests start from.
+`pixi init` writes it into the [`exclude-newer`](./pixi_manifest.md#exclude-newer-optional) of a new workspace or script, `pixi global` into the `exclude-newer` of a new global manifest, and `pixi exec` solves its environments with it.
+It takes the same values as `exclude-newer` in a manifest: a cutoff such as `"7d"` or a date, or a table with a `cutoff` and `exemptions`.
+It is shared with other rattler-based tools, so it can also be set in a `rattler` location.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:exclude-newer"
+```
+
+!!! note
+    The `exclude-newer` of the configuration never applies to an existing workspace or global manifest: a workspace solves with the `exclude-newer` of its manifest only, so the lock file doesn't depend on the configuration of whoever runs pixi.
+    A global manifest that pixi creates from an existing installation doesn't get it either, as those environments were installed without a cutoff.
+    To add a cutoff to an existing workspace, use [`pixi workspace exclude-newer set`](./cli/pixi/workspace/exclude-newer/set.md), or set [`exclude-newer`](./pixi_manifest.md#exclude-newer-optional) in its manifest.
+
+    With `pixi config set`, a table is given as JSON, e.g. `pixi config set exclude-newer '{"cutoff": "7d", "exemptions": {"ruff": "*"}}'`.
+    Keys inside it can also be set and unset on their own, e.g. `pixi config set exclude-newer.exemptions.ruff '*'` or `pixi config unset exclude-newer.exemptions.ruff`.
 
 ### `shell`
 
@@ -93,16 +146,100 @@ project manifest.
 
 ### `tls-no-verify`
 
-When set to true, the TLS certificates are not verified.
+When set to true, TLS certificate verification is disabled for all network connections, including both conda channels and PyPI registries.
+You can override this from the CLI with `--tls-no-verify`.
 
 !!! warning
 
     This is a security risk and should only be used for testing purposes or internal networks.
 
-You can override this from the CLI with `--tls-no-verify`.
+This is a global setting that affects all connections. 
+If you only need to bypass TLS verification for specific PyPI hosts, consider using [`pypi-config.allow-insecure-host`](#pypi-config) instead for more granular control.
+
+!!! note "Implementation detail and limitations"
+
+    For PyPI operations, since uv does not support a global TLS verification disable flag, pixi automatically adds all configured PyPI index hosts to the trusted hosts list when `tls-no-verify` is enabled. 
+    For the main PyPI index, `files.pythonhosted.org` (the download host) is also automatically added.
+    **Important limitation:** If your custom PyPI index redirects package downloads to a different host (e.g., a separate CDN or artifact server), that download host will not be automatically trusted, even with `tls-no-verify` set. 
+    In these cases, you *must* manually add the download host to [`pypi-config.allow-insecure-host`](#pypi-config).
+
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-no-verify"
+```
+
+### `tls-root-certs`
+
+Controls which TLS root certificates are used for HTTPS connections. This affects both conda channels and PyPI registries.
+
+Available options:
+
+- `webpki`: Uses bundled Mozilla root certificates. The most portable option.
+- `system`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
+
+The default is backend-dependent: `rustls` builds default to `webpki`, `native-tls` builds default to `system`.
+
+If `SSL_CERT_FILE` or `SSL_CERT_DIR` is set, those certificates take precedence over this setting.
+
+You can override this from the CLI with `--tls-root-certs`.
+
+!!! note "Build-dependent behavior"
+
+    This setting only has an effect with `rustls` builds (standalone pixi binaries from GitHub releases).
+    For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates.
+    In this case, the setting is accepted but has no effect.
+
+!!! note "Deprecated values"
+
+    The values `native` and `all` are deprecated:
+
+    - `native` is the old spelling of `system` and still works, but emits a deprecation warning.
+    - `all` (combined webpki + system) is no longer supported because the underlying HTTP client can't merge the two trust stores. It still parses, but falls back to `system` at runtime with a warning.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-root-certs"
+```
+
+### `offline`
+
+When set to `true`, Pixi runs in offline mode: it does not access the network and only uses locally cached data.
+You can also enable this from the CLI with `--offline` or by setting the `PIXI_OFFLINE` environment variable (any boolish value like `1`, `true`, `yes` works).
+A CLI flag or environment variable takes precedence over the configuration, so `--offline=false` (or `PIXI_OFFLINE=false`) temporarily overrides `offline = true` from a configuration file.
+
+In offline mode:
+
+- Cached repodata is used as-is, even when it is out of date.
+- Conda packages and PyPI distributions are only taken from the local caches; anything missing from the cache makes the command fail.
+- Solving only considers conda packages that are already available locally, so a solve that succeeds can be installed without downloading anything.
+- Git dependencies are only fetched from the local checkout cache; local `file://` repositories keep working. Fetching git LFS objects is skipped entirely (git-lfs uses its own HTTP client), so LFS-tracked files may be missing from fresh checkouts.
+- Any HTTP request that would still slip through is rejected by the HTTP client itself, so no network access can occur.
+- Commands that inherently require the network (e.g. `pixi self-update`, `pixi upload`, `pixi publish` to a remote channel) fail with an error explaining this.
+
+A conda package counts as available locally when it is already in the package cache, or when it is served from a local (`file://`) channel, which needs no download either way.
+Anything else is excluded from the solve, and if an exclusion is what makes a solve impossible the error names the packages that were ruled out.
+
+The restriction applies to the solve for the platform pixi runs on.
+The other platforms in a manifest solve from cached repodata without it: their packages are never downloaded to this machine, so restricting them would only make every multi-platform lock-file rewrite fail offline.
+
+Channels that serve [sharded repodata](https://prefix.dev/blog/sharded_repodata) are fetched one package at a time, so the cache holds what earlier solves happened to look at rather than the whole channel.
+A package missing from that cache is treated as having no local candidates, so widening a dependency (say from `python = "3.13.*"` to `python = "*"`) fails on the restriction and names the packages, rather than failing on the repodata cache itself.
+
+The restriction applies to solving. Commands otherwise behave as they normally do, including the ones that write to the manifest.
+`pixi add` and `pixi upgrade` record version bounds derived from the versions they resolved, so offline those bounds describe what was available locally rather than what the channels offer.
+`pixi update` warns when it writes `pixi.lock` for the same reason.
+
+!!! note "Conda packages only"
+
+    The solve restriction applies to conda packages. PyPI dependencies are resolved by uv, which pixi runs with offline connectivity but cannot restrict to cached distributions, so a solve that succeeds may still require network access for PyPI.
+
+Offline mode works best after the caches have been populated by running the same commands once with network access.
+
+!!! note "Build backends"
+
+    Build backends for source dependencies (e.g. `pixi-build-python`, `pixi-build-ros`) run as separate processes with their own network clients; offline mode is currently not enforced for them.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:offline"
 ```
 
 ### `authentication-override-file`
@@ -118,21 +255,23 @@ Read more in the authentication section.
 
 ### `detached-environments`
 
-The directory where Pixi stores the project environments, what would normally be placed in the `.pixi/envs` folder in a
-project's root.
+The directory where Pixi stores the workspace environments, what would normally be placed in the `.pixi/envs` folder in a
+workspace's root.
 It doesn't affect the environments built for `pixi global`.
 The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME`
 environment variable.
+
 !!! warning
-We recommend against using this because any environment created for a project is no longer placed in the same folder as
-the project.
-This creates a disconnect between the project and its environments and manual cleanup of the environments is required
-when deleting the project.
+
+    We recommend against using this because any environment created for a workspace is no longer placed in the same folder as
+    the workspace.
+    This creates a disconnect between the workspace and its environments and manual cleanup of the environments is required
+    when deleting the workspace.
 
     However, in some cases, this option can still be very useful, for instance to:
 
     - force the installation on a specific filesystem/drive.
-    - install environments locally but keep the project on a network drive.
+    - install environments locally but keep the workspace on a network drive.
     - let a system-administrator have more control over all environments on a system.
 
 This field can consist of two types of input.
@@ -154,6 +293,12 @@ or:
 The environments will be stored in the [cache directory](../workspace/environment.md#caching-packages) when this option
 is `true`.
 When you specify a custom path the environments will be stored in that directory.
+
+!!! tip "Per-kind path override"
+    You can also pin just the detached-environments path via the [`[cache]`](#cache) table
+    (`cache.detached-environments`), which is convenient on HPC where this cache typically
+    belongs on node-local scratch even when the rest of the pixi cache lives on a shared
+    network filesystem.
 
 The resulting directory structure will look like this:
 
@@ -192,6 +337,22 @@ Configuration for conda channel-mirrors, more info [below](#mirror-configuration
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:mirrors"
 ```
 
+### `proxy-config`
+
+`pixi` respects the proxy environments such as `https_proxy` with the highest priority.
+Also we can set the proxies in `proxy-config` table of the `pixi` config, which affect all the pixi
+network actions, such as resolve, self-update, download, etc.
+Now `proxy-config` table supports the following options:
+
+- `https` and `http`: The proxy url for https:// or http:// url, works like `https_proxy` and `http_proxy` environments.
+- `non-proxy-hosts`: A list of domains which should bypass proxies.
+
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:proxy-config"
+```
+
+
 ### `repodata-config`
 
 Configuration for repodata fetching.
@@ -206,6 +367,22 @@ The above settings can be overridden on a per-channel basis by specifying a chan
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:prefix-repodata-config"
 ```
 
+### `index-config`
+
+Options for the channels `pixi publish` indexes.
+They are ignored when publishing to a server that indexes on its own, such as prefix.dev, and only apply to the targets Pixi indexes itself: S3 URLs and local filesystem channels.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:index-config"
+```
+
+The above settings can be overridden per channel by using the channel URL or absolute path as the key.
+The longest matching prefix wins, so a general entry can be narrowed for one channel below it.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:per-channel-index-config"
+```
+
 ### `pypi-config`
 
 To setup a certain number of defaults for the usage of PyPI registries. You can use the following configuration options:
@@ -215,16 +392,16 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
   `pixi init`.
 - `keyring-provider`: Allows the use of the [keyring](https://pypi.org/project/keyring/) python package to store and
   retrieve credentials.
-- `allow-insecure-host`: Allow insecure connections to host.
+- `allow-insecure-host`: A list of host names (without protocol or port) for which TLS certificate verification should be disabled when accessing PyPI registries. This is useful when working with internal PyPI mirrors that use self-signed certificates. For disabling TLS verification globally for all connections, use [`tls-no-verify`](#tls-no-verify) instead.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pypi-config"
 ```
 
 !!! Note "`index-url` and `extra-index-urls` are *not* globals"
-Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml`
-file and are not globally interpreted when not present in the manifest.
-This is because we want to keep the manifest file as complete and reproducible as possible.
+    Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml`
+    file and are not globally interpreted when not present in the manifest.
+    This is because we want to keep the manifest file as complete and reproducible as possible.
 
 ### `s3-options`
 
@@ -250,6 +427,9 @@ pixi config set concurrency.solves 1
 pixi config set concurrency.downloads 12
 ```
 
+For PyPI operations, `UV_CONCURRENT_CACHE_READS` limits concurrent HTTP cache reads.
+It defaults to `4` and must be a positive integer.
+
 ### `run-post-link-scripts`
 
 Configure whether pixi should execute `post-link` and `pre-unlink` scripts or not.
@@ -259,7 +439,7 @@ these scripts as insecure because they can contain arbitrary code that is execut
 user's consent. By default, the value of `run-post-link-scripts` is set to `false` which prevents the execution of these
 scripts.
 
-However, you can opt-in on a global (or project) basis by setting the value to `insecure` (e.g. by running
+However, you can opt-in on a global (or workspace) basis by setting the value to `insecure` (e.g. by running
 `pixi config set --local run-post-link-scripts insecure`).
 
 In the future we are planning to add a `sandbox` mode to execute these scripts in a controlled environment.
@@ -279,8 +459,152 @@ architecture for which there is fewer support for certain build backends.
 ```
 
 !!! Note "Virtual packages"
-The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
-operating system than the current system, no virtual packages will be used.
+    The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
+    operating system than the current system, no virtual packages will be used.
+
+### `cache`
+
+The `[cache]` table lets you redirect specific pixi caches independently.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:cache"
+```
+
+#### Resolution order
+
+For each cache kind, pixi resolves the directory in this order (highest
+priority first):
+
+1. The matching `PIXI_CACHE_<KIND>_DIR` environment variable, if set
+    (see [Environment-variable escape hatches](#environment-variable-escape-hatches)).
+2. The matching `[cache.<kind>]` path from this config, if set.
+3. The cache root, joined with the kind's subdirectory:
+  1. `PIXI_CACHE_DIR` environment variable
+  2. `RATTLER_CACHE_DIR` environment variable
+  3. `[cache.root]` from this config
+  4. `$XDG_CACHE_HOME/pixi` (when it exists)
+  5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
+4. If the resolved path is on a network filesystem and the kind is not
+    "shared-friendly", auto-redirect to node-local scratch (see
+    `netfs-redirect` below).
+
+#### Cache kinds
+
+The fields under `[cache]` map one-to-one to the caches pixi maintains:
+
+| Field | Cache contents | Default behavior on netfs |
+|---|---|---|
+| `conda-packages` | Extracted conda packages (`pkgs`) | Stay shared |
+| `repodata` | `repodata.json` cache | Stay shared |
+| `pypi-wheels` | uv wheel cache (`uv-cache`) | Stay shared |
+| `pypi-mapping` | conda↔PyPI name mapping | Redirect to node-local |
+| `exec-environments` | Cached `pixi exec` envs | Redirect to node-local |
+| `virtual-package-detectors` | Environments and cached reports of [virtual package detectors](../workspace/multi_platform_configuration.md#virtual-package-detectors) | Redirect to node-local |
+| `build-tool-environments` | Cached build-tool envs | Redirect to node-local |
+| `detached-environments` | Workspace envs when [`detached-environments`](#detached-environments) is `true` | Redirect to node-local |
+
+
+#### `netfs-redirect`
+
+Controls the auto-redirect behavior when the resolved cache root lives on a
+network filesystem (NFS, SMB/CIFS, FUSE, autofs):
+
+- `"auto"` (default): redirect only the kinds that prefer node-local storage
+    (those marked "Redirect to node-local" above).
+- `"always"`: redirect every kind to node-local scratch when the root is on
+    netfs.
+- `"never"`: do not redirect anything, even when on netfs.
+
+A per-kind path override (`[cache.<kind>] = "..."`) always wins over the
+auto-redirect logic.
+
+The redirect target is chosen from the first non-netfs candidate among
+`$SLURM_TMPDIR`, `$PBS_JOBFS`, `$SCRATCH`, and `$TMPDIR`, falling back to the
+system temp directory.
+
+#### Path syntax
+
+All path fields under `[cache]` (including `root` and every per-kind
+override) follow the same rules:
+
+- **Absolute paths are required.** Relative paths are rejected at
+    config-load time with an error naming the offending field. This is
+    enforced because `config.toml` is loaded from many layered locations
+    (system, XDG, workspace) and "relative to which one?" is ambiguous.
+- **`~` is expanded to the user's home directory.** For example,
+    `pypi-mapping = "~/scratch/mapping"` resolves to
+    `<home>/scratch/mapping`. Expansion happens once, at config-load time.
+- **No environment-variable substitution.** Strings like `$HOME` or
+    `${SCRATCH}` are treated as literal directory names. If you need an
+    environment-variable-driven cache root, use the `PIXI_CACHE_DIR`
+    environment variable instead — it is consulted before `[cache.root]`.
+
+#### Environment-variable escape hatches
+
+Every `[cache]` field can be overridden by an environment variable. Env vars
+take precedence over `config.toml`, so they're useful on shared CI/HPC nodes
+where editing the config file is awkward.
+
+**Per-kind path overrides.** Each one is equivalent to the matching
+`[cache.<kind>]` field. Setting one bypasses the auto-redirect logic for
+that kind and uses the path verbatim.
+
+| Environment variable | Equivalent TOML field |
+|---|---|
+| `PIXI_CACHE_CONDA_PACKAGES_DIR` | `cache.conda-packages` |
+| `PIXI_CACHE_REPODATA_DIR` | `cache.repodata` |
+| `PIXI_CACHE_PYPI_WHEELS_DIR` | `cache.pypi-wheels` |
+| `PIXI_CACHE_PYPI_MAPPING_DIR` | `cache.pypi-mapping` |
+| `PIXI_CACHE_EXEC_ENVIRONMENTS_DIR` | `cache.exec-environments` |
+| `PIXI_CACHE_VIRTUAL_PACKAGE_DETECTORS_DIR` | `cache.virtual-package-detectors` |
+| `PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR` | `cache.build-tool-environments` |
+| `PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR` | `cache.detached-environments` |
+
+**Redirect policy override.**
+
+- `PIXI_CACHE_NETFS_REDIRECT` = `auto` | `always` | `never` — overrides
+    `[cache.netfs-redirect]`. An unrecognized value is logged and ignored
+    (config falls through).
+
+**Detection escape hatches.** These force the network-filesystem detection
+itself rather than the policy. They're intended for tests, CI, and one-off
+debugging:
+
+- `PIXI_DISABLE_NETFS_REDIRECT=1` — treat all paths as local; never redirect.
+- `PIXI_FORCE_NETFS_REDIRECT=1` — treat all paths as netfs; redirect kinds
+    that prefer local storage.
+
+For persistent behavior, prefer `[cache.netfs-redirect]` or
+`PIXI_CACHE_NETFS_REDIRECT`.
+
+### `virtual-package-detectors`
+
+Channels can register virtual package detectors: small packages whose executable reports [virtual packages](../conda_ecosystem.md#virtual-packages-describing-the-host-system).
+These identify system capabilities that packages depend on.
+One example for this could be a detector reporting which [MPI](https://en.wikipedia.org/wiki/Message_Passing_Interface) implementation and version you have on your system. 
+
+That also means, you run external and potentially untrusted code shortly before installing an environment.
+This is why Pixi asks whether to trust detectors coming from a certain channel.
+Additionally, it allows you to store your decision in your configuration, so you don't have to answer the question with every Pixi command.
+If you choose not to save it, the decision applies only to the current command, so Pixi asks again next time.
+For example, a saved decision looks like this:
+
+```toml title="config.toml"
+[virtual-package-detectors]
+# How long a detector, and separately its activation, may run. At most 300.
+timeout-seconds = 30
+
+# Decisions per registration origin, the channel's base URL.
+[virtual-package-detectors.consent]
+"https://conda.anaconda.org/conda-forge" = "allow"
+```
+
+Consent is matched against the channel's base URL without credentials or authentication tokens.
+Equivalent URLs, including spellings with or without a trailing slash, share one decision.
+Across configuration layers, a `deny` takes precedence over an `allow`.
+Setting or unsetting a channel's consent key updates all equivalent spellings in the selected file; newly saved keys do not contain credentials.
+
+The detector package comes from its registering channel. Its dependencies resolve from that channel and its [channel relations](https://github.com/conda/ceps/blob/main/cep-0042.md#channel-references).
 
 ## Experimental
 
@@ -294,14 +618,14 @@ activated.
 Turn this feature on from configuration with the following command:
 
 ```shell
-# For all your projects
+# For all of your workspaces
 pixi config set experimental.use-environment-activation-cache true --global
 
-# For a specific project
+# For a specific workspace
 pixi config set experimental.use-environment-activation-cache true --local
 ```
 
-This will cache the environment activation in the `.pixi/activation-env-v0` folder in the project root.
+This will cache the environment activation in the `.pixi/activation-env-v0` folder in the workspace root.
 It will create a json file for each environment that is activated, and it will be used to activate the environment in
 the future.
 
@@ -333,8 +657,23 @@ Set the configuration with:
 ```
 
 !!! note "Why is this experimental?"
-This feature is experimental because the cache invalidation is very tricky,
-and we don't want to disturb users that are not affected by activation times.
+    This feature is experimental because the cache invalidation is very tricky,
+    and we don't want to disturb users that are not affected by activation times.
+
+### Running conda scripts
+
+[Conda scripts](../tutorials/conda_script.md) normally need `--experimental` on every `pixi run`.
+Turn the flag into a setting with:
+
+```shell
+# For all of your workspaces
+pixi config set experimental.conda-script true --global
+
+# For a specific workspace
+pixi config set experimental.conda-script true --local
+```
+
+Running a conda script then prints a warning instead of asking for the flag, as a reminder that the format may still change.
 
 ## Mirror configuration
 
@@ -373,6 +712,9 @@ team. You can use it like this:
 
 The GHCR mirror also contains `bioconda` packages. You can search the [available
 packages on Github](https://github.com/orgs/channel-mirrors/packages).
+
+For private OCI registries, credentials configured with
+`pixi auth login <registry-host>` are also used for `oci://` mirrors.
 
 ### Mirrors for PyPi resolving and PyPi package downloading
 

@@ -1,7 +1,7 @@
 from llama_index.llms.llama_cpp import LlamaCPP
 from llama_index.llms.llama_cpp.llama_utils import (
-    messages_to_prompt,
     completion_to_prompt,
+    messages_to_prompt,
 )
 
 # Source code derived from: https://docs.llamaindex.ai/en/stable/examples/llm/llama_2_llama_cpp/

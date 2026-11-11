@@ -1,0 +1,673 @@
+use std::cmp::Ordering;
+use std::io::{Seek, Write};
+
+use flate2::read::GzDecoder;
+use tar::Archive;
+
+use miette::{IntoDiagnostic, WrapErr};
+use pixi_config::{Config, ConfigCliTls};
+use pixi_consts::consts;
+use pixi_utils::reqwest::build_reqwest_clients;
+use reqwest_middleware::ClientWithMiddleware;
+
+use tempfile::{NamedTempFile, TempDir};
+use url::Url;
+
+use rattler_conda_types::Version;
+use std::str::FromStr;
+
+use crate::GlobalOptions;
+use pixi_reporters::format_release_notes;
+
+/// Update pixi to the latest version or a specific version.
+#[derive(Debug, clap::Parser)]
+pub struct Args {
+    #[clap(flatten)]
+    config_source: pixi_config::ConfigSourceCli,
+
+    /// Run without network access. Updating always requires the network, so
+    /// this makes `pixi self-update` fail fast instead of attempting to
+    /// connect.
+    #[arg(
+        long,
+        env = "PIXI_OFFLINE",
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        value_parser = clap::builder::BoolishValueParser::new(),
+    )]
+    offline: Option<bool>,
+
+    #[clap(flatten)]
+    tls: ConfigCliTls,
+
+    /// The desired version (to downgrade or upgrade to).
+    #[clap(long)]
+    version: Option<Version>,
+
+    /// Only show release notes, do not modify the binary.
+    #[clap(long)]
+    dry_run: bool,
+
+    /// Force download the desired version when not exactly same with the current. If no desired
+    /// version, always replace with the latest version.
+    #[clap(long, default_value_t = false)]
+    force: bool,
+
+    /// Skip printing the release notes.
+    #[clap(long, default_value_t = false)]
+    no_release_note: bool,
+
+    /// The github releases URL, useful when behind a proxy, or using custom Pixi release
+    #[clap(long)]
+    from_url: Option<String>,
+
+    /// Update to a development build of the `main` branch instead of a release.
+    ///
+    /// Development builds are published to <https://github.com/prefix-dev/pixi-nightly>.
+    /// Combine with `--version` to install a specific development build, e.g.
+    /// `--version 0.84.0-10-ge4b92dc9f`.
+    #[clap(long, conflicts_with = "from_url")]
+    nightly: bool,
+}
+
+/// The GitHub repository that pixi binaries are downloaded from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReleaseChannel {
+    /// Regular releases from `prefix-dev/pixi`.
+    Stable,
+    /// Development builds of `main` from `prefix-dev/pixi-nightly`.
+    Nightly,
+}
+
+impl ReleaseChannel {
+    fn from_args(args: &Args) -> Self {
+        if args.nightly {
+            Self::Nightly
+        } else {
+            Self::Stable
+        }
+    }
+
+    /// The releases page, without trailing slash.
+    fn releases_url(self) -> &'static str {
+        match self {
+            Self::Stable => consts::RELEASES_URL,
+            Self::Nightly => consts::NIGHTLY_RELEASES_URL,
+        }
+    }
+
+    /// The API endpoint for a release by tag, without trailing slash.
+    fn api_by_tag(self) -> &'static str {
+        match self {
+            Self::Stable => consts::RELEASES_API_BY_TAG,
+            Self::Nightly => consts::NIGHTLY_RELEASES_API_BY_TAG,
+        }
+    }
+
+    /// The API endpoint for the latest release.
+    fn api_latest(self) -> &'static str {
+        match self {
+            Self::Stable => consts::RELEASES_API_LATEST,
+            Self::Nightly => consts::NIGHTLY_RELEASES_API_LATEST,
+        }
+    }
+}
+
+/// Response from the Github API when fetching a release by tag.
+/// <https://docs.github.com/de/rest/releases/releases?apiVersion=2022-11-28#get-a-release-by-tag-name>
+#[derive(Debug, serde::Deserialize)]
+struct ReleaseResponse {
+    /// Markdown body of the release as seen on the Github release page.
+    body: String,
+
+    /// The time and date when the release was published. (seems to be ISO 8601)
+    published_at: String,
+
+    /// The tag name of the release
+    tag_name: String,
+}
+
+fn user_agent() -> String {
+    format!("pixi {}", consts::PIXI_VERSION)
+}
+
+fn default_archive_name() -> Option<String> {
+    if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "x86_64") {
+            Some("pixi-x86_64-apple-darwin.tar.gz".to_string())
+        } else {
+            Some("pixi-aarch64-apple-darwin.tar.gz".to_string())
+        }
+    } else if cfg!(target_os = "windows") {
+        if cfg!(target_arch = "x86_64") {
+            Some("pixi-x86_64-pc-windows-msvc.zip".to_string())
+        } else if cfg!(target_arch = "aarch64") {
+            Some("pixi-aarch64-pc-windows-msvc.zip".to_string())
+        } else {
+            None
+        }
+    } else if cfg!(target_os = "linux") {
+        if cfg!(target_arch = "x86_64") {
+            Some("pixi-x86_64-unknown-linux-musl.tar.gz".to_string())
+        } else if cfg!(target_arch = "aarch64") {
+            Some("pixi-aarch64-unknown-linux-musl.tar.gz".to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+async fn latest_version(
+    client: &ClientWithMiddleware,
+    channel: ReleaseChannel,
+) -> miette::Result<Version> {
+    // GitHub redirects the /latest endpoint to /tag/vX.Y.Z, so the tag is the
+    // last segment of the final URL.
+    let url = format!("{}/latest", channel.releases_url());
+
+    let response = client
+        .head(&url)
+        .header("User-Agent", user_agent())
+        .send()
+        .await
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to fetch {url}"))?;
+    if !response.status().is_success() {
+        miette::bail!("{url} returned {}", response.status())
+    }
+    let final_url = response.url();
+    let mut segments = final_url.path_segments().into_iter().flatten().rev();
+    match (segments.next(), segments.next()) {
+        // /latest redirect took us back to /releases instead of /tag/vX.Y.Z
+        (Some("releases"), _) => miette::bail!("{url} does not contain any releases"),
+        (Some(tag), Some("tag")) => match tag.strip_prefix('v') {
+            Some(version) => Version::from_str(version).into_diagnostic(),
+            None => miette::bail!("tag name '{tag}' must start with 'v'"),
+        },
+        _ => miette::bail!("{url} redirected to {final_url}, which is not a release tag"),
+    }
+}
+
+async fn fetch_release_notes(
+    client: &ClientWithMiddleware,
+    channel: ReleaseChannel,
+    version: &Option<Version>,
+) -> miette::Result<String> {
+    let url = if let Some(version) = version {
+        format!("{}/v{}", channel.api_by_tag(), version)
+    } else {
+        channel.api_latest().to_string()
+    };
+
+    let response = client
+        .get(&url)
+        .header("User-Agent", user_agent())
+        .send()
+        .await
+        .into_diagnostic()?;
+
+    if response.status().is_success() {
+        let release_response: ReleaseResponse = response.json().await.into_diagnostic()?;
+
+        // We only care for the date, not the time
+        let date = release_response
+            .published_at
+            .split('T')
+            .next()
+            .unwrap_or("unknown");
+
+        Ok(format!(
+            "Release notes for version {} ({}):\n{}\n",
+            version
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or(release_response.tag_name),
+            date,
+            release_response.body.trim()
+        ))
+    } else {
+        miette::bail!("Status code {}", response.status())
+    }
+}
+
+fn config_from_args(args: &Args) -> Config {
+    Config {
+        offline: args.offline,
+        ..Config::from(args.tls.clone())
+    }
+}
+
+/// Executes the self-update command.
+///
+/// # Arguments
+/// * `args` - The self-update specific arguments.
+/// * `global_options` - Reference to the global CLI options.
+pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
+    let source = args.config_source.source();
+    let config = Config::try_load_global_with(&source)?.merge_config(config_from_args(&args));
+
+    // Updating the binary always requires downloading a release from GitHub,
+    // so bail out early with a clear error in offline mode.
+    if config.offline() {
+        return Err(crate::offline::NetworkRequiredError {
+            command: "pixi self-update",
+        }
+        .into());
+    }
+
+    // Exam the validity of provided url
+    if let Some(ref url) = args.from_url
+        && let Err(err) = Url::parse(url)
+    {
+        miette::bail!("URL: {}. Url validation failed: {}", url, err)
+    }
+
+    // A single client serves every request so TLS, proxy, and auth settings
+    // are applied consistently.
+    let client = build_reqwest_clients(Some(&config), None)?.1;
+    let channel = ReleaseChannel::from_args(&args);
+
+    let is_quiet = global_options.quiet > 0;
+    // Get the target version, without 'v' prefix, None for force latest version
+    let target_version = match &args.version {
+        Some(version) => {
+            // Remove leading 'v' if present and inform the user
+            if version.to_string().starts_with('v') {
+                if !is_quiet {
+                    eprintln!(
+                        "{}Warning: Leading 'v' removed from version {}",
+                        console::style(console::Emoji("⚠️ ", "")).yellow(),
+                        version
+                    );
+                }
+                Some(Version::from_str(&version.to_string()[1..]).into_diagnostic()?)
+            } else {
+                Some(version.clone())
+            }
+        }
+        None => {
+            if args.force {
+                None
+            } else {
+                Some(latest_version(&client, channel).await?)
+            }
+        }
+    };
+
+    // Get the current version of the pixi binary
+    let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
+
+    let up_to_date = target_version
+        .as_ref()
+        .is_some_and(|t| *t == current_version);
+
+    let fetch_release_warning = if args.no_release_note || up_to_date || is_quiet {
+        None
+    } else {
+        match fetch_release_notes(&client, channel, &target_version).await {
+            Ok(release_notes) => {
+                // Print release notes
+                eprintln!(
+                    "{}{}",
+                    console::style(console::Emoji("📝 ", "")).yellow(),
+                    format_release_notes(&release_notes)
+                );
+                None
+            }
+            Err(err) => {
+                // Failure to fetch release notes must not prevent self-update, especially if format changes
+                let release_url = if let Some(ref target_version) = target_version {
+                    format!("{}/v{}", channel.releases_url(), target_version)
+                } else {
+                    format!("{}/latest", channel.releases_url())
+                };
+                Some(format!(
+                    "{}Failed to fetch release notes ({}). Check the release page for more information: {}",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                    err,
+                    release_url
+                ))
+            }
+        }
+    };
+
+    // Don't actually update the binary if `--dry-run` is passed
+    if args.dry_run {
+        if !is_quiet {
+            let target_version = match target_version {
+                Some(target_version) => target_version,
+                None => latest_version(&client, channel).await?,
+            };
+            eprintln!("{}", get_dry_run_message(&current_version, &target_version));
+        }
+        return Ok(());
+    }
+
+    // Stop here if the target version is the same as the current version
+    if up_to_date {
+        if !is_quiet {
+            eprintln!(
+                "{}pixi is already up-to-date (version {})",
+                console::style(console::Emoji("✔ ", "")).green(),
+                current_version
+            );
+        }
+        return Ok(());
+    }
+
+    let action = if !args.force
+        && target_version
+            .as_ref()
+            .is_some_and(|t| *t < current_version)
+    {
+        if args.version.is_none() {
+            // Ask if --version was not passed
+            let confirmation = dialoguer::Confirm::new()
+                .with_prompt(format!(
+                        "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
+                        current_version, target_version.as_ref().expect("target_version is not resolved")
+                ))
+                .default(false)
+                .show_default(true)
+                .interact()
+                .into_diagnostic()?;
+            if !confirmation {
+                return Ok(());
+            };
+        };
+        "downgraded"
+    } else {
+        "updated"
+    };
+
+    if !args.force && !is_quiet {
+        eprintln!(
+            "{}Pixi will be {} from {} to {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            action,
+            current_version,
+            target_version
+                .as_ref()
+                .expect("target_version is not resolved")
+        );
+    }
+
+    // Get the name of the binary to download and install based on the current platform
+    let archive_name = default_archive_name()
+        .expect("Could not find the default archive name for the current platform");
+
+    let pre_fix = if let Some(ref from_url) = args.from_url {
+        from_url
+    } else {
+        channel.releases_url()
+    };
+
+    let download_url = if let Some(ref target_version) = target_version {
+        format!("{}/download/v{}/{}", pre_fix, target_version, archive_name)
+    } else {
+        format!("{}/latest/download/{}", pre_fix, archive_name)
+    };
+
+    // Create a temp file to download the archive
+    let mut archived_tempfile = NamedTempFile::new().into_diagnostic()?;
+
+    let mut res = client
+        .get(&download_url)
+        .header("User-Agent", user_agent())
+        .send()
+        .await
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to download {download_url}"))?;
+
+    if res.status() != reqwest::StatusCode::OK {
+        miette::bail!(format!("URL {} returned {}", download_url, res.status()));
+    } else {
+        // Download the archive
+        while let Some(chunk) = res.chunk().await.into_diagnostic()? {
+            archived_tempfile
+                .as_file()
+                .write_all(&chunk)
+                .into_diagnostic()?;
+        }
+    }
+
+    if !is_quiet {
+        eprintln!(
+            "{}Pixi archive downloaded.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
+    }
+
+    // Seek to the beginning of the file before uncompressing it
+    archived_tempfile
+        .rewind()
+        .expect("Failed to rewind the archive file");
+
+    // Create a temporary directory to unpack the archive
+    let binary_tempdir = &tempfile::tempdir().into_diagnostic()?;
+
+    // Uncompress the archive
+    if archive_name.ends_with(".tar.gz") {
+        unpack_tar_gz(&archived_tempfile, binary_tempdir)?;
+    } else if archive_name.ends_with(".zip") {
+        let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
+        archive.extract(binary_tempdir).into_diagnostic()?;
+    } else {
+        let error_message = format!("Unsupported archive format: {archive_name}");
+        Err(miette::miette!(error_message))?
+    }
+
+    if !is_quiet {
+        eprintln!(
+            "{}Pixi archive uncompressed.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
+    }
+
+    // Get the new binary path used for self-replacement
+    let new_binary_path = binary_tempdir.path().join(pixi_binary_name());
+
+    // Replace the current binary with the new binary
+    self_replace::self_replace(new_binary_path).into_diagnostic()?;
+
+    if !is_quiet {
+        if let Some(ref target_version) = target_version {
+            eprintln!(
+                "{}Pixi has been updated to version {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                target_version
+            );
+        } else {
+            eprintln!(
+                "{}Pixi has been updated to latest release.",
+                console::style(console::Emoji("✔ ", "")).green(),
+            );
+        }
+    }
+
+    if let Some(fetch_release_warning) = fetch_release_warning {
+        tracing::warn!(fetch_release_warning);
+    }
+
+    // Best-effort anonymous ping; must not affect the update result.
+    let ping_version = target_version
+        .as_ref()
+        .map_or_else(|| "latest".to_string(), |v| v.to_string());
+    crate::install_ping::self_update_ping(&client, &ping_version, is_quiet).await;
+
+    Ok(())
+}
+
+/// Return the message that should be shown to users when executing with `--dry-run`.
+fn get_dry_run_message(current: &Version, target: &Version) -> String {
+    match target.cmp(current) {
+        Ordering::Equal => format!(
+            "{}Current pixi version already at latest version: {current}.",
+            console::style(console::Emoji("✔ ", "")).green()
+        ),
+        Ordering::Greater => format!(
+            "{}Pixi version would be updated from {current} to {target}, but `--dry-run` given.",
+            console::style(console::Emoji("ℹ️ ", "")).yellow()
+        ),
+        Ordering::Less => format!(
+            "{}Pixi version would be downgraded from {current} to {target}, but `--dry-run` given.",
+            console::style(console::Emoji("ℹ️ ", "")).yellow()
+        ),
+    }
+}
+
+/// Unpack files from a tar.gz archive to a target directory.
+fn unpack_tar_gz(
+    archived_tempfile: &NamedTempFile,
+    binary_tempdir: &TempDir,
+) -> miette::Result<()> {
+    let mut archive = Archive::new(GzDecoder::new(archived_tempfile.as_file()));
+
+    for entry in archive.entries().into_diagnostic()? {
+        let mut entry = entry.into_diagnostic()?;
+        let path = entry.path().into_diagnostic()?;
+
+        // Skip directories; we only care about files.
+        if entry.header().entry_type().is_file() {
+            // Create a flat path by stripping any directory components.
+            let stripped_path = path
+                .file_name()
+                .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
+
+            // Construct the final path in the target directory.
+            let final_path = binary_tempdir.path().join(stripped_path);
+
+            // Unpack the file to the destination.
+            entry.unpack(final_path).into_diagnostic()?;
+        }
+    }
+    Ok(())
+}
+
+fn pixi_binary_name() -> String {
+    format!("pixi{}", std::env::consts::EXE_SUFFIX)
+}
+
+pub async fn execute_stub(_: Args, _: &GlobalOptions) -> miette::Result<()> {
+    let message = option_env!("PIXI_SELF_UPDATE_DISABLED_MESSAGE");
+    miette::bail!(
+        message.unwrap_or("This version of pixi was built without self-update support. Please use your package manager to update pixi.")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+    use pixi_config::{Config, GlobalConfigSource, TlsRootCerts};
+    use std::path::PathBuf;
+    use std::str::FromStr;
+
+    #[test]
+    fn accepts_tls_options() {
+        let args = super::Args::try_parse_from([
+            "self-update",
+            "--tls-root-certs",
+            "system",
+            "--tls-no-verify",
+        ])
+        .unwrap();
+        let config = Config::load_global_with(&GlobalConfigSource::None)
+            .merge_config(super::config_from_args(&args));
+
+        assert!(config.tls_no_verify());
+        assert_eq!(config.tls_root_certs(), Some(TlsRootCerts::System));
+    }
+
+    #[test]
+    fn nightly_conflicts_with_from_url() {
+        let err = super::Args::try_parse_from([
+            "self-update",
+            "--nightly",
+            "--from-url",
+            "https://example.com/releases",
+        ])
+        .unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn nightly_selects_nightly_channel() {
+        let args = super::Args::try_parse_from(["self-update", "--nightly"]).unwrap();
+        assert_eq!(
+            super::ReleaseChannel::from_args(&args),
+            super::ReleaseChannel::Nightly
+        );
+        let args = super::Args::try_parse_from(["self-update"]).unwrap();
+        assert_eq!(
+            super::ReleaseChannel::from_args(&args),
+            super::ReleaseChannel::Stable
+        );
+    }
+
+    #[test]
+    fn nightly_versions_round_trip_to_their_tag() {
+        // The download URL is built from the parsed version, so it has to
+        // render back to the `git describe` tag of the nightly release.
+        let version = super::Version::from_str("0.84.0-10-ge4b92dc9f").unwrap();
+        assert_eq!(version.to_string(), "0.84.0-10-ge4b92dc9f");
+    }
+
+    #[test]
+    fn nightly_versions_order_between_releases() {
+        let v = |s: &str| super::Version::from_str(s).unwrap();
+        assert!(v("0.84.0") < v("0.84.0-9-gabcdef012"));
+        assert!(v("0.84.0-9-gabcdef012") < v("0.84.0-10-ge4b92dc9f"));
+        assert!(v("0.84.0-10-ge4b92dc9f") < v("0.85.0"));
+    }
+
+    #[test]
+    pub fn test_unarchive_flat_structure() {
+        // This archive contains a single file named "a_file"
+        // So we expect the file to be extracted to the target directory
+
+        let archive_path = PathBuf::from(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests")
+            .join("data")
+            .join("archives")
+            .join("pixi_flat_archive.tar.gz");
+
+        let named_tempfile = tempfile::NamedTempFile::new().unwrap();
+        let binary_tempdir = tempfile::tempdir().unwrap();
+
+        fs_err::copy(archive_path, named_tempfile.path()).unwrap();
+
+        super::unpack_tar_gz(&named_tempfile, &binary_tempdir).unwrap();
+
+        let binary_path = binary_tempdir.path().join("a_file");
+        assert!(binary_path.exists());
+    }
+
+    #[test]
+    pub fn test_unarchive_nested_structure() {
+        // This archive contains following nested structure
+        // pixi_nested_archive.tar.gz
+        // ├── some_pixi (directory)
+        // │   └── some_pixi (file)
+        // So we want to test that we can extract only the file to the target directory
+        // without parent directory
+        let archive_path = PathBuf::from(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests")
+            .join("data")
+            .join("archives")
+            .join("pixi_nested_archive.tar.gz");
+
+        let named_tempfile = tempfile::NamedTempFile::new().unwrap();
+        let binary_tempdir = tempfile::tempdir().unwrap();
+
+        fs_err::copy(archive_path, named_tempfile.path()).unwrap();
+
+        super::unpack_tar_gz(&named_tempfile, &binary_tempdir).unwrap();
+
+        let binary_path = binary_tempdir.path().join("some_pixi");
+        assert!(binary_path.exists());
+        assert!(binary_path.is_file());
+    }
+}

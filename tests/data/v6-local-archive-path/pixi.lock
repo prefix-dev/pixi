@@ -1,0 +1,29 @@
+#
+# v6 lock file with a local path dependency whose directory name looks like
+# an archive (foo.tar.gz).  On upgrade to v7 the entry is misdetected as a
+# PypiDistributionData because is_wheel_or_archive_location matches ".tar.gz".
+# A re-resolve corrects this to PypiSourceData.
+
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    indexes:
+    - https://pypi.org/simple
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.3-h2628c8c_0_cpython.conda
+      - pypi: ./foo.tar.gz
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.3-h2628c8c_0_cpython.conda
+  sha256: 1a95494abe572a8819c933f978df89f00bde72ea9432d46a70632599e8029ea4
+  md5: f07c8c5dd98767f9a652de5d039b284e
+  # Faked to be empty to reduce the size of the example
+  depends: []
+  purls:
+  - pkg:pypi/cpython
+- pypi: ./foo.tar.gz
+  name: foo
+  version: '23.42'
+  requires_python: '>=3.11'

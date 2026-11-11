@@ -1,12 +1,25 @@
-from .common import verify_cli_command
-import pytest
-from pathlib import Path
 import shutil
+from pathlib import Path
+
+import pytest
+
+from .common import skip_if_current_platform_unsupported, verify_cli_command
 
 
 @pytest.fixture
 def reinstall_workspace(tmp_pixi_workspace: Path, mock_projects: Path) -> Path:
     test_rebuild_src = mock_projects / "test-rebuild"
+    shutil.rmtree(test_rebuild_src.joinpath(".pixi"), ignore_errors=True)
+    shutil.copytree(test_rebuild_src, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    skip_if_current_platform_unsupported(tmp_pixi_workspace.joinpath("pixi.toml"))
+
+    return tmp_pixi_workspace
+
+
+@pytest.fixture
+def cpp_simple(tmp_pixi_workspace: Path, test_data: Path) -> Path:
+    test_rebuild_src = test_data / "cpp_simple"
     shutil.rmtree(test_rebuild_src.joinpath(".pixi"), ignore_errors=True)
     shutil.copytree(test_rebuild_src, tmp_pixi_workspace, dirs_exist_ok=True)
 
@@ -57,7 +70,7 @@ def test_pixi_reinstall_default_env(pixi: Path, reinstall_workspace: Path) -> No
     )
 
 
-@pytest.mark.slow
+@pytest.mark.extra_slow
 def test_pixi_reinstall_multi_env(pixi: Path, reinstall_workspace: Path) -> None:
     env = {
         "PIXI_CACHE_DIR": str(reinstall_workspace.joinpath("pixi_cache")),

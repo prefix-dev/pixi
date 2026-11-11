@@ -2,7 +2,7 @@
 //! the structure of a project, and are used to access and manipulate the
 //! workspace and package data.
 //!
-//! The main entry point into the manifest is the [`Manifest`] struct which
+//! The main entry point into the manifest is the `Manifest` struct which
 //! represents a parsed `pixi.toml`. This struct is used to both access and
 //! manipulate the manifest data. It also holds the original source code of the
 //! manifest file which allows relating certain parts of the manifest back to
@@ -16,10 +16,15 @@ mod provenance;
 mod source;
 mod workspace;
 
-pub use document::ManifestDocument;
+pub use document::{ManifestDocument, ManifestDocumentError, ManifestRenderError};
 pub use package::PackageManifest;
 pub use provenance::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ProvenanceError, WithProvenance,
 };
 pub use source::ManifestSource;
-pub use workspace::{WorkspaceManifest, WorkspaceManifestMut};
+pub use workspace::{
+    ActivationEditError, ActivationLocation, ActivationScriptsChange, AddDependencyError,
+    EnvironmentEditError, FeatureNotFoundError, InvalidVersionError, MissingTargetError,
+    PlatformEditError, RemoveChannelsError, RemoveDependencyError, SetRequiresPixiError,
+    TaskEditError, WorkspaceManifest, WorkspaceManifestMut,
+};

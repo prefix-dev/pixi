@@ -1,0 +1,53 @@
+use std::path::PathBuf;
+
+use minijinja::Environment;
+use pixi_build_types::SourcePackageName;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize)]
+pub struct BuildScriptContext {
+    pub installer: Installer,
+    pub build_platform: BuildPlatform,
+    pub editable: bool,
+    pub extra_args: Vec<String>,
+    pub manifest_root: PathBuf,
+}
+
+/// The tool used to install the built wheel into the prefix.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Installer {
+    #[default]
+    Uv,
+    Pip,
+}
+
+impl Installer {
+    pub fn package_name(&self) -> SourcePackageName {
+        match self {
+            Installer::Uv => rattler_conda_types::PackageName::new_unchecked("uv").into(),
+            Installer::Pip => rattler_conda_types::PackageName::new_unchecked("pip").into(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildPlatform {
+    Windows,
+    Unix,
+}
+
+impl BuildScriptContext {
+    pub fn render(&self) -> String {
+        let env = Environment::new();
+        let template = env
+            .template_from_str(include_str!("build_script.j2"))
+            .unwrap();
+        template
+            .render(minijinja::value::Serde(self))
+            .unwrap()
+            .trim()
+            .to_string()
+    }
+}

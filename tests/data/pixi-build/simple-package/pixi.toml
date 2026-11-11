@@ -1,0 +1,12 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+exclude-newer = "7d"
+preview = ["pixi-build"]
+
+[package]
+name = "simple-package"
+version = "0.1.0"
+
+[package.build.backend]
+name = "pixi-build-rattler-build"
+version = "*"

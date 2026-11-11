@@ -13,7 +13,7 @@ body:
           required: true
         - label: >
             I have confirmed this bug exists on the
-            [latest version](https://github.com/prefix-dev/pixi/releases) of pixi, using `pixi --version`.
+            [latest version](https://github.com/prefix-dev/pixi/releases/latest) of pixi, using `pixi --version`.
           required: true
 
   - type: textarea
@@ -23,9 +23,19 @@ body:
       description: >
         Please provide us with the needed files to make a copy-pastable example. This always includes a `pixi.toml` but where possible please add a link to the repo of the project. Include the (wrong) output if applicable.
       value: |
+        Commands I ran and their output:
         ```shell
 
         ```
+        `pixi.toml`/`pyproject.toml` file that reproduces my issue:
+        ```toml
+
+        ```
+        `pixi info` output:
+        ```plaintext
+
+        ```
+        Other files (e.g. script files, source files, etc.):
     validations:
       required: true
 
@@ -36,7 +46,7 @@ body:
       description: >
         Provide any additional information you think might be relevant.
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: expected-behavior

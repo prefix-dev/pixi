@@ -1,7 +1,7 @@
 {#-
   This file was automatically generated - do not edit
 -#}
-{% extends "base.html" %}
+{% extends "main.html" %}
 {% block htmltitle %}
     {% if page.meta and page.meta.title %}
         <title>{{ page.meta.title }}</title>
@@ -16,7 +16,9 @@
     {% include "partials/mycontent.html" %}
 {% endblock %}
 
-{% block extrahead %}
-    <style>.md-content__button {display:none !important}; </style>
-    <style>.md-header__topic {font-weight:700 !important}</style>
+{% block outdated %}
+  You're not viewing the latest version.
+  <a href="{{ '../' ~ base_url }}"> 
+    <strong>Click here to go to latest.</strong>
+  </a>
 {% endblock %}

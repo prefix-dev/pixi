@@ -1,0 +1,6 @@
+[package]
+name = "source"
+
+[package.build.backend]
+name = "in-memory"
+version = "*"

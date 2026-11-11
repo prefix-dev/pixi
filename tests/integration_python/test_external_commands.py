@@ -2,8 +2,7 @@ import platform
 import stat
 from pathlib import Path
 
-
-from .common import ExitCode, verify_cli_command
+from .common import PIXI_VERSION, ExitCode, verify_cli_command
 
 
 def create_external_command(command_path: Path, script_content: str) -> Path:
@@ -125,11 +124,8 @@ def test_pixi_internal_wins_over_external(
     # We want to make sure that pixi list is executed instead of the
     # external command ( pixi-foobar that we exposed as pixi-list )
     verify_cli_command(
-        [pixi, "list"],
+        [pixi, "--version"],
         env=env,
         cwd=tmp_pixi_workspace,
-        stdout_contains=[
-            "Kind",
-            "Build",
-        ],
+        stdout_contains=[PIXI_VERSION],
     )

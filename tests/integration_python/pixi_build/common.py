@@ -1,0 +1,190 @@
+"""Build-specific test utilities for pixi-build tests."""
+
+import os
+import shutil
+import subprocess
+import tempfile
+from collections.abc import Generator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import tomli_w
+import yaml
+from rattler.package_streaming import extract
+
+# Re-export from parent common module
+from ..common import (
+    ALL_PLATFORMS,
+    CONDA_FORGE_CHANNEL,
+    CURRENT_PLATFORM,
+    EMPTY_BOILERPLATE_PROJECT,
+    ExitCode,
+    Output,
+    bat_extension,
+    current_platform,
+    default_env_path,
+    exec_extension,
+    get_manifest,
+    is_binary,
+    pixi_dir,
+    repo_root,
+    skip_if_current_platform_unsupported,
+    verify_cli_command,
+)
+
+__all__ = [
+    "ALL_PLATFORMS",
+    "CONDA_FORGE_CHANNEL",
+    "CURRENT_PLATFORM",
+    "EMPTY_BOILERPLATE_PROJECT",
+    "ExitCode",
+    "Output",
+    "Workspace",
+    "bat_extension",
+    "copy_manifest",
+    "copytree_with_local_backend",
+    "current_platform",
+    "cwd",
+    "default_env_path",
+    "exec_extension",
+    "get_manifest",
+    "git_test_repo",
+    "is_binary",
+    "package_files",
+    "pixi_dir",
+    "repo_root",
+    "skip_if_current_platform_unsupported",
+    "verify_cli_command",
+]
+
+
+@dataclass
+class Workspace:
+    """Represents a pixi workspace for build tests."""
+
+    recipe: dict[str, Any]
+    workspace_manifest: dict[str, Any]
+    workspace_dir: Path
+    package_manifest: dict[str, Any]
+    package_dir: Path
+    recipe_path: Path
+    debug_dir: Path
+
+    def write_files(self) -> None:
+        self.recipe_path.write_text(yaml.dump(self.recipe))
+        workspace_manifest_path = self.workspace_dir.joinpath("pixi.toml")
+        workspace_manifest_path.write_text(tomli_w.dumps(self.workspace_manifest))
+        package_manifest_path = self.package_dir.joinpath("pixi.toml")
+        package_manifest_path.write_text(tomli_w.dumps(self.package_manifest))
+
+    def iter_debug_dirs(self) -> list[Path]:
+        # Layout: <workspace>/.pixi/bld/<pkg>/<workspace_key>/debug/
+        # (see cache_dirs::source_build_workspaces and DEBUG_OUTPUT_DIR).
+        candidates: list[Path] = []
+        bld_root = self.workspace_dir.joinpath(".pixi", "bld")
+        if bld_root.is_dir():
+            for pkg_entry in sorted(bld_root.iterdir()):
+                if not pkg_entry.is_dir():
+                    continue
+                for workspace_entry in sorted(pkg_entry.iterdir()):
+                    debug_candidate = workspace_entry.joinpath("debug")
+                    if debug_candidate.is_dir():
+                        candidates.append(debug_candidate)
+        return candidates
+
+    def find_debug_file(self, filename: str) -> Path | None:
+        for debug_dir in self.iter_debug_dirs():
+            target = debug_dir.joinpath(filename)
+            if target.is_file():
+                return target
+        return None
+
+
+def copy_manifest(
+    src: os.PathLike[str],
+    dst: os.PathLike[str],
+) -> Path:
+    """Copy file (simple copy, no channel rewriting needed in merged repo)."""
+    return Path(shutil.copy(src, dst))
+
+
+def copytree_with_local_backend(
+    src: os.PathLike[str],
+    dst: os.PathLike[str],
+    **kwargs: Any,
+) -> Path:
+    """Copy tree while ignoring .pixi directories and .conda files."""
+    kwargs.setdefault("copy_function", copy_manifest)
+
+    return Path(
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns(".pixi", "*.conda"), **kwargs)
+    )
+
+
+def package_files(archive: Path) -> set[str]:
+    """Return the paths a `.conda` archive contains, excluding its `info/` metadata."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        extracted = Path(temp_dir)
+        extract(archive, extracted)
+        return {
+            path.relative_to(extracted).as_posix()
+            for path in extracted.rglob("*")
+            if path.is_file() and not path.is_relative_to(extracted.joinpath("info"))
+        }
+
+
+@contextmanager
+def cwd(path: str | Path) -> Generator[None]:
+    """Context manager to temporarily change the current working directory."""
+    oldpwd = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(oldpwd)
+
+
+def git_test_repo(source_dir: Path, repo_name: str, target_dir: Path) -> str:
+    """Create a git repository from the source directory in a target directory."""
+    repo_path: Path = target_dir / repo_name
+
+    # Copy source directory to temp
+    copytree_with_local_backend(source_dir, repo_path, copy_function=copy_manifest)
+
+    # Initialize git repository in the copied source
+    subprocess.run(
+        ["git", "init"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+
+    # Add all files and commit
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "bot@prefix.dev"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Bot"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "--message", "Initial commit"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+
+    return repo_path.as_uri()

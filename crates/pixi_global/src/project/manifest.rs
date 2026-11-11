@@ -1,0 +1,1559 @@
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
+use fancy_display::FancyDisplay;
+use indexmap::IndexSet;
+use pixi_config::Config;
+use pixi_consts::consts;
+use pixi_manifest::{
+    ExcludeNewerConfig, ExcludeNewerEditError, ExcludeNewerExemption, PrioritizedChannel,
+    TomlError, toml::TomlDocument,
+};
+use pixi_toml::TomlIndexMap;
+use pixi_utils::{executable_from_path, strip_executable_extension};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
+use serde_with::{DeserializeFromStr, SerializeDisplay};
+use toml_edit::{DocumentMut, Item};
+use toml_span::{DeserError, Value};
+
+use super::{
+    EnvironmentName, ExposedName,
+    global_spec::GlobalSpec,
+    parsed_manifest::{
+        ExposedNameError, ManifestParseError, ManifestParsingError, ManifestVersion, ParsedManifest,
+    },
+};
+use crate::project::ParsedEnvironment;
+
+/// An error from loading, editing or saving the global manifest.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ManifestError {
+    #[error("failed to resolve the global manifest path '{}'", .path.display())]
+    Canonicalize {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Config(Box<pixi_config::ConfigError>),
+
+    #[error("failed to read the global manifest")]
+    Read(#[source] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Parse(#[from] Box<ManifestParseError>),
+
+    #[error("failed to save the global manifest '{}'", .path.display())]
+    Save {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+
+    #[error("environment '{0}' doesn't exist")]
+    EnvironmentNotFound(EnvironmentName),
+
+    #[error("environment '{0}' already exists")]
+    EnvironmentAlreadyExists(EnvironmentName),
+
+    #[error("dependency '{}' not found in environment '{environment}'", .name.as_normalized())]
+    DependencyNotFound {
+        name: PackageName,
+        environment: EnvironmentName,
+    },
+
+    #[error("inline package definition for '{}' requires a source spec", .name.as_normalized())]
+    #[diagnostic(help("the spec is `{spec}`"))]
+    InlineRequiresSourceSpec { name: PackageName, spec: String },
+
+    #[error("exposed name '{0}' not found in any environment")]
+    ExposedNameNotFound(ExposedName),
+
+    #[error("exposed name '{name}' doesn't exist in environment '{environment}'")]
+    ExposedNameNotInEnvironment {
+        name: ExposedName,
+        environment: EnvironmentName,
+    },
+
+    #[error("exposed name '{0}' already exists")]
+    ExposedNameAlreadyExists(ExposedName),
+
+    #[error("shortcut '{}' doesn't exist", .0.as_normalized())]
+    ShortcutNotFound(PackageName),
+
+    #[error("shortcut '{}' already exists", .0.as_normalized())]
+    ShortcutAlreadyExists(PackageName),
+
+    #[error("environment '{0}' has no shortcuts")]
+    NoShortcuts(EnvironmentName),
+
+    #[error("expected a table for {0}")]
+    ExpectedTable(&'static str),
+
+    #[error("expected an array for {0}")]
+    ExpectedArray(&'static str),
+}
+
+impl From<pixi_config::ConfigError> for ManifestError {
+    fn from(error: pixi_config::ConfigError) -> Self {
+        Self::Config(Box::new(error))
+    }
+}
+
+/// Handles the global project's manifest file.
+/// This struct is responsible for reading, parsing, editing, and saving the
+/// manifest. It encapsulates all logic related to the manifest's TOML format
+/// and structure. The manifest data is represented as a [`ParsedManifest`]
+/// struct for easy manipulation.
+#[derive(Debug, Clone, Default)]
+pub struct Manifest {
+    /// The path to the manifest file
+    pub path: PathBuf,
+
+    /// Editable toml document
+    pub document: TomlDocument,
+
+    /// The parsed manifest
+    pub parsed: ParsedManifest,
+}
+
+impl Manifest {
+    /// Creates a new manifest from a path
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, ManifestError> {
+        let manifest_path =
+            dunce::canonicalize(path.as_ref()).map_err(|source| ManifestError::Canonicalize {
+                path: path.as_ref().to_path_buf(),
+                source,
+            })?;
+        let contents = fs_err::read_to_string(path.as_ref()).map_err(ManifestError::Read)?;
+        Self::from_str(manifest_path.as_ref(), contents)
+    }
+
+    /// Creates a new manifest from a string
+    pub fn from_str(
+        manifest_path: &Path,
+        contents: impl Into<String>,
+    ) -> Result<Self, ManifestError> {
+        let contents = contents.into();
+        let root_directory = manifest_path.parent().unwrap_or(Path::new(""));
+        let parsed = ParsedManifest::from_toml_str(&contents, root_directory);
+
+        let (manifest, document) = match parsed.and_then(|manifest| {
+            contents
+                .parse::<DocumentMut>()
+                .map(|doc| (manifest, doc))
+                .map_err(ManifestParsingError::from)
+        }) {
+            Ok(result) => result,
+            Err(e) => {
+                return Err(Box::new(e.into_parse_error(
+                    consts::GLOBAL_MANIFEST_DEFAULT_NAME,
+                    &contents,
+                    manifest_path,
+                ))
+                .into());
+            }
+        };
+
+        let manifest = Self {
+            path: manifest_path.to_path_buf(),
+
+            document: TomlDocument::new(document),
+            parsed: manifest,
+        };
+
+        Ok(manifest)
+    }
+
+    /// Adds an environment to the manifest
+    pub fn add_environment(
+        &mut self,
+        env_name: &EnvironmentName,
+        channels: Option<Vec<NamedChannelOrUrl>>,
+    ) -> Result<(), ManifestError> {
+        let channels = match channels.filter(|c| !c.is_empty()) {
+            Some(channels) => channels,
+            None => Config::try_load_global()?.default_channels(),
+        };
+
+        // Update self.parsed
+        if self.parsed.envs.get(env_name).is_some() {
+            return Err(ManifestError::EnvironmentAlreadyExists(env_name.clone()));
+        }
+        self.parsed.envs.insert(
+            env_name.clone(),
+            ParsedEnvironment::new(channels.clone().into_iter().map(PrioritizedChannel::from)),
+        );
+
+        // Update self.document
+        let channels_array = self
+            .document
+            .get_or_insert_toml_array_mut(&["envs", env_name.as_str()], "channels")?;
+        for channel in channels {
+            channels_array.push(channel.as_str());
+        }
+
+        tracing::debug!(
+            "Added environment {} to toml document",
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Removes a specific environment from the manifest
+    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> Result<(), ManifestError> {
+        // Update self.parsed
+        self.parsed
+            .envs
+            .shift_remove(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&["envs"])?
+            .remove(env_name.as_str())
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        tracing::debug!(
+            "Removed environment {} from toml document",
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Adds a dependency to the manifest
+    pub fn add_dependency(
+        &mut self,
+        env_name: &EnvironmentName,
+        named_spec: &GlobalSpec,
+    ) -> Result<(), ManifestError> {
+        let name = named_spec.name();
+        let spec = named_spec.spec();
+
+        // The value to write into the document: the source spec, extended
+        // with the inline package definition under the `package` key when one
+        // is supplied.
+        let toml_value = match &named_spec.inline {
+            None => spec.to_toml_value(),
+            Some(inline) => {
+                let toml_edit::Value::InlineTable(mut table) = spec.to_toml_value() else {
+                    return Err(ManifestError::InlineRequiresSourceSpec {
+                        name: name.clone(),
+                        spec: spec.to_toml_value().to_string(),
+                    });
+                };
+                table.insert("package", inline.to_toml_value());
+                toml_edit::Value::InlineTable(table)
+            }
+        };
+
+        if !self.parsed.envs.contains_key(env_name) {
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()));
+        }
+
+        // Look up the existing key so a non-normalized spelling in the
+        // document (e.g. "PyTest" vs "pytest") is overwritten in place
+        // instead of inserted a second time.
+        let existing_key = self
+            .document
+            .get_nested_table(&["envs", env_name.as_str(), "dependencies"])
+            .ok()
+            .and_then(|table| {
+                table.iter().find_map(|(key, _)| {
+                    let existing = PackageName::from_str(key).ok()?;
+                    (existing == *name).then(|| key.to_string())
+                })
+            });
+        let key = existing_key.as_deref().unwrap_or(name.as_normalized());
+
+        if named_spec.inline.is_some() {
+            // Inline package definitions are converted with root-directory
+            // context by the manifest parser, so `self.parsed` has to come
+            // from a re-parse of the document. Apply the edit to a scratch
+            // copy first and only commit document and parsed manifest
+            // together once the re-parse succeeds, keeping both consistent
+            // when it doesn't.
+            let mut document = self.document.clone();
+            document.insert_into_inline_table(
+                &["envs", env_name.as_str(), "dependencies"],
+                key,
+                toml_value.clone(),
+            )?;
+            let contents = document.to_string();
+            let root_directory = self.path.parent().unwrap_or(Path::new(""));
+            match ParsedManifest::from_toml_str(&contents, root_directory) {
+                Ok(parsed) => {
+                    self.document = document;
+                    self.parsed = parsed;
+                }
+                Err(e) => {
+                    return Err(Box::new(e.into_parse_error(
+                        consts::GLOBAL_MANIFEST_DEFAULT_NAME,
+                        &contents,
+                        &self.path,
+                    ))
+                    .into());
+                }
+            }
+        } else {
+            // Update self.parsed
+            let env = self
+                .parsed
+                .envs
+                .get_mut(env_name)
+                .expect("environment existence was checked above");
+            env.dependencies.specs.insert(name.clone(), spec.clone());
+            // A previously recorded inline definition no longer applies when
+            // the dependency is overwritten without one.
+            env.inline_packages.swap_remove(name);
+
+            // Update self.document
+            self.document.insert_into_inline_table(
+                &["envs", env_name.as_str(), "dependencies"],
+                key,
+                toml_value.clone(),
+            )?;
+        }
+
+        tracing::debug!(
+            "Added dependency {}={} to toml document for environment {}",
+            name.as_normalized(),
+            toml_value.to_string(),
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Removes a dependency from the manifest
+    pub fn remove_dependency(
+        &mut self,
+        env_name: &EnvironmentName,
+        name: &PackageName,
+    ) -> Result<PackageName, ManifestError> {
+        // Update self.parsed
+        let parsed_env = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+        parsed_env
+            .dependencies
+            .specs
+            .swap_remove(name)
+            .ok_or_else(|| ManifestError::DependencyNotFound {
+                name: name.clone(),
+                environment: env_name.clone(),
+            })?;
+        parsed_env.inline_packages.swap_remove(name);
+
+        // Update self.document
+        let item = self.document.get_or_insert_nested_item(&[
+            "envs",
+            env_name.as_str(),
+            "dependencies",
+        ])?;
+        // Look up the existing key so a non-normalized spelling in the
+        // document (e.g. "PyTest" vs "pytest") is found as well.
+        let key =
+            existing_package_key(item, name).unwrap_or_else(|| name.as_normalized().to_string());
+        pixi_toml_edit::remove_entry(item, &key)
+            .map_err(|_| ManifestError::ExpectedTable("dependencies"))?;
+
+        tracing::debug!(
+            "Removed dependency {} to toml document for environment {}",
+            console::style(name.as_normalized()).green(),
+            env_name.fancy_display()
+        );
+        Ok(name.clone())
+    }
+
+    /// Sets the platform of a specific environment in the manifest
+    pub fn set_platform(
+        &mut self,
+        env_name: &EnvironmentName,
+        platform: Subdir,
+    ) -> Result<(), ManifestError> {
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?
+            .platform
+            .replace(platform);
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&["envs", env_name.as_str()])?
+            .insert(
+                "platform",
+                Item::Value(toml_edit::Value::from(platform.to_string())),
+            );
+
+        tracing::debug!(
+            "Set platform {} for environment {} in toml document",
+            platform,
+            env_name
+        );
+        Ok(())
+    }
+
+    /// Sets or removes the `exclude-newer` cutoff of the manifest.
+    pub fn set_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.parsed
+            .exclude_newer
+            .set_cutoff(self.document.as_table_mut(), cutoff)?;
+        tracing::debug!("Set exclude-newer cutoff to {cutoff:?} in toml document");
+        Ok(())
+    }
+
+    /// Replaces the `exclude-newer` of the manifest with `config`, written as
+    /// `value`, the TOML that `config` was parsed from.
+    pub fn set_exclude_newer(
+        &mut self,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.parsed
+            .exclude_newer
+            .replace(self.document.as_table_mut(), value, config)?;
+        tracing::debug!("Set exclude-newer to {value} in toml document");
+        Ok(())
+    }
+
+    /// Exempts the releases of `name` that match the spec of `exemption`
+    /// from the `exclude-newer` cutoff, replacing an existing exemption of the
+    /// package.
+    pub fn add_exclude_newer_exemption(
+        &mut self,
+        name: PackageName,
+        exemption: ExcludeNewerExemption,
+    ) -> Result<(), ExcludeNewerEditError> {
+        let source = name.as_source().to_string();
+        self.parsed
+            .exclude_newer
+            .add_exemption(self.document.as_table_mut(), name, exemption)?;
+        tracing::debug!("Added exclude-newer exemption for {source} to toml document");
+        Ok(())
+    }
+
+    /// Removes the `exclude-newer` exemption of `name`. Returns false if the
+    /// package was not exempt.
+    pub fn remove_exclude_newer_exemption(
+        &mut self,
+        name: &PackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        let removed = self
+            .parsed
+            .exclude_newer
+            .remove_exemption(self.document.as_table_mut(), name)?;
+        if removed {
+            tracing::debug!(
+                "Removed exclude-newer exemption for {} from toml document",
+                name.as_source()
+            );
+        }
+        Ok(removed)
+    }
+
+    /// Matches an exposed name to its corresponding environment name.
+    pub fn match_exposed_name_to_environment(
+        &self,
+        exposed_name: &ExposedName,
+    ) -> Result<EnvironmentName, ManifestError> {
+        for (env_name, env) in &self.parsed.envs {
+            for mapping in &env.exposed {
+                if mapping.exposed_name == *exposed_name {
+                    return Ok(env_name.clone());
+                }
+            }
+        }
+        Err(ManifestError::ExposedNameNotFound(exposed_name.clone()))
+    }
+
+    /// Checks if an exposed name already exists in other environments
+    pub fn exposed_name_already_exists_in_other_envs(
+        &self,
+        env_name: &EnvironmentName,
+        exposed_name: &ExposedName,
+    ) -> bool {
+        self.parsed
+            .envs
+            .iter()
+            .filter_map(|(name, env)| if name != env_name { Some(env) } else { None })
+            .flat_map(|env| env.exposed.iter())
+            .any(|mapping| mapping.exposed_name == *exposed_name)
+    }
+
+    /// Adds exposed mapping to the manifest
+    pub fn add_exposed_mapping(
+        &mut self,
+        env_name: &EnvironmentName,
+        mapping: &Mapping,
+    ) -> Result<(), ManifestError> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()));
+        }
+
+        // Ensure exposed name is unique
+        if self.exposed_name_already_exists_in_other_envs(env_name, &mapping.exposed_name) {
+            return Err(ManifestError::ExposedNameAlreadyExists(
+                mapping.exposed_name.clone(),
+            ));
+        }
+
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .expect("environment existence was checked above")
+            .exposed
+            .insert(mapping.clone());
+
+        // Update self.document
+        self.document.insert_into_inline_table(
+            &["envs", env_name.as_str(), "exposed"],
+            mapping.exposed_name.as_ref(),
+            toml_edit::Value::from(mapping.executable_relname.clone()),
+        )?;
+
+        tracing::debug!("Added exposed mapping {mapping} to toml document");
+        Ok(())
+    }
+
+    /// Removes exposed mapping from the manifest
+    pub fn remove_exposed_name(
+        &mut self,
+        env_name: &EnvironmentName,
+        exposed_name: &ExposedName,
+    ) -> Result<(), ManifestError> {
+        let environment = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        // Remove exposed_name from parsed environment
+        environment
+            .exposed
+            .retain(|map| map.exposed_name() != exposed_name);
+
+        // Remove from the document
+        let item =
+            self.document
+                .get_or_insert_nested_item(&["envs", env_name.as_str(), "exposed"])?;
+        pixi_toml_edit::remove_entry(item, exposed_name.as_ref())
+            .map_err(|_| ManifestError::ExpectedTable("exposed names"))?
+            .ok_or_else(|| ManifestError::ExposedNameNotInEnvironment {
+                name: exposed_name.clone(),
+                environment: env_name.clone(),
+            })?;
+
+        tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
+        Ok(())
+    }
+
+    /// Removes all exposed mappings for a specific environment
+    pub fn remove_all_exposed_mappings(
+        &mut self,
+        env_name: &EnvironmentName,
+    ) -> Result<(), ManifestError> {
+        // Ensure the environment exists
+        let env = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        // Clear the exposed mappings
+        env.exposed.clear();
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&["envs", env_name.as_str()])?
+            .remove("exposed");
+
+        tracing::debug!(
+            "Removed all exposed mappings for environment {} in toml document",
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Checks if an exposed name already exists in other environments
+    pub fn shortcut_already_exists_in_other_envs(
+        &self,
+        env_name: &EnvironmentName,
+        shortcut: &PackageName,
+    ) -> bool {
+        self.parsed
+            .envs
+            .iter()
+            .filter_map(|(name, env)| if name != env_name { Some(env) } else { None })
+            .flat_map(|env| env.shortcuts.iter().flat_map(|s| s.iter()))
+            .any(|s| s == shortcut)
+    }
+
+    /// Adds shortcut to the manifest
+    pub fn add_shortcut(
+        &mut self,
+        env_name: &EnvironmentName,
+        shortcut: &PackageName,
+    ) -> Result<(), ManifestError> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()));
+        }
+
+        // Ensure shortcut is unique
+        if self.shortcut_already_exists_in_other_envs(env_name, shortcut) {
+            return Err(ManifestError::ShortcutAlreadyExists(shortcut.clone()));
+        }
+
+        // Update self.parsed
+        let env = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .expect("environment existence was checked above");
+        env.shortcuts
+            .get_or_insert_default()
+            .insert(shortcut.clone());
+
+        // Update self.document
+        let shortcuts_array = self
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str()])?
+            .entry("shortcuts")
+            .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
+            .as_array_mut()
+            .ok_or(ManifestError::ExpectedArray("shortcuts"))?;
+
+        // Append the shortcut unless it is already listed, leaving the
+        // existing entries' formatting untouched.
+        let shortcut = shortcut.as_normalized();
+        if !shortcuts_array
+            .iter()
+            .any(|item| item.as_str() == Some(shortcut))
+        {
+            pixi_toml_edit::push_array_element(shortcuts_array, shortcut.into());
+        }
+
+        tracing::debug!(
+            "Added shortcut {} for environment {} in toml document",
+            console::style(shortcut).green(),
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Removes shortcut from the manifest of any environment
+    pub fn remove_shortcut(
+        &mut self,
+        shortcut: &PackageName,
+        env_name: &EnvironmentName,
+    ) -> Result<(), ManifestError> {
+        let environment = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
+
+        // Remove shortcut from parsed environment
+        if let Some(shortcuts) = environment.shortcuts.as_mut() {
+            if !shortcuts.contains(shortcut) {
+                return Err(ManifestError::ShortcutNotFound(shortcut.clone()));
+            }
+
+            shortcuts.swap_remove(shortcut);
+            tracing::debug!(
+                "Removed shortcut '{}' from toml document",
+                shortcut.as_normalized()
+            );
+        }
+
+        // Remove from the document
+        let shortcuts_array = self
+            .document
+            .get_mut_toml_array(&["envs", env_name.as_str()], "shortcuts")?
+            .ok_or_else(|| ManifestError::NoShortcuts(env_name.clone()))?;
+
+        let shortcut_str = shortcut.as_normalized();
+        if !shortcuts_array
+            .iter()
+            .any(|item| item.as_str() == Some(shortcut_str))
+        {
+            return Err(ManifestError::ShortcutNotFound(shortcut.clone()));
+        }
+        pixi_toml_edit::retain_array_elements(shortcuts_array, |item| {
+            item.as_str() != Some(shortcut_str)
+        });
+        tracing::debug!("Removed shortcut '{}' from toml document", shortcut_str);
+
+        Ok(())
+    }
+
+    /// Saves the manifest to the file system
+    pub async fn save(&self) -> Result<(), ManifestError> {
+        let contents = {
+            // Ensure that version is always set when saving, as the first key
+            let mut document = self.document.clone();
+            let table = document.as_table_mut();
+            if !table.contains_key("version") {
+                table.insert("version", ManifestVersion::default().into());
+                table.sort_values_by(|a, _, b, _| {
+                    (a.get() != "version").cmp(&(b.get() != "version"))
+                });
+            }
+            document.to_string()
+        };
+
+        pixi_utils::atomic_write::atomic_write(&self.path, contents)
+            .await
+            .map_err(|source| ManifestError::Save {
+                path: self.path.clone(),
+                source,
+            })?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, SerializeDisplay, DeserializeFromStr)]
+pub struct Mapping {
+    exposed_name: ExposedName,
+    // The executable_relname is a executable name possibly with a parts of a path in it to match
+    // on. e.g. `dotnet/dotnet` will find `$PREFIX/lib/dotnet/dotnet`
+    executable_relname: String,
+}
+
+pub(super) struct TomlMapping(IndexSet<Mapping>);
+
+impl TomlMapping {
+    pub fn into_inner(self) -> IndexSet<Mapping> {
+        self.0
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlMapping {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        Ok(Self(
+            TomlIndexMap::deserialize(value)?
+                .into_inner()
+                .into_iter()
+                .map(|(key, value)| Mapping::new(key, value))
+                .collect(),
+        ))
+    }
+}
+
+impl Mapping {
+    pub fn new(exposed_name: ExposedName, executable_relname: String) -> Self {
+        Self {
+            exposed_name,
+            executable_relname: strip_executable_extension(executable_relname),
+        }
+    }
+
+    pub fn exposed_name(&self) -> &ExposedName {
+        &self.exposed_name
+    }
+
+    pub fn executable_relname(&self) -> &str {
+        &self.executable_relname
+    }
+
+    // Splitting the executable_relname by the last '/' and taking the last part
+    // e.g. 'nested/test_executable' -> 'test_executable'
+    pub fn executable_name(&self) -> &str {
+        Path::new(&self.executable_relname)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&self.executable_relname)
+    }
+}
+
+impl fmt::Display for Mapping {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}={}", self.exposed_name, self.executable_relname)
+    }
+}
+
+impl FromStr for Mapping {
+    type Err = ExposedNameError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        // If we can't parse exposed_name=executable_relname, assume input=input
+        let (exposed_name, executable_relname) = input.split_once('=').unwrap_or((input, input));
+
+        // Make sure we expose only the executable name, even with nested paths.
+        // e.g. lib/bin/exec.exe -> exec
+        let exposed_name = executable_from_path(Path::new(exposed_name));
+        let exposed_name = ExposedName::from_str(exposed_name.as_str())?;
+
+        Ok(Mapping::new(exposed_name, executable_relname.to_string()))
+    }
+}
+
+/// The key under which a conda package is stored in the table-like item,
+/// honoring conda package name normalization so a differently spelled key
+/// (e.g. "PyTest" vs "pytest") is found.
+fn existing_package_key(item: &Item, name: &PackageName) -> Option<String> {
+    pixi_toml_edit::find_table_key(item, |key| {
+        PackageName::from_str(key).is_ok_and(|existing| existing == *name)
+    })
+}
+
+/// Describes which executables should be (additionally) exposed
+/// Only executables by direct dependencies are taken into account
+#[derive(Default)]
+pub enum ExposedType {
+    #[default]
+    All,
+    Nothing,
+    Ignore(Vec<PackageName>),
+    Mappings(Vec<Mapping>),
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use indexmap::IndexSet;
+    use insta::assert_snapshot;
+    use pixi_consts::consts::DEFAULT_CHANNELS;
+    use rattler_conda_types::ChannelConfig;
+
+    use super::*;
+
+    #[test]
+    fn test_mapping_executable_names() {
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let executable_name = "test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!("test_executable", mapping.executable_relname());
+
+        let executable_name = "nested/test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!("nested/test_executable", mapping.executable_relname());
+
+        let executable_name: String;
+        let expected_exe_relname: &str;
+        #[cfg(windows)]
+        {
+            executable_name = "nested\\test_executable.exe".to_string();
+            expected_exe_relname = "nested\\test_executable";
+        }
+        #[cfg(unix)]
+        {
+            executable_name = "nested/test_executable.sh".to_string();
+            expected_exe_relname = "nested/test_executable";
+        }
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        assert_eq!("test_executable", mapping.executable_name());
+        assert_eq!(expected_exe_relname, mapping.executable_relname());
+    }
+
+    #[test]
+    fn test_add_exposed_mapping_new_env() {
+        let mut manifest = Manifest::default();
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let executable_name = "test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        manifest.add_environment(&env_name, None).unwrap();
+
+        let result = manifest.add_exposed_mapping(&env_name, &mapping);
+        assert!(result.is_ok());
+
+        let expected_value = "test_executable";
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str(), "exposed"])
+            .unwrap()
+            .get(exposed_name.as_ref())
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(expected_value, actual_value);
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .exposed
+            .iter()
+            .find(|map| map.exposed_name() == &exposed_name)
+            .unwrap()
+            .executable_relname();
+        assert_eq!(expected_value, actual_value)
+    }
+
+    #[test]
+    fn test_add_exposed_mapping_existing_env() {
+        let mut manifest = Manifest::default();
+        let exposed_name1 = ExposedName::from_str("test_exposed1").unwrap();
+        let executable_relname1 = "test_executable1".to_string();
+        let mapping1 = Mapping::new(exposed_name1.clone(), executable_relname1);
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        manifest.add_environment(&env_name, None).unwrap();
+
+        manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
+
+        let exposed_name2 = ExposedName::from_str("test_exposed2").unwrap();
+        let executable_relname2 = "nested/test_executable2".to_string();
+        let mapping2 = Mapping::new(exposed_name2.clone(), executable_relname2);
+        let result = manifest.add_exposed_mapping(&env_name, &mapping2);
+        assert!(result.is_ok());
+
+        // Check document for executable1
+        let expected_value1 = "test_executable1";
+        let actual_value1 = manifest
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str(), "exposed"])
+            .unwrap()
+            .get(exposed_name1.as_ref())
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(expected_value1, actual_value1);
+
+        // Check parsed for executable1
+        let actual_value1 = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .exposed
+            .iter()
+            .find(|map| map.exposed_name() == &exposed_name1)
+            .unwrap()
+            .executable_relname();
+        assert_eq!(expected_value1, actual_value1);
+
+        // Check document for executable2
+        let expected_value2 = "nested/test_executable2";
+        let actual_value2 = manifest
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str(), "exposed"])
+            .unwrap()
+            .get(exposed_name2.as_ref())
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert_eq!(expected_value2, actual_value2);
+
+        // Check parsed for executable2
+        let actual_value2 = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .exposed
+            .iter()
+            .find(|map| map.exposed_name() == &exposed_name2)
+            .unwrap()
+            .executable_relname();
+        assert_eq!(expected_value2, actual_value2);
+    }
+
+    #[test]
+    fn test_remove_exposed_mapping() {
+        let mut manifest = Manifest::default();
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let executable_name = "test_executable".to_string();
+        let mapping = Mapping::new(exposed_name.clone(), executable_name);
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        // Add environment
+        manifest.add_environment(&env_name, None).unwrap();
+
+        // Add and remove mapping again
+        manifest.add_exposed_mapping(&env_name, &mapping).unwrap();
+        manifest
+            .remove_exposed_name(&env_name, &exposed_name)
+            .unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str(), "exposed"])
+            .unwrap()
+            .get(exposed_name.as_ref());
+        assert!(actual_value.is_none());
+
+        // Check parsed
+        assert!(
+            !manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .exposed
+                .iter()
+                .any(|map| map.exposed_name() == &exposed_name)
+        );
+    }
+
+    #[test]
+    fn test_remove_exposed_mapping_nonexistent() {
+        let mut manifest = Manifest::default();
+        let exposed_name = ExposedName::from_str("test_exposed").unwrap();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        // Removing an exposed name that doesn't exist should return an error
+        let result = manifest.remove_exposed_name(&env_name, &exposed_name);
+        assert!(matches!(
+            result,
+            Err(ManifestError::EnvironmentNotFound(name)) if name == env_name
+        ));
+    }
+
+    #[test]
+    fn test_add_environment_default_channel() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        // Add environment
+        manifest.add_environment(&env_name, None).unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&["envs"])
+            .unwrap()
+            .get(env_name.as_str());
+        assert!(actual_value.is_some());
+
+        // Check parsed
+        let env = manifest.parsed.envs.get(&env_name).unwrap();
+
+        // Check channels
+        let expected_channels = Config::load_global()
+            .default_channels()
+            .into_iter()
+            .map(From::from)
+            .collect::<IndexSet<_>>();
+        let actual_channels = env.channels.clone();
+        assert_eq!(expected_channels, actual_channels);
+    }
+
+    #[test]
+    fn test_add_environment_given_channel() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        let channels = Vec::from([
+            NamedChannelOrUrl::from_str("test-channel-1").unwrap(),
+            NamedChannelOrUrl::from_str("test-channel-2").unwrap(),
+        ]);
+
+        // Add environment
+        manifest
+            .add_environment(&env_name, Some(channels.clone()))
+            .unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&["envs"])
+            .unwrap()
+            .get(env_name.as_str());
+        assert!(actual_value.is_some());
+
+        // Check parsed
+        let env = manifest.parsed.envs.get(&env_name).unwrap();
+
+        // Check channels
+        let expected_channels = channels
+            .into_iter()
+            .map(From::from)
+            .collect::<IndexSet<_>>();
+        let actual_channels = env.channels.clone();
+        assert_eq!(expected_channels, actual_channels);
+    }
+
+    #[test]
+    fn test_remove_environment() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        // Add environment
+        manifest.add_environment(&env_name, None).unwrap();
+
+        // Remove environment
+        manifest.remove_environment(&env_name).unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&["envs"])
+            .unwrap()
+            .get(env_name.as_str());
+        assert!(actual_value.is_none());
+
+        // Check parsed
+        let actual_value = manifest.parsed.envs.get(&env_name);
+        assert!(actual_value.is_none());
+    }
+
+    #[test]
+    fn test_remove_non_existent_environment() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("non-existent-env").unwrap();
+
+        // Remove non-existent environment
+        let result = manifest.remove_environment(&env_name);
+
+        // This should fail
+        assert!(matches!(
+            result,
+            Err(ManifestError::EnvironmentNotFound(name)) if name == env_name
+        ));
+    }
+
+    #[test]
+    fn test_parse_errors() {
+        use miette::Diagnostic;
+
+        let path = Path::new("pixi-global.toml");
+
+        // A syntax error points at its location in the manifest
+        let err = Manifest::from_str(path, "[envs").unwrap_err();
+        let ManifestError::Parse(err) = err else {
+            panic!("expected a parse error, got {err:?}");
+        };
+        assert!(matches!(*err, ManifestParseError::Spanned { .. }));
+        assert_eq!(err.labels().unwrap().count(), 1);
+
+        // An unsupported version keeps its help
+        let err = Manifest::from_str(path, "version = 99\nunknown = 1").unwrap_err();
+        let ManifestError::Parse(err) = err else {
+            panic!("expected a parse error, got {err:?}");
+        };
+        assert!(matches!(*err, ManifestParseError::Invalid { .. }));
+        assert!(err.help().unwrap().to_string().contains("update `pixi`"));
+    }
+
+    #[test]
+    fn test_add_dependency() {
+        let mut manifest = Manifest::default();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        let named_global_spec =
+            GlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
+
+        // Add environment
+        manifest
+            .add_environment(
+                &env_name,
+                Some(
+                    DEFAULT_CHANNELS
+                        .iter()
+                        .map(|name| NamedChannelOrUrl::Name(name.to_string()))
+                        .collect(),
+                ),
+            )
+            .unwrap();
+
+        // Add dependency
+        manifest
+            .add_dependency(&env_name, &named_global_spec)
+            .unwrap();
+
+        // Check document
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str(), "dependencies"])
+            .unwrap()
+            .get(named_global_spec.name().as_normalized());
+        assert!(actual_value.is_some());
+        assert_eq!(
+            actual_value.unwrap().to_string().replace('"', ""),
+            named_global_spec
+                .spec()
+                .as_version_spec()
+                .unwrap()
+                .to_string()
+        );
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .specs
+            .get(named_global_spec.name().as_normalized())
+            .unwrap()
+            .clone();
+        assert_eq!(actual_value, *named_global_spec.spec());
+
+        // Add another dependency
+        let build_match_spec = GlobalSpec::try_from_str(
+            "python [version='==3.11.0', build=he550d4f_1_cpython]",
+            &channel_config,
+        )
+        .unwrap();
+        manifest
+            .add_dependency(&env_name, &build_match_spec)
+            .unwrap();
+        let any_spec = GlobalSpec::try_from_str("any-spec", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &any_spec).unwrap();
+
+        assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_existing_dependency() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec = GlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
+
+        // Add environment
+        manifest.add_environment(&env_name, None).unwrap();
+
+        // Add dependency
+        manifest.add_dependency(&env_name, &spec).unwrap();
+
+        // Add the same dependency again, with a new match_spec
+        let new_spec = GlobalSpec::try_from_str("pythonic==3.18.0", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &new_spec).unwrap();
+
+        // Check document
+        let name = spec.name();
+        let actual_value = manifest
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str(), "dependencies"])
+            .unwrap()
+            .get(name.as_normalized());
+        assert!(actual_value.is_some());
+        assert_eq!(
+            actual_value.unwrap().to_string().replace('"', ""),
+            "==3.18.0"
+        );
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .specs
+            .get(name)
+            .unwrap()
+            .clone();
+        assert_eq!(
+            actual_value.into_version().unwrap().to_string(),
+            "==3.18.0".to_string()
+        );
+    }
+
+    /// Re-adding a source dependency replaces its inline `package` definition
+    /// wholesale: attaching a definition records it, and re-adding without one
+    /// removes it rather than leaving a stale table behind.
+    #[test]
+    fn test_add_dependency_overwrites_inline_definition() {
+        let contents = r#"
+        [envs.xsv]
+        channels = ["conda-forge"]
+        [envs.xsv.dependencies]
+        xsv = { path = "some-source" }
+        "#;
+        let mut manifest =
+            Manifest::from_str(std::path::Path::new("pixi-global.toml"), contents).unwrap();
+
+        let env_name = EnvironmentName::from_str("xsv").unwrap();
+        let name = rattler_conda_types::PackageName::from_str("xsv").unwrap();
+        let source_spec = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .specs
+            .get(&name)
+            .unwrap()
+            .clone();
+
+        let dependency_toml = |manifest: &mut Manifest| {
+            manifest
+                .document
+                .get_or_insert_nested_table(&["envs", env_name.as_str(), "dependencies"])
+                .unwrap()
+                .get(name.as_normalized())
+                .unwrap()
+                .to_string()
+        };
+
+        // Attach an inline definition to the existing source spec.
+        let value: toml_edit::Value = r#"{ build = { backend = { name = "pixi-build-rust" } } }"#
+            .parse()
+            .unwrap();
+        let inline =
+            crate::project::InlinePackageValue::new(value.as_inline_table().unwrap().clone());
+        let with_inline = GlobalSpec::new(name.clone(), source_spec.clone()).with_inline(inline);
+        manifest.add_dependency(&env_name, &with_inline).unwrap();
+        assert!(
+            dependency_toml(&mut manifest).contains("package"),
+            "inline definition was not recorded"
+        );
+
+        // Re-add the same dependency without an inline definition.
+        let without_inline = GlobalSpec::new(name.clone(), source_spec);
+        manifest.add_dependency(&env_name, &without_inline).unwrap();
+        assert!(
+            !dependency_toml(&mut manifest).contains("package"),
+            "stale inline definition lingered after overwrite"
+        );
+        assert!(
+            manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .inline_packages
+                .is_empty(),
+            "parsed inline definition lingered after overwrite"
+        );
+    }
+
+    /// Removing a source dependency also drops its parsed inline definition.
+    #[test]
+    fn test_remove_dependency_drops_inline_definition() {
+        let contents = r#"
+        [envs.xsv]
+        channels = ["conda-forge"]
+        [envs.xsv.dependencies]
+        xsv = { path = "some-source", package.build.backend.name = "pixi-build-rust" }
+        "#;
+        let mut manifest =
+            Manifest::from_str(std::path::Path::new("pixi-global.toml"), contents).unwrap();
+
+        let env_name = EnvironmentName::from_str("xsv").unwrap();
+        let name = rattler_conda_types::PackageName::from_str("xsv").unwrap();
+        assert!(
+            manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .inline_packages
+                .contains_key(&name),
+            "inline definition should be parsed from the manifest"
+        );
+
+        manifest.remove_dependency(&env_name, &name).unwrap();
+
+        let env = manifest.parsed.envs.get(&env_name).unwrap();
+        assert!(env.dependencies.specs.is_empty());
+        assert!(
+            env.inline_packages.is_empty(),
+            "parsed inline definition lingered after removal"
+        );
+    }
+
+    #[test]
+    fn test_set_platform() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let platform = Subdir::LinuxRiscv64;
+
+        // Add environment
+        manifest.add_environment(&env_name, None).unwrap();
+
+        // Set platform
+        manifest.set_platform(&env_name, platform).unwrap();
+
+        // Check document
+        let actual_platform = manifest
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str()])
+            .unwrap()
+            .get("platform")
+            .unwrap();
+        assert_eq!(actual_platform.as_str().unwrap(), platform.as_str());
+
+        // Check parsed
+        let actual_platform = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .platform
+            .unwrap();
+        assert_eq!(actual_platform, platform);
+    }
+
+    #[test]
+    fn test_remove_dependency() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let name = PackageName::from_str("pytest").unwrap();
+
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["test-channel"]
+dependencies = { "python" = "*", pytest = "*"}
+"#,
+        )
+        .unwrap();
+
+        // Remove dependency
+        manifest.remove_dependency(&env_name, &name).unwrap();
+
+        // Check document
+        assert!(
+            !manifest
+                .document
+                .to_string()
+                .contains(name.clone().as_normalized())
+        );
+
+        // Check parsed
+        let actual_value = manifest
+            .parsed
+            .envs
+            .get(&env_name)
+            .unwrap()
+            .dependencies
+            .specs
+            .get(&name);
+        assert!(actual_value.is_none());
+
+        assert_snapshot!(manifest.document.to_string());
+    }
+
+    /// Adding and removing dependencies in an environment written with a
+    /// TOML 1.1 multiline inline table keeps the multiline layout.
+    #[test]
+    fn test_multiline_dependencies_keep_their_layout() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = {
+    python = "*",
+    pytest = "*",
+}
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let spec = GlobalSpec::try_from_str("pydantic ==2.12.5", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
+        manifest
+            .remove_dependency(&env_name, &PackageName::from_str("pytest").unwrap())
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [envs.test-env]
+        channels = ["conda-forge"]
+        dependencies = {
+            python = "*",
+            pydantic = "==2.12.5",
+        }
+        exposed = { python = "python" }
+        "#);
+    }
+
+    #[test]
+    fn test_add_environment_with_dots() {
+        let env_name = EnvironmentName::from_str("sdl.example").unwrap();
+        let channels = vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()];
+
+        let mut manifest = Manifest::from_str(Path::new("global.toml"), r#"version = 1"#).unwrap();
+
+        // Add environment with dots in name
+        manifest.add_environment(&env_name, Some(channels)).unwrap();
+
+        // Check document structure
+        let toml_str = manifest.document.to_string();
+        assert!(toml_str.contains(r#"[envs."sdl.example"]"#));
+        assert!(toml_str.contains(r#"channels = ["conda-forge"]"#));
+
+        // Verify parsing works
+        assert!(manifest.parsed.envs.contains_key(&env_name));
+    }
+
+    /// Removing a dependency must find the entry in the document even when
+    /// the document spells the name differently than the user typed it.
+    #[test]
+    fn test_remove_dependency_with_non_normalized_name_in_document() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = { PyTest = "*", python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        manifest
+            .remove_dependency(&env_name, &PackageName::from_str("pytest").unwrap())
+            .unwrap();
+
+        let document = manifest.document.to_string();
+        assert!(
+            !document.to_lowercase().contains("pytest"),
+            "pytest was not removed from the document:\n{document}"
+        );
+    }
+
+    /// Adding a dependency that the document spells differently must
+    /// overwrite the existing entry instead of inserting a second one.
+    #[test]
+    fn test_add_dependency_with_non_normalized_name_in_document() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = { PyTest = "*", python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let spec = GlobalSpec::try_from_str("pytest ==8.0.0", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
+
+        let document = manifest.document.to_string();
+        let count = document.to_lowercase().matches("pytest").count();
+        assert_eq!(count, 1, "pytest is now listed more than once:\n{document}");
+    }
+}
