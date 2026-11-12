@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use once_cell::unsync::OnceCell;
 use pixi_build_backend::generated_recipe::MetadataProvider;
 use pyproject_toml::PyProjectToml;
-use rattler_conda_types::{ParseVersionError, Version};
+use rattler_conda_types::{ParseVersionError, VersionWithSource};
 
 /// Controls how the `PyprojectMetadataProvider` handles the pyproject.toml manifest.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -134,9 +134,9 @@ impl MetadataProvider for PyprojectMetadataProvider {
     /// Returns the package version from the pyproject.toml manifest.
     ///
     /// If `ignore_pyproject_manifest` is true, returns `None`. Otherwise, extracts
-    /// the version from the project section. The version string is parsed into a
-    /// `rattler_conda_types::Version`.
-    fn version(&mut self) -> Result<Option<Version>, Self::Error> {
+    /// the version from the project section. The PEP 440 normalized version
+    /// string is parsed into a `rattler_conda_types::VersionWithSource`.
+    fn version(&mut self) -> Result<Option<VersionWithSource>, Self::Error> {
         if self.mode == PyprojectManifestMode::Ignore {
             return Ok(None);
         }
@@ -147,7 +147,8 @@ impl MetadataProvider for PyprojectMetadataProvider {
             return Ok(None);
         };
         Ok(Some(
-            Version::from_str(&version.to_string()).map_err(MetadataError::ParseVersion)?,
+            VersionWithSource::from_str(&version.to_string())
+                .map_err(MetadataError::ParseVersion)?,
         ))
     }
 

@@ -7,7 +7,7 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 use pixi_spec::{TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{PackageName, Version, VersionSpec};
+use rattler_conda_types::{PackageName, VersionSpec, VersionWithSource};
 use std::str::FromStr;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
@@ -99,7 +99,7 @@ pub struct TomlWorkspace {
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use
     // the name from the PyProject file.
     pub name: Option<String>,
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
     pub description: Option<String>,
     pub authors: Option<Vec<String>>,
     pub channels: IndexSet<PrioritizedChannel>,

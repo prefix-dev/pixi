@@ -6,7 +6,7 @@
 use miette::IntoDiagnostic;
 use pixi_build_backend::generated_recipe::{GeneratedRecipe, MetadataProvider};
 use pixi_build_types::ProjectModel;
-use rattler_conda_types::Version;
+use rattler_conda_types::VersionWithSource;
 
 use crate::package_xml::PackageXml;
 
@@ -66,8 +66,8 @@ impl MetadataProvider for RosPackageXmlMetadataProvider {
         Ok(Some(format!("ros-{}-{}", self.distro_name, formatted)))
     }
 
-    fn version(&mut self) -> Result<Option<Version>, Self::Error> {
-        Ok(self.package_data.version.parse::<Version>().ok())
+    fn version(&mut self) -> Result<Option<VersionWithSource>, Self::Error> {
+        Ok(self.package_data.version.parse::<VersionWithSource>().ok())
     }
 
     fn homepage(&mut self) -> Result<Option<String>, Self::Error> {

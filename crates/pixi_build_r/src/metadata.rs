@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 use miette::Diagnostic;
 use once_cell::unsync::OnceCell;
 use pixi_build_backend::generated_recipe::MetadataProvider;
-use rattler_conda_types::{ParseVersionError, Version};
+use rattler_conda_types::{ParseVersionError, VersionWithSource};
 use std::str::FromStr;
 
 /// CRAN to SPDX license mapping loaded from JSON file.
@@ -401,10 +401,10 @@ impl MetadataProvider for DescriptionMetadataProvider {
             .map(r_package_to_conda))
     }
 
-    fn version(&mut self) -> Result<Option<Version>, Self::Error> {
+    fn version(&mut self) -> Result<Option<VersionWithSource>, Self::Error> {
         let data = self.ensure_data()?;
         match &data.version {
-            Some(v) => Ok(Some(Version::from_str(v)?)),
+            Some(v) => Ok(Some(VersionWithSource::from_str(v)?)),
             None => Ok(None),
         }
     }
