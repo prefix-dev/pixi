@@ -8,7 +8,8 @@ use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::{ExcludeNewer, TomlSpec};
 use pixi_toml::TomlEnum;
 use rattler_conda_types::{
-    Arch, GenericVirtualPackage, NamedChannelOrUrl, PackageName, Subdir, Version, VersionSpec,
+    Arch, GenericVirtualPackage, NamedChannelOrUrl, PackageName, Subdir, VersionSpec,
+    VersionWithSource,
 };
 use serde::Deserialize;
 use toml_span::{DeserError, Value};
@@ -43,7 +44,7 @@ pub struct Workspace {
     pub name: Option<String>,
 
     /// The version of the project
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
 
     /// An optional project description
     pub description: Option<String>,

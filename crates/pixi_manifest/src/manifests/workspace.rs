@@ -14,7 +14,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
     NamedChannelOrUrl, PackageName, ParseStrictness::Strict, ParseVersionError,
-    ParseVersionSpecError, Subdir, Version, VersionSpec,
+    ParseVersionSpecError, Subdir, VersionSpec, VersionWithSource,
 };
 use toml_edit::Value;
 
@@ -1966,7 +1966,7 @@ impl WorkspaceManifestMut<'_> {
     pub fn set_version(&mut self, version: &str) -> Result<(), InvalidVersionError> {
         // Update in both the manifest and the toml
         self.workspace.workspace.version =
-            Some(Version::from_str(version).map_err(InvalidVersionError)?);
+            Some(VersionWithSource::from_str(version).map_err(InvalidVersionError)?);
         self.document.set_version(version);
         Ok(())
     }

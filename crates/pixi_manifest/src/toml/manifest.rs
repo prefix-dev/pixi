@@ -11,7 +11,7 @@ use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{PackageName, Subdir, Version};
+use rattler_conda_types::{PackageName, Subdir, VersionWithSource};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -1154,7 +1154,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
 #[derive(Debug, Clone, Default)]
 pub struct ExternalWorkspaceProperties {
     pub name: Option<String>,
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
     pub description: Option<String>,
     pub authors: Option<Vec<String>>,
     pub license: Option<String>,

@@ -169,7 +169,7 @@ impl InMemoryBackend for PassthroughBackend {
                         PackageName::try_from(name.as_str()).expect("invalid package name");
                 }
                 if let Some(version) = &self.project_model.version {
-                    modified_index_json.version = version.clone().into();
+                    modified_index_json.version = version.clone();
                 }
                 modified_index_json.license = self.project_model.license.clone();
 
@@ -606,10 +606,8 @@ fn create_output(
 
     let output_version = project_model
         .version
-        .as_ref()
-        .or_else(|| Some(index_json.version.version()))
-        .cloned()
-        .unwrap_or_else(|| Version::major(0));
+        .clone()
+        .unwrap_or_else(|| index_json.version.clone());
     let output_build = compute_build_string(&index_json.build, &variant, has_real_variants);
 
     CondaOutput {
@@ -623,7 +621,7 @@ fn create_output(
         extra_dependencies,
         metadata: CondaOutputMetadata {
             name: name.clone(),
-            version: output_version.clone().into(),
+            version: output_version.clone(),
             build: output_build.clone(),
             build_number: index_json.build_number,
             subdir,
@@ -1133,8 +1131,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     version: project_model
                         .version
                         .clone()
-                        .unwrap_or_else(|| Version::major(0))
-                        .into(),
+                        .unwrap_or_else(|| Version::major(0).into()),
                     flags: vec![],
                     repodata_revision: None,
                 };

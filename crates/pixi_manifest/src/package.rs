@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use rattler_conda_types::Version;
+use rattler_conda_types::VersionWithSource;
 use url::Url;
 
 /// Defines the contents of the `[package]` section of the project manifest.
@@ -10,7 +10,7 @@ pub struct Package {
     pub name: Option<String>,
 
     /// The version of the project
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
 
     /// An optional project description
     pub description: Option<String>,
@@ -43,7 +43,7 @@ pub struct Package {
 
 impl Package {
     /// Creates a new package with the given name and version.
-    pub fn new(name: Option<String>, version: Option<Version>) -> Self {
+    pub fn new(name: Option<String>, version: Option<VersionWithSource>) -> Self {
         Self {
             name,
             version,
