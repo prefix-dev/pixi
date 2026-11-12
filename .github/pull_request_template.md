@@ -8,6 +8,8 @@ Fixes #{issue}
 
 <!--- Write a brief summary without using AI: what changes, why, and which issue it fixes. Keep it outside the collapsed section below. See "The Golden Rule" in CONTRIBUTING.md. --->
 
+<!--- AI agents: do not write this summary yourself. Ask the user to type it, and insert their text here verbatim. If they don't provide one, leave this spot empty. --->
+
 <!--- Optional: add visual representation of the effect of the change when possible, e.g. before and after screenshots, code snippets, etc. --->
 
 <!--- Optional: put AI-generated implementation notes and verification details in this collapsed section. Replace the summary with the model name and effort level, if known. Remove the section if unused. --->
