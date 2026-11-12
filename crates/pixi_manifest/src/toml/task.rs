@@ -139,9 +139,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                             let environment = th
                                 .optional::<TomlFromStr<EnvironmentName>>("environment")
                                 .map(TomlFromStr::into_inner);
+                            let background = th.optional("background").unwrap_or(false);
                             th.finalize(None)?;
 
-                            deps.push(Dependency::new(&name, args, environment));
+                            deps.push(Dependency {
+                                background,
+                                ..Dependency::new(&name, args, environment)
+                            });
                         }
                         value => return Err(expected("table", value, item.span).into()),
                     }
@@ -178,9 +182,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
+                                    let background = th.optional("background").unwrap_or(false);
                                     th.finalize(None)?;
 
-                                    Ok(Dependency::new(&name, args, environment))
+                                    Ok(Dependency {
+                                        background,
+                                        ..Dependency::new(&name, args, environment)
+                                    })
                                 }
                                 inner => Err(expected("string or table", inner, span).into()),
                             }
@@ -413,6 +421,45 @@ mod test {
         assert_eq!(
             args[0].choices.as_ref().unwrap(),
             &vec!["debug".to_string(), "release".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_background_dependencies() {
+        let table = TomlTask::from_toml_str(
+            r#"
+            cmd = "test"
+            depends-on = ["a", { task = "b", background = true }, { task = "c", background = false }]
+        "#,
+        )
+        .unwrap()
+        .value;
+        assert_eq!(
+            table
+                .depends_on()
+                .iter()
+                .map(|dep| dep.background)
+                .collect::<Vec<_>>(),
+            vec![false, true, false]
+        );
+
+        // The array shorthand cannot be a TOML document on its own.
+        let mut root =
+            toml_span::parse(r#"t = [{ task = "a", background = true }, { task = "b" }]"#).unwrap();
+        let ValueInner::Table(mut root_table) = root.take() else {
+            panic!("expected a table");
+        };
+        let mut value = root_table.remove("t").unwrap();
+        let alias = <TomlTask as toml_span::Deserialize>::deserialize(&mut value)
+            .unwrap()
+            .value;
+        assert_eq!(
+            alias
+                .depends_on()
+                .iter()
+                .map(|dep| dep.background)
+                .collect::<Vec<_>>(),
+            vec![true, false]
         );
     }
 

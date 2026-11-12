@@ -872,6 +872,10 @@ class DependsOn(StrictBaseModel):
     environment: EnvironmentName | None = Field(
         None, description="The environment to use for the task"
     )
+    background: bool | None = Field(
+        None,
+        description="Start the task in the background and stop it when the run ends. Pixi does not wait for the task, so list a task that waits for it right after it.",
+    )
 
 
 class TaskInlineTable(StrictBaseModel):

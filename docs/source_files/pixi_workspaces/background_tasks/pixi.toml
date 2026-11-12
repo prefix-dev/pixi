@@ -1,0 +1,21 @@
+[workspace]
+channels = ["conda-forge"]
+name = "background-tasks"
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+# --8<-- [start:tasks]
+[tasks]
+sim = "python simulator.py"
+wait-for-sim = "python wait_for_simulator.py"
+control = "python controller.py"
+control-in-sim = {
+  depends-on = [
+    { task = "sim", background = true },
+    "wait-for-sim",
+    "control",
+  ]
+}
+# --8<-- [end:tasks]
+
+[dependencies]
+python = "3.13.*"

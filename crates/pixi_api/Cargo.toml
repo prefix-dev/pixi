@@ -44,7 +44,7 @@ same-file = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["fs", "rt", "signal"] }
+tokio = { workspace = true, features = ["fs", "rt", "signal", "time"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
