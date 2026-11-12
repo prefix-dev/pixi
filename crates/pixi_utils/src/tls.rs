@@ -2,13 +2,11 @@
 //!
 //! Mirrors the [`Certificates`] design used by `uv-client` (uv PR #18550): a thin
 //! newtype over [`CertificateDer<'static>`] with factories for the bundled
-//! webpki roots, the platform's native store, and the `SSL_CERT_FILE` /
-//! `SSL_CERT_DIR` environment variables.
+//! webpki roots and the `SSL_CERT_FILE` / `SSL_CERT_DIR` environment variables.
 
 use std::{env, io, path::PathBuf};
 
 use itertools::Itertools;
-use pixi_config::TlsRootCerts;
 use rustls_native_certs::{CertificateResult, load_certs_from_paths};
 use rustls_pki_types::CertificateDer;
 use serde::Serialize;
@@ -28,47 +26,11 @@ pub struct CertEnvSource {
 pub struct Certificates(Vec<CertificateDer<'static>>);
 
 impl Certificates {
-    /// Resolve explicit certificates for a configured root-certificate mode.
-    ///
-    /// Priority follows uv's model:
-    /// 1. `SSL_CERT_FILE` / `SSL_CERT_DIR` env vars (if set and valid)
-    /// 2. The configured [`TlsRootCerts`] mode
-    ///
-    /// The rustls reqwest client uses the platform verifier for `System` mode
-    /// and only calls this when explicit certificates are required.
-    ///
-    /// Deprecation warnings for the legacy [`TlsRootCerts::LegacyNative`] and
-    /// [`TlsRootCerts::All`] spellings fire once at config-load time
-    /// (`Config::from_toml`), so this function stays silent.
-    pub fn for_mode(mode: TlsRootCerts) -> Self {
-        if let Some(env_certs) = Self::from_env() {
-            return env_certs;
-        }
-
-        #[allow(deprecated)]
-        match mode {
-            TlsRootCerts::Webpki => Self::webpki_roots(),
-            TlsRootCerts::System | TlsRootCerts::LegacyNative | TlsRootCerts::All => {
-                Self::from_native_store()
-            }
-        }
-    }
-
     /// Load the bundled Mozilla root certificates from `webpki-root-certs`.
     pub fn webpki_roots() -> Self {
         // Each `CertificateDer` borrows from static data, so cloning the slice
         // only copies fat pointers, not certificate bytes.
         Self(webpki_root_certs::TLS_SERVER_ROOT_CERTS.to_vec())
-    }
-
-    /// Load certificates from the platform's native trust store via
-    /// [`rustls_native_certs::load_native_certs`].
-    pub fn from_native_store() -> Self {
-        let result = rustls_native_certs::load_native_certs();
-        for err in &result.errors {
-            tracing::warn!("failed to load a native root certificate: {err}");
-        }
-        Self::from(result)
     }
 
     /// Load custom CA certificates from `SSL_CERT_FILE` and `SSL_CERT_DIR`.
