@@ -9,6 +9,7 @@ use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 
 use crate::cli_config::NoInstallConfig;
 use crate::cli_config::ScriptWorkspaceConfig;
+use crate::constraint_args::{ConstraintArgs, warn_unmatched_constraints};
 
 /// Solve environments and update the lock file without installing the
 /// environments.
@@ -41,6 +42,9 @@ pub struct Args {
     /// Implies `--no-install`.
     #[clap(long)]
     pub dry_run: bool,
+
+    #[clap(flatten)]
+    pub constraint_args: ConstraintArgs,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -85,6 +89,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace = workspace.with_backend_override(backend_override);
     }
 
+    // Inject the temporary constraints. They only live in memory and take part
+    // in both the satisfiability check and the solve.
+    args.constraint_args.apply(&mut workspace)?;
+    if !args.json {
+        args.constraint_args.print_applied();
+    }
+
     // Update the lock file, and extract it from the derived data to drop additional resources
     // created for the solve.
     // Use the silent version here since update_lock_file() will display the warning.
@@ -112,6 +123,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
     drop(clear_progress);
+
+    // A constraint that matches no locked conda package has no effect, which
+    // usually points to a misspelled name or a PyPI package.
+    warn_unmatched_constraints(&workspace, &lock_file);
 
     // Determine the diff between the old and new lock file.
     let diff = LockFileDiff::from_lock_files(&original_lock_file, &lock_file);
