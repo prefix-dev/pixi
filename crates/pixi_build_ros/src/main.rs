@@ -1,22 +1,14 @@
-mod build_script;
-pub mod config;
-mod distro;
-mod metadata;
-pub mod package_map;
-pub mod package_xml;
-pub mod workspace_discovery;
-
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use config::RosBackendConfig;
 use fs_err as fs;
 use miette::IntoDiagnostic;
 use pixi_build_backend::compilers::default_compiler_variants;
 use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams};
 use pixi_build_backend::intermediate_backend::IntermediateBackendInstantiator;
 use pixi_build_backend::tools::BackendIdentifier;
+use pixi_build_ros::config::RosBackendConfig;
 use rattler_build_jinja::{JinjaTemplate, Variable};
 use rattler_build_recipe::stage0::{
     Conditional, Item, JinjaExpression, NestedItemList, Script, SerializableMatchSpec,
@@ -25,14 +17,15 @@ use rattler_build_recipe::stage0::{
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 
-use crate::build_script::render_build_script;
-use crate::config::{PackageMappingSource, extract_distro_from_channels_list};
-use crate::distro::Distro;
-use crate::metadata::parse_and_render;
-use crate::package_map::{
+use pixi_build_ros::build_script::render_build_script;
+use pixi_build_ros::config::{PackageMappingSource, extract_distro_from_channels_list};
+use pixi_build_ros::distro::Distro;
+use pixi_build_ros::metadata::parse_and_render;
+use pixi_build_ros::package_map::{
     load_package_map_data, merge_conditional_lists, package_xml_to_conda_requirements,
 };
-use crate::package_xml::PackageXml;
+use pixi_build_ros::package_xml::PackageXml;
+use pixi_build_ros::{package_map, workspace_discovery};
 
 #[derive(Default, Clone)]
 pub struct RosGenerator {}

@@ -717,4 +717,55 @@ mod tests {
         // A lone quote is an unterminated string and must not panic.
         assert!(evaluate_condition("$ROS_VERSION == 1 and '", &env));
     }
+
+    #[test]
+    fn test_build_type_follows_its_condition() {
+        // e.g. a package that builds for both ROS versions
+        let xml = r#"<?xml version="1.0"?>
+<package format="3">
+  <name>dual</name>
+  <version>0.1.0</version>
+  <description>Test</description>
+  <maintainer email="test@example.com">Tester</maintainer>
+  <license>MIT</license>
+  <export>
+    <build_type condition="$ROS_VERSION == 1">catkin</build_type>
+    <build_type condition="$ROS_VERSION == 2">ament_cmake</build_type>
+  </export>
+</package>"#;
+        let pkg = PackageXml::parse(xml).unwrap();
+        let env = |v: &str| HashMap::from([("ROS_VERSION".to_string(), v.to_string())]);
+        assert_eq!(
+            pkg.clone().evaluate_conditions(&env("2")).build_type(),
+            "ament_cmake"
+        );
+        assert_eq!(pkg.evaluate_conditions(&env("1")).build_type(), "catkin");
+    }
+
+    #[test]
+    fn test_group_dependencies() {
+        let xml = r#"<?xml version="1.0"?>
+<package format="3">
+  <name>rosidl_default_runtime</name>
+  <version>1.6.0</version>
+  <description>Test</description>
+  <maintainer email="test@example.com">Tester</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_export_depend>ament_cmake_core</buildtool_export_depend>
+  <group_depend>rosidl_runtime_packages</group_depend>
+  <member_of_group condition="$ROS_VERSION == 1">some_ros1_group</member_of_group>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+</package>"#;
+        let env = HashMap::from([("ROS_VERSION".to_string(), "2".to_string())]);
+        let pkg = PackageXml::parse(xml).unwrap().evaluate_conditions(&env);
+        let groups: Vec<&str> = pkg.group_depends.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(groups, vec!["rosidl_runtime_packages"]);
+        let member_of: Vec<&str> = pkg
+            .member_of_groups
+            .iter()
+            .filter(|g| g.is_active())
+            .map(|g| g.name.as_str())
+            .collect();
+        assert_eq!(member_of, vec!["rosidl_interface_packages"]);
+    }
 }
