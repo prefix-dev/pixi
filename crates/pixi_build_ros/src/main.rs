@@ -132,15 +132,13 @@ impl GenerateRecipe for RosGenerator {
         // the flat list: they're carried by `metadata_input_glob_sets`
         // with marker semantics that the flat form can't express.
 
-        // Load package mappings
-        let robostack_yaml: &str = include_str!("../robostack.yaml");
-        let robostack_mapping: HashMap<String, package_map::PackageMapEntry> =
-            serde_yaml::from_str(robostack_yaml).into_diagnostic()?;
-
+        // Load package mappings: the user's over the bundled RoboStack ones
         let mut all_mapping_sources = config.extra_package_mappings.clone();
-        all_mapping_sources.push(PackageMappingSource::Mapping(robostack_mapping));
+        all_mapping_sources.push(PackageMappingSource::Mapping(
+            package_map::bundled_package_map(&distro.name)?,
+        ));
 
-        let package_map_data = load_package_map_data(&all_mapping_sources);
+        let package_map_data = load_package_map_data(&all_mapping_sources)?;
 
         // Get requirements from package.xml
         let mut package_requirements = package_xml_to_conda_requirements(
@@ -430,8 +428,7 @@ mod tests {
     }
 
     fn default_package_map() -> HashMap<String, package_map::PackageMapEntry> {
-        let content = include_str!("../robostack.yaml");
-        serde_yaml::from_str(content).unwrap()
+        package_map::bundled_package_map("jazzy").unwrap()
     }
 
     fn jazzy_distro() -> Distro {
