@@ -268,20 +268,17 @@ pub(crate) fn spec_override_hint(spec: &MatchSpec, target: Subdir) -> Option<Str
     let name = spec.name.as_exact()?.as_normalized();
     let version = match &spec.version {
         None | Some(VersionSpec::Any) => None,
-        // Suggest a bound the whole constraint accepts, else the realistic
-        // example, but never a version the constraint excludes.
+        // Only suggest a bound accepted by the whole constraint.
         Some(constraint) => Some(
             spec_bounds(constraint)
                 .into_iter()
-                .cloned()
-                .chain(example_override_version(name).and_then(|v| v.parse().ok()))
                 .find(|version| constraint.matches(version))?,
         ),
     };
     if spec.build.as_ref().is_some_and(|build| !build.matches("0")) {
         return None;
     }
-    conda_override_hint(name, version.as_ref(), target)
+    conda_override_hint(name, version, target)
 }
 
 /// The versions a constraint's bounds name, e.g. `14` and `15` for `>=14,<15`.
@@ -303,18 +300,6 @@ pub(crate) fn spec_override_hints(specs: &[MatchSpec], target: Subdir) -> Vec<St
         .collect()
 }
 
-/// A realistic override value for `name` when the requirement names no
-/// usable version.
-fn example_override_version(name: &str) -> Option<&'static str> {
-    match name {
-        "__glibc" => Some("2.17"),
-        "__cuda" => Some("12.0"),
-        "__osx" => Some("10.15"),
-        "__amdgpu_arch" => Some("11.0.0"),
-        _ => None,
-    }
-}
-
 /// Whether setting `CONDA_OVERRIDE_*` for `name` has any effect when the target
 /// platform is `target` (as defined in CEP-30).
 fn override_applies_to(name: &str, target: Subdir) -> bool {
@@ -327,7 +312,7 @@ fn override_applies_to(name: &str, target: Subdir) -> bool {
 }
 
 /// `CONDA_OVERRIDE_*` hint for a virtual package the machine does not provide:
-/// the required version when known, a realistic example otherwise.
+/// the required version when known, zero for an unconstrained requirement.
 ///
 /// `None` when there is no such variable (e.g. `__unix`), when `target` ignores
 /// it, or when a known AMDGPU architecture cannot be represented as a numeric ISA.
@@ -354,14 +339,7 @@ pub(crate) fn conda_override_hint(
         return Some(format!("{env_var}=0"));
     }
     if name == "__amdgpu_arch" {
-        let mut example = version.map_or_else(
-            || {
-                example_override_version(name)
-                    .unwrap_or_default()
-                    .to_string()
-            },
-            ToString::to_string,
-        );
+        let mut example = version.map_or_else(|| "0".to_string(), ToString::to_string);
         // Conda versions can omit trailing zeros, but the override requires all
         // three ISA components. Let rattler reject nonnumeric or oversized ISAs.
         for _ in example.bytes().filter(|&b| b == b'.').count()..2 {
@@ -373,7 +351,7 @@ pub(crate) fn conda_override_hint(
     }
     let example = match version {
         Some(version) => version.to_string(),
-        None => example_override_version(name).unwrap_or("0").to_string(),
+        None => "0".to_string(),
     };
     Some(format!("{env_var}={example}"))
 }
@@ -498,14 +476,6 @@ mod tests {
     }
 
     #[test]
-    fn unknown_amdgpu_arch_hint_is_parseable_and_enables_presence() {
-        let hint = conda_override_hint("__amdgpu_arch", None, Subdir::Linux64).unwrap();
-        let (presence, arch) = parse_amd_override_hint(&hint);
-        assert!(presence.is_some());
-        assert_eq!(arch.unwrap().version, Version::from_str("11.0.0").unwrap());
-    }
-
-    #[test]
     fn unusable_amdgpu_arch_versions_do_not_suggest_a_different_isa() {
         for raw in [
             "9.0.10a",
@@ -534,14 +504,6 @@ mod tests {
     }
 
     #[test]
-    fn exclusive_zero_bound_does_not_suggest_excluded_version() {
-        assert_eq!(
-            spec_override_hint(&spec("__cuda >0"), Subdir::Linux64).as_deref(),
-            Some("CONDA_OVERRIDE_CUDA=12.0")
-        );
-    }
-
-    #[test]
     fn compound_requirement_hint_satisfies_whole_spec() {
         assert_eq!(
             spec_override_hint(&spec("__osx >=14,<15"), Subdir::OsxArm64).as_deref(),
@@ -551,19 +513,9 @@ mod tests {
             spec_override_hint(&spec("__cuda >=13,<14"), Subdir::Linux64).as_deref(),
             Some("CONDA_OVERRIDE_CUDA=13")
         );
-        assert!(spec_override_hint(&spec("__cuda >12,<13"), Subdir::Linux64).is_none());
-    }
-
-    #[test]
-    fn example_hint_used_when_no_bound_satisfies_spec() {
-        for raw in ["__osx <15", "__osx !=14", "__osx !=14.*"] {
-            assert_eq!(
-                spec_override_hint(&spec(raw), Subdir::OsxArm64).as_deref(),
-                Some("CONDA_OVERRIDE_OSX=10.15"),
-                "{raw}"
-            );
+        for raw in ["__cuda >12,<13", "__cuda >0", "__cuda <15", "__cuda !=14.*"] {
+            assert!(spec_override_hint(&spec(raw), Subdir::Linux64).is_none());
         }
-        assert!(spec_override_hint(&spec("__cuda <12"), Subdir::Linux64).is_none());
     }
 
     #[test]
