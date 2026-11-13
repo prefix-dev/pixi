@@ -1338,8 +1338,8 @@ mod tests {
           ·              ─────
         5 │ # test = "pytest"
           ╰────
-         help: a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-dependencies`, `pypi-exclude-newer`, `target`,
-               `workspace`
+         help: a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-constraints`, `pypi-dependencies`, `pypi-
+               exclude-newer`, `target`, `workspace`
         "#);
     }
 
@@ -1359,8 +1359,8 @@ mod tests {
           ·              ────────────
         7 │ # test = ["test"]
           ╰────
-         help: a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-dependencies`, `pypi-exclude-newer`, `target`,
-               `workspace`
+         help: a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-constraints`, `pypi-dependencies`, `pypi-
+               exclude-newer`, `target`, `workspace`
         "#);
     }
 

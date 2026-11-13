@@ -18,8 +18,8 @@ use itertools::{Either, Itertools};
 use ordermap::OrderSet;
 use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
 use pixi_manifest::{
-    EnvironmentName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, SolveStrategy,
-    pypi::pypi_options::PypiOptions,
+    EnvironmentName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PyPiConstraints,
+    SolveStrategy, pypi::pypi_options::PypiOptions,
 };
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
@@ -205,6 +205,13 @@ pub enum SolveError {
         source: AsPep508Error,
     },
 
+    #[error("failed to convert pypi constraint '{name}' to a uv requirement")]
+    PypiConstraint {
+        name: String,
+        #[source]
+        source: AsPep508Error,
+    },
+
     #[error(transparent)]
     PythonVersion(#[from] uv_pep440::VersionParseError),
 
@@ -335,6 +342,7 @@ pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
     dependencies: IndexMap<uv_normalize::PackageName, OrderSet<PixiPypiSpec>>,
+    pypi_constraints: PyPiConstraints,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[UnresolvedPypiRecord],
     platform: PixiPlatformName,
@@ -591,6 +599,20 @@ pub async fn resolve_pypi(
         .transpose()?
         .unwrap_or_default();
 
+    // The `[pypi-constraints]` of the environment restrict the versions of
+    // PyPI packages without requiring them.
+    let pypi_constraints = pypi_constraints
+        .iter_specs()
+        .map(|(name, spec)| {
+            as_uv_req(spec, name.as_normalized().as_ref(), project_root).map_err(|source| {
+                SolveError::PypiConstraint {
+                    name: name.as_source().to_string(),
+                    source,
+                }
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
     // Lock-time resolution creates the lock file; there are no locked
     // digests to verify against yet.
     let flat_index = FlatIndex::load(&registry_client, &context.cache, &index_locations).await?;
@@ -782,7 +804,8 @@ pub async fn resolve_pypi(
 
     let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
 
-    let constraints = Constraints::from_requirements(constraints.iter().cloned());
+    let constraints =
+        Constraints::from_requirements(constraints.into_iter().chain(pypi_constraints));
 
     // Pixi does not exclude any dependencies.
     let modifiers = DependencyModifiers::new(

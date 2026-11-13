@@ -3,12 +3,12 @@ use std::{collections::HashMap, path::Path};
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, TomlLocationSpec, TomlSpec};
 use pixi_spec_containers::DependencyMap;
-use pixi_toml::{TomlHashMap, TomlIndexMap};
+use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
-    Activation, InlinePackageManifest, KnownPreviewFlag, SpecType, TargetSelector, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceTarget,
+    Activation, InlinePackageManifest, KnownPreviewFlag, PyPiConstraints, SpecType, TargetSelector,
+    Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
     toml::{TomlPackage, WorkspacePackageProperties, preview::TomlPreview, task::TomlTask},
     utils::{
@@ -16,7 +16,7 @@ use crate::{
         package_map::UniquePackageMap,
     },
 };
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use rattler_conda_types::PackageName;
 
 #[derive(Debug, Default)]
@@ -30,6 +30,10 @@ pub struct TomlTarget {
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
     pub constraints: Option<PixiSpanned<InheritablePackageMap>>,
+
+    /// PyPI version constraints - limit versions of PyPI packages that can be
+    /// installed without explicitly requiring them.
+    pub pypi_constraints: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -68,6 +72,7 @@ impl TomlTarget {
             pypi_dependencies,
             dev_dependencies,
             constraints,
+            pypi_constraints,
             activation,
             tasks,
             mut warnings,
@@ -200,6 +205,8 @@ impl TomlTarget {
             })
             .transpose()?;
 
+        let pypi_constraints = pypi_constraints.map(into_pypi_constraints).transpose()?;
+
         Ok(WithWarnings {
             value: WorkspaceTarget {
                 dependencies: combine_target_dependencies(
@@ -220,12 +227,52 @@ impl TomlTarget {
                 }),
                 inline_packages,
                 constraints,
+                pypi_constraints,
                 activation,
                 tasks,
             },
             warnings,
         })
     }
+}
+
+/// Validates the `[pypi-constraints]` table and converts it into a
+/// [`PyPiConstraints`] map.
+///
+/// A constraint only restricts which versions of a package are acceptable, so
+/// it has to be a plain version requirement, optionally with environment
+/// markers. Extras, indexes and git, path or url sources would change what is
+/// installed rather than restrict it, so they are rejected.
+fn into_pypi_constraints(
+    table: PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>,
+) -> Result<PyPiConstraints, TomlError> {
+    let PixiSpanned { span, value } = table;
+    for (name, spec) in &value {
+        let reason = match &spec.source {
+            PixiPypiSource::Registry { index: Some(_), .. } => Some("an index"),
+            PixiPypiSource::Registry { index: None, .. } if !spec.extras.is_empty() => {
+                Some("extras")
+            }
+            PixiPypiSource::Registry { index: None, .. } => None,
+            PixiPypiSource::Git { .. } => Some("a git source"),
+            PixiPypiSource::Path { .. } => Some("a path source"),
+            PixiPypiSource::Url { .. } => Some("a url source"),
+        };
+        if let Some(reason) = reason {
+            return Err(TomlError::Generic(
+                GenericError::new(format!(
+                    "`[pypi-constraints]` only supports version requirements, but the constraint for '{}' specifies {reason}",
+                    name.as_source()
+                ))
+                .with_opt_span(span)
+                .with_span_label("pypi constraint specified here")
+                .with_help(
+                    "constraints only restrict the allowed versions, use `[pypi-dependencies]` to choose where a package comes from",
+                ),
+            ));
+        }
+    }
+    Ok(value.into_iter().collect())
 }
 
 /// Resolves a consumer dependency table against the workspace pool and drains
@@ -310,6 +357,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let constraints = th.optional("constraints");
+        let pypi_constraints = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-constraints")
+            .map(TomlWith::into_inner);
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
@@ -339,6 +389,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             host_dependencies,
             build_dependencies,
             constraints,
+            pypi_constraints,
             pypi_dependencies,
             dev_dependencies: dev,
             activation,
