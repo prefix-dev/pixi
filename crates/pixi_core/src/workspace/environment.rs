@@ -480,21 +480,22 @@ impl<'p> Environment<'p> {
         Ok(result)
     }
 
-    /// Return all tasks available for the given environment
-    /// This will not return task prefixed with _
-    pub fn get_filtered_tasks(&self, platform: Option<&'p PixiPlatform>) -> HashSet<TaskName> {
+    /// Tasks available for `platform`, excluding hidden tasks (prefixed with
+    /// `_`). Empty when the environment doesn't support `platform`.
+    pub fn visible_tasks(
+        &self,
+        platform: Option<&'p PixiPlatform>,
+    ) -> impl Iterator<Item = (&'p TaskName, &'p Task)> {
         self.tasks(platform)
             .into_iter()
-            .flat_map(|tasks| {
-                tasks.into_iter().filter_map(|(key, _)| {
-                    if !key.as_str().starts_with('_') {
-                        Some(key)
-                    } else {
-                        None
-                    }
-                })
-            })
-            .map(ToOwned::to_owned)
+            .flatten()
+            .filter(|(name, _)| !name.as_str().starts_with('_'))
+    }
+
+    /// Names of the tasks [`Self::visible_tasks`] returns.
+    pub fn get_filtered_tasks(&self, platform: Option<&'p PixiPlatform>) -> HashSet<TaskName> {
+        self.visible_tasks(platform)
+            .map(|(name, _)| name.clone())
             .collect()
     }
     /// Returns the task with the given `name` and for the specified `platform`
