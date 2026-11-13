@@ -110,20 +110,27 @@ fn canonical(id: spdx::LicenseId, or_later: bool) -> String {
 /// A valid SPDX expression, with canonical identifiers.
 fn normalize(s: &str) -> Option<String> {
     let expr = spdx::Expression::parse_mode(s, MODE).ok()?;
-    let mut out = s.to_string();
+    let mut ids = Vec::new();
     for req in expr.requirements() {
-        if let spdx::LicenseItem::Spdx { id, or_later } = req.req.license {
-            let canonical = canonical(id, or_later);
-            // the span leaves out a trailing `+` (GPL-3.0+), which `canonical` covers
-            let mut end = req.span.end as usize;
-            if s[end..].starts_with('+') {
-                end += 1;
-            }
-            out = out.replacen(&s[req.span.start as usize..end], &canonical, 1);
-        } else {
+        let spdx::LicenseItem::Spdx { id, or_later } = req.req.license else {
             return None;
+        };
+        // the span leaves out a trailing `+` (GPL-3.0+), which `canonical` covers
+        let mut end = req.span.end as usize;
+        if s[end..].starts_with('+') {
+            end += 1;
         }
+        ids.push((req.span.start as usize, end, canonical(id, or_later)));
     }
+    // rebuilt from the spans: replacing text would also hit `GPL-2.0` inside `LGPL-2.0-only`
+    ids.sort_by_key(|(start, ..)| *start);
+    let (mut out, mut last) = (String::new(), 0);
+    for (start, end, canonical) in ids {
+        out.push_str(&s[last..start]);
+        out.push_str(&canonical);
+        last = end;
+    }
+    out.push_str(&s[last..]);
     Some(out)
 }
 
@@ -194,6 +201,14 @@ mod tests {
         assert_eq!(spdx(&["GPL-3.0+"]).unwrap(), "GPL-3.0-or-later");
         assert_eq!(spdx(&["LGPL-2.1+"]).unwrap(), "LGPL-2.1-or-later");
         assert_eq!(spdx(&["GPL-2.0"]).unwrap(), "GPL-2.0-only");
+        assert_eq!(
+            spdx(&["LGPL-2.0 OR GPL-2.0"]).unwrap(),
+            "LGPL-2.0-only OR GPL-2.0-only"
+        );
+        assert_eq!(
+            spdx(&["GPL-3.0+ AND LGPL-3.0+"]).unwrap(),
+            "GPL-3.0-or-later AND LGPL-3.0-or-later"
+        );
     }
 
     #[test]
