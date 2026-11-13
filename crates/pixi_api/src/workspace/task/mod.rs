@@ -122,15 +122,8 @@ pub async fn list_tasks<I: Interface>(
     };
 
     let tasks_for = |env: &Environment<'_>| {
-        let platform = env.installed_or_selected_platform(lock_file.as_ref());
-        let task_names = env.get_filtered_tasks(platform);
-        task_names
-            .into_iter()
-            .flat_map(|task_name| {
-                env.task(&task_name, platform)
-                    .ok()
-                    .map(|task| (task_name, task.clone()))
-            })
+        env.visible_tasks(env.installed_or_selected_platform(lock_file.as_ref()))
+            .map(|(name, task)| (name.clone(), task.clone()))
             .collect::<HashMap<_, _>>()
     };
     let env_task_map: HashMap<Environment, (EnvironmentRunnability, HashMap<TaskName, Task>)> =
