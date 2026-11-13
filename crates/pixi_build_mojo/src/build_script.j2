@@ -1,11 +1,17 @@
 {# - Set up common variables -#}
 {%- set library_prefix = "$PREFIX" -%}
 
-mojo --version
+# Match pin_compatible's host-first compiler selection.
+MOJO_COMPILER=mojo
+if [[ -x "{{ library_prefix }}/bin/mojo" ]]; then
+    MOJO_COMPILER="{{ library_prefix }}/bin/mojo"
+    export MODULAR_HOME="{{ library_prefix }}/share/max"
+fi
+
+"$MOJO_COMPILER" --version
 {% if accelerator_variants_enabled %}
 MODULAR_MOJO_MAX_LINKER_DRIVER="$(command -v "$CC")"
 export MODULAR_MOJO_MAX_LINKER_DRIVER
-export MODULAR_HOME="{{ library_prefix }}/share/max"
 export MODULAR_CACHE_DIR="$SRC_DIR/.mojo-cache"
 {% endif %}
 
@@ -36,7 +42,7 @@ esac
 {% endraw %}
 {% endif %}
 {% for bin in bins %}
-mojo build "${mojo_build_args[@]}" \
+"$MOJO_COMPILER" build "${mojo_build_args[@]}" \
     {{ bin.extra_args | join(" ") }} \
     "{{ bin.path }}" \
     -o "{{ library_prefix }}/bin/{{ bin.name }}"
@@ -46,7 +52,7 @@ mojo build "${mojo_build_args[@]}" \
 {#- Build pkg -#}
 {% if pkg %}
 # Mojo v1.0 renamed `mojo package` to `mojo precompile`; probe which subcommand the installed compiler supports
-if mojo precompile --help >/dev/null 2>&1; then
+if "$MOJO_COMPILER" precompile --help >/dev/null 2>&1; then
     MOJO_PKG_CMD=precompile
     MOJO_PKG_EXT=mojoc
 else
@@ -54,5 +60,5 @@ else
     MOJO_PKG_EXT=mojopkg
 fi
 mkdir -p {{ library_prefix }}/lib/mojo
-mojo $MOJO_PKG_CMD {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o {{ library_prefix }}/lib/mojo/{{ pkg.name }}.$MOJO_PKG_EXT
+"$MOJO_COMPILER" $MOJO_PKG_CMD {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o {{ library_prefix }}/lib/mojo/{{ pkg.name }}.$MOJO_PKG_EXT
 {% endif %}

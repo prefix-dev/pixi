@@ -13,7 +13,10 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
 };
 use rattler_build_jinja::Variable;
-use rattler_build_recipe::stage0::{ConditionalList, Item, Script, SingleOutputRecipe, Value};
+use rattler_build_recipe::stage0::{
+    Conditional, ConditionalList, Item, JinjaExpression, NestedItemList, Script,
+    SingleOutputRecipe, Value,
+};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
@@ -83,21 +86,55 @@ impl GenerateRecipe for MojoGenerator {
             accelerator::configure_recipe(&mut generated_recipe.recipe)?;
         }
 
-        if host_platform.is_osx() && bins.as_ref().is_some_and(|bins| !bins.is_empty()) {
-            // mojo-compiler bundles libKGENCompilerRTShared.dylib but has no strong run export.
-            // TODO: Adapt the runtime dependency when the Mojo and MAX packages are split up.
-            generated_recipe
-                .recipe
-                .requirements
-                .run
-                .push(Item::Value(accelerator::template(
+        let needs_compiler_pin = !accelerator_variants_enabled
+            && (pkg.is_some() || bins.as_ref().is_some_and(|bins| !bins.is_empty()));
+        let requirements = &mut generated_recipe.recipe.requirements;
+        if needs_compiler_pin && let Some(targets) = &model.targets {
+            // Run pins prefer host records. Align host with build when a build compiler is declared.
+            let targets = targets
+                .default_target
+                .iter()
+                .map(|target| (None, target))
+                .chain(
+                    targets
+                        .conditional
+                        .iter()
+                        .flatten()
+                        .map(|(condition, target)| (Some(condition), target)),
+                );
+            for (condition, target) in targets {
+                if !target
+                    .build_dependencies
+                    .iter()
+                    .flatten()
+                    .any(|(name, _)| name.as_str().eq_ignore_ascii_case("mojo-compiler"))
+                {
+                    continue;
+                }
+                let pin = Item::Value(accelerator::template(
                     "${{ pin_compatible('mojo-compiler', exact=True) }}",
-                )?));
+                )?);
+                requirements.host.push(match condition {
+                    Some(condition) => Item::Conditional(Conditional {
+                        condition: JinjaExpression::new(condition.to_string())
+                            .map_err(miette::Error::msg)?,
+                        then: NestedItemList::single(pin),
+                        else_value: None,
+                        condition_span: None,
+                    }),
+                    None => pin,
+                });
+            }
+        }
+
+        if needs_compiler_pin {
+            // Libraries require the producing compiler; binaries also need its shared runtime.
+            requirements.run.push(Item::Value(accelerator::template(
+                "${{ pin_compatible('mojo-compiler', exact=True) }}",
+            )?));
         }
 
         // Add compiler
-        let requirements = &mut generated_recipe.recipe.requirements;
-
         let mut compilers = config.compilers.clone().unwrap_or_default();
         if accelerator_variants_enabled {
             for language in ["c", "cxx"] {
@@ -275,39 +312,83 @@ mod tests {
         };
     }
 
+    #[rstest::rstest]
+    #[case(Subdir::Linux64, false, None, 1)]
+    #[case(Subdir::OsxArm64, true, None, 1)]
+    #[case(Subdir::Linux64, true, Some("unix"), 1)]
+    #[case(Subdir::Linux64, false, Some("osx"), 0)]
     #[tokio::test]
-    async fn test_mojo_bin_is_set() {
-        let project_model = project_fixture!({
+    async fn test_library_pins_build_compiler(
+        #[case] platform: Subdir,
+        #[case] with_binary: bool,
+        #[case] compiler_condition: Option<&str>,
+        #[case] host_pins: usize,
+    ) {
+        use rattler_build_recipe::stage1::{Dependency, Evaluate, EvaluationContext};
+
+        let mut project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
             "targets": {
                 "defaultTarget": {
+                    "buildDependencies": {
+                        "mojo-compiler": {"binary": {"version": "==1.2.0"}}
+                    },
                     "runDependencies": {
-                        "boltons": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
+                        "boltons": {"binary": {"version": "*"}}
                     }
-                },
+                }
             }
         });
+        if let Some(condition) = compiler_condition {
+            let targets = project_model.targets.as_mut().unwrap();
+            let build_dependencies = targets
+                .default_target
+                .as_mut()
+                .unwrap()
+                .build_dependencies
+                .take();
+            targets.conditional = Some(
+                [(
+                    condition.to_owned().into(),
+                    pixi_build_types::Target {
+                        build_dependencies,
+                        ..Default::default()
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            );
+        }
+        let temp = tempfile::TempDir::new().unwrap();
+        fs::create_dir(temp.path().join("src")).unwrap();
+        fs::write(temp.path().join("src/__init__.mojo"), "").unwrap();
+        let config = if with_binary {
+            MojoBackendConfig {
+                bins: Some(vec![MojoBinConfig {
+                    name: Some("example".into()),
+                    path: Some("main.mojo".into()),
+                    extra_args: None,
+                }]),
+                pkg: Some(MojoPkgConfig {
+                    name: Some("foobar".into()),
+                    path: Some("src".into()),
+                    extra_args: None,
+                }),
+                ..Default::default()
+            }
+        } else {
+            MojoBackendConfig::default()
+        };
 
         let generated_recipe = MojoGenerator::default()
             .generate_recipe(
                 &project_model,
-                &MojoBackendConfig {
-                    bins: Some(vec![MojoBinConfig {
-                        name: Some(String::from("example")),
-                        path: Some(String::from("./main.mojo")),
-                        extra_args: Some(vec![String::from("-I"), String::from(".")]),
-                    }]),
-                    ..Default::default()
-                },
-                PathBuf::from("."),
-                Subdir::Linux64,
+                &config,
+                temp.path().to_path_buf(),
+                platform,
                 None,
-                &HashSet::new(),
+                &HashSet::from([NormalizedKey::from(accelerator::VARIANT_KEY)]),
                 vec![],
                 None,
                 None,
@@ -315,65 +396,23 @@ mod tests {
                 None,
             )
             .await
-            .expect("Failed to generate recipe");
+            .unwrap();
+        let requirements = generated_recipe
+            .recipe
+            .requirements
+            .evaluate(&EvaluationContext::for_platform(platform))
+            .unwrap();
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
-        });
-    }
-
-    #[tokio::test]
-    async fn test_mojo_pkg_is_set() {
-        let project_model = project_fixture!({
-            "name": "foobar",
-            "version": "0.1.0",
-            "targets": {
-                "defaultTarget": {
-                    "runDependencies": {
-                        "boltons": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
-                    }
-                },
-            }
-        });
-
-        let generated_recipe = MojoGenerator::default()
-            .generate_recipe(
-                &project_model,
-                &MojoBackendConfig {
-                    bins: Some(vec![MojoBinConfig {
-                        name: Some(String::from("example")),
-                        path: Some(String::from("./main.mojo")),
-                        extra_args: Some(vec![String::from("-i"), String::from(".")]),
-                    }]),
-                    pkg: Some(MojoPkgConfig {
-                        name: Some(String::from("lib")),
-                        path: Some(String::from("mylib")),
-                        extra_args: Some(vec![String::from("-i"), String::from(".")]),
-                    }),
-                    ..Default::default()
-                },
-                PathBuf::from("."),
-                Subdir::Linux64,
-                None,
-                &HashSet::new(),
-                vec![],
-                None,
-                None,
-                None,
-                None,
-            )
-            .await
-            .expect("Failed to generate recipe");
-
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
-        });
+        assert_eq!(requirements.host.len(), host_pins);
+        assert_eq!(requirements.run.len(), 2);
+        assert_eq!(requirements.run[0].to_string(), "boltons");
+        for dependency in requirements.host.iter().chain(&requirements.run[1..]) {
+            let Dependency::PinCompatible(pin) = dependency else {
+                panic!("expected a compiler compatibility pin, got {dependency:?}");
+            };
+            assert_eq!(pin.pin_compatible.name.as_normalized(), "mojo-compiler");
+            assert!(pin.pin_compatible.args.exact);
+        }
     }
 
     #[tokio::test]
@@ -451,51 +490,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_compiler_is_in_build_requirements() {
-        let project_model = project_fixture!({
-            "name": "foobar",
-            "version": "0.1.0",
-            "targets": {
-                "defaultTarget": {
-                    "runDependencies": {
-                        "boltons": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
-                    }
-                },
-            }
-        });
-
-        // Create a temporary directory with a main.mojo file so the test has something to build
-        let temp = tempfile::TempDir::new().unwrap();
-        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
-
-        let generated_recipe = MojoGenerator::default()
-            .generate_recipe(
-                &project_model,
-                &MojoBackendConfig::default(),
-                temp.path().to_path_buf(),
-                Subdir::Linux64,
-                None,
-                &HashSet::new(),
-                vec![],
-                None,
-                None,
-                None,
-                None,
-            )
-            .await
-            .expect("Failed to generate recipe");
-
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
-        });
-    }
-
-    #[tokio::test]
     async fn test_env_vars_are_set() {
         let project_model = project_fixture!({
             "name": "foobar",
@@ -542,58 +536,6 @@ mod tests {
         insta::assert_yaml_snapshot!(generated_recipe.recipe.build.plan.script().unwrap(),
         {
             ".content" => "[ ... script ... ]",
-        });
-    }
-
-    #[tokio::test]
-    async fn test_compiler_is_not_added_if_compiler_is_already_present() {
-        let project_model = project_fixture!({
-            "name": "foobar",
-            "version": "0.1.0",
-            "targets": {
-                "defaultTarget": {
-                    "runDependencies": {
-                        "boltons": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
-                    },
-                    "buildDependencies": {
-                        "mojo-compiler": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
-                    }
-                },
-            }
-        });
-
-        // Create a temporary directory with a main.mojo file so the test has something to build
-        let temp = tempfile::TempDir::new().unwrap();
-        fs::write(temp.path().join("main.mojo"), "def main():\n    pass").unwrap();
-
-        let generated_recipe = MojoGenerator::default()
-            .generate_recipe(
-                &project_model,
-                &MojoBackendConfig::default(),
-                temp.path().to_path_buf(),
-                Subdir::Linux64,
-                None,
-                &HashSet::new(),
-                vec![],
-                None,
-                None,
-                None,
-                None,
-            )
-            .await
-            .expect("Failed to generate recipe");
-
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
         });
     }
 

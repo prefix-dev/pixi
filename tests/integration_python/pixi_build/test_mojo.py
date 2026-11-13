@@ -78,22 +78,40 @@ def _write_consumer(workspace: Path, channel: Path, platforms: list[dict[str, An
     workspace.joinpath("pixi.toml").write_text(tomli_w.dumps(manifest))
 
 
-@pytest.mark.skipif(CURRENT_PLATFORM != "osx-arm64", reason="Needs the macOS Mojo compiler")
-def test_mojo_macos_binary_installs_compiler_runtime(pixi: Path, tmp_pixi_workspace: Path) -> None:
+@pytest.mark.skipif(
+    CURRENT_PLATFORM not in ("linux-64", "osx-arm64"), reason="Needs the Mojo compiler"
+)
+def test_mojo_binary_installs_compiler_runtime(pixi: Path, tmp_pixi_workspace: Path) -> None:
     workspace = tmp_pixi_workspace
     workspace.joinpath("main.mojo").write_text('def main():\n    print("hello from Mojo")\n')
+    platforms = [{"platform": CURRENT_PLATFORM}]
+    build_variants = {}
+    build_config: dict[str, Any] = {"bins": [{"name": PACKAGE_NAME, "path": "main.mojo"}]}
+    if CURRENT_PLATFORM == "linux-64":
+        platforms[0]["glibc"] = "2.34"
+        build_variants["c_stdlib_version"] = ["2.34"]
+        linker = workspace.joinpath("link-driver.sh")
+        linker.write_text('#!/bin/sh\nexec "$CC" -Wl,-rpath-link,"$PREFIX/lib" "$@"\n')
+        linker.chmod(0o755)
+        build_config.update(
+            {
+                "compilers": ["c", "cxx"],
+                "env": {"MODULAR_MOJO_MAX_LINKER_DRIVER": str(linker)},
+            }
+        )
     manifest = {
         "workspace": {
             "channels": CHANNELS,
-            "platforms": [CURRENT_PLATFORM],
+            "platforms": platforms,
             "preview": ["pixi-build"],
+            "build-variants": build_variants,
         },
         "package": {
             "name": PACKAGE_NAME,
             "version": "1.0.0",
             "build": {
                 "backend": {"name": "pixi-build-mojo", "version": "*"},
-                "config": {"bins": [{"name": PACKAGE_NAME, "path": "main.mojo"}]},
+                "config": build_config,
             },
             "build-dependencies": {"mojo-compiler": "==1.2.0"},
         },
@@ -109,18 +127,95 @@ def test_mojo_macos_binary_installs_compiler_runtime(pixi: Path, tmp_pixi_worksp
     compiler_build = _runtime_pin(index, "mojo-compiler", "1.2.0")
 
     consumer = workspace.joinpath("consumer")
-    _write_consumer(consumer, channel, [{"platform": CURRENT_PLATFORM}])
-    verify_cli_command(
-        [pixi, "run", PACKAGE_NAME],
-        cwd=consumer,
-        stdout_contains="hello from Mojo",
-    )
+    _write_consumer(consumer, channel, platforms)
+    output = verify_cli_command([pixi, "run", PACKAGE_NAME], cwd=consumer)
+    assert output.stdout == "hello from Mojo\n"
     [compiler_record] = consumer.joinpath(".pixi", "envs", "default", "conda-meta").glob(
         "mojo-compiler-*.json"
     )
     compiler = json.loads(compiler_record.read_text())
     assert compiler["version"] == "1.2.0"
     assert compiler["build"] == compiler_build
+
+
+@pytest.mark.skipif(
+    CURRENT_PLATFORM not in ("linux-64", "osx-arm64"), reason="Needs the Mojo compiler"
+)
+@pytest.mark.parametrize("compiler_environment", ["build", "host", "transitive-build"])
+def test_mojo_library_pins_compiler(
+    pixi: Path, tmp_pixi_workspace: Path, compiler_environment: str
+) -> None:
+    workspace = tmp_pixi_workspace
+    source = workspace.joinpath("src")
+    source.mkdir()
+    source.joinpath("__init__.mojo").write_text("def answer() -> Int:\n    return 42\n")
+    compiler_section = (
+        "host-dependencies" if compiler_environment == "host" else "build-dependencies"
+    )
+    manifest = {
+        "workspace": {
+            "channels": CHANNELS,
+            "platforms": [CURRENT_PLATFORM],
+            "preview": ["pixi-build"],
+        },
+        "package": {
+            "name": PACKAGE_NAME,
+            "version": "1.0.0",
+            "build": {
+                "backend": {"name": "pixi-build-mojo", "version": "*"},
+                "config": {"pkg": {"name": "probe", "path": "src"}},
+            },
+            compiler_section: {"mojo-compiler": "==1.2.0"},
+        },
+    }
+    if compiler_environment == "build":
+        manifest["package"]["host-dependencies"] = {"mojo-compiler": "*"}
+    channel = workspace.joinpath("channel")
+    compiler_version = "1.2.0"
+    if compiler_environment == "transitive-build":
+        provider = workspace.joinpath("provider")
+        provider.mkdir()
+        manifest["package"]["name"] = "mojo-compiler-provider"
+        manifest["package"]["build"]["config"]["pkg"]["path"] = str(source)
+        provider.joinpath("pixi.toml").write_text(tomli_w.dumps(manifest))
+        verify_cli_command(
+            [pixi, "publish", "--target-channel", channel.as_uri()],
+            cwd=provider,
+        )
+        manifest["package"]["name"] = PACKAGE_NAME
+        manifest["package"]["build"]["config"]["pkg"]["path"] = "src"
+        manifest["workspace"]["channels"] = [channel.as_uri(), *CHANNELS]
+        manifest["package"]["build-dependencies"] = {"mojo-compiler-provider": "*"}
+        compiler_version = "1.1.0"
+        manifest["package"]["host-dependencies"] = {"mojo-compiler": f"=={compiler_version}"}
+    workspace.joinpath("pixi.toml").write_text(tomli_w.dumps(manifest))
+    verify_cli_command(
+        [pixi, "publish", "--target-channel", channel.as_uri()],
+        cwd=workspace,
+    )
+    [archive] = channel.joinpath(CURRENT_PLATFORM).glob(f"{PACKAGE_NAME}-*.conda")
+    index = _package_index(archive, workspace.joinpath("extracted"))
+    compiler_build = _runtime_pin(index, "mojo-compiler", compiler_version)
+
+    consumer = workspace.joinpath("consumer")
+    _write_consumer(consumer, channel, [{"platform": CURRENT_PLATFORM}])
+    consumer.joinpath("main.mojo").write_text(
+        "from probe import answer\n\ndef main():\n    print(answer())\n"
+    )
+    output = verify_cli_command([pixi, "run", "mojo", "main.mojo"], cwd=consumer)
+    assert output.stdout == "42\n"
+    [compiler_record] = consumer.joinpath(".pixi", "envs", "default", "conda-meta").glob(
+        "mojo-compiler-*.json"
+    )
+    compiler = json.loads(compiler_record.read_text())
+    assert compiler["version"] == compiler_version
+    assert compiler["build"] == compiler_build
+
+    manifest_path = consumer.joinpath("pixi.toml")
+    consumer_manifest = tomli.loads(manifest_path.read_text())
+    consumer_manifest["dependencies"]["mojo-compiler"] = f"!={compiler_version}"
+    manifest_path.write_text(tomli_w.dumps(consumer_manifest))
+    verify_cli_command([pixi, "lock"], ExitCode.FAILURE, cwd=consumer)
 
 
 @pytest.mark.skipif(
