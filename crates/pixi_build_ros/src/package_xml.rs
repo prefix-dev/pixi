@@ -34,6 +34,10 @@ pub struct PackageXml {
     pub licenses: Vec<String>,
     pub urls: Vec<UrlEntry>,
     pub dependencies: Dependencies,
+    /// `<group_depend>`: depend on every package that is a member of the group.
+    pub group_depends: Vec<Dependency>,
+    /// `<member_of_group>`: the groups this package belongs to.
+    pub member_of_groups: Vec<Dependency>,
     pub export: Export,
 }
 
@@ -100,7 +104,11 @@ impl From<&str> for Dependency {
 
 #[derive(Debug, Clone, Default)]
 pub struct Export {
+    /// The active build type: the first `<build_type>` without a condition or
+    /// whose condition holds (after [`PackageXml::evaluate_conditions`]).
     pub build_type: Option<BuildType>,
+    /// Every `<build_type>` element, e.g. one for ROS 1 and one for ROS 2.
+    pub build_types: Vec<BuildType>,
     pub architecture_independent: bool,
     pub metapackage: bool,
 }
@@ -175,6 +183,8 @@ impl PackageXml {
         };
 
         let export = parse_export(&root);
+        let group_depends = parse_deps(&root, "group_depend");
+        let member_of_groups = parse_deps(&root, "member_of_group");
 
         Ok(PackageXml {
             format,
@@ -185,6 +195,8 @@ impl PackageXml {
             licenses,
             urls,
             dependencies,
+            group_depends,
+            member_of_groups,
             export,
         })
     }
@@ -221,6 +233,23 @@ impl PackageXml {
         eval_deps(&mut self.dependencies.build_export_depends, env);
         eval_deps(&mut self.dependencies.buildtool_export_depends, env);
         eval_deps(&mut self.dependencies.test_depends, env);
+        eval_deps(&mut self.group_depends, env);
+        eval_deps(&mut self.member_of_groups, env);
+
+        // Several <build_type>s with conditions (e.g. catkin for ROS 1 and
+        // ament_cmake for ROS 2): the first one that applies is the build type.
+        if self.export.build_types.len() > 1 {
+            self.export.build_type = self
+                .export
+                .build_types
+                .iter()
+                .find(|bt| {
+                    bt.condition
+                        .as_deref()
+                        .is_none_or(|c| evaluate_condition(c, env))
+                })
+                .cloned();
+        }
 
         self
     }
@@ -269,15 +298,17 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
         return Export::default();
     };
 
-    let build_type = export
+    let build_types: Vec<BuildType> = export
         .children()
-        .find(|n| n.is_element() && n.tag_name().name() == "build_type")
-        .and_then(|n| {
+        .filter(|n| n.is_element() && n.tag_name().name() == "build_type")
+        .filter_map(|n| {
             n.text().map(|t| BuildType {
                 name: t.trim().to_string(),
                 condition: n.attribute("condition").map(|s| s.to_string()),
             })
-        });
+        })
+        .collect();
+    let build_type = build_types.first().cloned();
 
     let architecture_independent = export
         .children()
@@ -289,6 +320,7 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
 
     Export {
         build_type,
+        build_types,
         architecture_independent,
         metapackage,
     }
@@ -304,7 +336,7 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
 ///
 /// A condition that cannot be parsed is logged and evaluates to `true`, so the
 /// dependency is kept rather than silently dropped.
-fn evaluate_condition(condition: &str, env: &HashMap<String, String>) -> bool {
+pub fn evaluate_condition(condition: &str, env: &HashMap<String, String>) -> bool {
     let result = tokenize_condition(condition).and_then(|tokens| {
         let mut parser = ConditionParser {
             tokens: &tokens,
