@@ -20,6 +20,12 @@ pixi lock [OPTIONS]
 :  Check if any changes have been made to the lock file. If yes, exit with a non-zero code. Implies `--dry-run`
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
 :  Compute the lock file without writing to disk. Implies `--no-install`
+- <a id="arg---with-constraint" href="#arg---with-constraint">`--with-constraint <MATCHSPEC>`</a>
+:  Temporarily constrain a conda package to the given match spec, e.g. `--with-constraint 'openssl>=3.5.4'`
+<br>May be provided more than once.
+- <a id="arg---with-pypi-constraint" href="#arg---with-pypi-constraint">`--with-pypi-constraint <REQUIREMENT>`</a>
+:  Temporarily constrain a PyPI package to the given PEP 508 requirement, e.g. `--with-pypi-constraint 'urllib3>=2.2.2'`
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>

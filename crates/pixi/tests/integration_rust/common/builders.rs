@@ -642,6 +642,14 @@ impl UpdateBuilder {
         self
     }
 
+    pub fn with_constraint(mut self, constraint: impl Into<String>) -> Self {
+        self.args
+            .constraint_args
+            .constraints
+            .push(constraint.into());
+        self
+    }
+
     pub fn json(mut self, json: bool) -> Self {
         self.args.json = json;
         self
@@ -674,6 +682,20 @@ impl LockBuilder {
     }
     pub fn with_check(mut self, check: bool) -> Self {
         self.args.check = check;
+        self
+    }
+    pub fn with_constraint(mut self, constraint: impl Into<String>) -> Self {
+        self.args
+            .constraint_args
+            .constraints
+            .push(constraint.into());
+        self
+    }
+    pub fn with_pypi_constraint(mut self, constraint: impl Into<String>) -> Self {
+        self.args
+            .constraint_args
+            .pypi_constraints
+            .push(constraint.into());
         self
     }
 }

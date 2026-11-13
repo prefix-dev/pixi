@@ -3815,6 +3815,7 @@ async fn spawn_solve_pypi_task<'p>(
 
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(pixi_platform));
+    let pypi_constraints = grouped_environment.combined_pypi_constraints(Some(pixi_platform));
     if dependencies.is_empty() {
         return Ok(TaskResult::PypiGroupSolved(
             grouped_environment.name().clone(),
@@ -3874,6 +3875,7 @@ async fn spawn_solve_pypi_task<'p>(
             resolution_context,
             &pypi_options,
             requirements,
+            pypi_constraints,
             pixi_solve_records,
             locked_pypi_records,
             platform.clone(),

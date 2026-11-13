@@ -160,13 +160,14 @@ conda-forge = { location = "https://raw.githubusercontent.com/prefix-dev/parselm
 !!! note
     Use the `raw.githubusercontent.com` URL. The regular `github.com/.../blob/...` page serves HTML, not JSON.
 
-### PyPI overrides vs conda constraints
+### PyPI overrides vs constraints
 
 PyPI's [`pypi-options.dependency-overrides`](../advanced/override.md)
-fills a similar role to conda [`constraints`](../reference/pixi_manifest.md#constraints): both can
+fills a similar role to conda [`constraints`](../reference/pixi_manifest.md#constraints) and
+[`pypi-constraints`](../reference/pixi_manifest.md#pypi-constraints): all of them can
 steer transitive dependencies without adding a new direct dependency.
 
-The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
+The difference is that constraints add an extra bound, while PyPI dependency overrides replace
 the requirement used for that package during PyPI resolution.
 
 Package-specific `exclude-newer` exemptions are configured separately from both mechanisms:
