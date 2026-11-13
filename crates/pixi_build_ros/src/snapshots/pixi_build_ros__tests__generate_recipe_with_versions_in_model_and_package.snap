@@ -33,55 +33,53 @@ build:
   post_process: []
 requirements:
   build:
-    - ros-catkin
-    - ros-ros-package <=2.0.0
-    - ros-ros-package-msgs <=2.0.0
-    - ros-ros-package2 <2.0.0a0
-    - "qt-main >=5.15.0,<5.16.0"
-    - libopengl-devel
-    - libgl-devel
-    - tinyxml2 ==10.0.0
-    - asio <10.0.0
+    - "${{ compiler('cxx') }}"
+    - "${{ compiler('c') }}"
     - ninja
     - python
     - setuptools
     - git
     - git-lfs
-    - cmake
-    - cpython
     - patch
     - make
     - coreutils
-    - "${{ compiler('c') }}"
-    - "${{ compiler('cxx') }}"
+    - cmake
+    - cython
+    - if: build_platform != target_platform
+      then: pkg-config
+    - if: build_platform != target_platform
+      then: python
     - if: build_platform != target_platform
       then: "cross-python_${{ target_platform }}"
+    - if: build_platform != target_platform
+      then: numpy
   host:
-    - ros-catkin
-    - ros-ros-package <=2.0.0
-    - ros-ros-package-msgs <=2.0.0
-    - ros-ros-package2 <2.0.0a0
-    - "qt-main >=5.15.0,<5.16.0"
-    - libopengl-devel
-    - libgl-devel
-    - tinyxml2 ==10.0.0
     - asio <10.0.0
-    - python
+    - libgl-devel
+    - libopengl-devel
     - numpy
     - pip
-    - pkg-config
-    - setuptools
+    - python
+    - "qt-main >=5.15.0,<5.16.0"
+    - ros-catkin
     - ros-distro-mutex * noetic_*
-  run:
-    - "asio >=9.0,<10.0.0"
     - ros-ros-package <=2.0.0
     - ros-ros-package-msgs <=2.0.0
     - ros-ros-package2 <2.0.0a0
-    - "qt-main >=5.15.0,<5.16.0"
-    - libopengl-devel
-    - libgl-devel
     - tinyxml2 ==10.0.0
+    - if: build_platform == target_platform
+      then: pkg-config
+  run:
+    - "asio >=9.0,<10.0.0"
+    - libgl-devel
+    - libopengl-devel
+    - python
+    - "qt-main >=5.15.0,<5.16.0"
     - ros-distro-mutex * noetic_*
+    - ros-ros-package <=2.0.0
+    - ros-ros-package-msgs <=2.0.0
+    - ros-ros-package2 <2.0.0a0
+    - tinyxml2 ==10.0.0
 about:
   license: Apache-2.0
   summary: Demo

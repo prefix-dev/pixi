@@ -9,11 +9,8 @@ use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe, Pyth
 use pixi_build_backend::intermediate_backend::IntermediateBackendInstantiator;
 use pixi_build_backend::tools::BackendIdentifier;
 use pixi_build_ros::config::RosBackendConfig;
-use rattler_build_jinja::{JinjaTemplate, Variable};
-use rattler_build_recipe::stage0::{
-    Conditional, Item, JinjaExpression, NestedItemList, Script, SerializableMatchSpec,
-    SingleOutputRecipe, Value,
-};
+use rattler_build_jinja::Variable;
+use rattler_build_recipe::stage0::{Script, SingleOutputRecipe, Value};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 
@@ -25,6 +22,7 @@ use pixi_build_ros::package_map::{
     load_package_map_data, merge_conditional_lists, package_xml_to_conda_requirements,
 };
 use pixi_build_ros::package_xml::PackageXml;
+use pixi_build_ros::requirements::Rules;
 use pixi_build_ros::{package_map, workspace_discovery};
 
 #[derive(Default, Clone)]
@@ -50,7 +48,7 @@ impl GenerateRecipe for RosGenerator {
         manifest_path: PathBuf,
         host_platform: Subdir,
         _python_params: Option<PythonParams>,
-        _variants: &HashSet<NormalizedKey>,
+        variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
         _workspace_scratch_directory: Option<PathBuf>,
@@ -140,13 +138,15 @@ impl GenerateRecipe for RosGenerator {
 
         let package_map_data = load_package_map_data(&all_mapping_sources)?;
 
-        // Get requirements from package.xml
-        let mut package_requirements = package_xml_to_conda_requirements(
-            &package_xml,
-            &distro,
-            host_platform,
-            &package_map_data,
-        )?;
+        // Get requirements from package.xml, by RoboStack's rules
+        let build_type = BuildType::of(&package_xml, &distro)?;
+        let rules = Rules {
+            // `stdlib('c')` only renders with a `c_stdlib` variant
+            c_stdlib: variants.contains(&NormalizedKey::from("c_stdlib")),
+            ..Rules::new(distro.clone(), host_platform)
+        };
+        let mut package_requirements =
+            package_xml_to_conda_requirements(&package_xml, build_type, &rules, &package_map_data)?;
 
         // Discover sibling ROS packages in the workspace and rewrite any
         // package.xml deps that match a sibling into source dependencies, so
@@ -224,83 +224,19 @@ impl GenerateRecipe for RosGenerator {
                 });
         }
 
-        // Add standard build dependencies
-        let mut build_deps: Vec<&str> = vec![
-            "ninja",
-            "python",
-            "setuptools",
-            "git",
-            "git-lfs",
-            "cmake",
-            "cpython",
-        ];
-
-        if host_platform.is_unix() {
-            build_deps.extend(["patch", "make", "coreutils"]);
-        }
-        if host_platform.is_windows() {
-            build_deps.push("m2-patch");
-        }
-        if host_platform.is_osx() {
-            build_deps.push("tapi");
-        }
-
-        let mut build_items = package_requirements.build.clone();
-        let mut host_items = package_requirements.host.clone();
-        let mut run_items = package_requirements.run.clone();
-
-        for dep in &build_deps {
-            build_items.push(Item::Value(Value::new_concrete(
-                SerializableMatchSpec::from(*dep),
-                None,
-            )));
-        }
-
-        // Add compiler dependencies
-        let c_compiler =
-            JinjaTemplate::new("${{ compiler('c') }}".to_string()).expect("valid jinja template");
-        let cxx_compiler =
-            JinjaTemplate::new("${{ compiler('cxx') }}".to_string()).expect("valid jinja template");
-        build_items.push(Item::Value(Value::new_template(c_compiler, None)));
-        build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
-
-        // The host python cannot run on the build machine when
-        // cross-compiling, e.g. for `ament_python` packages.
-        build_items.push(cross_python_build_item());
-
-        // Add host dependencies
-        let host_dep_names = ["python", "numpy", "pip", "pkg-config", "setuptools"];
-        for dep in &host_dep_names {
-            host_items.push(Item::Value(Value::new_concrete(
-                SerializableMatchSpec::from(*dep),
-                None,
-            )));
-        }
-
-        // Add the distro mutex to host and run: the package names don't carry
-        // the distribution, the mutex pins it
-        let mutex = distro.mutex_spec();
-        host_items.push(Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from(mutex.as_str()),
-            None,
-        )));
-        run_items.push(Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from(mutex.as_str()),
-            None,
-        )));
-
         // Merge package requirements into the model requirements
         let requirements = &mut generated_recipe.recipe.requirements;
-        requirements.host = merge_conditional_lists(&requirements.host, &host_items)?;
-        requirements.build = merge_conditional_lists(&requirements.build, &build_items)?;
-        requirements.run = merge_conditional_lists(&requirements.run, &run_items)?;
+        requirements.host =
+            merge_conditional_lists(&requirements.host, &package_requirements.host)?;
+        requirements.build =
+            merge_conditional_lists(&requirements.build, &package_requirements.build)?;
+        requirements.run = merge_conditional_lists(&requirements.run, &package_requirements.run)?;
 
-        // Generate build script
-        // The build script runs on the build machine, not the host platform.
+        // Generate the build script, which runs on the build machine
         let windows = Subdir::current().unwrap_or(Subdir::NoArch).is_windows();
         let source_dir = manifest_root.display().to_string();
         let build_script_content = render_build_script(
-            BuildType::of(&package_xml, &distro)?,
+            build_type,
             windows,
             BuildMode::Incremental,
             &ScriptVars {
@@ -386,22 +322,6 @@ impl GenerateRecipe for RosGenerator {
     }
 }
 
-/// `cross-python` for the target platform, only when cross-compiling.
-///
-/// Its activation replaces the host prefix's python with one that runs on
-/// the build machine, so `$PYTHON` keeps working in the build scripts.
-fn cross_python_build_item() -> Item<SerializableMatchSpec> {
-    let cross_python = JinjaTemplate::new("cross-python_${{ target_platform }}".to_string())
-        .expect("valid jinja template");
-    Item::Conditional(Conditional {
-        condition: JinjaExpression::new("build_platform != target_platform".to_string())
-            .expect("valid jinja expression"),
-        then: NestedItemList::single(Item::Value(Value::new_template(cross_python, None))),
-        else_value: None,
-        condition_span: None,
-    })
-}
-
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
@@ -424,6 +344,8 @@ mod tests {
 
     use pixi_build_types::ProjectModel;
     use rattler_conda_types::Subdir;
+
+    use rattler_build_recipe::stage0::{Item, SerializableMatchSpec};
 
     use super::*;
 
@@ -462,41 +384,53 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = default_package_map();
 
+        let build_type = BuildType::of(&package_xml, &distro).unwrap();
+        let rules = Rules::new(distro, Subdir::Linux64);
         let requirements =
-            package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
+            package_xml_to_conda_requirements(&package_xml, build_type, &rules, &package_map)
                 .unwrap();
 
-        insta::assert_yaml_snapshot!(requirements.build, @"
+        insta::assert_yaml_snapshot!(requirements.host, @"
+        - numpy
+        - pip
+        - python
         - ros2-ament-cmake
-        - ros2-example-interfaces
-        - ros2-rcl
-        - ros2-rclcpp
-        - ros2-rclcpp-components
-        - ros2-rcl-interfaces
-        - ros2-rcpputils
-        - ros2-rcutils
-        - ros2-rmw
-        - ros2-std-msgs
         - ros2-ament-cmake-pytest
         - ros2-ament-lint-auto
         - ros2-ament-lint-common
+        - ros2-distro-mutex * jazzy_*
+        - ros2-example-interfaces
         - ros2-launch
         - ros2-launch-testing
         - ros2-launch-testing-ament-cmake
         - ros2-launch-testing-ros
+        - ros2-rcl
+        - ros2-rcl-interfaces
+        - ros2-rclcpp
+        - ros2-rclcpp-components
+        - ros2-rcpputils
+        - ros2-rcutils
+        - ros2-rmw
+        - ros2-ros-environment
         - ros2-ros-workspace
+        - ros2-std-msgs
+        - if: build_platform == target_platform
+          then: pkg-config
         ");
         insta::assert_yaml_snapshot!(requirements.run, @"
+        - python
+        - ros2-distro-mutex * jazzy_*
         - ros2-example-interfaces
         - ros2-launch-ros
         - ros2-launch-xml
         - ros2-rcl
+        - ros2-rcl-interfaces
         - ros2-rclcpp
         - ros2-rclcpp-components
-        - ros2-rcl-interfaces
         - ros2-rcpputils
         - ros2-rcutils
         - ros2-rmw
+        - ros2-ros-workspace
         - ros2-std-msgs
         ");
     }
@@ -515,16 +449,25 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = default_package_map();
 
+        let build_type = BuildType::of(&package_xml, &distro).unwrap();
+        let rules = Rules::new(distro, Subdir::Linux64);
         let requirements =
-            package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
+            package_xml_to_conda_requirements(&package_xml, build_type, &rules, &package_map)
                 .unwrap();
 
-        insta::assert_yaml_snapshot!(requirements.build, @"
+        insta::assert_yaml_snapshot!(requirements.host, @"
+        - numpy
+        - pip
+        - python
         - ros2-ament-cmake
-        - ros2-rosidl-default-generators
         - ros2-ament-lint-auto
         - ros2-ament-lint-common
+        - ros2-distro-mutex * jazzy_*
+        - ros2-ros-environment
         - ros2-ros-workspace
+        - ros2-rosidl-default-generators
+        - if: build_platform == target_platform
+          then: pkg-config
         ");
     }
 
@@ -588,76 +531,67 @@ mod tests {
 
         insta::assert_yaml_snapshot!(generated_recipe.recipe.requirements, @r#"
         build:
-          - ros2-ament-cmake
-          - ros2-example-interfaces
-          - ros2-rcl
-          - ros2-rclcpp
-          - ros2-rclcpp-components
-          - ros2-rcl-interfaces
-          - ros2-rcpputils
-          - ros2-rcutils
-          - ros2-rmw
-          - ros2-std-msgs
-          - ros2-ament-cmake-pytest
-          - ros2-ament-lint-auto
-          - ros2-ament-lint-common
-          - ros2-launch
-          - ros2-launch-testing
-          - ros2-launch-testing-ament-cmake
-          - ros2-launch-testing-ros
-          - ros2-ros-workspace
+          - "${{ compiler('cxx') }}"
+          - "${{ compiler('c') }}"
           - ninja
           - python
           - setuptools
           - git
           - git-lfs
-          - cmake
-          - cpython
           - patch
           - make
           - coreutils
-          - "${{ compiler('c') }}"
-          - "${{ compiler('cxx') }}"
+          - cmake
+          - cython
+          - if: build_platform != target_platform
+            then: pkg-config
+          - if: build_platform != target_platform
+            then: python
           - if: build_platform != target_platform
             then: "cross-python_${{ target_platform }}"
+          - if: build_platform != target_platform
+            then: numpy
         host:
+          - numpy
+          - pip
+          - python
           - ros2-ament-cmake
-          - ros2-example-interfaces
-          - ros2-rcl
-          - ros2-rclcpp
-          - ros2-rclcpp-components
-          - ros2-rcl-interfaces
-          - ros2-rcpputils
-          - ros2-rcutils
-          - ros2-rmw
-          - ros2-std-msgs
           - ros2-ament-cmake-pytest
           - ros2-ament-lint-auto
           - ros2-ament-lint-common
+          - ros2-distro-mutex * jazzy_*
+          - ros2-example-interfaces
           - ros2-launch
           - ros2-launch-testing
           - ros2-launch-testing-ament-cmake
           - ros2-launch-testing-ros
+          - ros2-rcl
+          - ros2-rcl-interfaces
+          - ros2-rclcpp
+          - ros2-rclcpp-components
+          - ros2-rcpputils
+          - ros2-rcutils
+          - ros2-rmw
+          - ros2-ros-environment
           - ros2-ros-workspace
-          - python
-          - numpy
-          - pip
-          - pkg-config
-          - setuptools
-          - ros2-distro-mutex * jazzy_*
+          - ros2-std-msgs
+          - if: build_platform == target_platform
+            then: pkg-config
         run:
+          - python
+          - ros2-distro-mutex * jazzy_*
           - ros2-example-interfaces
           - ros2-launch-ros
           - ros2-launch-xml
           - ros2-rcl
+          - ros2-rcl-interfaces
           - ros2-rclcpp
           - ros2-rclcpp-components
-          - ros2-rcl-interfaces
           - ros2-rcpputils
           - ros2-rcutils
           - ros2-rmw
+          - ros2-ros-workspace
           - ros2-std-msgs
-          - ros2-distro-mutex * jazzy_*
         "#);
     }
 
@@ -818,7 +752,7 @@ mod tests {
         };
 
         serde_json::json!({
-            "build": filter(&generated.recipe.requirements.build),
+            "host": filter(&generated.recipe.requirements.host),
             "run": filter(&generated.recipe.requirements.run),
         })
     }
@@ -827,7 +761,7 @@ mod tests {
     async fn test_condition_evaluation_ros2_default() {
         let generated = generate_conditional_recipe("jazzy", None).await;
         insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "jazzy"), @"
-        build:
+        host:
           - ros2-ament-cmake
           - ros2-rclcpp
         run:
@@ -839,7 +773,7 @@ mod tests {
     async fn test_condition_evaluation_ros1_default() {
         let generated = generate_conditional_recipe("noetic", None).await;
         insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "noetic"), @"
-        build:
+        host:
           - ros-catkin
           - ros-roscpp
         run:
@@ -855,7 +789,7 @@ mod tests {
         ]);
         let generated = generate_conditional_recipe("jazzy", Some(env)).await;
         insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "jazzy"), @"
-        build:
+        host:
           - ros2-catkin
           - ros2-roscpp
         run:
@@ -1371,11 +1305,11 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let sibling_in_build = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-b")
-            .expect("sibling should appear in build requirements");
+        let sibling_in_host = find_concrete(&generated.recipe.requirements.host, "ros2-pkg-b")
+            .expect("sibling should appear in host requirements");
         assert!(
-            sibling_in_build.0.url.is_some(),
-            "expected ros2-pkg-b to be a source dep, got: {sibling_in_build}"
+            sibling_in_host.0.url.is_some(),
+            "expected ros2-pkg-b to be a source dep, got: {sibling_in_host}"
         );
 
         let sibling_in_run = find_concrete(&generated.recipe.requirements.run, "ros2-pkg-b")
@@ -1417,7 +1351,7 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let sibling = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-b")
+        let sibling = find_concrete(&generated.recipe.requirements.host, "ros2-pkg-b")
             .expect("sibling should still be present as binary");
         assert!(
             sibling.0.url.is_none(),
@@ -1473,11 +1407,11 @@ mod tests {
             "manual model entry must stay binary, got source: {in_run}"
         );
 
-        let in_build = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-b")
-            .expect("build entry should exist");
+        let in_host = find_concrete(&generated.recipe.requirements.host, "ros2-pkg-b")
+            .expect("host entry should exist");
         assert!(
-            in_build.0.url.is_some(),
-            "build override should still kick in, got binary: {in_build}"
+            in_host.0.url.is_some(),
+            "host override should still kick in, got binary: {in_host}"
         );
     }
 
@@ -1575,7 +1509,7 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let sibling = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-b")
+        let sibling = find_concrete(&generated.recipe.requirements.host, "ros2-pkg-b")
             .expect("ignored sibling should still appear via RoboStack fallback");
         assert!(
             sibling.0.url.is_none(),
@@ -1612,10 +1546,10 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let self_in_build = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-a");
+        let self_in_host = find_concrete(&generated.recipe.requirements.host, "ros2-pkg-a");
         assert!(
-            self_in_build.is_none(),
-            "current package must not list itself as a source dep: {self_in_build:?}"
+            self_in_host.is_none(),
+            "current package must not list itself as a source dep: {self_in_host:?}"
         );
     }
 }
