@@ -81,12 +81,13 @@ impl Distro {
     }
 
     /// The prefix of the conda names of this distribution's ROS packages, as
-    /// RoboStack names them: `ros2` for ROS 2 and `ros` for ROS 1. The names
-    /// don't say which distribution a package belongs to; the mutex does.
-    pub fn package_prefix(&self) -> &'static str {
+    /// RoboStack names them: `ros2` for ROS 2 (the names don't say which
+    /// distribution a package belongs to; the mutex does) and `ros-<distro>`
+    /// for ROS 1, whose channels (robostack-noetic) only have those names.
+    pub fn package_prefix(&self) -> String {
         match self.version {
-            RosVersion::Ros1 => "ros",
-            RosVersion::Ros2 => "ros2",
+            RosVersion::Ros1 => format!("ros-{}", self.name),
+            RosVersion::Ros2 => "ros2".to_string(),
         }
     }
 
@@ -161,7 +162,10 @@ mod tests {
             Distro::new("jazzy").conda_name("demo_nodes_cpp"),
             "ros2-demo-nodes-cpp"
         );
-        assert_eq!(Distro::new("noetic").conda_name("roscpp"), "ros-roscpp");
+        assert_eq!(
+            Distro::new("noetic").conda_name("roscpp"),
+            "ros-noetic-roscpp"
+        );
         assert_eq!(
             Distro::new("jazzy").mutex_spec(),
             "ros2-distro-mutex * jazzy_*"

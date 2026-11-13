@@ -57,18 +57,18 @@ requirements:
     - numpy
     - pip
     - python
-    - ros-catkin
     - ros-distro-mutex * noetic_*
-    - ros-multi-package
-    - ros-ros-package
+    - ros-noetic-catkin
+    - ros-noetic-multi-package
+    - ros-noetic-ros-package
     - if: build_platform == target_platform
       then: pkg-config
   run:
     - rich >=10.0
     - python
     - ros-distro-mutex * noetic_*
-    - ros-multi-package
-    - ros-ros-package
+    - ros-noetic-multi-package
+    - ros-noetic-ros-package
 about:
   homepage: "https://test.io/custom_ros"
   license: Apache-2.0

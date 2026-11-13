@@ -240,8 +240,9 @@ impl GenerateRecipe for RosGenerator {
             windows,
             BuildMode::Incremental,
             &ScriptVars {
+                generator: "pixi-build-ros",
                 source_dir: &source_dir,
-                package_prefix: distro.package_prefix(),
+                package_prefix: &distro.package_prefix(),
                 distro: &distro.name,
                 cmake_args: "",
             },
@@ -774,10 +775,10 @@ mod tests {
         let generated = generate_conditional_recipe("noetic", None).await;
         insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "noetic"), @"
         host:
-          - ros-catkin
-          - ros-roscpp
+          - ros-noetic-catkin
+          - ros-noetic-roscpp
         run:
-          - ros-roscpp
+          - ros-noetic-roscpp
         ");
     }
 
@@ -1142,7 +1143,7 @@ mod tests {
                 .as_concrete()
                 .unwrap()
                 .to_string(),
-            "ros-custom-ros"
+            "ros-noetic-custom-ros"
         );
 
         let run_deps: Vec<String> = generated
@@ -1159,12 +1160,12 @@ mod tests {
         // custom_ros.xml has <depend>ros_package</depend> which maps to
         // ros: [ros_package, ros_package_msgs] in other_package_map.yaml
         assert!(
-            run_deps.iter().any(|d| d == "ros-ros-package"),
-            "Expected ros-ros-package in run deps: {run_deps:?}"
+            run_deps.iter().any(|d| d == "ros-noetic-ros-package"),
+            "Expected ros-noetic-ros-package in run deps: {run_deps:?}"
         );
         assert!(
-            run_deps.iter().any(|d| d == "ros-ros-package-msgs"),
-            "Expected ros-ros-package-msgs in run deps: {run_deps:?}"
+            run_deps.iter().any(|d| d == "ros-noetic-ros-package-msgs"),
+            "Expected ros-noetic-ros-package-msgs in run deps: {run_deps:?}"
         );
         // multi_package maps to conda: [multi-package-a, multi-package-b]
         assert!(
@@ -1222,12 +1223,12 @@ mod tests {
             .collect();
 
         assert!(
-            run_deps.iter().any(|d| d == "ros-ros-custom2"),
-            "Expected ros-ros-custom2 in run deps: {run_deps:?}"
+            run_deps.iter().any(|d| d == "ros-noetic-ros-custom2"),
+            "Expected ros-noetic-ros-custom2 in run deps: {run_deps:?}"
         );
         assert!(
-            run_deps.iter().any(|d| d == "ros-ros-custom2-msgs"),
-            "Expected ros-ros-custom2-msgs in run deps: {run_deps:?}"
+            run_deps.iter().any(|d| d == "ros-noetic-ros-custom2-msgs"),
+            "Expected ros-noetic-ros-custom2-msgs in run deps: {run_deps:?}"
         );
     }
 

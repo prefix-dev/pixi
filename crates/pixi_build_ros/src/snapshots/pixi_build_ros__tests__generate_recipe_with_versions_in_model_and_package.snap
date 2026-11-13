@@ -61,11 +61,11 @@ requirements:
     - pip
     - python
     - "qt-main >=5.15.0,<5.16.0"
-    - ros-catkin
     - ros-distro-mutex * noetic_*
-    - ros-ros-package <=2.0.0
-    - ros-ros-package-msgs <=2.0.0
-    - ros-ros-package2 <2.0.0a0
+    - ros-noetic-catkin
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
     - tinyxml2 ==10.0.0
     - if: build_platform == target_platform
       then: pkg-config
@@ -76,9 +76,9 @@ requirements:
     - python
     - "qt-main >=5.15.0,<5.16.0"
     - ros-distro-mutex * noetic_*
-    - ros-ros-package <=2.0.0
-    - ros-ros-package-msgs <=2.0.0
-    - ros-ros-package2 <2.0.0a0
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
     - tinyxml2 ==10.0.0
 about:
   license: Apache-2.0

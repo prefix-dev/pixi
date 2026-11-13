@@ -147,7 +147,10 @@ mod tests {
         };
 
         // The name is ROS-formatted
-        assert_eq!(provider.name().unwrap().as_deref(), Some("ros-custom-ros"));
+        assert_eq!(
+            provider.name().unwrap().as_deref(),
+            Some("ros-noetic-custom-ros")
+        );
         assert_eq!(
             provider.version().unwrap().map(|v| v.to_string()),
             Some("0.0.1".to_string())

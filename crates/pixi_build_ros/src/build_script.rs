@@ -84,6 +84,8 @@ pub enum BuildMode {
 /// The values a build script template is filled with.
 #[derive(Debug, Clone, Copy)]
 pub struct ScriptVars<'a> {
+    /// What wrote the script, for its first line (e.g. `pixi-build-ros`)
+    pub generator: &'a str,
     /// The package's sources, in the script's shell syntax (e.g.
     /// `$SRC_DIR/$PKG_NAME/src/work/` for a recipe that checks them out)
     pub source_dir: &'a str,
@@ -142,6 +144,7 @@ pub fn render_build_script(
         .filter(|line| !line.starts_with(skip))
         .map(|line| line.strip_prefix(keep).unwrap_or(line))
         .collect::<String>()
+        .replace("@(generator)", vars.generator)
         .replace("@(source_dir)", vars.source_dir)
         .replace("@(package_prefix)", vars.package_prefix)
         .replace("@(distro)", vars.distro)
@@ -170,6 +173,7 @@ mod tests {
     use super::*;
 
     const VARS: ScriptVars<'static> = ScriptVars {
+        generator: "pixi-build-ros",
         source_dir: "/my/source",
         package_prefix: "ros2",
         distro: "jazzy",
@@ -233,6 +237,7 @@ mod tests {
     #[test]
     fn test_incremental_build_scripts() {
         let vars = ScriptVars {
+            generator: "pixi-build-ros",
             cmake_args: "",
             ..VARS
         };
