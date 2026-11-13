@@ -99,8 +99,9 @@ pub enum PlatformMapping {
     /// A single string: `"pkg-a"`
     SingleString(String),
     /// Platform-specific mapping, by subdir (`linux-aarch64`) or by OS (`linux`,
-    /// `osx`, `win64`, `emscripten`): `{"linux": ["pkg"], "osx": []}`
-    PlatformSpecific(HashMap<String, Vec<String>>),
+    /// `osx`, `win64`, `emscripten`): `{"linux": ["pkg"], "osx": []}` (`osx:`
+    /// without a value is the same as `[]`)
+    PlatformSpecific(HashMap<String, Option<Vec<String>>>),
 }
 
 impl PlatformMapping {
@@ -119,6 +120,7 @@ impl PlatformMapping {
                     map.get(os)
                 })
                 .cloned()
+                .flatten()
                 .unwrap_or_default(),
         }
     }
@@ -738,7 +740,7 @@ mod tests {
     #[test]
     fn test_platform_keys_subdir_before_os() {
         let package_map: HashMap<String, PackageMapEntry> = serde_yaml::from_str(
-            "gl: {robostack: {linux: [libgl-devel], linux-aarch64: [], win64: [opengl32]}}",
+            "gl: {robostack: {linux: [libgl-devel], linux-aarch64: [], win64: [opengl32], osx: }}",
         )
         .unwrap();
         let resolve = |platform| match lookup(&package_map, "gl", platform).unwrap() {
