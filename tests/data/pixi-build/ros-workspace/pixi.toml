@@ -14,20 +14,24 @@ preview = ["pixi-build"]
 c_compiler_version = ["22"]
 cxx_compiler_version = ["22"]
 
+# RoboStack's ROS 2 packages are built for macOS 14
+[system-requirements]
+macos = "14.0"
+
 [tasks]
 navigator = "ros2 run navigator navigator"
 navigator_py = "ros2 run navigator_py navigator"
 
 [dependencies]
-ros-humble-navigator = { path = "src/navigator" }
-ros-humble-navigator-py = { path = "src/navigator_py" }
+ros2-navigator = { path = "src/navigator" }
+ros2-navigator-py = { path = "src/navigator_py" }
 
 [feature.distro-less]
 channels = [
   "https://prefix.dev/robostack-jazzy",
   "https://prefix.dev/conda-forge",
 ]
-dependencies = { ros-jazzy-distro-less-package = { path = "src/distro_less_package" } }
+dependencies = { ros2-distro-less-package = { path = "src/distro_less_package" } }
 tasks = { distro-less-task = "ros2 run distro_less_package distro_less_package" }
 
 [environments]

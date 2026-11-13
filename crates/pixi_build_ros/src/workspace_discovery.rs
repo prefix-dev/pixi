@@ -18,6 +18,7 @@ use rattler_build_recipe::stage0::{ConditionalList, Item, SerializableMatchSpec,
 use thiserror::Error;
 use url::Url;
 
+use crate::distro::Distro;
 use crate::package_map::item_package_name;
 use crate::package_xml::{PackageXml, PackageXmlError};
 
@@ -174,7 +175,7 @@ fn path_to_forward_slashes(path: &Path) -> String {
 }
 
 /// Build a matchspec string of the form
-/// `ros-<distro>-<name>[url="source://?path=<rel-to-manifest>"]` that, when
+/// `<conda name>[url="source://?path=<rel-to-manifest>"]` that, when
 /// parsed via `SerializableMatchSpec::from`, yields a source dependency
 /// pointing at the sibling package.
 ///
@@ -200,25 +201,20 @@ pub fn sibling_source_spec(
     format!("{conda_name}[url=\"{url}\"]")
 }
 
-/// Build the conda-formatted package name for a ROS package.
-pub fn conda_name_for(distro: &str, ros_name: &str) -> String {
-    format!("ros-{}-{}", distro, ros_name.replace('_', "-"))
-}
-
 /// Compute the `conda-name -> source-spec-string` map for every sibling
 /// package discovered under the workspace, excluding the current package.
 pub fn sibling_source_spec_map(
     discovered: &HashMap<String, PathBuf>,
     current_package_name: &str,
     manifest_root: &Path,
-    distro_name: &str,
+    distro: &Distro,
 ) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for (ros_name, package_xml_path) in discovered {
         if ros_name == current_package_name {
             continue;
         }
-        let conda_name = conda_name_for(distro_name, ros_name);
+        let conda_name = distro.conda_name(ros_name);
         let spec = sibling_source_spec(&conda_name, package_xml_path, manifest_root);
         map.insert(conda_name, spec);
     }
@@ -442,7 +438,7 @@ preview = ["pixi-build"]
             root.join("node_pkg").join("pixi.toml"),
             r#"
 [package]
-name = "ros-humble-node-pkg"
+name = "ros2-node-pkg"
 version = "0.0.0"
 
 [package.build]
@@ -456,7 +452,12 @@ extra-package-mappings = [{ "my-conda-dep" = { conda = ["xtensor"] } }]
 
         let discovered = discover_ros_packages(root).unwrap().packages;
         let manifest_root = root.join("launch_pkg");
-        let specs = sibling_source_spec_map(&discovered, "launch_pkg", &manifest_root, "humble");
+        let specs = sibling_source_spec_map(
+            &discovered,
+            "launch_pkg",
+            &manifest_root,
+            &Distro::new("humble"),
+        );
 
         let spec_for = |rel: &str| {
             let mut url = Url::from_str("source://").unwrap();
@@ -468,16 +469,16 @@ extra-package-mappings = [{ "my-conda-dep" = { conda = ["xtensor"] } }]
         // directory so pixi discovers that manifest, including its
         // [package.build.config].
         assert_eq!(
-            specs.get("ros-humble-node-pkg").unwrap(),
-            &format!("ros-humble-node-pkg[url=\"{}\"]", spec_for("../node_pkg")),
+            specs.get("ros2-node-pkg").unwrap(),
+            &format!("ros2-node-pkg[url=\"{}\"]", spec_for("../node_pkg")),
         );
 
         // plain_pkg is a bare ROS package: keep pointing at its package.xml,
         // which is the only way to select ROS discovery for it.
         assert_eq!(
-            specs.get("ros-humble-plain-pkg").unwrap(),
+            specs.get("ros2-plain-pkg").unwrap(),
             &format!(
-                "ros-humble-plain-pkg[url=\"{}\"]",
+                "ros2-plain-pkg[url=\"{}\"]",
                 spec_for("../plain_pkg/package.xml")
             ),
         );

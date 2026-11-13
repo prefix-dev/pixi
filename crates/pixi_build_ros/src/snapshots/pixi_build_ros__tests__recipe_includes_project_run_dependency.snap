@@ -59,12 +59,12 @@ requirements:
     - pip
     - pkg-config
     - setuptools
-    - ros-distro-mutex
+    - ros-distro-mutex * noetic_*
   run:
     - rich >=10.0
     - ros-noetic-ros-package
     - ros-noetic-multi-package
-    - ros-distro-mutex
+    - ros-distro-mutex * noetic_*
 about:
   homepage: "https://test.io/custom_ros"
   license: Apache-2.0
