@@ -349,16 +349,6 @@ impl From<ChannelPriority> for rattler_solve::ChannelPriority {
     }
 }
 
-impl From<rattler_solve::ChannelPriority> for ChannelPriority {
-    fn from(value: rattler_solve::ChannelPriority) -> Self {
-        match value {
-            rattler_solve::ChannelPriority::Strict => ChannelPriority::Strict,
-            rattler_solve::ChannelPriority::Flexible => ChannelPriority::Flexible,
-            rattler_solve::ChannelPriority::Disabled => ChannelPriority::Disabled,
-        }
-    }
-}
-
 /// The value of `[workspace.conda-pypi-map]`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CondaPypiMap {
