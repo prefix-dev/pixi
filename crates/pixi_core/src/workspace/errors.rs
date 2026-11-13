@@ -138,7 +138,7 @@ impl Display for UnsupportedPlatformError {
         if !self.skipped_platforms.is_empty() {
             write!(
                 f,
-                "\n\nPlatforms skipped because their locked packages don't fit:"
+                "\n\nplatforms skipped because their locked packages don't fit:"
             )?;
             for skipped in &self.skipped_platforms {
                 write!(f, "\n  - {}: {}", skipped.platform, skipped.reason)?;
@@ -469,7 +469,7 @@ mod tests {
         insta::assert_snapshot!(error.to_string(), @r"
         The workspace does not support 'linux-64' on this machine.
 
-        Platforms skipped because their locked packages don't fit:
+        platforms skipped because their locked packages don't fit:
           - gpu: missing __cuda >=12.4
         ");
     }
