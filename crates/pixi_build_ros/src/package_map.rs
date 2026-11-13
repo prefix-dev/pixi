@@ -71,8 +71,15 @@ pub enum PackageMapError {
     #[error("dependency '{dep_name}' cannot be specified by both `=` and an inequality")]
     EqualityWithInequality { dep_name: String },
 
-    #[error("cannot merge version specifiers: '{spec1}' or '{spec2}' contains spaces")]
-    MergeSpecsWithSpaces { spec1: String, spec2: String },
+    #[error("dependency '{dep_name}' cannot have both build strings `{build1}` and `{build2}`")]
+    ConflictingBuildStrings {
+        dep_name: String,
+        build1: String,
+        build2: String,
+    },
+
+    #[error("cannot merge the specifier '{spec}': it has more than a version and a build string")]
+    MergeSpecWithSpaces { spec: String },
 
     #[error("rosdep '{dep_name}' resolved to an invalid conda package spec '{spec}'")]
     #[diagnostic(help("Map '{dep_name}' to a valid conda package via `extra-package-mappings`."))]
@@ -246,9 +253,8 @@ fn resolve_rosdep_to_conda_package_spec(
     let spec_str = rosdep_nameless_matchspec(dep)?;
     let ros_name = |name: &str| {
         format!(
-            "ros-{}-{}{}",
-            distro.name,
-            name.replace('_', "-"),
+            "{}{}",
+            distro.conda_name(name),
             spec_str.as_deref().unwrap_or("")
         )
     };
@@ -532,35 +538,60 @@ fn normalize_spec(spec: &str, package_name: &str) -> String {
         .to_string()
 }
 
-/// Merge two version spec strings for the same package.
+/// A spec without the package name, split into its version and build string.
+fn version_and_build(
+    spec: Option<&str>,
+    package_name: &str,
+) -> Result<(String, Option<String>), PackageMapError> {
+    let spec = spec
+        .map(|s| normalize_spec(s, package_name))
+        .unwrap_or_default();
+    let Some((version, build)) = spec.split_once(' ') else {
+        return Ok((spec, None));
+    };
+    if build.contains(' ') {
+        return Err(PackageMapError::MergeSpecWithSpaces { spec });
+    }
+    Ok((version.to_string(), Some(build.to_string())))
+}
+
+/// Merge two specs for the same package: their version constraints, and the
+/// build string that at most one of them has (e.g. the distro mutex's pin to a
+/// distribution).
 fn merge_specs(
     spec1: Option<&str>,
     spec2: Option<&str>,
     package_name: &str,
 ) -> Result<String, PackageMapError> {
-    let v1 = spec1
-        .map(|s| normalize_spec(s, package_name))
-        .unwrap_or_default();
-    let v2 = spec2
-        .map(|s| normalize_spec(s, package_name))
-        .unwrap_or_default();
+    let (v1, b1) = version_and_build(spec1, package_name)?;
+    let (v2, b2) = version_and_build(spec2, package_name)?;
 
-    if v1.contains(' ') || v2.contains(' ') {
-        return Err(PackageMapError::MergeSpecsWithSpaces {
-            spec1: v1,
-            spec2: v2,
-        });
-    }
+    let build = match (b1, b2) {
+        (Some(b1), Some(b2)) if b1 != b2 => {
+            return Err(PackageMapError::ConflictingBuildStrings {
+                dep_name: package_name.to_string(),
+                build1: b1,
+                build2: b2,
+            });
+        }
+        (b1, b2) => b1.or(b2),
+    };
 
-    // Early out with *, empty, or ==
-    if v1 == "*" || v1.is_empty() || v2.contains("==") || v1 == v2 {
-        return Ok(spec2.unwrap_or("").to_string());
-    }
-    if v2 == "*" || v2.is_empty() || v1.contains("==") {
-        return Ok(spec1.unwrap_or("").to_string());
-    }
+    let version = if v1 == "*" || v1.is_empty() || v2.contains("==") || v1 == v2 {
+        v2
+    } else if v2 == "*" || v2.is_empty() || v1.contains("==") {
+        v1
+    } else {
+        format!("{v1},{v2}")
+    };
 
-    Ok(format!("{package_name} {},{}", v1, v2))
+    Ok(match (version.as_str(), build) {
+        (_, Some(build)) if version.is_empty() => format!("{package_name} * {build}"),
+        (_, Some(build)) => format!("{package_name} {version} {build}"),
+        ("", None) if spec1.is_none() && spec2.is_none() => String::new(),
+        ("", None) => package_name.to_string(),
+        (_, None) => format!("{package_name} {version}"),
+    })
 }
 
 /// Merge two ConditionalLists, deduplicating by package name and merging
@@ -794,7 +825,7 @@ mod tests {
 
         let result =
             rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &HashMap::new()).unwrap();
-        assert_eq!(result, vec!["ros-jazzy-ament-cmake==1.2.3"]);
+        assert_eq!(result, vec!["ros2-ament-cmake==1.2.3"]);
     }
 
     #[test]
@@ -809,7 +840,7 @@ mod tests {
 
         let result =
             rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &HashMap::new()).unwrap();
-        assert_eq!(result, vec!["ros-jazzy-rclcpp >=18.0.0,<20.0.0"]);
+        assert_eq!(result, vec!["ros2-rclcpp >=18.0.0,<20.0.0"]);
     }
 
     #[test]
@@ -830,7 +861,7 @@ mod tests {
 
         let result =
             rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
-        assert_eq!(result, vec!["ros-jazzy-foo-util >=3.1"]);
+        assert_eq!(result, vec!["ros2-foo-util >=3.1"]);
     }
 
     #[test]
@@ -1014,20 +1045,42 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_specs_with_spaces() {
-        let list1 = vec![Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from("ros-noetic 2.* noetic"),
-            None,
-        ))];
-        let list2 = vec![Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from("ros-noetic <=2.0,<3.0"),
-            None,
-        ))];
+    fn test_merge_specs_with_build_strings() {
+        let spec = |s: &str| {
+            vec![Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from(s),
+                None,
+            ))]
+        };
 
-        let result = merge_unique_items_vec(&list1, &list2);
+        // a version and a build string, e.g. the distro mutex's pin
+        let result = merge_unique_items_vec(
+            &spec("ros2-distro-mutex 0.5.*"),
+            &spec("ros2-distro-mutex * jazzy_*"),
+        )
+        .unwrap();
+        assert_eq!(
+            item_spec_string(&result[0]).unwrap(),
+            "ros2-distro-mutex 0.5.* jazzy_*"
+        );
+
+        let result = merge_unique_items_vec(
+            &spec("ros-noetic 2.* noetic"),
+            &spec("ros-noetic <=2.0,<3.0"),
+        )
+        .unwrap();
+        assert_eq!(
+            item_spec_string(&result[0]).unwrap(),
+            "ros-noetic 2.*,<=2.0,<3.0 noetic"
+        );
+
+        let result = merge_unique_items_vec(
+            &spec("ros-noetic 2.* noetic"),
+            &spec("ros-noetic * melodic"),
+        );
         assert!(matches!(
             result,
-            Err(PackageMapError::MergeSpecsWithSpaces { .. })
+            Err(PackageMapError::ConflictingBuildStrings { .. })
         ));
     }
 
@@ -1061,7 +1114,7 @@ mod tests {
 
         let result =
             rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &HashMap::new()).unwrap();
-        assert_eq!(result, vec!["ros-jazzy-customlib >1.0.0"]);
+        assert_eq!(result, vec!["ros2-customlib >1.0.0"]);
     }
 
     #[test]

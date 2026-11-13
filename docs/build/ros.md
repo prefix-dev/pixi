@@ -70,9 +70,9 @@ Create a `pixi.toml` inside `src/my_python_ros_pkg` so Pixi can build it using t
 
 Notes:
 
-- When `package.build.config.distro` is set, the produced package name is prefixed like `ros-<distro>-<name>`.
+- When `package.build.config.distro` is set, the produced package name is prefixed like `ros2-<name>` (`ros-<name>` for ROS 1), and the distro mutex pins the distribution.
 - The backend automatically reads `package.xml` (name, version, license, maintainers, URLs, dependencies). Any explicitly set fields in `pixi.toml` override `package.xml`.
-- Dependencies in `package.xml` are mapped to conda packages via RoboStack (for example `std_msgs` → `ros-<distro>-std-msgs`). Unknown deps pass through unchanged.
+- Dependencies in `package.xml` are mapped to conda packages via RoboStack (for example `std_msgs` → `ros2-std-msgs`). Unknown deps pass through unchanged.
 
 ### Add the package to the pixi workspace
 

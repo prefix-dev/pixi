@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_build_ros/src/main.rs
-assertion_line: 915
 expression: generated.recipe
 ---
 schema_version: 1
@@ -34,10 +33,10 @@ build:
   post_process: []
 requirements:
   build:
-    - ros-noetic-catkin
-    - ros-noetic-ros-package <=2.0.0
-    - ros-noetic-ros-package-msgs <=2.0.0
-    - ros-noetic-ros-package2 <2.0.0a0
+    - ros-catkin
+    - ros-ros-package <=2.0.0
+    - ros-ros-package-msgs <=2.0.0
+    - ros-ros-package2 <2.0.0a0
     - "qt-main >=5.15.0,<5.16.0"
     - libopengl-devel
     - libgl-devel
@@ -58,11 +57,11 @@ requirements:
     - if: build_platform != target_platform
       then: "cross-python_${{ target_platform }}"
   host:
-    - ros-distro-mutex 0.5.*
-    - ros-noetic-catkin
-    - ros-noetic-ros-package <=2.0.0
-    - ros-noetic-ros-package-msgs <=2.0.0
-    - ros-noetic-ros-package2 <2.0.0a0
+    - ros-distro-mutex 0.5.* noetic_*
+    - ros-catkin
+    - ros-ros-package <=2.0.0
+    - ros-ros-package-msgs <=2.0.0
+    - ros-ros-package2 <2.0.0a0
     - "qt-main >=5.15.0,<5.16.0"
     - libopengl-devel
     - libgl-devel
@@ -75,15 +74,15 @@ requirements:
     - setuptools
   run:
     - rich >=10.0
-    - ros-noetic-ros-package <=2.0.0
-    - ros-noetic-ros-package-msgs <=2.0.0
-    - ros-noetic-ros-package2 <2.0.0a0
+    - ros-ros-package <=2.0.0
+    - ros-ros-package-msgs <=2.0.0
+    - ros-ros-package2 <2.0.0a0
     - "qt-main >=5.15.0,<5.16.0"
     - libopengl-devel
     - libgl-devel
     - tinyxml2 ==10.0.0
     - asio <10.0.0
-    - ros-distro-mutex
+    - ros-distro-mutex * noetic_*
 about:
   license: Apache-2.0
   summary: Demo

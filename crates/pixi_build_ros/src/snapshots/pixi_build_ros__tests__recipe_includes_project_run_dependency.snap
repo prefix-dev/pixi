@@ -33,9 +33,9 @@ build:
   post_process: []
 requirements:
   build:
-    - ros-noetic-catkin
-    - ros-noetic-ros-package
-    - ros-noetic-multi-package
+    - ros-catkin
+    - ros-ros-package
+    - ros-multi-package
     - ninja
     - python
     - setuptools
@@ -51,20 +51,20 @@ requirements:
     - if: build_platform != target_platform
       then: "cross-python_${{ target_platform }}"
   host:
-    - ros-noetic-catkin
-    - ros-noetic-ros-package
-    - ros-noetic-multi-package
+    - ros-catkin
+    - ros-ros-package
+    - ros-multi-package
     - python
     - numpy
     - pip
     - pkg-config
     - setuptools
-    - ros-distro-mutex
+    - ros-distro-mutex * noetic_*
   run:
     - rich >=10.0
-    - ros-noetic-ros-package
-    - ros-noetic-multi-package
-    - ros-distro-mutex
+    - ros-ros-package
+    - ros-multi-package
+    - ros-distro-mutex * noetic_*
 about:
   homepage: "https://test.io/custom_ros"
   license: Apache-2.0

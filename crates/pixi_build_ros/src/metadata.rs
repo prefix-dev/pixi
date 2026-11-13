@@ -8,6 +8,7 @@ use pixi_build_backend::generated_recipe::{GeneratedRecipe, MetadataProvider};
 use pixi_build_types::ProjectModel;
 use rattler_conda_types::VersionWithSource;
 
+use crate::distro::Distro;
 use crate::package_xml::PackageXml;
 
 /// Parse a [`PackageXml`] and render a [`GeneratedRecipe`] from the given
@@ -15,14 +16,14 @@ use crate::package_xml::PackageXml;
 /// and collecting input globs.
 pub fn parse_and_render(
     package_xml: PackageXml,
-    distro_name: &str,
+    distro: &Distro,
     model: ProjectModel,
     extra_input_globs: Vec<String>,
     package_mapping_files: Vec<String>,
 ) -> miette::Result<GeneratedRecipe> {
     let mut provider = RosPackageXmlMetadataProvider {
         package_data: package_xml,
-        distro_name: distro_name.to_string(),
+        distro: distro.clone(),
         extra_input_globs,
         package_mapping_files,
     };
@@ -34,12 +35,11 @@ pub fn parse_and_render(
 
 /// Metadata provider for ROS package.xml files.
 ///
-/// Formats package names as `ros-<distro>-<name>` with underscore-to-hyphen
-/// conversion.
+/// Names packages as RoboStack does (see [`Distro::conda_name`]).
 #[derive(Debug)]
 struct RosPackageXmlMetadataProvider {
     package_data: PackageXml,
-    distro_name: String,
+    distro: Distro,
     extra_input_globs: Vec<String>,
     package_mapping_files: Vec<String>,
 }
@@ -62,8 +62,7 @@ impl MetadataProvider for RosPackageXmlMetadataProvider {
     type Error = std::convert::Infallible;
 
     fn name(&mut self) -> Result<Option<String>, Self::Error> {
-        let formatted = self.package_data.name.replace('_', "-");
-        Ok(Some(format!("ros-{}-{}", self.distro_name, formatted)))
+        Ok(Some(self.distro.conda_name(&self.package_data.name)))
     }
 
     fn version(&mut self) -> Result<Option<VersionWithSource>, Self::Error> {
@@ -142,16 +141,13 @@ mod tests {
         let package_xml = load_package_xml("custom_ros.xml");
         let mut provider = RosPackageXmlMetadataProvider {
             package_data: package_xml,
-            distro_name: "noetic".to_string(),
+            distro: Distro::new("noetic"),
             extra_input_globs: Vec::new(),
             package_mapping_files: Vec::new(),
         };
 
         // The name is ROS-formatted
-        assert_eq!(
-            provider.name().unwrap().as_deref(),
-            Some("ros-noetic-custom-ros")
-        );
+        assert_eq!(provider.name().unwrap().as_deref(), Some("ros-custom-ros"));
         assert_eq!(
             provider.version().unwrap().map(|v| v.to_string()),
             Some("0.0.1".to_string())
@@ -174,7 +170,7 @@ mod tests {
         let package_xml = load_package_xml("custom_ros.xml");
         let provider = RosPackageXmlMetadataProvider {
             package_data: package_xml,
-            distro_name: "noetic".to_string(),
+            distro: Distro::new("noetic"),
             extra_input_globs: Vec::new(),
             package_mapping_files: vec!["/tmp/custom_mapping.yaml".to_string()],
         };
