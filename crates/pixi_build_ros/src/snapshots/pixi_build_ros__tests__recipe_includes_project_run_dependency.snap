@@ -67,6 +67,7 @@ requirements:
     - ros-distro-mutex
 about:
   homepage: "https://test.io/custom_ros"
+  license: Apache-2.0
   summary: Demo
   description: Demo
   repository: "https://github.com/test/custom_ros"
