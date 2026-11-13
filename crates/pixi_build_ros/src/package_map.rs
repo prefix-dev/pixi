@@ -11,15 +11,20 @@ use std::cell::LazyCell;
 use std::collections::HashMap;
 
 use miette::Diagnostic;
-use rattler_build_jinja::{Jinja, JinjaConfig};
-use rattler_build_recipe::stage0::{ConditionalList, Item, SerializableMatchSpec, Value};
+use rattler_build_jinja::{Jinja, JinjaConfig, JinjaTemplate};
+use rattler_build_recipe::stage0::{
+    Conditional, ConditionalList, Item, JinjaExpression, NestedItemList, SerializableMatchSpec,
+    Value,
+};
 use rattler_conda_types::{MatchSpec, ParseStrictness, Subdir};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::build_script::BuildType;
 use crate::config::PackageMappingSource;
-use crate::distro::{Distro, RosVersion};
+use crate::distro::Distro;
 use crate::package_xml::{Dependency, PackageXml};
+use crate::requirements::{Req, Reqs, Rules};
 
 /// Errors that can occur during package mapping resolution.
 #[derive(Debug, Error, Diagnostic)]
@@ -394,127 +399,52 @@ pub fn rosdep_nameless_matchspec(dep: &Dependency) -> Result<Option<String>, Pac
     }
 }
 
-/// Convert a parsed PackageXml to conda requirements (build, host, run).
+/// The requirements of a package for `pixi build`: RoboStack's rules (see
+/// [`Rules`]), with the dependencies mapped by `package_map_data` and keeping
+/// package.xml's versions.
 pub fn package_xml_to_conda_requirements(
     pkg: &PackageXml,
-    distro: &Distro,
-    host_platform: Subdir,
+    build_type: BuildType,
+    rules: &Rules,
     package_map_data: &HashMap<String, PackageMapEntry>,
 ) -> Result<ConditionalRequirements, PackageMapError> {
-    // Build deps
-    let mut build_deps: Vec<&Dependency> = Vec::new();
-    build_deps.extend(
-        pkg.dependencies
-            .buildtool_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    build_deps.extend(
-        pkg.dependencies
-            .buildtool_export_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    build_deps.extend(
-        pkg.dependencies
-            .build_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    build_deps.extend(
-        pkg.dependencies
-            .build_export_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    build_deps.extend(
-        pkg.dependencies
-            .test_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    build_deps.extend(pkg.dependencies.depend.iter().filter(|d| d.is_active()));
-
-    // Add ros_workspace for ROS2
-    let ros_workspace_dep;
-    if distro.version == RosVersion::Ros2 {
-        ros_workspace_dep = Dependency::from("ros_workspace");
-        build_deps.push(&ros_workspace_dep);
-    }
-
-    let mut conda_build_deps = Vec::new();
-    for dep in &build_deps {
-        conda_build_deps.extend(rosdep_to_conda_package_spec(
-            dep,
-            distro,
-            host_platform,
-            package_map_data,
-        )?);
-    }
-
-    // Run deps
-    let mut run_deps: Vec<&Dependency> = Vec::new();
-    run_deps.extend(
-        pkg.dependencies
-            .run_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    run_deps.extend(
-        pkg.dependencies
-            .exec_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    run_deps.extend(
-        pkg.dependencies
-            .build_export_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    run_deps.extend(
-        pkg.dependencies
-            .buildtool_export_depends
-            .iter()
-            .filter(|d| d.is_active()),
-    );
-    run_deps.extend(pkg.dependencies.depend.iter().filter(|d| d.is_active()));
-
-    let mut conda_run_deps = Vec::new();
-    for dep in &run_deps {
-        conda_run_deps.extend(rosdep_to_conda_package_spec(
-            dep,
-            distro,
-            host_platform,
-            package_map_data,
-        )?);
-    }
-
-    let build_items: Vec<Item<SerializableMatchSpec>> = conda_build_deps
-        .iter()
-        .map(|name| {
-            Item::Value(Value::new_concrete(
-                SerializableMatchSpec::from(name.as_str()),
-                None,
-            ))
-        })
-        .collect();
-
-    let run_items: Vec<Item<SerializableMatchSpec>> = conda_run_deps
-        .iter()
-        .map(|name| {
-            Item::Value(Value::new_concrete(
-                SerializableMatchSpec::from(name.as_str()),
-                None,
-            ))
-        })
-        .collect();
-
+    let mut requirements = rules.requirements(pkg, build_type, &[], |dep, _| {
+        rosdep_to_conda_package_spec(dep, &rules.distro, rules.platform, package_map_data)
+    })?;
+    rules.finish(&mut requirements);
     Ok(ConditionalRequirements {
-        build: ConditionalList::new(build_items.clone()),
-        host: ConditionalList::new(build_items),
-        run: ConditionalList::new(run_items),
+        build: conditional_list(&requirements.build),
+        host: conditional_list(&requirements.host),
+        run: conditional_list(&requirements.run),
     })
+}
+
+fn conditional_list(reqs: &Reqs) -> ConditionalList<SerializableMatchSpec> {
+    let spec = |s: &String| {
+        if s.contains("${{") {
+            let template = JinjaTemplate::new(s.clone()).expect("valid jinja template");
+            Item::Value(Value::new_template(template, None))
+        } else {
+            Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from(s.as_str()),
+                None,
+            ))
+        }
+    };
+    ConditionalList::new(
+        reqs.iter()
+            .map(|req| match req {
+                Req::Spec(s) => spec(s),
+                Req::If { cond, then } => Item::Conditional(Conditional {
+                    condition: JinjaExpression::new(cond.as_str().to_string())
+                        .expect("valid jinja expression"),
+                    then: NestedItemList::new(then.iter().map(spec).collect()),
+                    else_value: None,
+                    condition_span: None,
+                }),
+            })
+            .collect(),
+    )
 }
 
 /// Conda requirements split into build/host/run categories.
