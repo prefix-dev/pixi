@@ -104,10 +104,8 @@ impl From<&str> for Dependency {
 
 #[derive(Debug, Clone, Default)]
 pub struct Export {
-    /// The active build type: the first `<build_type>` without a condition or
-    /// whose condition holds (after [`PackageXml::evaluate_conditions`]).
-    pub build_type: Option<BuildType>,
-    /// Every `<build_type>` element, e.g. one for ROS 1 and one for ROS 2.
+    /// Every `<build_type>` element, e.g. one for ROS 1 and one for ROS 2;
+    /// [`PackageXml::build_type`] is the first that applies.
     pub build_types: Vec<BuildType>,
     pub architecture_independent: bool,
     pub metapackage: bool,
@@ -117,6 +115,8 @@ pub struct Export {
 pub struct BuildType {
     pub name: String,
     pub condition: Option<String>,
+    /// Set by [`PackageXml::evaluate_conditions`] when there is a condition.
+    pub evaluated_condition: Option<bool>,
 }
 
 impl PackageXml {
@@ -201,11 +201,13 @@ impl PackageXml {
         })
     }
 
-    /// Get the build type from the export section, defaulting to "catkin".
+    /// Get the build type from the export section: the first `<build_type>`
+    /// whose condition doesn't evaluate to false, defaulting to "catkin".
     pub fn build_type(&self) -> String {
         self.export
-            .build_type
-            .as_ref()
+            .build_types
+            .iter()
+            .find(|bt| bt.evaluated_condition != Some(false))
             .map(|bt| bt.name.clone())
             .unwrap_or_else(|| "catkin".to_string())
     }
@@ -236,19 +238,10 @@ impl PackageXml {
         eval_deps(&mut self.group_depends, env);
         eval_deps(&mut self.member_of_groups, env);
 
-        // Several <build_type>s with conditions (e.g. catkin for ROS 1 and
-        // ament_cmake for ROS 2): the first one that applies is the build type.
-        if self.export.build_types.len() > 1 {
-            self.export.build_type = self
-                .export
-                .build_types
-                .iter()
-                .find(|bt| {
-                    bt.condition
-                        .as_deref()
-                        .is_none_or(|c| evaluate_condition(c, env))
-                })
-                .cloned();
+        for bt in &mut self.export.build_types {
+            if let Some(condition) = &bt.condition {
+                bt.evaluated_condition = Some(evaluate_condition(condition, env));
+            }
         }
 
         self
@@ -305,10 +298,10 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
             n.text().map(|t| BuildType {
                 name: t.trim().to_string(),
                 condition: n.attribute("condition").map(|s| s.to_string()),
+                evaluated_condition: None,
             })
         })
         .collect();
-    let build_type = build_types.first().cloned();
 
     let architecture_independent = export
         .children()
@@ -319,7 +312,6 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
         .any(|n| n.is_element() && n.tag_name().name() == "metapackage");
 
     Export {
-        build_type,
         build_types,
         architecture_independent,
         metapackage,
