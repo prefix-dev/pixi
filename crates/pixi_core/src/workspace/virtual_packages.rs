@@ -977,10 +977,7 @@ packages: []
     }
 
     fn platform_data(subdir: Subdir, vps: Vec<GenericVirtualPackage>) -> PlatformData {
-        PlatformData {
-            subdir,
-            virtual_packages: vps,
-        }
+        PlatformData::new(subdir, vps)
     }
 
     /// The requirement side: match specs as a resolved package's `depends`

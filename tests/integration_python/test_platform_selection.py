@@ -493,8 +493,9 @@ worker = ["worker"]
     assert result.stdout.strip() == "from-default"
 
 
+@pytest.mark.parametrize("legacy_marker", [False, True])
 def test_rerun_keeps_lock_selected_platform_with_identical_declarations(
-    pixi: Path, tmp_pixi_workspace: Path
+    pixi: Path, tmp_pixi_workspace: Path, legacy_marker: bool
 ) -> None:
     """Platforms differing only in dependencies can't be told apart by their
     virtual packages, so the installed prefix must still map back to the one
@@ -526,10 +527,49 @@ SELECTION = "unbounded"
 which = "echo SELECTED-$SELECTION"
 """)
     verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
-    for _ in range(2):
-        verify_cli_command(
+    for run in range(2):
+        result = verify_cli_command(
             [pixi, "run", "--frozen", "which"],
             env={"CONDA_OVERRIDE_CUDA": "12.5"},
             cwd=tmp_pixi_workspace,
-            stdout_contains="SELECTED-unbounded",
         )
+        assert result.stdout.strip() == "SELECTED-unbounded"
+        if legacy_marker and run == 0:
+            marker_path = _marker(tmp_pixi_workspace)
+            marker = json.loads(marker_path.read_text())
+            del marker["resolved_platform"]["name"]
+            marker_path.write_text(json.dumps(marker))
+
+
+def test_platform_switch_with_identical_packages_keeps_selected_activation(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    channel = _channel(tmp_pixi_workspace)
+    (tmp_pixi_workspace / "pixi.toml").write_text(f"""
+[workspace]
+name = "identical-packages"
+channels = ["{channel.url}"]
+platforms = [
+    {{ name = "first", platform = "linux-64" }},
+    {{ name = "second", platform = "linux-64" }},
+]
+
+[dependencies]
+cpu-package = "*"
+
+[target.first.activation.env]
+SELECTION = "first"
+
+[target.second.activation.env]
+SELECTION = "second"
+
+[tasks]
+which = "echo SELECTED-$SELECTION"
+""")
+    for platform, expected in [("first", "first"), ("second", "second"), (None, "second")]:
+        args = ["--platform", platform] if platform else []
+        result = verify_cli_command(
+            [pixi, "run", *args, "which"],
+            cwd=tmp_pixi_workspace,
+        )
+        assert result.stdout.strip() == f"SELECTED-{expected}"
