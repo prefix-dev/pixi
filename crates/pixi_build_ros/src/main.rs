@@ -17,7 +17,7 @@ use rattler_build_recipe::stage0::{
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 
-use pixi_build_ros::build_script::render_build_script;
+use pixi_build_ros::build_script::{BuildMode, BuildType, ScriptVars, render_build_script};
 use pixi_build_ros::config::{PackageMappingSource, extract_distro_from_channels_list};
 use pixi_build_ros::distro::Distro;
 use pixi_build_ros::metadata::parse_and_render;
@@ -296,8 +296,20 @@ impl GenerateRecipe for RosGenerator {
         requirements.run = merge_conditional_lists(&requirements.run, &run_items)?;
 
         // Generate build script
-        let build_type = package_xml.build_type();
-        let build_script_content = render_build_script(&build_type, &distro.name, &manifest_root)?;
+        // The build script runs on the build machine, not the host platform.
+        let windows = Subdir::current().unwrap_or(Subdir::NoArch).is_windows();
+        let source_dir = manifest_root.display().to_string();
+        let build_script_content = render_build_script(
+            BuildType::of(&package_xml, &distro)?,
+            windows,
+            BuildMode::Incremental,
+            &ScriptVars {
+                source_dir: &source_dir,
+                package_prefix: distro.package_prefix(),
+                distro: &distro.name,
+                cmake_args: "",
+            },
+        );
 
         let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
         script_env.insert(
