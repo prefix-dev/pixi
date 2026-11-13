@@ -491,3 +491,45 @@ worker = ["worker"]
         cwd=tmp_pixi_workspace,
     )
     assert result.stdout.strip() == "from-default"
+
+
+def test_rerun_keeps_lock_selected_platform_with_identical_declarations(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Platforms differing only in dependencies can't be told apart by their
+    virtual packages, so the installed prefix must still map back to the one
+    the lock selected rather than to the first declared."""
+    channel = _channel(tmp_pixi_workspace)
+    channel.package("bounded-gpu-package", ["__cuda >=12,<12.2"])
+    (tmp_pixi_workspace / "pixi.toml").write_text(f"""
+[workspace]
+name = "identical-declarations"
+channels = ["{channel.url}"]
+platforms = [
+    {{ name = "bounded", platform = "linux-64", cuda = "12" }},
+    {{ name = "unbounded", platform = "linux-64", cuda = "12" }},
+]
+
+[target.bounded.dependencies]
+bounded-gpu-package = "*"
+
+[target.bounded.activation.env]
+SELECTION = "bounded"
+
+[target.unbounded.dependencies]
+gpu-package = "*"
+
+[target.unbounded.activation.env]
+SELECTION = "unbounded"
+
+[tasks]
+which = "echo SELECTED-$SELECTION"
+""")
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    for _ in range(2):
+        verify_cli_command(
+            [pixi, "run", "--frozen", "which"],
+            env={"CONDA_OVERRIDE_CUDA": "12.5"},
+            cwd=tmp_pixi_workspace,
+            stdout_contains="SELECTED-unbounded",
+        )
