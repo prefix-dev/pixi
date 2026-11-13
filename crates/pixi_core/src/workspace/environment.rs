@@ -181,11 +181,8 @@ impl<'p> Environment<'p> {
     }
 
     /// The name of the workspace platform this environment was last installed
-    /// for, recovered by matching the resolved platform in `conda-meta/pixi`
-    /// (subdir + virtual packages) against the declared platforms. Lets `pixi
-    /// run` default to what the user installed for without a repeated
-    /// `--platform`. `None` when the environment isn't installed or its
-    /// resolved platform is no longer declared.
+    /// for, provided its recorded name and definition are still declared.
+    /// Legacy markers without a name must match exactly one declaration.
     pub fn installed_resolved_platform_name(&self) -> Option<PixiPlatformName> {
         self.installed_resolved_platform()
             .map(|platform| platform.name().clone())
@@ -196,18 +193,25 @@ impl<'p> Environment<'p> {
     pub fn installed_resolved_platform(&self) -> Option<&'p PixiPlatform> {
         let (resolved, _) = self.installed_platforms();
         let resolved = resolved?;
-        self.workspace_manifest()
+        let mut matches = self
+            .workspace_manifest()
             .workspace
             .platforms
             .iter()
-            .find(|platform| {
+            .filter(|platform| {
                 let records = match platform.records() {
                     VirtualPackageRecords::Manifest(records)
                     | VirtualPackageRecords::Detected(records) => records,
                 };
-                platform.subdir() == resolved.subdir()
+                resolved
+                    .name
+                    .as_ref()
+                    .is_none_or(|name| platform.name() == name)
+                    && platform.subdir() == resolved.subdir()
                     && virtual_packages_match(records, resolved.virtual_packages())
-            })
+            });
+        let platform = matches.next()?;
+        matches.next().is_none().then_some(platform)
     }
 
     /// We store a hash of the lock file and all activation env variables in a

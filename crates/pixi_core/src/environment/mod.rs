@@ -300,9 +300,9 @@ impl Display for EnvironmentHash {
 ///
 /// Because a match suppresses the marker rewrite, the hash must fold in every
 /// input the marker records. Hence it covers not only the locked packages but
-/// also the install platform's subdir and declared virtual packages (the
-/// marker's `resolved_platform`): omit those and editing a virtual package such
-/// as `__linux` leaves the recorded platform stale.
+/// also the install platform's name, subdir, and declared virtual packages (the
+/// marker's `resolved_platform`), so changes to its identity or definition do
+/// not leave the recorded platform stale.
 #[derive(Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LockedEnvironmentHash(String);
 impl LockedEnvironmentHash {
@@ -342,6 +342,7 @@ impl LockedEnvironmentHash {
         // docs). Sort the virtual packages first so the hash is independent of
         // the order they appear in the manifest.
         if let Some(platform) = platform {
+            platform.name().hash(&mut hasher);
             platform.subdir().to_string().hash(&mut hasher);
             let records = match platform.records() {
                 VirtualPackageRecords::Manifest(records)
@@ -366,13 +367,15 @@ impl LockedEnvironmentHash {
     }
 }
 
-/// The conda subdir plus the virtual packages that define a [`PixiPlatform`].
+/// The identity and full definition of an installed platform.
 ///
-/// Stored instead of the platform's name so the full platform definition
-/// survives: a synthesised rich-platform name can't be parsed back into its
-/// virtual packages, and a bare subdir name drops them entirely.
+/// The name distinguishes platforms with identical definitions; the definition
+/// preserves capabilities that cannot be recovered from a name alone.
 #[derive(Serialize, Deserialize)]
 pub struct PlatformData {
+    /// The workspace platform name, absent for global environments and legacy markers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) name: Option<PixiPlatformName>,
     /// The conda subdir this platform targets, e.g. `linux-64`.
     pub(crate) subdir: Subdir,
     /// The virtual packages that define this platform.
@@ -386,6 +389,7 @@ impl PlatformData {
     /// [`PixiPlatform`].
     pub fn new(subdir: Subdir, virtual_packages: Vec<GenericVirtualPackage>) -> Self {
         Self {
+            name: None,
             subdir,
             virtual_packages,
         }
@@ -410,6 +414,7 @@ impl From<&PixiPlatform> for PlatformData {
             }
         };
         Self {
+            name: Some(platform.name().clone()),
             subdir: platform.subdir(),
             virtual_packages: records.clone(),
         }
@@ -1247,36 +1252,6 @@ mod tests {
             LockedEnvironmentHash::from_environment(environment, Some(&one)),
             LockedEnvironmentHash::from_environment(environment, Some(&other)),
         );
-    }
-
-    /// `PlatformData` stores the platform's composition (subdir + declared
-    /// virtual packages), not its name -- a custom rich-platform name carries
-    /// none of the virtual packages, so the name alone would be lossy.
-    #[test]
-    fn platform_data_captures_composition_not_name() {
-        let cuda = GenericVirtualPackage {
-            name: PackageName::from_str("__cuda").unwrap(),
-            version: Version::from_str("12").unwrap(),
-            build_string: BuildString::new_unchecked("0"),
-        };
-        let platform = PixiPlatform::new(
-            PixiPlatformName::try_from("gpu-box").unwrap(),
-            Subdir::Linux64,
-            vec![cuda.clone()],
-        )
-        .unwrap();
-
-        let data = PlatformData::from(&platform);
-        assert_eq!(data.subdir, Subdir::Linux64);
-        assert!(data.virtual_packages.contains(&cuda));
-
-        // The composition survives a JSON round-trip; the custom name is not
-        // part of the stored data.
-        let json = serde_json::to_string(&data).unwrap();
-        assert!(!json.contains("gpu-box"));
-        let restored: PlatformData = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.subdir, Subdir::Linux64);
-        assert!(restored.virtual_packages.contains(&cuda));
     }
 
     /// Markers written before pixi adopted CEP26 omit the default build. They
