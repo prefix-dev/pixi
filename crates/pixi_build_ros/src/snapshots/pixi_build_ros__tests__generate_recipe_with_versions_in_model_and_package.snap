@@ -75,7 +75,7 @@ requirements:
     - pip
     - pkg-config
     - setuptools
-    - ros-distro-mutex
+    - ros-distro-mutex * noetic_*
   run:
     - "asio >=9.0,<10.0.0"
     - ros-noetic-ros-package <=2.0.0
@@ -87,7 +87,7 @@ requirements:
     - xorg-libx11
     - xorg-libxext
     - tinyxml2 ==10.0.0
-    - ros-distro-mutex
+    - ros-distro-mutex * noetic_*
 about:
   license: Apache-2.0
   summary: Demo

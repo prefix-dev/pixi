@@ -17,7 +17,10 @@ use rattler_build_recipe::stage0::{
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 
-use pixi_build_ros::build_script::render_build_script;
+use pixi_build_ros::build_script::{
+    BuildMode, BuildType, ScriptVars, escape_quoted, is_batch, render_build_script,
+    script_interpreter,
+};
 use pixi_build_ros::config::{PackageMappingSource, extract_distro_from_channels_list};
 use pixi_build_ros::distro::Distro;
 use pixi_build_ros::metadata::parse_and_render;
@@ -118,7 +121,7 @@ impl GenerateRecipe for RosGenerator {
 
         let mut generated_recipe = parse_and_render(
             package_xml.clone(),
-            &distro.name,
+            &distro,
             model.clone(),
             extra_input_globs.clone(),
             package_mapping_files,
@@ -180,7 +183,7 @@ impl GenerateRecipe for RosGenerator {
                 &discovery.packages,
                 &package_xml.name,
                 &manifest_root,
-                &distro.name,
+                &distro,
             );
 
             // Apply per-class: a manual entry in the model for the same conda
@@ -246,6 +249,14 @@ impl GenerateRecipe for RosGenerator {
         if host_platform.is_osx() {
             build_deps.push("tapi");
         }
+        // The build script runs on the build machine, whose operating system is
+        // the host platform's: `pixi build` does not cross-compile between
+        // operating systems.
+        let windows = host_platform.is_windows();
+        let build_type = BuildType::of(&package_xml, &distro)?;
+        if let Some(interpreter) = script_interpreter(build_type, windows) {
+            build_deps.push(interpreter);
+        }
 
         let mut build_items = package_requirements.build.clone();
         let mut host_items = package_requirements.host.clone();
@@ -279,14 +290,15 @@ impl GenerateRecipe for RosGenerator {
             )));
         }
 
-        // Add distro mutex to host and run
-        let mutex_name = distro.version.mutex_package_name();
+        // Add the distro mutex to host and run: the package names don't carry
+        // the distribution, the mutex pins it
+        let mutex = distro.mutex_spec();
         host_items.push(Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from(mutex_name),
+            SerializableMatchSpec::from(mutex.as_str()),
             None,
         )));
         run_items.push(Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from(mutex_name),
+            SerializableMatchSpec::from(mutex.as_str()),
             None,
         )));
 
@@ -297,8 +309,22 @@ impl GenerateRecipe for RosGenerator {
         requirements.run = merge_conditional_lists(&requirements.run, &run_items)?;
 
         // Generate build script
-        let build_type = package_xml.build_type();
-        let build_script_content = render_build_script(&build_type, &distro.name, &manifest_root)?;
+        let source_dir = escape_quoted(
+            &manifest_root.display().to_string(),
+            is_batch(build_type, windows),
+        );
+        let build_script_content = render_build_script(
+            build_type,
+            windows,
+            BuildMode::Incremental,
+            &ScriptVars {
+                generator: "pixi-build-ros",
+                source_dir: &source_dir,
+                package_prefix: &distro.package_prefix(),
+                distro: &distro.name,
+                cmake_args: "",
+            },
+        );
 
         let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
         script_env.insert(
@@ -320,10 +346,13 @@ impl GenerateRecipe for RosGenerator {
             .build
             .plan
             .script_mut()
-            .expect("generated recipes use script mode") =
-            Script::from_content(build_script_content)
+            .expect("generated recipes use script mode") = Script {
+            interpreter: script_interpreter(build_type, windows)
+                .map(|i| Value::new_concrete(i.to_string(), None)),
+            ..Script::from_content(build_script_content)
                 .with_env(script_env)
-                .with_secrets(model.secrets.iter().cloned().collect());
+                .with_secrets(model.secrets.iter().cloned().collect())
+        };
 
         Ok(generated_recipe)
     }
@@ -456,39 +485,39 @@ mod tests {
             package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
                 .unwrap();
 
-        insta::assert_yaml_snapshot!(requirements.build, @r###"
-        - ros-jazzy-ament-cmake
-        - ros-jazzy-example-interfaces
-        - ros-jazzy-rcl
-        - ros-jazzy-rclcpp
-        - ros-jazzy-rclcpp-components
-        - ros-jazzy-rcl-interfaces
-        - ros-jazzy-rcpputils
-        - ros-jazzy-rcutils
-        - ros-jazzy-rmw
-        - ros-jazzy-std-msgs
-        - ros-jazzy-ament-cmake-pytest
-        - ros-jazzy-ament-lint-auto
-        - ros-jazzy-ament-lint-common
-        - ros-jazzy-launch
-        - ros-jazzy-launch-testing
-        - ros-jazzy-launch-testing-ament-cmake
-        - ros-jazzy-launch-testing-ros
-        - ros-jazzy-ros-workspace
-        "###);
-        insta::assert_yaml_snapshot!(requirements.run, @r###"
-        - ros-jazzy-example-interfaces
-        - ros-jazzy-launch-ros
-        - ros-jazzy-launch-xml
-        - ros-jazzy-rcl
-        - ros-jazzy-rclcpp
-        - ros-jazzy-rclcpp-components
-        - ros-jazzy-rcl-interfaces
-        - ros-jazzy-rcpputils
-        - ros-jazzy-rcutils
-        - ros-jazzy-rmw
-        - ros-jazzy-std-msgs
-        "###);
+        insta::assert_yaml_snapshot!(requirements.build, @"
+        - ros2-ament-cmake
+        - ros2-example-interfaces
+        - ros2-rcl
+        - ros2-rclcpp
+        - ros2-rclcpp-components
+        - ros2-rcl-interfaces
+        - ros2-rcpputils
+        - ros2-rcutils
+        - ros2-rmw
+        - ros2-std-msgs
+        - ros2-ament-cmake-pytest
+        - ros2-ament-lint-auto
+        - ros2-ament-lint-common
+        - ros2-launch
+        - ros2-launch-testing
+        - ros2-launch-testing-ament-cmake
+        - ros2-launch-testing-ros
+        - ros2-ros-workspace
+        ");
+        insta::assert_yaml_snapshot!(requirements.run, @"
+        - ros2-example-interfaces
+        - ros2-launch-ros
+        - ros2-launch-xml
+        - ros2-rcl
+        - ros2-rclcpp
+        - ros2-rclcpp-components
+        - ros2-rcl-interfaces
+        - ros2-rcpputils
+        - ros2-rcutils
+        - ros2-rmw
+        - ros2-std-msgs
+        ");
     }
 
     #[test]
@@ -509,13 +538,13 @@ mod tests {
             package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
                 .unwrap();
 
-        insta::assert_yaml_snapshot!(requirements.build, @r###"
-        - ros-jazzy-ament-cmake
-        - ros-jazzy-rosidl-default-generators
-        - ros-jazzy-ament-lint-auto
-        - ros-jazzy-ament-lint-common
-        - ros-jazzy-ros-workspace
-        "###);
+        insta::assert_yaml_snapshot!(requirements.build, @"
+        - ros2-ament-cmake
+        - ros2-rosidl-default-generators
+        - ros2-ament-lint-auto
+        - ros2-ament-lint-common
+        - ros2-ros-workspace
+        ");
     }
 
     #[tokio::test]
@@ -563,7 +592,7 @@ mod tests {
                 .as_concrete()
                 .unwrap()
                 .to_string(),
-            "ros-jazzy-demo-nodes-cpp"
+            "ros2-demo-nodes-cpp"
         );
         assert_eq!(
             generated_recipe
@@ -576,26 +605,26 @@ mod tests {
             "0.37.1"
         );
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe.requirements, @r###"
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.requirements, @r#"
         build:
-          - ros-jazzy-ament-cmake
-          - ros-jazzy-example-interfaces
-          - ros-jazzy-rcl
-          - ros-jazzy-rclcpp
-          - ros-jazzy-rclcpp-components
-          - ros-jazzy-rcl-interfaces
-          - ros-jazzy-rcpputils
-          - ros-jazzy-rcutils
-          - ros-jazzy-rmw
-          - ros-jazzy-std-msgs
-          - ros-jazzy-ament-cmake-pytest
-          - ros-jazzy-ament-lint-auto
-          - ros-jazzy-ament-lint-common
-          - ros-jazzy-launch
-          - ros-jazzy-launch-testing
-          - ros-jazzy-launch-testing-ament-cmake
-          - ros-jazzy-launch-testing-ros
-          - ros-jazzy-ros-workspace
+          - ros2-ament-cmake
+          - ros2-example-interfaces
+          - ros2-rcl
+          - ros2-rclcpp
+          - ros2-rclcpp-components
+          - ros2-rcl-interfaces
+          - ros2-rcpputils
+          - ros2-rcutils
+          - ros2-rmw
+          - ros2-std-msgs
+          - ros2-ament-cmake-pytest
+          - ros2-ament-lint-auto
+          - ros2-ament-lint-common
+          - ros2-launch
+          - ros2-launch-testing
+          - ros2-launch-testing-ament-cmake
+          - ros2-launch-testing-ros
+          - ros2-ros-workspace
           - ninja
           - python
           - setuptools
@@ -611,44 +640,44 @@ mod tests {
           - if: build_platform != target_platform
             then: "cross-python_${{ target_platform }}"
         host:
-          - ros-jazzy-ament-cmake
-          - ros-jazzy-example-interfaces
-          - ros-jazzy-rcl
-          - ros-jazzy-rclcpp
-          - ros-jazzy-rclcpp-components
-          - ros-jazzy-rcl-interfaces
-          - ros-jazzy-rcpputils
-          - ros-jazzy-rcutils
-          - ros-jazzy-rmw
-          - ros-jazzy-std-msgs
-          - ros-jazzy-ament-cmake-pytest
-          - ros-jazzy-ament-lint-auto
-          - ros-jazzy-ament-lint-common
-          - ros-jazzy-launch
-          - ros-jazzy-launch-testing
-          - ros-jazzy-launch-testing-ament-cmake
-          - ros-jazzy-launch-testing-ros
-          - ros-jazzy-ros-workspace
+          - ros2-ament-cmake
+          - ros2-example-interfaces
+          - ros2-rcl
+          - ros2-rclcpp
+          - ros2-rclcpp-components
+          - ros2-rcl-interfaces
+          - ros2-rcpputils
+          - ros2-rcutils
+          - ros2-rmw
+          - ros2-std-msgs
+          - ros2-ament-cmake-pytest
+          - ros2-ament-lint-auto
+          - ros2-ament-lint-common
+          - ros2-launch
+          - ros2-launch-testing
+          - ros2-launch-testing-ament-cmake
+          - ros2-launch-testing-ros
+          - ros2-ros-workspace
           - python
           - numpy
           - pip
           - pkg-config
           - setuptools
-          - ros2-distro-mutex
+          - ros2-distro-mutex * jazzy_*
         run:
-          - ros-jazzy-example-interfaces
-          - ros-jazzy-launch-ros
-          - ros-jazzy-launch-xml
-          - ros-jazzy-rcl
-          - ros-jazzy-rclcpp
-          - ros-jazzy-rclcpp-components
-          - ros-jazzy-rcl-interfaces
-          - ros-jazzy-rcpputils
-          - ros-jazzy-rcutils
-          - ros-jazzy-rmw
-          - ros-jazzy-std-msgs
-          - ros2-distro-mutex
-        "###);
+          - ros2-example-interfaces
+          - ros2-launch-ros
+          - ros2-launch-xml
+          - ros2-rcl
+          - ros2-rclcpp
+          - ros2-rclcpp-components
+          - ros2-rcl-interfaces
+          - ros2-rcpputils
+          - ros2-rcutils
+          - ros2-rmw
+          - ros2-std-msgs
+          - ros2-distro-mutex * jazzy_*
+        "#);
     }
 
     /// Helper to generate a recipe from a package.xml fixture.
@@ -784,7 +813,7 @@ mod tests {
     /// to make the snapshot focused.
     fn filter_conditional_deps(generated: &GeneratedRecipe, distro: &str) -> serde_json::Value {
         let declared = ["ament-cmake", "catkin", "rclcpp", "roscpp"];
-        let prefix = format!("ros-{distro}-");
+        let prefix = format!("{}-", Distro::new(distro).package_prefix());
 
         let filter = |list: &rattler_build_recipe::stage0::ConditionalList<
             SerializableMatchSpec,
@@ -816,25 +845,25 @@ mod tests {
     #[tokio::test]
     async fn test_condition_evaluation_ros2_default() {
         let generated = generate_conditional_recipe("jazzy", None).await;
-        insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "jazzy"), @r###"
+        insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "jazzy"), @"
         build:
-          - ros-jazzy-ament-cmake
-          - ros-jazzy-rclcpp
+          - ros2-ament-cmake
+          - ros2-rclcpp
         run:
-          - ros-jazzy-rclcpp
-        "###);
+          - ros2-rclcpp
+        ");
     }
 
     #[tokio::test]
     async fn test_condition_evaluation_ros1_default() {
         let generated = generate_conditional_recipe("noetic", None).await;
-        insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "noetic"), @r###"
+        insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "noetic"), @"
         build:
           - ros-noetic-catkin
           - ros-noetic-roscpp
         run:
           - ros-noetic-roscpp
-        "###);
+        ");
     }
 
     #[tokio::test]
@@ -844,13 +873,13 @@ mod tests {
             ("ROS_DISTRO".to_string(), "custom-jazzy".to_string()),
         ]);
         let generated = generate_conditional_recipe("jazzy", Some(env)).await;
-        insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "jazzy"), @r###"
+        insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "jazzy"), @"
         build:
-          - ros-jazzy-catkin
-          - ros-jazzy-roscpp
+          - ros2-catkin
+          - ros2-roscpp
         run:
-          - ros-jazzy-roscpp
-        "###);
+          - ros2-roscpp
+        ");
     }
 
     #[tokio::test]
@@ -1047,7 +1076,7 @@ mod tests {
                 .as_concrete()
                 .unwrap()
                 .to_string(),
-            "ros-jazzy-demo-nodes-cpp"
+            "ros2-demo-nodes-cpp"
         );
     }
 
@@ -1095,7 +1124,7 @@ mod tests {
                 .as_concrete()
                 .unwrap()
                 .to_string(),
-            "ros-humble-demo-nodes-cpp"
+            "ros2-demo-nodes-cpp"
         );
     }
 
@@ -1361,19 +1390,18 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let sibling_in_build =
-            find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-b")
-                .expect("sibling should appear in build requirements");
+        let sibling_in_build = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-b")
+            .expect("sibling should appear in build requirements");
         assert!(
             sibling_in_build.0.url.is_some(),
-            "expected ros-jazzy-pkg-b to be a source dep, got: {sibling_in_build}"
+            "expected ros2-pkg-b to be a source dep, got: {sibling_in_build}"
         );
 
-        let sibling_in_run = find_concrete(&generated.recipe.requirements.run, "ros-jazzy-pkg-b")
+        let sibling_in_run = find_concrete(&generated.recipe.requirements.run, "ros2-pkg-b")
             .expect("sibling should also appear in run requirements");
         assert!(
             sibling_in_run.0.url.is_some(),
-            "expected ros-jazzy-pkg-b in run to be source, got: {sibling_in_run}"
+            "expected ros2-pkg-b in run to be source, got: {sibling_in_run}"
         );
     }
 
@@ -1408,7 +1436,7 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let sibling = find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-b")
+        let sibling = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-b")
             .expect("sibling should still be present as binary");
         assert!(
             sibling.0.url.is_none(),
@@ -1423,14 +1451,14 @@ mod tests {
         write_minimal_package_xml(&workspace_root.join("pkg_a"), "pkg_a", &["pkg_b"]);
         write_minimal_package_xml(&workspace_root.join("pkg_b"), "pkg_b", &[]);
 
-        // Model declares ros-jazzy-pkg-b in run only, with an explicit version.
+        // Model declares ros2-pkg-b in run only, with an explicit version.
         // Discovery must not override that entry, but build/host still get the
         // source dep because the manual entry was per-class.
         let model = project_fixture!({
             "targets": {
                 "defaultTarget": {
                     "runDependencies": {
-                        "ros-jazzy-pkg-b": { "binary": { "version": "==1.2.3" } }
+                        "ros2-pkg-b": { "binary": { "version": "==1.2.3" } }
                     }
                 }
             }
@@ -1457,14 +1485,14 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let in_run = find_concrete(&generated.recipe.requirements.run, "ros-jazzy-pkg-b")
+        let in_run = find_concrete(&generated.recipe.requirements.run, "ros2-pkg-b")
             .expect("run entry should remain");
         assert!(
             in_run.0.url.is_none(),
             "manual model entry must stay binary, got source: {in_run}"
         );
 
-        let in_build = find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-b")
+        let in_build = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-b")
             .expect("build entry should exist");
         assert!(
             in_build.0.url.is_some(),
@@ -1566,7 +1594,7 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let sibling = find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-b")
+        let sibling = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-b")
             .expect("ignored sibling should still appear via RoboStack fallback");
         assert!(
             sibling.0.url.is_none(),
@@ -1603,7 +1631,7 @@ mod tests {
             .await
             .expect("generate_recipe should succeed");
 
-        let self_in_build = find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-a");
+        let self_in_build = find_concrete(&generated.recipe.requirements.build, "ros2-pkg-a");
         assert!(
             self_in_build.is_none(),
             "current package must not list itself as a source dep: {self_in_build:?}"

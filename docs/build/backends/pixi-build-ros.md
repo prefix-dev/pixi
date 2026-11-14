@@ -65,11 +65,16 @@ When you want to install it into your environment, you can do so by adding the f
 
 ```toml
 [dependencies]
-ros-jazzy-my-ros-package = { path = "." }
+ros2-my-ros-package = { path = "." }
 # or if the package is in a separate pixi.toml
-# ros-jazzy-my-ros-package = { path = "src/my_ros_package" }
+# ros2-my-ros-package = { path = "src/my_ros_package" }
 ```
-Note that you need to specify the `ros-jazzy-` prefix when you use a distro configuration.
+Note that you need to specify the `ros2-` prefix (`ros-<distro>-` for ROS 1) when you use a distro configuration.
+
+!!! note "Migrating from `ros-<distro>-` names"
+    Earlier versions of the backend named ROS 2 packages `ros-<distro>-<name>`, as RoboStack's compatibility aliases are named.
+    Rename such entries in your `pixi.toml`, e.g. `ros-jazzy-my-ros-package` becomes `ros2-my-ros-package`.
+    RoboStack builds its ROS 2 packages for macOS 14 or newer, so on macOS add `[system-requirements]` with `macos = "14.0"` to your workspace.
 
 
 ### Automatic Metadata Detection
@@ -106,7 +111,7 @@ homepage = "https://github.com/user/my_ros_package"
 repository = "https://github.com/user/my_ros_package"
 ```
 
-The backend will automatically use the metadata from `package.xml` to generate a complete conda package named `ros-jazzy-my-ros-package`.
+The backend will automatically use the metadata from `package.xml` to generate a complete conda package named `ros2-my-ros-package`.
 The fields in the `pixi.toml` will override the values from `package.xml` if they are explicitly set.
 
 ### Automatic Distro Detection
@@ -135,15 +140,15 @@ Because the definition of a dependency in a `package.xml` file is not similar to
 - **Workspace siblings**: Other ROS packages in the same workspace are discovered automatically and resolved as **source** dependencies, built from their sibling directory. See [Workspace Source Discovery](#workspace-source-discovery).
 - **Known dependencies**: Mapped using the [`robostack.yaml`](https://github.com/prefix-dev/pixi-build-backends/blob/main/backends/pixi-build-ros/robostack.yaml).
 - **Custom mappings**: You can provide additional mappings in your `pixi.toml` under [`[package.build.config.extra-package-mappings]`](#extra-package-mappings)
-- **Other packages**: Mapped to `ros-<distro>-<package-name>` format.
+- **Other packages**: Mapped to RoboStack's names: `ros2-<package-name>` for ROS 2 and `ros-<distro>-<package-name>` for ROS 1.
 
-The `<distro>` part of the package name is automatically generated based on the `distro` configuration.
+ROS 2 names don't include the distribution: the generated recipe pins the distro mutex (`ros2-distro-mutex * <distro>_*`) to the `distro` configuration instead.
 
 ### Workspace Source Discovery
 
 When a `package.xml` declares a `<depend>` (or `build_depend` / `run_depend` / `exec_depend`) on another ROS package that lives in the same workspace, the backend automatically resolves it as a source dependency. There is no need to hand-write `path = "..."` entries in `pixi.toml` for every sibling reference.
 
-Concretely, the backend walks the workspace root looking for every `package.xml`, and for each declared dependency in the current package whose `<name>` matches a sibling's `<name>`, it emits `ros-<distro>-<sibling-name>` as a source dep pointing at the sibling's `package.xml` instead of mapping it through RoboStack as a binary.
+Concretely, the backend walks the workspace root looking for every `package.xml`, and for each declared dependency in the current package whose `<name>` matches a sibling's `<name>`, it emits `ros2-<sibling-name>` as a source dep pointing at the sibling's `package.xml` instead of mapping it through RoboStack as a binary.
 
 Discovery follows colcon conventions: directories that contain a `COLCON_IGNORE`, `AMENT_IGNORE`, or `CATKIN_IGNORE` marker file are pruned from the walk. Colcon writes these markers into its own `build/`, `install/`, and `log/` directories on first use, so those are skipped automatically once a colcon build has run.
 
@@ -153,10 +158,10 @@ A manual entry in `pixi.toml` always wins over discovery, per requirement class.
 
 ```toml
 [package.run-dependencies]
-ros-jazzy-pkg-b = { binary = { version = "==1.2.3" } }
+ros2-pkg-b = { binary = { version = "==1.2.3" } }
 ```
 
-then `ros-jazzy-pkg-b` stays a pinned binary in the `run` class, while discovery still applies in `build` and `host` if the same sibling is referenced there. Use this to pin a single sibling against a stability baseline while still iterating on the rest of the workspace. To skip discovery entirely for a single package, set [`ignore-workspace-sources = true`](#ignore-workspace-sources) on that package.
+then `ros2-pkg-b` stays a pinned binary in the `run` class, while discovery still applies in `build` and `host` if the same sibling is referenced there. Use this to pin a single sibling against a stability baseline while still iterating on the rest of the workspace. To skip discovery entirely for a single package, set [`ignore-workspace-sources = true`](#ignore-workspace-sources) on that package.
 
 ## Configuration Options
 
@@ -169,7 +174,7 @@ You can customize the ROS backend behavior using the `[package.build.config]` se
 - **Target Merge Behavior**: `Overwrite` - Platform-specific distro takes precedence over base
 
 The ROS distribution to build for. This affects dependency mapping and build configuration.
-If set the package name will be prefixed with `ros-<distro>-` automatically, otherwise the package name from `pixi.toml` or `package.xml` is used.
+If set the package name will be prefixed with `ros2-` (`ros-<distro>-` for ROS 1) automatically, otherwise the package name from `pixi.toml` or `package.xml` is used.
 
 ```toml
 [package.build.config]
@@ -283,7 +288,7 @@ package_name:  # The name of the package in the package.xml
 package_name2: # The name of the package in the package.xml
   conda: [package1, package2] # Maps to a list of conda packages
 ros_package:   # The name of the package in the package.xml
-  ros: ros_package # Maps to a RoboStack style package name, e.g. `ros-<distro>-ros-package`
+  ros: ros_package # Maps to a RoboStack style package name, e.g. `ros2-ros-package`
 ```
 
 

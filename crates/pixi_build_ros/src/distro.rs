@@ -1,8 +1,9 @@
 //! ROS distribution metadata.
 //!
 //! Maps a ROS distribution name to the ROS version it belongs to. That version
-//! selects the distro mutex package, the `ROS_VERSION` build environment
-//! variable, and whether `ros_workspace` is added as a build dependency.
+//! selects the conda package names (`ros2-<name>` / `ros-<name>`), the distro
+//! mutex package, the `ROS_VERSION` build environment variable, and whether
+//! `ros_workspace` is added as a dependency.
 
 /// The ROS 1 distributions.
 ///
@@ -78,6 +79,28 @@ impl Distro {
         let version = RosVersion::for_distro(&name);
         Self { name, version }
     }
+
+    /// The prefix of the conda names of this distribution's ROS packages, as
+    /// RoboStack names them: `ros2` for ROS 2 (the names don't say which
+    /// distribution a package belongs to; the mutex does) and `ros-<distro>`
+    /// for ROS 1, whose channels (robostack-noetic) only have those names.
+    pub fn package_prefix(&self) -> String {
+        match self.version {
+            RosVersion::Ros1 => format!("ros-{}", self.name),
+            RosVersion::Ros2 => "ros2".to_string(),
+        }
+    }
+
+    /// The conda name of the ROS package `ros_name`, e.g. `ros2-demo-nodes-cpp`.
+    pub fn conda_name(&self, ros_name: &str) -> String {
+        format!("{}-{}", self.package_prefix(), ros_name.replace('_', "-"))
+    }
+
+    /// The distro mutex pinned to this distribution: RoboStack builds the mutex
+    /// of a distribution with the build string `<distribution>_<build number>`.
+    pub fn mutex_spec(&self) -> String {
+        format!("{} * {}_*", self.version.mutex_package_name(), self.name)
+    }
 }
 
 #[cfg(test)]
@@ -131,6 +154,26 @@ mod tests {
     fn test_mutex_package_name() {
         assert_eq!(RosVersion::Ros1.mutex_package_name(), "ros-distro-mutex");
         assert_eq!(RosVersion::Ros2.mutex_package_name(), "ros2-distro-mutex");
+    }
+
+    #[test]
+    fn test_conda_names() {
+        assert_eq!(
+            Distro::new("jazzy").conda_name("demo_nodes_cpp"),
+            "ros2-demo-nodes-cpp"
+        );
+        assert_eq!(
+            Distro::new("noetic").conda_name("roscpp"),
+            "ros-noetic-roscpp"
+        );
+        assert_eq!(
+            Distro::new("jazzy").mutex_spec(),
+            "ros2-distro-mutex * jazzy_*"
+        );
+        assert_eq!(
+            Distro::new("noetic").mutex_spec(),
+            "ros-distro-mutex * noetic_*"
+        );
     }
 
     #[test]
