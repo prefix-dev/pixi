@@ -1,10 +1,7 @@
 use crate::cli_config::{
     LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
 };
-use crate::shared::tree::{
-    Dependency, Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
-    print_inverted_dependency_tree,
-};
+use crate::shared::tree::{Dependency, Package, PackageSource, print_requested_tree};
 use ahash::HashSet;
 use clap::Parser;
 use console::Color;
@@ -65,6 +62,10 @@ pub struct Args {
     /// Invert tree and show what depends on given package in the regex argument
     #[arg(short, long, requires = "regex")]
     pub invert: bool,
+
+    /// Output the dependency tree as JSON
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -150,21 +151,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         eprintln!("Installed for: {platform}");
     }
 
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock();
-    if args.invert {
-        print_inverted_dependency_tree(
-            &mut handle,
-            &build_reverse_dependency_map(&dep_map),
-            &direct_deps,
-            &args.regex,
-        )
-        .wrap_err("Couldn't print the inverted dependency tree")?;
-    } else {
-        print_dependency_tree(&mut handle, &dep_map, &direct_deps, &args.regex)
-            .wrap_err("Couldn't print the dependency tree")?;
-    }
-    Ok(())
+    print_requested_tree(
+        &dep_map,
+        &direct_deps,
+        args.regex.as_deref(),
+        args.invert,
+        args.json,
+    )
 }
 
 /// Per-package activated PyPI extras, propagated transitively from the
@@ -325,11 +318,8 @@ impl<'a> DependencyMapBuilder<'a> {
                 continue;
             };
             let version = match package {
-                LockedPackage::Conda(c) => c
-                    .record()
-                    .map(|r| r.version.to_string())
-                    .unwrap_or_default(),
-                LockedPackage::Pypi(p) => p.version_string(),
+                LockedPackage::Conda(c) => c.record().map(|r| r.version.to_string()),
+                LockedPackage::Pypi(p) => p.version().map(ToString::to_string),
             };
             let dependencies =
                 Self::merge_edges(edges.into_iter().filter(|e| !e.name.starts_with("__")));
@@ -457,15 +447,13 @@ pub fn direct_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::tree::{Tree, build_dependency_tree, print_tree, print_tree_json};
     use pixi_core::Workspace;
     use rattler_conda_types::Subdir;
     use rattler_lock::LockFile;
 
-    /// Render the PyPI subset of an example workspace through the production
-    /// printer into a buffer for snapshot comparison.
-    fn render_pypi_tree(manifest: &std::path::Path, platform: Subdir) -> String {
-        console::set_colors_enabled(false);
-
+    /// Build the tree of the PyPI subset of an example workspace.
+    fn build_pypi_tree(manifest: &std::path::Path, platform: Subdir) -> Tree {
         let workspace = Workspace::from_path(manifest).unwrap();
         let environment = workspace.default_environment();
         let pixi_platform = (&workspace)
@@ -493,8 +481,19 @@ mod tests {
         let mut direct_deps = direct_dependencies(&environment, pixi_platform, &dep_map);
         direct_deps.retain(|n| dep_map.contains_key(n));
 
+        build_dependency_tree(&dep_map, &direct_deps, None).unwrap()
+    }
+
+    fn render_pypi_tree(manifest: &std::path::Path, platform: Subdir) -> String {
+        console::set_colors_enabled(false);
         let mut buf: Vec<u8> = Vec::new();
-        print_dependency_tree(&mut buf, &dep_map, &direct_deps, &None).unwrap();
+        print_tree(&mut buf, &build_pypi_tree(manifest, platform)).unwrap();
+        String::from_utf8(buf).unwrap()
+    }
+
+    fn render_pypi_tree_json(manifest: &std::path::Path, platform: Subdir) -> String {
+        let mut buf: Vec<u8> = Vec::new();
+        print_tree_json(&mut buf, &build_pypi_tree(manifest, platform)).unwrap();
         String::from_utf8(buf).unwrap()
     }
 
@@ -507,5 +506,12 @@ mod tests {
                 insta::assert_snapshot!(render_pypi_tree(manifest, Subdir::Linux64));
             }
         );
+    }
+
+    #[test]
+    fn pypi_extras_tree_json_snapshot() {
+        let manifest = std::path::Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("examples/editable-with-extras/pixi.toml");
+        insta::assert_snapshot!(render_pypi_tree_json(&manifest, Subdir::Linux64));
     }
 }

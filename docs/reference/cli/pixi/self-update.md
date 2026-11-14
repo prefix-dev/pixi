@@ -30,6 +30,8 @@ pixi self-update [OPTIONS]
 <br>**default**: `false`
 - <a id="arg---from-url" href="#arg---from-url">`--from-url <FROM_URL>`</a>
 :  The github releases URL, useful when behind a proxy, or using custom Pixi release
+- <a id="arg---nightly" href="#arg---nightly">`--nightly`</a>
+:  Update to a development build of the `main` branch instead of a release
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>

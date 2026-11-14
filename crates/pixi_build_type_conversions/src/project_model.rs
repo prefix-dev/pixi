@@ -675,6 +675,33 @@ mod tests {
     }
 
     #[test]
+    fn test_package_version_is_converted_verbatim() {
+        let input = r#"
+        name = "example"
+        version = "1.01"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let version = project_model.version.expect("version is forwarded");
+
+        assert_eq!(version.as_str(), "1.01");
+    }
+
+    #[test]
     fn test_package_build_flags_are_converted_to_project_model() {
         let input = r#"
         name = "example"

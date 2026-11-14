@@ -1,0 +1,39 @@
+# `foo-meta` pins `libfoo` exactly, and only `libfoo` uses the `package3`
+# variant from the workspace.
+recipe:
+  name: multi-output-pinned-variant
+  version: 0.1.0
+
+build:
+  number: 0
+
+outputs:
+  - package:
+      name: libfoo
+    requirements:
+      host:
+        - package3
+    build:
+      script:
+        - if: win
+          then:
+            - if not exist "%PREFIX%" mkdir "%PREFIX%"
+            - echo libfoo > %PREFIX%\libfoo.txt
+          else:
+            - mkdir -p $PREFIX
+            - echo libfoo > $PREFIX/libfoo.txt
+
+  - package:
+      name: foo-meta
+    requirements:
+      run:
+        - ${{ pin_subpackage("libfoo", exact=True) }}
+    build:
+      script:
+        - if: win
+          then:
+            - if not exist "%PREFIX%" mkdir "%PREFIX%"
+            - echo foo-meta > %PREFIX%\foo-meta.txt
+          else:
+            - mkdir -p $PREFIX
+            - echo foo-meta > $PREFIX/foo-meta.txt

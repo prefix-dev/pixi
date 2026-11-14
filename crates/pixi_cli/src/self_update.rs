@@ -61,6 +61,57 @@ pub struct Args {
     /// The github releases URL, useful when behind a proxy, or using custom Pixi release
     #[clap(long)]
     from_url: Option<String>,
+
+    /// Update to a development build of the `main` branch instead of a release.
+    ///
+    /// Development builds are published to <https://github.com/prefix-dev/pixi-nightly>.
+    /// Combine with `--version` to install a specific development build, e.g.
+    /// `--version 0.84.0-10-ge4b92dc9f`.
+    #[clap(long, conflicts_with = "from_url")]
+    nightly: bool,
+}
+
+/// The GitHub repository that pixi binaries are downloaded from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReleaseChannel {
+    /// Regular releases from `prefix-dev/pixi`.
+    Stable,
+    /// Development builds of `main` from `prefix-dev/pixi-nightly`.
+    Nightly,
+}
+
+impl ReleaseChannel {
+    fn from_args(args: &Args) -> Self {
+        if args.nightly {
+            Self::Nightly
+        } else {
+            Self::Stable
+        }
+    }
+
+    /// The releases page, without trailing slash.
+    fn releases_url(self) -> &'static str {
+        match self {
+            Self::Stable => consts::RELEASES_URL,
+            Self::Nightly => consts::NIGHTLY_RELEASES_URL,
+        }
+    }
+
+    /// The API endpoint for a release by tag, without trailing slash.
+    fn api_by_tag(self) -> &'static str {
+        match self {
+            Self::Stable => consts::RELEASES_API_BY_TAG,
+            Self::Nightly => consts::NIGHTLY_RELEASES_API_BY_TAG,
+        }
+    }
+
+    /// The API endpoint for the latest release.
+    fn api_latest(self) -> &'static str {
+        match self {
+            Self::Stable => consts::RELEASES_API_LATEST,
+            Self::Nightly => consts::NIGHTLY_RELEASES_API_LATEST,
+        }
+    }
 }
 
 /// Response from the Github API when fetching a release by tag.
@@ -109,10 +160,13 @@ fn default_archive_name() -> Option<String> {
     }
 }
 
-async fn latest_version(client: &ClientWithMiddleware) -> miette::Result<Version> {
+async fn latest_version(
+    client: &ClientWithMiddleware,
+    channel: ReleaseChannel,
+) -> miette::Result<Version> {
     // GitHub redirects the /latest endpoint to /tag/vX.Y.Z, so the tag is the
     // last segment of the final URL.
-    let url = format!("{}/latest", consts::RELEASES_URL);
+    let url = format!("{}/latest", channel.releases_url());
 
     let response = client
         .head(&url)
@@ -139,12 +193,13 @@ async fn latest_version(client: &ClientWithMiddleware) -> miette::Result<Version
 
 async fn fetch_release_notes(
     client: &ClientWithMiddleware,
+    channel: ReleaseChannel,
     version: &Option<Version>,
 ) -> miette::Result<String> {
     let url = if let Some(version) = version {
-        format!("{}/v{}", consts::RELEASES_API_BY_TAG, version)
+        format!("{}/v{}", channel.api_by_tag(), version)
     } else {
-        consts::RELEASES_API_LATEST.to_string()
+        channel.api_latest().to_string()
     };
 
     let response = client
@@ -213,6 +268,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     // A single client serves every request so TLS, proxy, and auth settings
     // are applied consistently.
     let client = build_reqwest_clients(Some(&config), None)?.1;
+    let channel = ReleaseChannel::from_args(&args);
 
     let is_quiet = global_options.quiet > 0;
     // Get the target version, without 'v' prefix, None for force latest version
@@ -236,7 +292,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
             if args.force {
                 None
             } else {
-                Some(latest_version(&client).await?)
+                Some(latest_version(&client, channel).await?)
             }
         }
     };
@@ -251,7 +307,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     let fetch_release_warning = if args.no_release_note || up_to_date || is_quiet {
         None
     } else {
-        match fetch_release_notes(&client, &target_version).await {
+        match fetch_release_notes(&client, channel, &target_version).await {
             Ok(release_notes) => {
                 // Print release notes
                 eprintln!(
@@ -264,9 +320,9 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
             Err(err) => {
                 // Failure to fetch release notes must not prevent self-update, especially if format changes
                 let release_url = if let Some(ref target_version) = target_version {
-                    format!("{}/v{}", consts::RELEASES_URL, target_version)
+                    format!("{}/v{}", channel.releases_url(), target_version)
                 } else {
-                    format!("{}/latest", consts::RELEASES_URL)
+                    format!("{}/latest", channel.releases_url())
                 };
                 Some(format!(
                     "{}Failed to fetch release notes ({}). Check the release page for more information: {}",
@@ -283,7 +339,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
         if !is_quiet {
             let target_version = match target_version {
                 Some(target_version) => target_version,
-                None => latest_version(&client).await?,
+                None => latest_version(&client, channel).await?,
             };
             eprintln!("{}", get_dry_run_message(&current_version, &target_version));
         }
@@ -346,7 +402,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     let pre_fix = if let Some(ref from_url) = args.from_url {
         from_url
     } else {
-        consts::RELEASES_URL
+        channel.releases_url()
     };
 
     let download_url = if let Some(ref target_version) = target_version {
@@ -507,6 +563,7 @@ mod tests {
     use clap::Parser;
     use pixi_config::{Config, GlobalConfigSource, TlsRootCerts};
     use std::path::PathBuf;
+    use std::str::FromStr;
 
     #[test]
     fn accepts_tls_options() {
@@ -522,6 +579,48 @@ mod tests {
 
         assert!(config.tls_no_verify());
         assert_eq!(config.tls_root_certs(), Some(TlsRootCerts::System));
+    }
+
+    #[test]
+    fn nightly_conflicts_with_from_url() {
+        let err = super::Args::try_parse_from([
+            "self-update",
+            "--nightly",
+            "--from-url",
+            "https://example.com/releases",
+        ])
+        .unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn nightly_selects_nightly_channel() {
+        let args = super::Args::try_parse_from(["self-update", "--nightly"]).unwrap();
+        assert_eq!(
+            super::ReleaseChannel::from_args(&args),
+            super::ReleaseChannel::Nightly
+        );
+        let args = super::Args::try_parse_from(["self-update"]).unwrap();
+        assert_eq!(
+            super::ReleaseChannel::from_args(&args),
+            super::ReleaseChannel::Stable
+        );
+    }
+
+    #[test]
+    fn nightly_versions_round_trip_to_their_tag() {
+        // The download URL is built from the parsed version, so it has to
+        // render back to the `git describe` tag of the nightly release.
+        let version = super::Version::from_str("0.84.0-10-ge4b92dc9f").unwrap();
+        assert_eq!(version.to_string(), "0.84.0-10-ge4b92dc9f");
+    }
+
+    #[test]
+    fn nightly_versions_order_between_releases() {
+        let v = |s: &str| super::Version::from_str(s).unwrap();
+        assert!(v("0.84.0") < v("0.84.0-9-gabcdef012"));
+        assert!(v("0.84.0-9-gabcdef012") < v("0.84.0-10-ge4b92dc9f"));
+        assert!(v("0.84.0-10-ge4b92dc9f") < v("0.85.0"));
     }
 
     #[test]

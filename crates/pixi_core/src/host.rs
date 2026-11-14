@@ -21,7 +21,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::workspace::grouped_environment::GroupedEnvironment;
+use crate::lock_file::virtual_packages::compute_required_virtual_package_specs;
+use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 use async_trait::async_trait;
 use miette::Diagnostic;
 use pixi_config::{CacheKind, Config, DetectorDecision, consent_origin};
@@ -1063,6 +1064,42 @@ impl HostScope {
                 platform_names.contains(platform.name()) && subdirs.contains(&platform.subdir())
             });
         Self::for_platforms(environment, platforms, &channel_config)
+    }
+
+    /// The scope for installing `environment` from `lock_file`, which differs
+    /// from [`Self::for_environment`] as follows:
+    ///
+    /// - names: also the virtual packages that the locked records of
+    ///   `environment` depend on, for the platforms this machine can run
+    /// - specs: none, so detection reads only the detector registrations of
+    ///   the channels instead of querying repodata for every dependency of
+    ///   the environment and its solve group
+    ///
+    /// The channels are the same.
+    pub(crate) fn for_locked_environment(
+        environment: &Environment<'_>,
+        lock_file: &rattler_lock::LockFile,
+    ) -> Result<Self, HostProbeError> {
+        let mut scope = Self::for_environment(&GroupedEnvironment::from(environment.clone()))?;
+        scope.specs.clear();
+        let subdirs = candidate_subdirs(host_subdir());
+        let platform_names = environment.platforms();
+        let platforms: Vec<_> = environment
+            .workspace_manifest()
+            .workspace
+            .platforms
+            .iter()
+            .filter(|platform| {
+                platform_names.contains(platform.name()) && subdirs.contains(&platform.subdir())
+            })
+            .collect();
+        scope.names.extend(
+            compute_required_virtual_package_specs(lock_file, environment.name(), &platforms)
+                .into_values()
+                .flatten()
+                .filter_map(|spec| spec.name.as_exact().cloned()),
+        );
+        Ok(scope)
     }
 
     fn for_script(

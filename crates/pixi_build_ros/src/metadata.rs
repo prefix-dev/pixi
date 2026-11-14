@@ -6,7 +6,7 @@
 use miette::IntoDiagnostic;
 use pixi_build_backend::generated_recipe::{GeneratedRecipe, MetadataProvider};
 use pixi_build_types::ProjectModel;
-use rattler_conda_types::Version;
+use rattler_conda_types::VersionWithSource;
 
 use crate::package_xml::PackageXml;
 
@@ -66,8 +66,8 @@ impl MetadataProvider for RosPackageXmlMetadataProvider {
         Ok(Some(format!("ros-{}-{}", self.distro_name, formatted)))
     }
 
-    fn version(&mut self) -> Result<Option<Version>, Self::Error> {
-        Ok(self.package_data.version.parse::<Version>().ok())
+    fn version(&mut self) -> Result<Option<VersionWithSource>, Self::Error> {
+        Ok(self.package_data.version.parse::<VersionWithSource>().ok())
     }
 
     fn homepage(&mut self) -> Result<Option<String>, Self::Error> {
@@ -84,15 +84,10 @@ impl MetadataProvider for RosPackageXmlMetadataProvider {
     }
 
     fn license(&mut self) -> Result<Option<String>, Self::Error> {
-        if self.package_data.licenses.len() == 1 && !self.package_data.licenses[0].contains("TODO")
-        {
-            Ok(Some(format!(
-                "LicenseRef-{}",
-                self.package_data.licenses[0]
-            )))
-        } else {
-            Ok(None)
-        }
+        Ok(crate::license::to_spdx(
+            &self.package_data.licenses,
+            &self.package_data.name,
+        ))
     }
 
     fn license_files(&mut self) -> Result<Option<Vec<String>>, Self::Error> {
@@ -161,10 +156,7 @@ mod tests {
             provider.version().unwrap().map(|v| v.to_string()),
             Some("0.0.1".to_string())
         );
-        assert_eq!(
-            provider.license().unwrap().as_deref(),
-            Some("LicenseRef-Apache License 2.0")
-        );
+        assert_eq!(provider.license().unwrap().as_deref(), Some("Apache-2.0"));
         assert_eq!(provider.description().unwrap().as_deref(), Some("Demo"));
         assert_eq!(
             provider.homepage().unwrap().as_deref(),

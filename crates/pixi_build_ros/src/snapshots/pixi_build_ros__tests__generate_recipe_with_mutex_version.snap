@@ -90,6 +90,7 @@ requirements:
     - asio <10.0.0
     - ros-distro-mutex
 about:
+  license: Apache-2.0
   summary: Demo
   description: Demo
 extra: {}

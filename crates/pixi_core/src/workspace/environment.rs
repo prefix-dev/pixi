@@ -85,22 +85,22 @@ impl<'p> Environment<'p> {
         &self.environment.name
     }
 
-    /// Host capabilities detected with this environment's effective solve channels.
-    pub fn host(&self) -> &'p HostDetection {
+    /// A shared snapshot of host capabilities that remains valid across refreshes.
+    pub fn host(&self) -> Arc<HostDetection> {
         self.workspace
             .environment_hosts()
             .get(self.name())
             .and_then(|host| host.get())
-            .map(Arc::as_ref)
-            .unwrap_or(&self.workspace.host)
+            .unwrap_or_else(|| self.workspace.host.clone())
     }
 
     /// Host values for reusing this prefix without rerunning its detectors.
-    pub(crate) fn host_for_cached_run(&self) -> std::borrow::Cow<'p, HostDetection> {
+    pub(crate) fn host_for_cached_run(&self) -> Arc<HostDetection> {
+        let host = self.host();
         let Ok(Some(file)) = crate::environment::read_environment_file(&self.dir()) else {
-            return std::borrow::Cow::Borrowed(self.host());
+            return host;
         };
-        self.host().for_cached_run(
+        let cached = host.for_cached_run(
             &file.detector_virtual_packages,
             file.resolved_platform
                 .iter()
@@ -112,7 +112,11 @@ impl<'p> Environment<'p> {
                         .flat_map(|platform| platform.requirements())
                         .filter_map(|spec| spec.name.as_exact()),
                 ),
-        )
+        );
+        match cached {
+            std::borrow::Cow::Borrowed(_) => host,
+            std::borrow::Cow::Owned(host) => Arc::new(host),
+        }
     }
 
     /// Returns the solve group to which this environment belongs, or `None` if
@@ -203,7 +207,7 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        self.best_declared_platform_with_host(self.host())
+        self.best_declared_platform_with_host(&self.host())
     }
 
     /// Selects the best declared platform using an independently detected host.
@@ -305,8 +309,9 @@ impl<'p> Environment<'p> {
     /// virtual packages declared by the workspace's host-subdir platforms
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
-        let current = self.host().subdir();
-        let system_virtual_packages = self.host().capabilities();
+        let host = self.host();
+        let current = host.subdir();
+        let system_virtual_packages = host.capabilities();
         let env_platforms = self.platforms();
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(

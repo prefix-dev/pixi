@@ -135,7 +135,7 @@ struct Cli {
 
 impl Cli {
     fn new() -> Self {
-        Self::with_bin_name(pixi_utils::executable_name())
+        Self::with_bin_name("pixi")
     }
 
     /// The CLI as it looks when `pixi` is invoked as `bin_name`, which decides

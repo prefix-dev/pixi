@@ -47,10 +47,7 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum AddSpecsError {
-    #[error(
-        "{} does not support wildcard dependencies",
-        pixi_utils::executable_name()
-    )]
+    #[error("pixi does not support wildcard dependencies")]
     WildcardDependency,
 
     #[error(transparent)]

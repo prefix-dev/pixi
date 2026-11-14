@@ -2,11 +2,18 @@ use std::{path::Path, slice::from_ref, sync::Arc};
 
 use pixi_config::{Config, GlobalConfigSource};
 use pixi_core::{
+    InstallFilter, UpdateLockFileOptions,
+    environment::LockFileUsage,
     host::{DenyAll, HostDetection, HostDetector, SkipReason, WantedNames},
+    lock_file::{ReinstallPackages, UpdateMode},
     workspace::{DiscoveryStart, Workspace, WorkspaceLocator},
 };
 use pixi_manifest::{EnvironmentName, FeaturesExt};
-use rattler_conda_types::{ChannelUrl, MatchSpec, ParseStrictness, Subdir};
+use rattler_conda_types::{
+    ChannelUrl, MatchSpec, PackageRecord, ParseStrictness, RepoDataRecord, Subdir,
+    package::DistArchiveIdentifier,
+};
+use rattler_lock::{CondaPackageData, LockFile, PlatformData, PlatformName};
 use url::Url;
 
 use crate::{
@@ -38,6 +45,186 @@ fn version(host: &HostDetection, name: &str) -> Option<String> {
         .iter()
         .find(|package| package.name.as_normalized() == name)
         .map(|package| package.version.to_string())
+}
+
+fn lock_from_channel(channel: &Url, package_names: &[&str]) -> LockFile {
+    let subdir = Subdir::current().unwrap();
+    let repodata: serde_json::Value = serde_json::from_slice(
+        &fs_err::read(channel.to_file_path().unwrap().join("noarch/repodata.json")).unwrap(),
+    )
+    .unwrap();
+    let mut builder = LockFile::builder()
+        .with_platforms(vec![PlatformData {
+            name: PlatformName::try_from(subdir.as_str()).unwrap(),
+            subdir,
+            virtual_packages: vec![],
+        }])
+        .unwrap();
+    builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+    builder.set_options("default", rattler_lock::SolveOptions::default());
+    for name in package_names {
+        let (filename, record) = ["packages", "packages.conda"]
+            .into_iter()
+            .filter_map(|key| repodata[key].as_object())
+            .flat_map(|packages| packages.iter())
+            .find(|(_, record)| record["name"].as_str() == Some(*name))
+            .unwrap();
+        let package_record: PackageRecord = serde_json::from_value(record.clone()).unwrap();
+        builder
+            .add_conda_package(
+                "default",
+                subdir.as_str(),
+                CondaPackageData::from(RepoDataRecord {
+                    package_record,
+                    url: channel.join(&format!("noarch/{filename}")).unwrap(),
+                    identifier: DistArchiveIdentifier::try_from_filename(filename).unwrap(),
+                    channel: Some(channel.to_string()),
+                }),
+            )
+            .unwrap();
+    }
+    builder.finish()
+}
+
+async fn revalidate_locked_prefix(workspace: &Workspace, lock_file: &LockFile) {
+    lock_file.to_path(&workspace.lock_file_path()).unwrap();
+    let (derived, _) = workspace
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Frozen,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    derived
+        .prefix(
+            &workspace.default_environment(),
+            UpdateMode::Revalidate,
+            &ReinstallPackages::default(),
+            &InstallFilter::default(),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn changed_lock_refreshes_host_before_revalidating_the_same_workspace() {
+    let root = tempfile::tempdir().unwrap();
+    let channel_dir = root.path().join("channel");
+    let counter = root.path().join("runs");
+    write_channel_with(&channel_dir, &[counting_detector(&counter, REPORT)]).await;
+    let channel = Url::from_directory_path(channel_dir).unwrap();
+    let subdir = Subdir::current().unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"[workspace]
+name = "changed-locked-host"
+channels = ["{channel}"]
+platforms = ["{subdir}"]
+"#
+    ))
+    .unwrap();
+    let workspace = WorkspaceLocator::default()
+        .with_search_start(DiscoveryStart::ExplicitManifest(pixi.manifest_path()))
+        .with_global_config_source(GlobalConfigSource::None)
+        .with_cli_config(config(&root.path().join("cache"), &[(&channel, "allow")]))
+        .locate()
+        .await
+        .unwrap();
+    let environment = workspace.default_environment();
+    let plain_lock = lock_from_channel(&channel, &["plain"]);
+    let good_lock = lock_from_channel(&channel, &["needs-good"]);
+    let equivalent_lock = lock_from_channel(&channel, &["plain", "needs-good"]);
+
+    revalidate_locked_prefix(&workspace, &plain_lock).await;
+    let plain_host = environment.host();
+    assert_eq!(version(&plain_host, "__test_good"), None);
+    assert_eq!(runs(&counter), 0);
+
+    // This install must validate the new lock's __test_good requirement, not
+    // the empty detector result retained from the first install.
+    revalidate_locked_prefix(&workspace, &good_lock).await;
+    let good_host = environment.host();
+    assert_eq!(version(&good_host, "__test_good").as_deref(), Some("1.2.3"));
+    assert_eq!(runs(&counter), 1);
+    assert!(!Arc::ptr_eq(&plain_host, &good_host));
+    assert!(Arc::ptr_eq(&workspace.host(), &good_host));
+    assert_eq!(version(&plain_host, "__test_good"), None);
+    pixi_utils::prefix::Prefix::new(environment.dir())
+        .find_designated_package(&rattler_conda_types::PackageName::try_from("needs-good").unwrap())
+        .await
+        .unwrap();
+
+    revalidate_locked_prefix(&workspace, &equivalent_lock).await;
+    assert!(Arc::ptr_eq(&good_host, &environment.host()));
+    assert_eq!(runs(&counter), 1);
+
+    revalidate_locked_prefix(&workspace, &plain_lock).await;
+    assert!(Arc::ptr_eq(&plain_host, &environment.host()));
+    assert_eq!(version(&environment.host(), "__test_good"), None);
+    assert_eq!(version(&good_host, "__test_good").as_deref(), Some("1.2.3"));
+
+    revalidate_locked_prefix(&workspace, &good_lock).await;
+    assert!(Arc::ptr_eq(&good_host, &environment.host()));
+    assert_eq!(runs(&counter), 1);
+}
+
+#[tokio::test]
+async fn solve_detection_supersedes_locked_detection_in_the_same_workspace() {
+    let root = tempfile::tempdir().unwrap();
+    let channel_dir = root.path().join("channel");
+    let counter = root.path().join("runs");
+    write_channel_with(&channel_dir, &[counting_detector(&counter, REPORT)]).await;
+    let channel = Url::from_directory_path(channel_dir).unwrap();
+    let subdir = Subdir::current().unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"[workspace]
+name = "solve-after-locked-host"
+channels = ["{channel}"]
+platforms = ["{subdir}"]
+
+[dependencies]
+needs-good = "*"
+"#
+    ))
+    .unwrap();
+    let workspace = WorkspaceLocator::default()
+        .with_search_start(DiscoveryStart::ExplicitManifest(pixi.manifest_path()))
+        .with_global_config_source(GlobalConfigSource::None)
+        .with_cli_config(config(&root.path().join("cache"), &[(&channel, "allow")]))
+        .locate()
+        .await
+        .unwrap();
+    let environment = workspace.default_environment();
+    let plain_lock = lock_from_channel(&channel, &["plain"]);
+    workspace
+        .refresh_locked_environment_host(&environment, &plain_lock)
+        .await
+        .unwrap();
+    let locked_host = environment.host();
+    assert_eq!(version(&locked_host, "__test_good"), None);
+    assert_eq!(runs(&counter), 0);
+
+    workspace
+        .refresh_environment_host(&environment)
+        .await
+        .unwrap();
+    let solve_host = environment.host();
+    assert_eq!(
+        version(&solve_host, "__test_good").as_deref(),
+        Some("1.2.3")
+    );
+    assert!(!Arc::ptr_eq(&locked_host, &solve_host));
+    assert_eq!(version(&locked_host, "__test_good"), None);
+    assert_eq!(runs(&counter), 1);
+
+    workspace
+        .refresh_locked_environment_host(&environment, &plain_lock)
+        .await
+        .unwrap();
+    assert!(Arc::ptr_eq(&solve_host, &environment.host()));
+    assert_eq!(runs(&counter), 1);
 }
 
 /// Locates a workspace whose repository configuration allows its detector
@@ -94,7 +281,7 @@ platforms = [{{ platform = "{subdir}", __test_good = "1" }}]
     workspace.refresh_environment_hosts().await.unwrap();
     assert_eq!(runs(&counter), usize::from(authorized));
     assert_eq!(
-        version(workspace.host(), "__test_good").as_deref(),
+        version(&workspace.host(), "__test_good").as_deref(),
         authorized.then_some("1.2.3")
     );
 }
@@ -453,7 +640,7 @@ channels = [{{ channel = "{high_url}", priority = 100 }}]
     workspace.refresh_environment_hosts().await.unwrap();
     let environment = workspace.default_environment();
     assert_eq!(
-        version(environment.host(), "__test_good").as_deref(),
+        version(&environment.host(), "__test_good").as_deref(),
         Some("1.2.3")
     );
     assert_eq!(
@@ -474,7 +661,7 @@ channels = [{{ channel = "{high_url}", priority = 100 }}]
             .to_string(),
         "1"
     );
-    assert!(std::ptr::eq(workspace.host(), environment.host()));
+    assert!(Arc::ptr_eq(&workspace.host(), &environment.host()));
     assert_eq!(fs_err::read_to_string(counter).unwrap().lines().count(), 1);
 }
 
@@ -540,13 +727,13 @@ group-allowed = {{ features = ["allowed"], no-default-feature = true, solve-grou
     assert!(reversed.best_declared_platform().is_none());
     assert!(group_denied.best_declared_platform().is_none());
     assert!(group_allowed.best_declared_platform().is_none());
-    assert!(std::ptr::eq(allowed.host(), twin.host()));
-    assert!(std::ptr::eq(group_denied.host(), group_allowed.host()));
+    assert!(Arc::ptr_eq(&allowed.host(), &twin.host()));
+    assert!(Arc::ptr_eq(&group_denied.host(), &group_allowed.host()));
     assert_eq!(
-        version(allowed.host(), "__test_good").as_deref(),
+        version(&allowed.host(), "__test_good").as_deref(),
         Some("1.2.3")
     );
-    assert_eq!(version(reversed.host(), "__test_good"), None);
+    assert_eq!(version(&reversed.host(), "__test_good"), None);
 }
 
 #[tokio::test]
@@ -577,7 +764,7 @@ source-package = {{ path = "." }}
         .unwrap();
     workspace.refresh_environment_hosts().await.unwrap();
     assert_eq!(
-        version(workspace.host(), "__test_good").as_deref(),
+        version(&workspace.host(), "__test_good").as_deref(),
         Some("1.2.3")
     );
     assert!(

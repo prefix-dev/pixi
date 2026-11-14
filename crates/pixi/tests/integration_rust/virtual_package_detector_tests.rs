@@ -342,7 +342,7 @@ async fn an_allowed_detector_provides_the_declared_name() {
     let results = host.detector_results();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].name.as_source(), "__test_good");
-    assert_eq!(test_good_version(host).as_deref(), Some("1.2.3"));
+    assert_eq!(test_good_version(&host).as_deref(), Some("1.2.3"));
 }
 
 #[tokio::test]
@@ -366,7 +366,7 @@ async fn a_detector_registered_only_in_noarch_provides_the_declared_name() {
 
     let workspace = locate(&pixi).await;
     assert_eq!(
-        test_good_version(workspace.host()).as_deref(),
+        test_good_version(&workspace.host()).as_deref(),
         Some("1.2.3")
     );
 }
@@ -386,7 +386,7 @@ async fn a_detector_without_a_decision_is_skipped() {
     assert_eq!(skipped.len(), 1);
     assert_eq!(skipped[0].detector.as_source(), DETECTOR);
     assert_eq!(skipped[0].reason, SkipReason::ConsentDenied);
-    assert_eq!(test_good_version(host), None);
+    assert_eq!(test_good_version(&host), None);
     assert_eq!(runs(&counter), 0, "an undecided detector must not execute");
 }
 
@@ -405,7 +405,7 @@ async fn a_denied_detector_is_skipped_without_installing_anything() {
     let skipped = host.skipped_detectors();
     assert_eq!(skipped.len(), 1);
     assert_eq!(skipped[0].reason, SkipReason::ConsentDenied);
-    assert_eq!(test_good_version(host), None);
+    assert_eq!(test_good_version(&host), None);
     assert!(!detector_cache(&pixi).exists());
 }
 
@@ -439,7 +439,7 @@ async fn a_dependency_reference_runs_detector_without_a_declared_name() {
 
     let workspace = locate(&pixi).await;
     assert_eq!(
-        test_good_version(workspace.host()).as_deref(),
+        test_good_version(&workspace.host()).as_deref(),
         Some("1.2.3")
     );
     assert_eq!(runs(&counter), 1);
@@ -531,11 +531,11 @@ async fn a_detector_that_exits_unsuccessfully_is_reported_and_its_name_absent() 
         failures[0].stderr.as_deref().map(str::trim),
         Some("broken driver")
     );
-    assert_eq!(test_good_version(host), None);
+    assert_eq!(test_good_version(&host), None);
     assert_eq!(runs(&counter), 1);
     let second = locate(&pixi).await;
     assert_eq!(runs(&counter), 2, "a failed detector must run again");
-    assert_eq!(test_good_version(second.host()), None);
+    assert_eq!(test_good_version(&second.host()), None);
     assert_eq!(second.host().detector_failures().len(), 1);
 }
 
@@ -562,7 +562,7 @@ async fn a_detector_that_times_out_is_reported() {
         elapsed.as_secs() < 15,
         "the detector was not killed at the timeout: {elapsed:?}"
     );
-    assert_eq!(test_good_version(host), None);
+    assert_eq!(test_good_version(&host), None);
 }
 
 #[tokio::test]
@@ -581,7 +581,7 @@ async fn a_malformed_report_is_reported() {
     let host = workspace.host();
     let failures = host.detector_failures();
     assert_eq!(failures.len(), 1, "{failures:?}");
-    assert_eq!(test_good_version(host), None);
+    assert_eq!(test_good_version(&host), None);
 }
 
 #[tokio::test]
@@ -602,7 +602,7 @@ async fn a_report_with_an_unprefixed_name_is_rejected_without_partial_results() 
     let host = workspace.host();
     assert_eq!(host.detector_failures().len(), 1);
     assert!(host.detector_results().is_empty());
-    assert_eq!(test_good_version(host), None);
+    assert_eq!(test_good_version(&host), None);
     assert!(
         host.capabilities()
             .iter()
@@ -630,7 +630,7 @@ async fn a_report_omitting_a_registered_name_is_rejected() {
     let host = workspace.host();
     let failures = host.detector_failures();
     assert_eq!(failures.len(), 1, "{failures:?}");
-    assert_eq!(test_good_version(host), None);
+    assert_eq!(test_good_version(&host), None);
 }
 
 #[tokio::test]
@@ -718,7 +718,7 @@ async fn one_channel_decision_allows_all_its_detectors() {
         host.detector_failures()
     );
     assert_eq!(host.detector_results().len(), 2);
-    assert_eq!(test_good_version(host).as_deref(), Some("1.2.3"));
+    assert_eq!(test_good_version(&host).as_deref(), Some("1.2.3"));
     let capabilities = host.capabilities();
     let other = capabilities
         .iter()
@@ -750,7 +750,7 @@ async fn a_cached_report_is_reused_on_the_next_detection() {
     let second = locate(&pixi).await;
     assert_eq!(runs(&counter), 1, "the cached report must be reused");
     let host = second.host();
-    assert_eq!(test_good_version(host).as_deref(), Some("1.2.3"));
+    assert_eq!(test_good_version(&host).as_deref(), Some("1.2.3"));
     assert!(
         matches!(
             &host.detector_results()[0].source,
@@ -777,7 +777,7 @@ async fn a_zero_ttl_report_is_never_reused() {
     locate(&pixi).await;
     let second = locate(&pixi).await;
     assert_eq!(runs(&counter), 2);
-    assert_eq!(test_good_version(second.host()).as_deref(), Some("1.2.3"));
+    assert_eq!(test_good_version(&second.host()).as_deref(), Some("1.2.3"));
 }
 
 #[tokio::test]
@@ -800,7 +800,7 @@ async fn a_changed_watched_variable_invalidates_the_cache() {
     temp_env::async_with_vars([("PIXI_TEST_DETECTOR_WATCHED", Some("two"))], async {
         let workspace = locate(&pixi).await;
         assert_eq!(
-            test_good_version(workspace.host()).as_deref(),
+            test_good_version(&workspace.host()).as_deref(),
             Some("1.2.3")
         );
     })
@@ -827,7 +827,7 @@ async fn an_override_variable_wins_without_running_the_detector() {
         let workspace = locate(&pixi).await;
         let host = workspace.host();
         assert!(host.detector_failures().is_empty());
-        assert_eq!(test_good_version(host).as_deref(), Some("9.9"));
+        assert_eq!(test_good_version(&host).as_deref(), Some("9.9"));
         let results = host.detector_results();
         assert_eq!(results.len(), 1, "{results:?}");
         assert_eq!(
@@ -860,7 +860,7 @@ async fn an_empty_override_variable_declares_the_name_absent() {
     temp_env::async_with_vars([("CONDA_OVERRIDE_TEST_GOOD", Some(""))], async {
         let workspace = locate(&pixi).await;
         let host = workspace.host();
-        assert_eq!(test_good_version(host), None);
+        assert_eq!(test_good_version(&host), None);
         let results = host.detector_results();
         assert_eq!(results.len(), 1, "{results:?}");
         assert_eq!(results[0].value, DetectedValue::Absent);
@@ -932,7 +932,7 @@ async fn a_platform_override_skips_detectors_and_names_the_override_variable() {
             let workspace = locate(&pixi).await;
             let host = workspace.host();
             assert_eq!(host.subdir(), foreign);
-            assert_eq!(test_good_version(host).as_deref(), Some("4.5"));
+            assert_eq!(test_good_version(&host).as_deref(), Some("4.5"));
         },
     )
     .await;
@@ -1063,7 +1063,7 @@ async fn a_reboot_lifetime_is_cached_until_the_boot_session_changes() {
         1,
         "a REBOOT result is reused within the boot session"
     );
-    assert_eq!(test_good_version(second.host()).as_deref(), Some("1.2.3"));
+    assert_eq!(test_good_version(&second.host()).as_deref(), Some("1.2.3"));
 
     // Keep a valid BootId so this tests boot-session expiry, not a malformed entry.
     let results = detector_cache(&pixi).join("results");
@@ -1089,7 +1089,7 @@ async fn a_reboot_lifetime_is_cached_until_the_boot_session_changes() {
         2,
         "a different boot session re-runs the detector"
     );
-    assert_eq!(test_good_version(third.host()).as_deref(), Some("1.2.3"));
+    assert_eq!(test_good_version(&third.host()).as_deref(), Some("1.2.3"));
 }
 
 #[tokio::test]

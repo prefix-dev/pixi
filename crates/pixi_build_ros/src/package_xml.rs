@@ -34,6 +34,10 @@ pub struct PackageXml {
     pub licenses: Vec<String>,
     pub urls: Vec<UrlEntry>,
     pub dependencies: Dependencies,
+    /// `<group_depend>`: depend on every package that is a member of the group.
+    pub group_depends: Vec<Dependency>,
+    /// `<member_of_group>`: the groups this package belongs to.
+    pub member_of_groups: Vec<Dependency>,
     pub export: Export,
 }
 
@@ -100,7 +104,9 @@ impl From<&str> for Dependency {
 
 #[derive(Debug, Clone, Default)]
 pub struct Export {
-    pub build_type: Option<BuildType>,
+    /// Every `<build_type>` element, e.g. one for ROS 1 and one for ROS 2;
+    /// [`PackageXml::build_type`] is the first that applies.
+    pub build_types: Vec<BuildType>,
     pub architecture_independent: bool,
     pub metapackage: bool,
 }
@@ -109,6 +115,8 @@ pub struct Export {
 pub struct BuildType {
     pub name: String,
     pub condition: Option<String>,
+    /// Set by [`PackageXml::evaluate_conditions`] when there is a condition.
+    pub evaluated_condition: Option<bool>,
 }
 
 impl PackageXml {
@@ -175,6 +183,8 @@ impl PackageXml {
         };
 
         let export = parse_export(&root);
+        let group_depends = parse_deps(&root, "group_depend");
+        let member_of_groups = parse_deps(&root, "member_of_group");
 
         Ok(PackageXml {
             format,
@@ -185,15 +195,19 @@ impl PackageXml {
             licenses,
             urls,
             dependencies,
+            group_depends,
+            member_of_groups,
             export,
         })
     }
 
-    /// Get the build type from the export section, defaulting to "catkin".
+    /// Get the build type from the export section: the first `<build_type>`
+    /// whose condition doesn't evaluate to false, defaulting to "catkin".
     pub fn build_type(&self) -> String {
         self.export
-            .build_type
-            .as_ref()
+            .build_types
+            .iter()
+            .find(|bt| bt.evaluated_condition != Some(false))
             .map(|bt| bt.name.clone())
             .unwrap_or_else(|| "catkin".to_string())
     }
@@ -221,6 +235,14 @@ impl PackageXml {
         eval_deps(&mut self.dependencies.build_export_depends, env);
         eval_deps(&mut self.dependencies.buildtool_export_depends, env);
         eval_deps(&mut self.dependencies.test_depends, env);
+        eval_deps(&mut self.group_depends, env);
+        eval_deps(&mut self.member_of_groups, env);
+
+        for bt in &mut self.export.build_types {
+            if let Some(condition) = &bt.condition {
+                bt.evaluated_condition = Some(evaluate_condition(condition, env));
+            }
+        }
 
         self
     }
@@ -269,15 +291,17 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
         return Export::default();
     };
 
-    let build_type = export
+    let build_types: Vec<BuildType> = export
         .children()
-        .find(|n| n.is_element() && n.tag_name().name() == "build_type")
-        .and_then(|n| {
+        .filter(|n| n.is_element() && n.tag_name().name() == "build_type")
+        .filter_map(|n| {
             n.text().map(|t| BuildType {
                 name: t.trim().to_string(),
                 condition: n.attribute("condition").map(|s| s.to_string()),
+                evaluated_condition: None,
             })
-        });
+        })
+        .collect();
 
     let architecture_independent = export
         .children()
@@ -288,7 +312,7 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
         .any(|n| n.is_element() && n.tag_name().name() == "metapackage");
 
     Export {
-        build_type,
+        build_types,
         architecture_independent,
         metapackage,
     }
@@ -304,7 +328,7 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
 ///
 /// A condition that cannot be parsed is logged and evaluates to `true`, so the
 /// dependency is kept rather than silently dropped.
-fn evaluate_condition(condition: &str, env: &HashMap<String, String>) -> bool {
+pub fn evaluate_condition(condition: &str, env: &HashMap<String, String>) -> bool {
     let result = tokenize_condition(condition).and_then(|tokens| {
         let mut parser = ConditionParser {
             tokens: &tokens,
@@ -684,5 +708,56 @@ mod tests {
         assert!(evaluate_condition("$ROS_VERSION == '1", &env));
         // A lone quote is an unterminated string and must not panic.
         assert!(evaluate_condition("$ROS_VERSION == 1 and '", &env));
+    }
+
+    #[test]
+    fn test_build_type_follows_its_condition() {
+        // e.g. a package that builds for both ROS versions
+        let xml = r#"<?xml version="1.0"?>
+<package format="3">
+  <name>dual</name>
+  <version>0.1.0</version>
+  <description>Test</description>
+  <maintainer email="test@example.com">Tester</maintainer>
+  <license>MIT</license>
+  <export>
+    <build_type condition="$ROS_VERSION == 1">catkin</build_type>
+    <build_type condition="$ROS_VERSION == 2">ament_cmake</build_type>
+  </export>
+</package>"#;
+        let pkg = PackageXml::parse(xml).unwrap();
+        let env = |v: &str| HashMap::from([("ROS_VERSION".to_string(), v.to_string())]);
+        assert_eq!(
+            pkg.clone().evaluate_conditions(&env("2")).build_type(),
+            "ament_cmake"
+        );
+        assert_eq!(pkg.evaluate_conditions(&env("1")).build_type(), "catkin");
+    }
+
+    #[test]
+    fn test_group_dependencies() {
+        let xml = r#"<?xml version="1.0"?>
+<package format="3">
+  <name>rosidl_default_runtime</name>
+  <version>1.6.0</version>
+  <description>Test</description>
+  <maintainer email="test@example.com">Tester</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_export_depend>ament_cmake_core</buildtool_export_depend>
+  <group_depend>rosidl_runtime_packages</group_depend>
+  <member_of_group condition="$ROS_VERSION == 1">some_ros1_group</member_of_group>
+  <member_of_group>rosidl_interface_packages</member_of_group>
+</package>"#;
+        let env = HashMap::from([("ROS_VERSION".to_string(), "2".to_string())]);
+        let pkg = PackageXml::parse(xml).unwrap().evaluate_conditions(&env);
+        let groups: Vec<&str> = pkg.group_depends.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(groups, vec!["rosidl_runtime_packages"]);
+        let member_of: Vec<&str> = pkg
+            .member_of_groups
+            .iter()
+            .filter(|g| g.is_active())
+            .map(|g| g.name.as_str())
+            .collect();
+        assert_eq!(member_of, vec!["rosidl_interface_packages"]);
     }
 }

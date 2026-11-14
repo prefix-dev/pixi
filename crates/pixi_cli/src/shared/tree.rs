@@ -1,14 +1,16 @@
-//! This file contains the logic to pretty-print dependency lists in a tree-like structure.
+//! Builds dependency trees and renders them as text or JSON.
 
 use ahash::{HashSet, HashSetExt};
 use console::Color;
 use miette::{Context, IntoDiagnostic};
 use regex::Regex;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::io::Write;
 
 /// Defines the source of a package. Global packages can only have Conda dependencies.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PackageSource {
     Conda,
     Pypi,
@@ -28,10 +30,69 @@ pub struct Dependency {
 #[derive(Debug, Clone)]
 pub struct Package {
     pub name: String,
-    pub version: String,
+    /// `None` if the lock file doesn't record a version.
+    pub version: Option<String>,
     pub dependencies: Vec<Dependency>,
     pub needed_by: Vec<String>,
     pub source: PackageSource,
+}
+
+/// A node of a rendered dependency tree.
+///
+/// Every package is expanded only once. Later occurrences are marked with
+/// `is_deduplicated` and have no children.
+#[derive(Debug, Serialize)]
+pub struct TreeNode {
+    pub name: String,
+    /// `None` if the version is unknown, e.g. because the package isn't part
+    /// of the locked environment.
+    pub version: Option<String>,
+    /// `None` if the package isn't part of the locked environment.
+    pub kind: Option<PackageSource>,
+    /// Whether the package is directly specified in the manifest.
+    pub is_explicit: bool,
+    pub via_extras: Vec<String>,
+    pub is_deduplicated: bool,
+    #[serde(flatten)]
+    pub children: Children,
+}
+
+/// The children of a [`TreeNode`], serialized under a key that depends on
+/// the direction of the tree.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Children {
+    Dependencies(Vec<TreeNode>),
+    RequiredBy(Vec<TreeNode>),
+}
+
+impl Children {
+    fn nodes(&self) -> &[TreeNode] {
+        match self {
+            Children::Dependencies(nodes) | Children::RequiredBy(nodes) => nodes,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Tree {
+    /// Packages with their dependencies below them.
+    Dependencies {
+        roots: Vec<TreeNode>,
+        /// The roots are transitive dependencies because no direct dependency
+        /// matched the regex.
+        transitive_roots: bool,
+    },
+    /// Packages with the packages that depend on them below them.
+    Inverted { roots: Vec<TreeNode> },
+}
+
+impl Tree {
+    pub fn roots(&self) -> &[TreeNode] {
+        match self {
+            Tree::Dependencies { roots, .. } | Tree::Inverted { roots } => roots,
+        }
+    }
 }
 
 struct Symbols {
@@ -48,43 +109,58 @@ static UTF8_SYMBOLS: Symbols = Symbols {
     empty: "   ",
 };
 
-/// Prints a hierarchical tree of dependencies to the provided output handle.
-/// Direct dependencies are shown at the top level, with their transitive dependencies indented below.
-///
-/// If a regex pattern is provided, only dependencies matching the pattern will be displayed.
-/// When no direct dependencies match the pattern but transitive ones do, it shows matching transitive dependencies instead.
-///
-/// # Arguments
-///
-/// * `handle` - A mutable lock on stdout for writing the output
-/// * `dep_map` - A map of package names to their dependency information
-/// * `direct_deps` - A set of package names that should be highlighted.
-/// * `regex` - Optional regex pattern to filter which dependencies to display
-///
-/// # Returns
-///
-/// Returns `Ok(())` if the tree was printed successfully, or an error if the regex was invalid or no matches were found
-pub fn print_dependency_tree(
-    handle: &mut impl Write,
+/// Builds the tree requested on the command line and prints it as text or JSON.
+pub fn print_requested_tree(
     dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
-    regex: &Option<String>,
+    regex: Option<&str>,
+    invert: bool,
+    json: bool,
 ) -> miette::Result<()> {
-    let mut filtered_deps = direct_deps.clone();
-    let mut transitive = false;
+    let tree = if invert {
+        build_inverted_dependency_tree(&build_reverse_dependency_map(dep_map), direct_deps, regex)
+            .wrap_err("Couldn't build the inverted dependency tree")?
+    } else {
+        build_dependency_tree(dep_map, direct_deps, regex)
+            .wrap_err("Couldn't build the dependency tree")?
+    };
+
+    let mut handle = std::io::stdout().lock();
+    if json {
+        print_tree_json(&mut handle, &tree)
+    } else {
+        print_tree(&mut handle, &tree)
+    }
+}
+
+/// Builds a tree with the direct dependencies as roots and their transitive
+/// dependencies below them.
+///
+/// If a regex is given, only roots matching it are kept. If no direct
+/// dependency matches, the matching transitive dependencies become the roots.
+pub fn build_dependency_tree(
+    dep_map: &HashMap<String, Package>,
+    direct_deps: &HashSet<String>,
+    regex: Option<&str>,
+) -> miette::Result<Tree> {
+    let mut root_names = direct_deps.clone();
+    let mut transitive_roots = false;
 
     if let Some(regex) = regex {
         let regex = Regex::new(regex)
             .into_diagnostic()
             .wrap_err("Invalid regular expression")?;
 
-        filtered_deps.retain(|p| regex.is_match(p));
+        root_names.retain(|p| regex.is_match(p));
 
-        if filtered_deps.is_empty() {
-            filtered_deps = dep_map.keys().cloned().collect();
-            filtered_deps.retain(|p| regex.is_match(p));
+        if root_names.is_empty() {
+            root_names = dep_map
+                .keys()
+                .filter(|p| regex.is_match(p))
+                .cloned()
+                .collect();
 
-            if filtered_deps.is_empty() {
+            if root_names.is_empty() {
                 return Err(miette::miette!(
                     "No dependencies matched the given regular expression"
                 ));
@@ -93,352 +169,276 @@ pub fn print_dependency_tree(
             tracing::info!(
                 "No top-level dependencies matched the regular expression, showing matching transitive dependencies"
             );
-            transitive = true;
+            transitive_roots = true;
         }
     }
 
-    let mut visited_pkgs = HashSet::new();
-    let direct_dep_count = filtered_deps.len();
-    let mut filtered_deps: Vec<String> = filtered_deps.into_iter().collect();
-    filtered_deps.sort();
+    let mut root_names: Vec<String> = root_names.into_iter().collect();
+    root_names.sort();
 
-    for (index, pkg_name) in filtered_deps.iter().enumerate() {
-        if !visited_pkgs.insert(pkg_name.clone()) {
+    let mut visited = HashSet::new();
+    let mut roots = Vec::new();
+    for name in root_names {
+        let Some(package) = dep_map.get(&name) else {
             continue;
-        }
-
-        let last = index == direct_dep_count - 1;
-        let mut symbol = "";
-        if !transitive {
-            symbol = if last {
-                UTF8_SYMBOLS.ell
-            } else {
-                UTF8_SYMBOLS.tee
-            };
-        }
-        if let Some(pkg) = dep_map.get(pkg_name) {
-            print_package(
-                handle,
-                &format!("{symbol} "),
-                pkg,
-                direct_deps.contains(&pkg.name),
-                false,
-                &[],
-            )?;
-
-            let prefix = if last {
-                UTF8_SYMBOLS.empty
-            } else {
-                UTF8_SYMBOLS.down
-            };
-            print_dependency_node(
-                handle,
-                pkg,
-                format!("{prefix} "),
-                dep_map,
-                &mut visited_pkgs,
-                direct_deps,
-            )?;
-        }
-    }
-    Ok(())
-}
-
-/// Prints a dependency tree node for a given package and its dependencies.
-///
-/// This function traverses the dependencies of a given package (`pkg`) and prints
-/// them in a structured, tree-like format. If a dependency has already been
-/// visited, it prevents infinite recursion by skipping that dependency.
-///
-/// # Arguments
-///
-/// * `handle` - A mutable reference to the standard output lock used for writing the output.
-/// * `pkg` - A reference to the package whose dependencies are to be printed.
-/// * `prefix` - A string used as a prefix for formatting tree branches.
-/// * `dep_map` - A map of dependency names to their corresponding `Package` data.
-/// * `visited_pkgs` - A mutable set of package names that have already been visited in the tree.
-/// * `direct_deps` - A set of package names that should be highlighted.
-///
-/// # Returns
-///
-/// Returns `Ok(())` if the dependency tree for the given package is successfully printed,
-/// or an error of type `miette::Result` if any operation fails during the process.
-///
-/// # Examples
-///
-/// Given a package with dependencies structured as a tree, calling this function
-/// generates a visual tree-like output. For instance:
-///
-/// ```text
-/// root
-/// ├── dep1
-/// │   └── subdep1
-/// └── dep2
-/// ```
-///
-/// Here `dep1` and `dep2` are direct dependencies of the `root`, and `subdep1` is a sub-dependency.
-///
-/// # Errors
-///
-/// This function can return an error if writing to the output stream fails.
-fn print_dependency_node(
-    handle: &mut impl Write,
-    package: &Package,
-    prefix: String,
-    dep_map: &HashMap<String, Package>,
-    visited_pkgs: &mut HashSet<String>,
-    direct_deps: &HashSet<String>,
-) -> miette::Result<()> {
-    let dep_count = package.dependencies.len();
-    for (index, edge) in package.dependencies.iter().enumerate() {
-        let last = index == dep_count - 1;
-        let symbol = if last {
-            UTF8_SYMBOLS.ell
-        } else {
-            UTF8_SYMBOLS.tee
         };
-
-        if let Some(dep) = dep_map.get(&edge.name) {
-            let visited = !visited_pkgs.insert(dep.name.clone());
-
-            print_package(
-                handle,
-                &format!("{prefix}{symbol} "),
-                dep,
-                direct_deps.contains(&dep.name),
-                visited,
-                &edge.via_extras,
-            )?;
-
-            if visited {
-                continue;
-            }
-
-            let new_prefix = if last {
-                format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
-            } else {
-                format!("{}{} ", prefix, UTF8_SYMBOLS.down)
-            };
-            print_dependency_node(handle, dep, new_prefix, dep_map, visited_pkgs, direct_deps)?;
+        // Roots that were already expanded below an earlier root are kept,
+        // so that every root is listed.
+        let is_deduplicated = !visited.insert(name);
+        let children = if is_deduplicated {
+            Vec::new()
         } else {
-            let visited = !visited_pkgs.insert(edge.name.clone());
-
-            print_package(
-                handle,
-                &format!("{prefix}{symbol} "),
-                &Package {
-                    name: edge.name.clone(),
-                    version: String::from(""),
-                    dependencies: Vec::new(),
-                    needed_by: Vec::new(),
-                    source: PackageSource::Conda,
-                },
-                false,
-                visited,
-                &edge.via_extras,
-            )?;
-        }
+            dependency_nodes(package, dep_map, direct_deps, &mut visited)
+        };
+        roots.push(package_node(
+            package,
+            direct_deps,
+            Vec::new(),
+            is_deduplicated,
+            Children::Dependencies(children),
+        ));
     }
-    Ok(())
+
+    Ok(Tree::Dependencies {
+        roots,
+        transitive_roots,
+    })
 }
 
-/// Prints information about a package to the given output handle.
-///
-/// # Arguments
-///
-/// * `handle` - A mutable reference to the standard output lock used for writing the output.
-/// * `prefix` - A string used as a prefix for formatting tree branches.
-/// * `package` - A reference to the `Package` struct containing information about the package (e.g., name, version, source).
-/// * `direct` - A boolean indicating if the package is a direct dependency. If `true`, the package name is formatted in bold green text.
-/// * `visited` - A boolean indicating if the package has already been visited. If `true`, the printed output will include "(*)".
-///
-/// # Errors
-/// This function can return an error if writing to the output stream fails.
-pub fn print_package(
-    handle: &mut impl Write,
-    prefix: &str,
+fn dependency_nodes(
     package: &Package,
-    direct: bool,
-    visited: bool,
-    via_extras: &[String],
-) -> miette::Result<()> {
-    let extras_label = if via_extras.is_empty() {
-        String::new()
-    } else {
-        format!("(extra: {})", via_extras.join(", "))
-    };
-    pixi_utils::io::ignore_broken_pipe(writeln!(
-        handle,
-        "{}{} {} {}{}",
-        prefix,
-        if direct {
-            console::style(&package.name).fg(Color::Green).bold()
-        } else {
-            console::style(&package.name)
-        },
-        match package.source {
-            PackageSource::Conda => console::style(&package.version).fg(Color::Yellow),
-            PackageSource::Pypi => console::style(&package.version).fg(Color::Blue),
-        },
-        console::style(extras_label).fg(Color::Cyan),
-        if visited { " (*)" } else { "" }
-    ))
-    .into_diagnostic()
-    .wrap_err("Failed to write package information")
+    dep_map: &HashMap<String, Package>,
+    direct_deps: &HashSet<String>,
+    visited: &mut HashSet<String>,
+) -> Vec<TreeNode> {
+    let mut nodes = Vec::with_capacity(package.dependencies.len());
+    for edge in &package.dependencies {
+        let is_deduplicated = !visited.insert(edge.name.clone());
+        let node = match dep_map.get(&edge.name) {
+            Some(dep) => {
+                let children = if is_deduplicated {
+                    Vec::new()
+                } else {
+                    dependency_nodes(dep, dep_map, direct_deps, visited)
+                };
+                package_node(
+                    dep,
+                    direct_deps,
+                    edge.via_extras.clone(),
+                    is_deduplicated,
+                    Children::Dependencies(children),
+                )
+            }
+            None => TreeNode {
+                name: edge.name.clone(),
+                version: None,
+                kind: None,
+                is_explicit: false,
+                via_extras: edge.via_extras.clone(),
+                is_deduplicated,
+                children: Children::Dependencies(Vec::new()),
+            },
+        };
+        nodes.push(node);
+    }
+    nodes
 }
 
-/// Prints an inverted hierarchical tree of dependencies to the provided output handle.
-/// Dependencies with a name matching the passed regex are shown at the top level, with the packages that require them indented below.
+/// Builds a tree with the packages matching `regex` as roots and the packages
+/// that depend on them below them.
 ///
-/// # Arguments
-///
-/// * `handle` - A mutable lock on stdout for writing the output
-/// * `inverted_dep_map` - Inverted map of packages with the `needed_by` field filled via [`build_reverse_dependency_map`]
-/// * `direct_deps` - A set of package names that should be highlighted.
-/// * `regex` - Regex pattern to filter which dependencies to display
-///
-/// # Returns
-///
-/// Returns `Ok(())` if the tree was printed successfully, or an error if the regex was invalid or no matches were found
-pub fn print_inverted_dependency_tree(
-    handle: &mut impl Write,
+/// `inverted_dep_map` must have its `needed_by` fields filled via
+/// [`build_reverse_dependency_map`].
+pub fn build_inverted_dependency_tree(
     inverted_dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
-    regex: &Option<String>,
-) -> miette::Result<()> {
-    let regex = regex
-        .as_ref()
-        .ok_or_else(|| miette::miette!("The -i flag requires a package name."))?;
-
+    regex: Option<&str>,
+) -> miette::Result<Tree> {
+    let regex = regex.ok_or_else(|| miette::miette!("The -i flag requires a package name."))?;
     let regex = Regex::new(regex)
         .into_diagnostic()
         .wrap_err("Invalid regular expression")?;
 
-    let root_pkg_names: Vec<_> = inverted_dep_map
+    let mut root_names: Vec<&String> = inverted_dep_map
         .keys()
         .filter(|p| regex.is_match(p))
         .collect();
-
-    if root_pkg_names.is_empty() {
+    if root_names.is_empty() {
         return Err(miette::miette!(
             "Nothing depends on the given regular expression"
         ));
     }
+    root_names.sort();
 
-    let mut visited_pkgs = HashSet::new();
-    for pkg_name in root_pkg_names {
-        if let Some(pkg) = inverted_dep_map.get(pkg_name) {
-            let visited = !visited_pkgs.insert(pkg_name.clone());
-            print_package(
-                handle,
-                "\n",
-                pkg,
-                direct_deps.contains(&pkg.name),
-                visited,
-                &[],
-            )?;
+    let mut visited = HashSet::new();
+    let roots = root_names
+        .into_iter()
+        .map(|name| {
+            let package = &inverted_dep_map[name];
+            let is_deduplicated = !visited.insert(name.clone());
+            let children = if is_deduplicated {
+                Vec::new()
+            } else {
+                dependent_nodes(package, inverted_dep_map, direct_deps, &mut visited)
+            };
+            package_node(
+                package,
+                direct_deps,
+                Vec::new(),
+                is_deduplicated,
+                Children::RequiredBy(children),
+            )
+        })
+        .collect();
 
-            if !visited {
-                print_inverted_node(
-                    handle,
-                    pkg,
-                    String::from(""),
-                    inverted_dep_map,
-                    direct_deps,
-                    &mut visited_pkgs,
-                )?;
+    Ok(Tree::Inverted { roots })
+}
+
+fn dependent_nodes(
+    package: &Package,
+    inverted_dep_map: &HashMap<String, Package>,
+    direct_deps: &HashSet<String>,
+    visited: &mut HashSet<String>,
+) -> Vec<TreeNode> {
+    let mut nodes = Vec::with_capacity(package.needed_by.len());
+    for name in &package.needed_by {
+        let Some(dependent) = inverted_dep_map.get(name) else {
+            continue;
+        };
+        let is_deduplicated = !visited.insert(name.clone());
+        let children = if is_deduplicated {
+            Vec::new()
+        } else {
+            dependent_nodes(dependent, inverted_dep_map, direct_deps, visited)
+        };
+        nodes.push(package_node(
+            dependent,
+            direct_deps,
+            Vec::new(),
+            is_deduplicated,
+            Children::RequiredBy(children),
+        ));
+    }
+    nodes
+}
+
+fn package_node(
+    package: &Package,
+    direct_deps: &HashSet<String>,
+    via_extras: Vec<String>,
+    is_deduplicated: bool,
+    children: Children,
+) -> TreeNode {
+    TreeNode {
+        name: package.name.clone(),
+        version: package.version.clone(),
+        kind: Some(package.source),
+        is_explicit: direct_deps.contains(&package.name),
+        via_extras,
+        is_deduplicated,
+        children,
+    }
+}
+
+/// Prints the tree with box-drawing characters.
+pub fn print_tree(handle: &mut impl Write, tree: &Tree) -> miette::Result<()> {
+    match tree {
+        Tree::Dependencies {
+            roots,
+            transitive_roots,
+        } => {
+            for (index, root) in roots.iter().enumerate() {
+                let last = index == roots.len() - 1;
+                let symbol = match (transitive_roots, last) {
+                    (true, _) => "",
+                    (false, true) => UTF8_SYMBOLS.ell,
+                    (false, false) => UTF8_SYMBOLS.tee,
+                };
+                print_node(handle, &format!("{symbol} "), root)?;
+                let prefix = if last {
+                    UTF8_SYMBOLS.empty
+                } else {
+                    UTF8_SYMBOLS.down
+                };
+                print_children(handle, &format!("{prefix} "), root)?;
+            }
+        }
+        Tree::Inverted { roots } => {
+            for root in roots {
+                print_node(handle, "\n", root)?;
+                print_children(handle, "", root)?;
             }
         }
     }
-
     Ok(())
 }
 
-/// Prints a dependency tree node for a given package and its dependents.
-///
-/// This function traverses the dependents of a given package (`pkg`) and prints
-/// them in a structured, tree-like format. If a dependent has already been
-/// visited, it prevents infinite recursion by skipping that dependent.
-///
-/// # Arguments
-///
-/// * `handle` - A mutable reference to the standard output lock used for writing the output.
-/// * `package` - A reference to the package whose dependents are to be printed.
-/// * `prefix` - A string used as a prefix for formatting tree branches.
-/// * `inverted_dep_map` - A map of dependency names to their corresponding `Package` data.
-/// * `visited_pkgs` - A mutable set of package names that have already been visited in the tree.
-/// * `direct_deps` - A set of package names that should be highlighted.
-///
-/// # Returns
-///
-/// Returns `Ok(())` if the dependent tree for the given package is successfully printed,
-/// or an error of type `miette::Result` if any operation fails during the process.
-///
-/// # Errors
-///
-/// This function can return an error if writing to the output stream fails.
-fn print_inverted_node(
-    handle: &mut impl Write,
-    package: &Package,
-    prefix: String,
-    inverted_dep_map: &HashMap<String, Package>,
-    direct_deps: &HashSet<String>,
-    visited_pkgs: &mut HashSet<String>,
-) -> miette::Result<()> {
-    let needed_count = package.needed_by.len();
-    for (index, needed_name) in package.needed_by.iter().enumerate() {
-        let last = index == needed_count - 1;
-        let symbol = if last {
-            UTF8_SYMBOLS.ell
+fn print_children(handle: &mut impl Write, prefix: &str, node: &TreeNode) -> miette::Result<()> {
+    let children = node.children.nodes();
+    for (index, child) in children.iter().enumerate() {
+        let last = index == children.len() - 1;
+        let (symbol, continuation) = if last {
+            (UTF8_SYMBOLS.ell, UTF8_SYMBOLS.empty)
         } else {
-            UTF8_SYMBOLS.tee
+            (UTF8_SYMBOLS.tee, UTF8_SYMBOLS.down)
         };
-
-        if let Some(needed_pkg) = inverted_dep_map.get(needed_name) {
-            let visited = !visited_pkgs.insert(needed_pkg.name.clone());
-            print_package(
-                handle,
-                &format!("{prefix}{symbol} "),
-                needed_pkg,
-                direct_deps.contains(&needed_pkg.name),
-                visited,
-                &[],
-            )?;
-
-            if !visited {
-                let new_prefix = if last {
-                    format!("{}{} ", prefix, UTF8_SYMBOLS.empty)
-                } else {
-                    format!("{}{} ", prefix, UTF8_SYMBOLS.down)
-                };
-
-                print_inverted_node(
-                    handle,
-                    needed_pkg,
-                    new_prefix,
-                    inverted_dep_map,
-                    direct_deps,
-                    visited_pkgs,
-                )?;
-            }
-        }
+        print_node(handle, &format!("{prefix}{symbol} "), child)?;
+        print_children(handle, &format!("{prefix}{continuation} "), child)?;
     }
     Ok(())
+}
+
+fn print_node(handle: &mut impl Write, prefix: &str, node: &TreeNode) -> miette::Result<()> {
+    let extras_label = if node.via_extras.is_empty() {
+        String::new()
+    } else {
+        format!("(extra: {})", node.via_extras.join(", "))
+    };
+    let name = if node.is_explicit {
+        console::style(node.name.as_str()).fg(Color::Green).bold()
+    } else {
+        console::style(node.name.as_str())
+    };
+    let version = match (&node.version, node.kind) {
+        (Some(version), _) => version.as_str(),
+        (None, Some(_)) => "<unknown>",
+        (None, None) => "",
+    };
+    let version = console::style(version).fg(match node.kind {
+        Some(PackageSource::Pypi) => Color::Blue,
+        Some(PackageSource::Conda) | None => Color::Yellow,
+    });
+    write_or_exit(writeln!(
+        handle,
+        "{}{} {} {}{}",
+        prefix,
+        name,
+        version,
+        console::style(extras_label).fg(Color::Cyan),
+        if node.is_deduplicated { " (*)" } else { "" }
+    ))
+    .wrap_err("Failed to write package information")
+}
+
+/// Prints the roots of the tree as a JSON array.
+pub fn print_tree_json(handle: &mut impl Write, tree: &Tree) -> miette::Result<()> {
+    let json = serde_json::to_string_pretty(tree.roots())
+        .expect("a tree only contains strings and booleans");
+    write_or_exit(writeln!(handle, "{json}")).wrap_err("Failed to write the dependency tree")
+}
+
+/// Exits gracefully if the reader closed the pipe, e.g. `pixi tree | head`.
+fn write_or_exit(result: std::io::Result<()>) -> miette::Result<()> {
+    if let Err(e) = &result
+        && e.kind() == std::io::ErrorKind::BrokenPipe
+    {
+        std::process::exit(0);
+    }
+    result.into_diagnostic()
 }
 
 /// Creates an inverted dependency graph by populating each package's `needed_by` field with the packages
-/// that directly depend on it. Used to support the generation of reverse dependency trees.
-///
-/// This function is used to support generation of "reverse dependency" trees that show what packages depend
-/// on a given package rather than what a package depends on.
-///
-/// # Arguments
-///
-/// * `dep_map` - A map of package names to `Package` objects representing the dependency graph
-///
-/// # Returns
-///
-/// A new dependency graph with `needed_by` fields populated to show reverse dependencies
+/// that directly depend on it, sorted by name.
 pub fn build_reverse_dependency_map(
     dep_map: &HashMap<String, Package>,
 ) -> HashMap<String, Package> {
@@ -451,6 +451,119 @@ pub fn build_reverse_dependency_map(
             }
         }
     }
+    for pkg in inverted_deps.values_mut() {
+        pkg.needed_by.sort();
+    }
 
     inverted_deps
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn package(name: &str, source: PackageSource, deps: &[(&str, &[&str])]) -> Package {
+        Package {
+            name: name.to_string(),
+            version: Some("1.0".to_string()),
+            dependencies: deps
+                .iter()
+                .map(|(name, extras)| Dependency {
+                    name: name.to_string(),
+                    via_extras: extras.iter().map(ToString::to_string).collect(),
+                })
+                .collect(),
+            needed_by: Vec::new(),
+            source,
+        }
+    }
+
+    /// `a -> b -> c -> a` is a cycle, `d` reaches `c` through an extra and
+    /// `a` depends on `ghost`, which isn't locked.
+    fn graph() -> (HashMap<String, Package>, HashSet<String>) {
+        let packages = [
+            package(
+                "a",
+                PackageSource::Conda,
+                &[("b", &[]), ("c", &[]), ("ghost", &[])],
+            ),
+            package("b", PackageSource::Conda, &[("c", &[])]),
+            package("c", PackageSource::Conda, &[("a", &[])]),
+            package("d", PackageSource::Pypi, &[("c", &["x"])]),
+        ];
+        let dep_map = packages.into_iter().map(|p| (p.name.clone(), p)).collect();
+        let direct_deps = ["a", "b", "d"].into_iter().map(String::from).collect();
+        (dep_map, direct_deps)
+    }
+
+    fn render(tree: &Tree) -> String {
+        console::set_colors_enabled(false);
+        let mut text = Vec::new();
+        print_tree(&mut text, tree).unwrap();
+        let mut json = Vec::new();
+        print_tree_json(&mut json, tree).unwrap();
+        format!(
+            "{}\n{}",
+            String::from_utf8(text).unwrap(),
+            String::from_utf8(json).unwrap()
+        )
+    }
+
+    #[test]
+    fn full_tree() {
+        let (dep_map, direct_deps) = graph();
+        let tree = build_dependency_tree(&dep_map, &direct_deps, None).unwrap();
+        insta::assert_snapshot!(render(&tree));
+    }
+
+    #[test]
+    fn regex_matching_direct_dependency() {
+        let (dep_map, direct_deps) = graph();
+        let tree = build_dependency_tree(&dep_map, &direct_deps, Some("^d$")).unwrap();
+        insta::assert_snapshot!(render(&tree));
+    }
+
+    #[test]
+    fn regex_falls_back_to_transitive_dependencies() {
+        let (dep_map, direct_deps) = graph();
+        let tree = build_dependency_tree(&dep_map, &direct_deps, Some("^c$")).unwrap();
+        insta::assert_snapshot!(render(&tree));
+    }
+
+    #[test]
+    fn regex_without_match() {
+        let (dep_map, direct_deps) = graph();
+        let error = build_dependency_tree(&dep_map, &direct_deps, Some("^nope$")).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "No dependencies matched the given regular expression"
+        );
+    }
+
+    #[test]
+    fn inverted_tree() {
+        let (dep_map, direct_deps) = graph();
+        let tree = build_inverted_dependency_tree(
+            &build_reverse_dependency_map(&dep_map),
+            &direct_deps,
+            Some("^[bc]$"),
+        )
+        .unwrap();
+        insta::assert_snapshot!(render(&tree));
+    }
+
+    #[test]
+    fn inverted_tree_without_match() {
+        let (dep_map, direct_deps) = graph();
+        let error = build_inverted_dependency_tree(
+            &build_reverse_dependency_map(&dep_map),
+            &direct_deps,
+            Some("^nope$"),
+        )
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Nothing depends on the given regular expression"
+        );
+    }
 }

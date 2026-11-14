@@ -11,9 +11,7 @@ use rattler_build_recipe::stage0::{
     About, ConditionalList, Item, License, Package, Recipe, SingleOutputRecipe, Value,
 };
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{
-    ChannelUrl, PackageName, SourcePackageName, Subdir, Version, VersionWithSource,
-};
+use rattler_conda_types::{ChannelUrl, PackageName, SourcePackageName, Subdir, VersionWithSource};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
@@ -182,8 +180,6 @@ pub enum GenerateRecipeError<MetadataProviderError: Diagnostic + 'static> {
         #[from]
         rattler_conda_types::InvalidPackageNameError,
     ),
-    #[error("failed to parse version")]
-    InvalidVersion(String),
     #[error("failed to parse URL: {0}")]
     InvalidUrl(String),
     #[error("failed to parse license: {0}")]
@@ -290,13 +286,10 @@ impl GeneratedRecipe {
         };
 
         let pkg_name = rattler_conda_types::PackageName::try_from(name)?;
-        let version_str = version.to_string();
-        let version_with_source = VersionWithSource::from_str(&version_str)
-            .map_err(|_| GenerateRecipeError::InvalidVersion(version_str))?;
 
         let package = Package::new(
             Value::new_concrete(SourcePackageName::from(pkg_name), None),
-            Value::new_concrete(version_with_source, None),
+            Value::new_concrete(version, None),
         );
 
         let requirements =
@@ -420,7 +413,7 @@ pub trait MetadataProvider {
 
     /// Returns the version of the package or `None` if the provider does not
     /// provide a version.
-    fn version(&mut self) -> Result<Option<Version>, Self::Error> {
+    fn version(&mut self) -> Result<Option<VersionWithSource>, Self::Error> {
         Ok(None)
     }
 

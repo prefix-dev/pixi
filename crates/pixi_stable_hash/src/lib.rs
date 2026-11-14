@@ -202,6 +202,15 @@ impl IsDefault for rattler_conda_types::Version {
 }
 
 #[cfg(feature = "rattler_conda_types")]
+impl IsDefault for rattler_conda_types::VersionWithSource {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip version fields
+    }
+}
+
+#[cfg(feature = "rattler_conda_types")]
 impl IsDefault for rattler_conda_types::StringMatcher {
     type Item = Self;
 

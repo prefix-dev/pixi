@@ -201,6 +201,8 @@ Detectors execute code from the channel, so Pixi asks whether to trust them befo
 You can save the decision in the [configuration](../reference/pixi_configuration.md#virtual-package-detectors).
 Without a terminal, detectors without a saved decision are skipped.
 
+See [Channel-provided virtual package detectors](../advanced/virtual_package_detectors.md) for a complete example with a Rust detector, a local channel, and a package depending on its result.
+
 ### Managing platforms from the CLI
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:

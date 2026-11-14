@@ -711,6 +711,103 @@ version = "0.1.0"
         }
     }
 
+    /// Versions must reach the package metadata exactly as written, even
+    /// where the canonical conda version differs (`f020736` -> `f20736`).
+    #[tokio::test]
+    async fn test_pyproject_version_is_kept_verbatim() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "targets": {}
+        });
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[project]
+name = "foobar"
+version = "2.0.0.dev0+git20261112.f020736"
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let result = intermediate_conda_outputs::<PythonGenerator>(
+            Some(project_model),
+            Some(temp_dir.path().to_path_buf()),
+            Subdir::Linux64,
+            None,
+            None,
+        )
+        .await;
+
+        assert_eq!(
+            result.outputs[0].metadata.version.as_str(),
+            "2.0.0.dev0+git20261112.f020736"
+        );
+    }
+
+    /// `[project] version` is PEP 440 normalized, matching the wheel version.
+    #[tokio::test]
+    async fn test_pyproject_version_is_pep440_normalized() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "targets": {}
+        });
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[project]
+name = "foobar"
+version = "1.01"
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let result = intermediate_conda_outputs::<PythonGenerator>(
+            Some(project_model),
+            Some(temp_dir.path().to_path_buf()),
+            Subdir::Linux64,
+            None,
+            None,
+        )
+        .await;
+
+        assert_eq!(result.outputs[0].metadata.version.as_str(), "1.1");
+    }
+
+    #[tokio::test]
+    async fn test_project_model_version_is_kept_verbatim() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "1.01",
+            "targets": {}
+        });
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[project]
+name = "foobar"
+dynamic = ["version"]
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let result = intermediate_conda_outputs::<PythonGenerator>(
+            Some(project_model),
+            Some(temp_dir.path().to_path_buf()),
+            Subdir::Linux64,
+            None,
+            None,
+        )
+        .await;
+
+        assert_eq!(result.outputs[0].metadata.version.as_str(), "1.01");
+    }
+
     #[tokio::test]
     async fn test_variant_files_are_applied() {
         let project_model = project_fixture!({

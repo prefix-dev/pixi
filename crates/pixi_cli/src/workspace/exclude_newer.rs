@@ -2,6 +2,7 @@ use std::{path::Path, str::FromStr};
 
 use chrono::{DateTime, SubsecRound, TimeDelta, Utc};
 use clap::Parser;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
@@ -55,8 +56,10 @@ pub enum Command {
     /// Exempt package releases from the cutoff.
     ///
     /// Exemptions are match specs, a bare package name exempts every release.
-    /// An existing exemption of the same package is replaced, with a warning
-    /// if that moves its cutoff later.
+    /// A package has a single exemption, so to exempt several versions,
+    /// combine them in one spec, e.g. `python==3.11.18|==3.12.16`. An
+    /// existing exemption of the same package is replaced, with a warning if
+    /// that moves its cutoff later.
     ///
     /// An exemption with a version only exempts the releases that are already
     /// published, so e.g. a later build of an exempt version is not exempt.
@@ -111,6 +114,22 @@ pub(crate) enum ExcludeNewerError {
     #[error("PyPI exemptions do not support a cutoff")]
     #[diagnostic(help("remove `--cutoff` and `--no-cutoff`"))]
     PypiExemptionCutoff,
+    #[error("cannot exempt both `{first}` and `{second}`")]
+    #[diagnostic(help(
+        "a package has a single exemption, so pass one spec for `{package}`, e.g. `{package}==1.0|==2.0` to exempt several versions"
+    ))]
+    DuplicateExemption {
+        package: String,
+        first: String,
+        second: String,
+    },
+    #[error("cannot exempt both `{first}` and `{second}`")]
+    #[diagnostic(help("both name the PyPI package `{package}`, so pass only one of them"))]
+    DuplicatePypiExemption {
+        package: String,
+        first: String,
+        second: String,
+    },
 }
 
 /// The cutoff of new exemptions.
@@ -196,16 +215,34 @@ fn describe_exemption(spec: &str, cutoff: Option<ExcludeNewer>) -> String {
 
 /// Exempts the conda `specs` with `add`, with the cutoff of `cutoff`.
 /// Returns the success message.
+///
+/// A package has a single exemption, so several specs of the same package
+/// are rejected instead of silently keeping only the last one.
 pub(crate) fn add_exemptions(
     specs: &[String],
     cutoff: &ExemptionCutoffArgs,
     channel_config: &ChannelConfig,
     mut add: impl FnMut(PackageName, ExcludeNewerExemption) -> miette::Result<()>,
 ) -> miette::Result<String> {
-    let now = now();
-    let mut names = Vec::with_capacity(specs.len());
+    // Parse every spec before adding any, so a duplicate is rejected before
+    // any exemption is added.
+    let mut parsed: IndexMap<PackageName, (&str, BinarySpec)> = IndexMap::new();
     for spec in specs {
         let (name, binary) = pixi_manifest::parse_conda_exemption(spec, channel_config)?;
+        if let Some((first, _)) = parsed.get(&name) {
+            return Err(ExcludeNewerError::DuplicateExemption {
+                package: name.as_normalized().to_string(),
+                first: first.to_string(),
+                second: spec.clone(),
+            }
+            .into());
+        }
+        parsed.insert(name, (spec, binary));
+    }
+
+    let now = now();
+    let mut names = Vec::with_capacity(parsed.len());
+    for (name, (spec, binary)) in parsed {
         let cutoff = cutoff.cutoff_for(&binary, now)?;
         names.push(describe_exemption(spec, cutoff));
         add(
@@ -399,15 +436,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if args.cutoff.is_set() {
                 return Err(ExcludeNewerError::PypiExemptionCutoff.into());
             }
-            let mut names = Vec::with_capacity(args.specs.len());
+            // Several spellings of one package are rejected, as for conda.
+            let mut parsed: IndexMap<PypiPackageName, &str> = IndexMap::new();
             for spec in &args.specs {
                 let name = pixi_manifest::parse_pypi_exemption(spec)?;
-                names.push(name.as_source().to_string());
+                if let Some(first) = parsed.get(&name) {
+                    return Err(ExcludeNewerError::DuplicatePypiExemption {
+                        package: name.as_normalized().to_string(),
+                        first: first.to_string(),
+                        second: spec.clone(),
+                    }
+                    .into());
+                }
+                parsed.insert(name, spec);
+            }
+            let names = parsed.values().join(", ");
+            for name in parsed.into_keys() {
                 workspace
                     .manifest()
                     .add_pypi_exclude_newer_exemption(name)?;
             }
-            format!("Exempted {} from {target}.", names.join(", "))
+            format!("Exempted {names} from {target}.")
         }
         Command::Exempt(args) => add_exemptions(
             &args.specs,

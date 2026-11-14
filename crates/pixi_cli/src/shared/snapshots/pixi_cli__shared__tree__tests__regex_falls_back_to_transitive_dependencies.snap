@@ -1,0 +1,70 @@
+---
+source: crates/pixi_cli/src/shared/tree.rs
+expression: render(&tree)
+---
+ c 1.0 
+    └── a 1.0 
+        ├── b 1.0 
+        │   └── c 1.0  (*)
+        ├── c 1.0  (*)
+        └── ghost  
+
+[
+  {
+    "name": "c",
+    "version": "1.0",
+    "kind": "conda",
+    "is_explicit": false,
+    "via_extras": [],
+    "is_deduplicated": false,
+    "dependencies": [
+      {
+        "name": "a",
+        "version": "1.0",
+        "kind": "conda",
+        "is_explicit": true,
+        "via_extras": [],
+        "is_deduplicated": false,
+        "dependencies": [
+          {
+            "name": "b",
+            "version": "1.0",
+            "kind": "conda",
+            "is_explicit": true,
+            "via_extras": [],
+            "is_deduplicated": false,
+            "dependencies": [
+              {
+                "name": "c",
+                "version": "1.0",
+                "kind": "conda",
+                "is_explicit": false,
+                "via_extras": [],
+                "is_deduplicated": true,
+                "dependencies": []
+              }
+            ]
+          },
+          {
+            "name": "c",
+            "version": "1.0",
+            "kind": "conda",
+            "is_explicit": false,
+            "via_extras": [],
+            "is_deduplicated": true,
+            "dependencies": []
+          },
+          {
+            "name": "ghost",
+            "version": null,
+            "kind": null,
+            "is_explicit": false,
+            "via_extras": [],
+            "is_deduplicated": false,
+            "dependencies": []
+          }
+        ]
+      }
+    ]
+  }
+]

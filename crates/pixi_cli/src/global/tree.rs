@@ -1,13 +1,9 @@
 use crate::cli_interface::cli_global_context;
-use crate::shared::tree::{
-    Dependency, Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
-    print_inverted_dependency_tree,
-};
+use crate::shared::tree::{Dependency, Package, PackageSource, print_requested_tree};
 use ahash::HashSet;
 use clap::Parser;
 use console::Color;
 use itertools::Itertools;
-use miette::Context;
 use pixi_api::global::{EnvironmentName, Project};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -34,13 +30,15 @@ pub struct Args {
     /// Invert tree and show what depends on a given package in the regex argument
     #[arg(short, long, requires = "regex")]
     pub invert: bool,
+
+    /// Output the dependency tree as JSON
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::discover_or_create().await?;
     let context = cli_global_context(project);
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock();
     let env_name = EnvironmentName::from_str(args.environment.as_str())?;
     let environment = context.get_environment(&env_name).await?;
 
@@ -62,7 +60,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .package_record
                     .version
                     .version()
-                    .to_string(),
+                    .to_string()
+                    .into(),
                 dependencies: record
                     .repodata_record
                     .package_record
@@ -90,17 +89,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let direct_deps =
         HashSet::from_iter(environment.dependencies.iter().map(|dep| dep.name.clone()));
-    if args.invert {
-        print_inverted_dependency_tree(
-            &mut handle,
-            &build_reverse_dependency_map(&packages),
-            &direct_deps,
-            &args.regex,
-        )
-        .wrap_err("Couldn't print the inverted dependency tree")?;
-    } else {
-        print_dependency_tree(&mut handle, &packages, &direct_deps, &args.regex)
-            .wrap_err("Couldn't print the dependency tree")?;
-    }
-    Ok(())
+    print_requested_tree(
+        &packages,
+        &direct_deps,
+        args.regex.as_deref(),
+        args.invert,
+        args.json,
+    )
 }

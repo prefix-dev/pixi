@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import http.server
@@ -11,7 +12,7 @@ import shutil
 import tarfile
 import threading
 import tomllib
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,7 @@ class DetectorChannel:
     root: Path
     registrations: dict[str, list[str]] = field(default_factory=dict)
     packages: dict[str, dict[str, Any]] = field(default_factory=dict)
+    relations: dict[str, str] = field(default_factory=dict)
 
     @property
     def url(self) -> str:
@@ -127,6 +129,7 @@ class DetectorChannel:
                         "info": {
                             "subdir": subdir,
                             "virtual_package_detectors": self.registrations,
+                            "channel_relations": self.relations,
                         },
                         "packages": self.packages if subdir == "noarch" else {},
                         "packages.conda": {},
@@ -297,6 +300,119 @@ def test_detector_values_reach_consumers_and_platform_selection(
     )
     sandbox.run(unsupported, "run", "check", expected=ExitCode.FAILURE)
     assert not default_env_path(unsupported).exists()
+
+
+@pytest.fixture
+def detector_dependency_channels(
+    detector_sandbox: DetectorSandbox,
+) -> tuple[DetectorChannel, DetectorChannel, Path, Path]:
+    sandbox = detector_sandbox
+    origin = DetectorChannel(sandbox.root / "origin")
+    dependency = DetectorChannel(sandbox.root / "dependency")
+    helper_marker = dependency.root / "helper.runs"
+    dependency.package(
+        "dependency-version",
+        [],
+        {
+            "bin/dependency-version": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(helper_marker))}\necho 3.0\n"
+            ).encode(),
+            "Scripts/dependency-version.bat": (
+                f'@echo off\r\necho run>>"{helper_marker}"\r\necho 3.0\r\n'
+            ).encode(),
+        },
+    )
+    detector = "dependency-detect"
+    origin_marker = origin.root / "detector.runs"
+    report = json.dumps({"version": 1, "virtual_packages": {CAPABILITY: {"version": "%s"}}})
+    origin.registrations[detector] = [CAPABILITY]
+    origin.package(
+        detector,
+        ["dependency-version"],
+        {
+            f"bin/{detector}": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(origin_marker))}\n"
+                "version=$(dependency-version) || exit $?\n"
+                f"printf '{report}\\n' \"$version\"\n"
+            ).encode(),
+            f"Scripts/{detector}.bat": (
+                f'@echo off\r\necho run>>"{origin_marker}"\r\n'
+                "for /f %%v in ('call dependency-version.bat') do "
+                f"echo {report.replace('%s', '%%v')}\r\n"
+            ).encode(),
+        },
+    )
+    origin.consumer("dependency-consumer", CAPABILITY, "==3.0")
+    return origin, dependency, origin_marker, helper_marker
+
+
+def test_unrelated_consumer_channel_cannot_supply_detector_dependencies(
+    detector_sandbox: DetectorSandbox,
+    detector_dependency_channels: tuple[DetectorChannel, DetectorChannel, Path, Path],
+) -> None:
+    sandbox = detector_sandbox
+    origin, dependency, origin_marker, helper_marker = detector_dependency_channels
+    workspace = sandbox.workspace(
+        "unrelated-dependency-channel", [dependency, origin], consumer="dependency-consumer"
+    )
+    sandbox.decision(workspace, origin, "allow")
+
+    info = sandbox.info(workspace)
+    report = next(
+        item
+        for item in info["virtual_package_detectors"]
+        if item["detector"] == "dependency-detect"
+    )
+    assert report["origin"] == origin.url
+    assert report["state"] == "failed"
+    assert "dependency-version" in report["detail"]
+    assert report["virtual_packages"] == []
+    assert CAPABILITY not in versions(info)
+    sandbox.run(workspace, "install", expected=ExitCode.FAILURE)
+    assert not (
+        default_env_path(workspace) / "conda-meta" / "dependency-consumer-1.0-0.json"
+    ).exists()
+    assert not origin_marker.exists()
+    assert not helper_marker.exists()
+
+
+def test_detector_dependencies_follow_relative_relation_without_replacing_origin(
+    detector_sandbox: DetectorSandbox,
+    detector_dependency_channels: tuple[DetectorChannel, DetectorChannel, Path, Path],
+) -> None:
+    sandbox = detector_sandbox
+    origin, dependency, origin_marker, helper_marker = detector_dependency_channels
+    origin.relations["base"] = "../dependency"
+    origin.write_repodata()
+    shadow_marker = dependency.root / "shadow.runs"
+    # The relation's higher-priority channel must not replace the registered detector.
+    dependency.package(
+        "dependency-detect",
+        [],
+        {
+            "bin/dependency-detect": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(shadow_marker))}\nexit 99\n"
+            ).encode(),
+            "Scripts/dependency-detect.bat": (
+                f'@echo off\r\necho run>>"{shadow_marker}"\r\nexit /b 99\r\n'
+            ).encode(),
+        },
+    )
+    workspace = sandbox.workspace(
+        "related-dependency-channel",
+        [origin],
+        capability=CAPABILITY,
+        consumer="dependency-consumer",
+    )
+    sandbox.decision(workspace, origin, "allow")
+
+    sandbox.run(workspace, "install")
+    assert (default_env_path(workspace) / "conda-meta" / "dependency-consumer-1.0-0.json").exists()
+    # Check execution before info's all-mode detection can conceal an install-path failure.
+    assert origin_marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert helper_marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert_report(sandbox.info(workspace), origin, "dependency-detect", CAPABILITY)
+    assert not shadow_marker.exists()
 
 
 @pytest.mark.parametrize("capability", ["__cuda", "__test_detector_capability"])
@@ -644,16 +760,11 @@ def test_installed_environment_ignores_uninstalled_sibling_detectors(
         assert marker.read_text(encoding="utf-8").splitlines() == installed_runs, command
 
 
-@pytest.fixture
-def installed_default_with_http_sibling(
-    detector_sandbox: DetectorSandbox,
-) -> Iterator[tuple[Path, list[str], Path]]:
-    sandbox = detector_sandbox
-    base = DetectorChannel(sandbox.root / "base-channel")
-    base.package("base-package", [])
-    sibling = DetectorChannel(sandbox.root / "sibling-channel")
-    marker = sibling.detector("sibling-detect", CAPABILITY)
-    sibling.consumer("sibling-consumer", CAPABILITY, ">=3")
+@contextlib.contextmanager
+def counting_channel_server(
+    channel: DetectorChannel,
+) -> Generator[tuple[str, list[str]]]:
+    """Serves `channel` over HTTP and records the path of every request."""
     requests: list[str] = []
 
     class Handler(http.server.SimpleHTTPRequestHandler):
@@ -669,12 +780,29 @@ def installed_default_with_http_sibling(
             pass
 
     server = http.server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), functools.partial(Handler, directory=str(sibling.root))
+        ("127.0.0.1", 0), functools.partial(Handler, directory=str(channel.root))
     )
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        sibling_url = f"http://127.0.0.1:{server.server_address[1]}/"
+        yield f"http://127.0.0.1:{server.server_address[1]}/", requests
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+@pytest.fixture
+def installed_default_with_http_sibling(
+    detector_sandbox: DetectorSandbox,
+) -> Iterator[tuple[Path, list[str], Path]]:
+    sandbox = detector_sandbox
+    base = DetectorChannel(sandbox.root / "base-channel")
+    base.package("base-package", [])
+    sibling = DetectorChannel(sandbox.root / "sibling-channel")
+    marker = sibling.detector("sibling-detect", CAPABILITY)
+    sibling.consumer("sibling-consumer", CAPABILITY, ">=3")
+    with counting_channel_server(sibling) as (sibling_url, requests):
         workspace = sandbox.workspace("http-siblings", [base])
         (workspace / "pixi.toml").write_text(
             '[workspace]\nname = "http-siblings"\n'
@@ -716,10 +844,6 @@ def installed_default_with_http_sibling(
         # A fresh cache makes every repodata request visible.
         sandbox.env["PIXI_CACHE_DIR"] = str(sandbox.root / "run-cache")
         yield workspace, requests, marker
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=5)
 
 
 def test_frozen_implicit_executable_does_not_discover_uninstalled_sibling_channel(
@@ -768,6 +892,82 @@ def test_frozen_revalidated_prefix_does_not_discover_uninstalled_sibling_channel
     assert (workspace / "pixi.lock").read_bytes() == lock
     assert (default_env_path(workspace) / "conda-meta" / "pixi").exists()
     assert not (workspace / ".pixi" / "envs" / "sibling").exists()
+
+
+def test_frozen_revalidated_prefix_without_requirements_skips_its_solve_group_channel(
+    detector_sandbox: DetectorSandbox,
+) -> None:
+    sandbox = detector_sandbox
+    base = DetectorChannel(sandbox.root / "base-channel")
+    base.package("base-package", [])
+    sibling = DetectorChannel(sandbox.root / "sibling-channel")
+    sibling.package("sibling-package", [])
+    with counting_channel_server(sibling) as (sibling_url, requests):
+        workspace = sandbox.workspace("solve-group", [base])
+        (workspace / "pixi.toml").write_text(
+            '[workspace]\nname = "solve-group"\n'
+            f"channels = {json.dumps([base.url])}\n"
+            f'platforms = ["{CURRENT_PLATFORM}"]\n'
+            '\n[dependencies]\nbase-package = "*"\n'
+            '\n[tasks]\ncheck = "echo default-ready"\n'
+            "\n[feature.sibling]\n"
+            f"channels = {json.dumps([sibling_url])}\n"
+            '\n[feature.sibling.dependencies]\nsibling-package = "*"\n'
+            "\n[environments]\n"
+            'default = { solve-group = "group" }\n'
+            'sibling = { features = ["sibling"], solve-group = "group" }\n',
+            encoding="utf-8",
+        )
+        sandbox.run(workspace, "install", "-e", "default")
+        assert requests, "the counting server must observe the solve of the group"
+        requests.clear()
+        # A fresh cache makes every repodata request visible.
+        sandbox.env["PIXI_CACHE_DIR"] = str(sandbox.root / "run-cache")
+        # Without its environment file the prefix can't be reused as is, so the
+        # run updates it, the way it always does for a local PyPI dependency.
+        (default_env_path(workspace) / "conda-meta" / "pixi").unlink()
+        output = sandbox.run(workspace, "run", "--frozen", "check")
+        assert "default-ready" in output.stdout
+        assert requests == []
+        assert (default_env_path(workspace) / "conda-meta" / "pixi").exists()
+
+
+def test_frozen_revalidated_prefix_in_a_solve_group_detects_what_it_requires(
+    detector_sandbox: DetectorSandbox,
+) -> None:
+    sandbox = detector_sandbox
+    base = DetectorChannel(sandbox.root / "base-channel")
+    marker = base.detector("base-detect", CAPABILITY)
+    base.consumer("base-consumer", CAPABILITY, ">=3")
+    sibling = DetectorChannel(sandbox.root / "sibling-channel")
+    sibling.package("sibling-package", [])
+    workspace = sandbox.workspace("solve-group-capability", [base])
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "solve-group-capability"\n'
+        f"channels = {json.dumps([base.url])}\n"
+        f'platforms = [{{ name = "capable", platform = "{CURRENT_PLATFORM}", '
+        f'{CAPABILITY} = "3.0" }}]\n'
+        '\n[dependencies]\nbase-consumer = "*"\n'
+        "\n[feature.sibling]\n"
+        f"channels = {json.dumps([sibling.url])}\n"
+        '\n[feature.sibling.dependencies]\nsibling-package = "*"\n'
+        "\n[environments]\n"
+        'default = { solve-group = "group" }\n'
+        'sibling = { features = ["sibling"], solve-group = "group" }\n',
+        encoding="utf-8",
+    )
+    sandbox.decision(workspace, base, "allow")
+    sandbox.run(workspace, "install", "-e", "default")
+    assert marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    # Fresh repodata and detector caches, so detection has to run again.
+    sandbox.env["PIXI_CACHE_DIR"] = str(sandbox.root / "run-cache")
+    # Without its environment file the prefix can't be reused as is, so the
+    # run updates it, the way it always does for a local PyPI dependency.
+    (default_env_path(workspace) / "conda-meta" / "pixi").unlink()
+    output = sandbox.run(workspace, "run", "--frozen", bat_extension("base-consumer"))
+    assert "consumer-ready" in output.stdout
+    assert marker.read_text(encoding="utf-8").splitlines() == ["run", "run"]
+    assert (default_env_path(workspace) / "conda-meta" / "pixi").exists()
 
 
 def test_frozen_implicit_task_selects_detector_dependent_sibling(

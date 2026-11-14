@@ -134,6 +134,7 @@ fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static st
         rattler_solve::ChannelPriority::Strict => "strict",
         rattler_solve::ChannelPriority::Flexible => "flexible",
         rattler_solve::ChannelPriority::Disabled => "disabled",
+        rattler_solve::ChannelPriority::VersionFirst => "version-first",
     }
 }
 

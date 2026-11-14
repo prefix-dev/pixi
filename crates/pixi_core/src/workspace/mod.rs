@@ -21,7 +21,7 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use crate::{
@@ -145,9 +145,31 @@ const NON_SEMVER_PACKAGES: [&str; 11] = [
 
 type HostScopeCache = Vec<(HostScope, Arc<HostDetection>)>;
 
-/// One lazily detected host per environment, so detecting one environment
-/// does not detect the others.
-type EnvironmentHosts = HashMap<EnvironmentName, AsyncCell<Arc<HostDetection>>>;
+/// Per-environment host detection state, initialized on demand.
+/// Detection results are shared between environments with identical scopes.
+type EnvironmentHosts = HashMap<EnvironmentName, EnvironmentHost>;
+
+/// The hosts detected for one environment.
+#[derive(Default)]
+struct EnvironmentHost {
+    /// Detected for a solve, with the names any candidate record references.
+    solve: AsyncCell<Arc<HostDetection>>,
+    /// The latest lock-scoped detection. Refreshes select an exact scope from
+    /// the shared cache, so changing locked requirements cannot reuse a stale host.
+    locked: RwLock<Option<Arc<HostDetection>>>,
+}
+
+impl EnvironmentHost {
+    /// The most complete detection so far.
+    fn get(&self) -> Option<Arc<HostDetection>> {
+        self.solve.get().cloned().or_else(|| {
+            self.locked
+                .read()
+                .expect("host detection lock poisoned")
+                .clone()
+        })
+    }
+}
 
 /// The pixi workspace, this main struct to interact with a workspace.
 ///
@@ -207,7 +229,7 @@ pub struct Workspace {
     backend_override: Option<BackendOverride>,
 
     /// The host supplied to synchronous constructors and script workspaces.
-    host: HostDetection,
+    host: Arc<HostDetection>,
 
     /// The consent policy used by discovery, including this process's decisions.
     detector_consent: Option<Arc<dyn DetectorConsent>>,
@@ -217,7 +239,7 @@ pub struct Workspace {
     /// manifest even when invalidated before an edit.
     environment_hosts: Arc<OnceCell<EnvironmentHosts>>,
 
-    /// Detections retained across manifest edits for unchanged solve scopes.
+    /// Detections retained across manifest and lock edits for unchanged scopes.
     environment_host_scopes: Arc<Mutex<HostScopeCache>>,
 }
 
@@ -513,7 +535,7 @@ impl Workspace {
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
-            host,
+            host: Arc::new(host),
             detector_consent: None,
             environment_hosts: Arc::default(),
             environment_host_scopes: Arc::new(Mutex::new(Vec::new())),
@@ -773,26 +795,29 @@ impl Workspace {
                 .value
                 .environments
                 .iter()
-                .map(|environment| (environment.name.clone(), AsyncCell::new()))
+                .map(|environment| (environment.name.clone(), EnvironmentHost::default()))
                 .collect()
         })
     }
 
-    /// What this machine provides for the default environment's solve channels.
-    pub fn host(&self) -> &HostDetection {
+    /// A shared snapshot of the default environment's host capabilities.
+    pub fn host(&self) -> Arc<HostDetection> {
         self.default_environment().host()
     }
 
     /// Retains a script's discovery policy and already-probed host.
     fn retain_script_host(&mut self, consent: Arc<dyn DetectorConsent>) {
-        let host = Arc::new(self.host.clone());
+        let host = self.host.clone();
         let hosts = self
             .environments()
             .into_iter()
             .map(|environment| {
                 (
                     environment.name().clone(),
-                    AsyncCell::new_with(host.clone()),
+                    EnvironmentHost {
+                        solve: AsyncCell::new_with(host.clone()),
+                        locked: RwLock::default(),
+                    },
                 )
             })
             .collect();
@@ -845,39 +870,83 @@ impl Workspace {
         Ok(())
     }
 
-    /// Detects the host of `environment` alone, reusing the detection of any
-    /// environment with the same solve scope. Call it before an install or
-    /// another decision that depends on detector results for this
-    /// environment only: detection queries repodata for the environment's
-    /// dependencies, so detecting environments that aren't used wastes time
-    /// and memory.
+    /// Detects the host of `environment` alone for a solve, reusing the
+    /// detection of any environment with the same solve scope. Call it before
+    /// a decision that depends on detector results for this environment only:
+    /// detection queries repodata for the environment's dependencies, so
+    /// detecting environments that aren't used wastes time and memory.
     pub async fn refresh_environment_host(
         &self,
         environment: &Environment<'_>,
+    ) -> Result<(), HostProbeError> {
+        let Some(host) = self.environment_hosts().get(environment.name()) else {
+            return Ok(());
+        };
+        self.detect_into(&host.solve, || {
+            HostScope::for_environment(&grouped_environment::GroupedEnvironment::from(
+                environment.clone(),
+            ))
+        })
+        .await
+    }
+
+    /// Detects the host of `environment` for installing it from `lock_file`.
+    /// Only the virtual packages its locked records require are detected, so
+    /// no repodata is queried for the dependencies of the environment or of
+    /// its solve group. A host already detected for a solve is reused.
+    pub async fn refresh_locked_environment_host(
+        &self,
+        environment: &Environment<'_>,
+        lock_file: &rattler_lock::LockFile,
+    ) -> Result<(), HostProbeError> {
+        let Some(host) = self.environment_hosts().get(environment.name()) else {
+            return Ok(());
+        };
+        if host.solve.get().is_some() {
+            return Ok(());
+        }
+        let Some(consent) = &self.detector_consent else {
+            return Ok(());
+        };
+        let scope = HostScope::for_locked_environment(environment, lock_file)?;
+        let detected = Box::pin(self.detect_host_for_scope(scope, consent)).await?;
+        *host.locked.write().expect("host detection lock poisoned") = Some(detected);
+        Ok(())
+    }
+
+    /// Fills `cell` with the host detected for the scope `scope` returns,
+    /// reusing an earlier detection of the same scope.
+    async fn detect_into(
+        &self,
+        cell: &AsyncCell<Arc<HostDetection>>,
+        scope: impl FnOnce() -> Result<HostScope, HostProbeError>,
     ) -> Result<(), HostProbeError> {
         let Some(consent) = &self.detector_consent else {
             // Synchronous constructors and explicitly injected hosts never probe.
             return Ok(());
         };
-        let Some(cell) = self.environment_hosts().get(environment.name()) else {
-            return Ok(());
-        };
         // Keep detector futures out of every solve, install and mutation future.
         cell.get_or_try_init(Box::pin(async {
-            let scope = HostScope::for_environment(
-                &grouped_environment::GroupedEnvironment::from(environment.clone()),
-            )?;
-            let mut cache = self.environment_host_scopes.lock().await;
-            if let Some((_, host)) = cache.iter().find(|(cached, _)| cached == &scope) {
-                return Ok(host.clone());
-            }
-            let detector = self.host_detector(consent.clone())?;
-            let host = Arc::new(scope.detect(&detector).await?);
-            cache.push((scope, host.clone()));
-            Ok::<_, HostProbeError>(host)
+            let scope = scope()?;
+            self.detect_host_for_scope(scope, consent).await
         }))
         .await?;
         Ok(())
+    }
+
+    async fn detect_host_for_scope(
+        &self,
+        scope: HostScope,
+        consent: &Arc<dyn DetectorConsent>,
+    ) -> Result<Arc<HostDetection>, HostProbeError> {
+        let mut cache = self.environment_host_scopes.lock().await;
+        if let Some((_, host)) = cache.iter().find(|(cached, _)| cached == &scope) {
+            return Ok(host.clone());
+        }
+        let detector = self.host_detector(consent.clone())?;
+        let host = Arc::new(scope.detect(&detector).await?);
+        cache.push((scope, host.clone()));
+        Ok(host)
     }
 
     fn host_detector(
@@ -1809,8 +1878,8 @@ mod tests {
             .unwrap();
 
         let extra = modified.workspace().environment("extra").unwrap();
-        assert!(std::ptr::eq(extra.host(), host.as_ref()));
-        assert!(std::ptr::eq(modified.workspace().host(), workspace.host()));
+        assert!(Arc::ptr_eq(&extra.host(), &host));
+        assert!(Arc::ptr_eq(&modified.workspace().host(), &workspace.host()));
         assert!(workspace.environment("extra").is_none());
         assert_eq!(workspace.environment_host_scopes.lock().await.len(), 1);
     }
