@@ -101,20 +101,25 @@ pub struct ScriptVars<'a> {
 /// The file name of the build script, e.g. `build_ament_cmake.sh`.
 pub fn script_name(build_type: BuildType, windows: bool) -> &'static str {
     match (build_type, windows) {
-        (BuildType::AmentCmake, false) => "build_ament_cmake.sh",
-        (BuildType::AmentCmake, true) => "bld_ament_cmake.bat",
-        (BuildType::AmentPython, false) => "build_ament_python.sh",
-        (BuildType::AmentPython, true) => "bld_ament_python.bat",
-        (BuildType::Cmake, false) => "build_cmake.sh",
-        (BuildType::Cmake, true) => "bld_cmake.bat",
+        (BuildType::AmentCmake, _) => "build_ament_cmake.sh",
+        (BuildType::AmentPython, _) => "build_ament_python.sh",
+        (BuildType::Cmake, _) => "build_cmake.sh",
         (BuildType::Catkin, false) => "build_catkin.sh",
         (BuildType::Catkin, true) => "bld_catkin.bat",
     }
 }
 
-/// Whether the build script is a batch file rather than a bash script.
-pub fn is_batch(_build_type: BuildType, windows: bool) -> bool {
-    windows
+/// The interpreter the recipe runs the build script with, if not the platform's
+/// default (bash, cmd.exe): the ROS 2 scripts are bash scripts, which run on
+/// Windows with brush, a bash-compatible shell (in the build requirements).
+pub fn script_interpreter(build_type: BuildType, windows: bool) -> Option<&'static str> {
+    (windows && !is_batch(build_type, windows)).then_some("brush")
+}
+
+/// Whether the build script is a batch file rather than a bash script: only
+/// ROS 1's on Windows.
+pub fn is_batch(build_type: BuildType, windows: bool) -> bool {
+    windows && build_type == BuildType::Catkin
 }
 
 /// Escape `text` for a double-quoted string of a build script, so that e.g. a
@@ -135,21 +140,17 @@ pub fn escape_quoted(text: &str, batch: bool) -> String {
 
 fn template(build_type: BuildType, windows: bool) -> &'static str {
     match (build_type, windows) {
-        (BuildType::AmentPython, false) => include_str!("../templates/build_ament_python.sh"),
-        (BuildType::AmentPython, true) => include_str!("../templates/bld_ament_python.bat"),
-        (BuildType::AmentCmake | BuildType::Cmake, false) => {
+        (BuildType::AmentPython, _) => include_str!("../templates/build_ament_python.sh"),
+        (BuildType::AmentCmake | BuildType::Cmake, _) => {
             include_str!("../templates/build_cmake.sh")
-        }
-        (BuildType::AmentCmake | BuildType::Cmake, true) => {
-            include_str!("../templates/bld_cmake.bat")
         }
         (BuildType::Catkin, false) => include_str!("../templates/build_catkin.sh"),
         (BuildType::Catkin, true) => include_str!("../templates/bld_catkin.bat"),
     }
 }
 
-/// Render the build script of a package: a shell script, or a batch file for
-/// Windows (`windows` is the platform the script runs on).
+/// Render the build script of a package (`windows` is the platform it runs on):
+/// a bash script, or for ROS 1 on Windows a batch file.
 ///
 /// Template lines starting with `@[clean]` / `@[incremental]` are only kept
 /// in that [`BuildMode`]; `@(name)` is replaced by the [`ScriptVars`] field.
