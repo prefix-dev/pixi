@@ -165,7 +165,7 @@ mod custom_platform_scoping {
         let env = workspace.default_environment();
         let platform = match platform {
             Some(name) => env
-                .named_or_best_declared_platform(Some(&platform_name(name)))
+                .named_or_selected_platform(Some(&platform_name(name)), None)
                 .expect("platform is declared by the default environment")
                 .clone(),
             None => env.activation_platform(),
@@ -224,7 +224,7 @@ mod custom_platform_scoping {
 
         // Write the `conda-meta/pixi` marker an install for `local` would leave.
         let local = env
-            .named_or_best_declared_platform(Some(&platform_name("local")))
+            .named_or_selected_platform(Some(&platform_name("local")), None)
             .unwrap();
         pixi_core::environment::write_environment_file(
             &env.dir(),
@@ -237,6 +237,7 @@ mod custom_platform_scoping {
                 resolved_platform: Some(local.into()),
                 minimum_supported_platform: Some(pixi_core::environment::RequiredPlatform::new(
                     local.subdir(),
+                    Vec::new(),
                     Vec::new(),
                 )),
                 detector_virtual_packages: Default::default(),
@@ -277,7 +278,7 @@ mod custom_platform_scoping {
         let env = workspace.default_environment();
         let script_names = |name: &str| {
             let platform = env
-                .named_or_best_declared_platform(Some(&platform_name(name)))
+                .named_or_selected_platform(Some(&platform_name(name)), None)
                 .unwrap();
             get_activator(&env, ShellEnum::default(), platform)
                 .unwrap()

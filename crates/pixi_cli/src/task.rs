@@ -16,6 +16,7 @@ use pixi_manifest::{
     EnvironmentName, FeatureName, PixiPlatformName,
     task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, TemplateString, quote},
 };
+use rattler_lock::LockFile;
 use serde::Serialize;
 use serde_with::serde_as;
 
@@ -504,14 +505,15 @@ fn print_tasks_json(
     project: &Workspace,
     environment: Option<EnvironmentName>,
 ) -> miette::Result<()> {
+    let lock_file = LockFile::from_path(&project.lock_file_path()).ok();
     let env_feature_task_map: Vec<EnvTasks> = match environment {
         Some(name) => {
             let env = project
                 .environment(&name)
                 .ok_or(EnvironmentFromNameError::Unknown(name))?;
-            vec![EnvTasks::from(&env)]
+            vec![EnvTasks::new(&env, lock_file.as_ref())]
         }
-        None => build_env_feature_task_map(project),
+        None => build_env_feature_task_map(project, lock_file.as_ref()),
     };
 
     let json_string =
@@ -522,12 +524,12 @@ fn print_tasks_json(
     Ok(())
 }
 
-fn build_env_feature_task_map(project: &Workspace) -> Vec<EnvTasks> {
+fn build_env_feature_task_map(project: &Workspace, lock_file: Option<&LockFile>) -> Vec<EnvTasks> {
     project
         .environments()
         .iter()
         .sorted_by_key(|env| env.name().to_string())
-        .map(EnvTasks::from)
+        .map(|env| EnvTasks::new(env, lock_file))
         .collect()
 }
 
@@ -539,11 +541,12 @@ struct EnvTasks {
     features: Vec<SerializableFeature>,
 }
 
-impl From<&Environment<'_>> for EnvTasks {
-    fn from(env: &Environment) -> Self {
+impl EnvTasks {
+    fn new(env: &Environment, lock_file: Option<&LockFile>) -> Self {
         let mut tasks = Vec::new();
         let mut features = Vec::new();
-        for (feature_name, task_map) in env.feature_tasks().iter() {
+        let platform = env.installed_or_selected_platform(lock_file);
+        for (feature_name, task_map) in env.feature_tasks(platform).iter() {
             if feature_name.is_environment() {
                 tasks.extend(serializable_tasks(task_map));
             } else {

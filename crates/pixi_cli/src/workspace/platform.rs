@@ -15,7 +15,7 @@ use pixi_manifest::{
     PixiPlatformName, PlatformEdit, PlatformMove, PrioritizedChannel,
     platform::{
         candidate_subdirs, capability_satisfied_by, host::machine_virtual_packages,
-        subdir_default_virtual_packages,
+        is_builtin_virtual_package, subdir_default_virtual_packages,
     },
 };
 use rattler_conda_types::{
@@ -1007,21 +1007,17 @@ impl<'a> HostMachine<'a> {
         self.candidate_subdirs.contains(&subdir)
     }
 
-    /// `true` when the host provides the capability `declared` names.
-    ///
-    /// Shares [`capability_satisfied_by`] with the selection machinery, so what
-    /// `list` calls supported is what `run` will actually pick. Rolling the
-    /// version comparison by hand here silently disagreed about `__archspec`,
-    /// which is matched by microarchitecture rather than by version.
+    /// Whether this declaration permits the host in preselection.
+    /// Custom names are checked only through locked requirements.
     fn satisfies(&self, declared: &GenericVirtualPackage) -> bool {
-        capability_satisfied_by(declared, &self.detected)
+        !is_builtin_virtual_package(declared.name.as_normalized())
+            || capability_satisfied_by(declared, &self.detected)
     }
 
     /// Does the current machine support running this platform? Combines
-    /// the subdir check with the per-VP satisfaction check on the user-
-    /// customized virtual packages (subdir defaults are pixi's baseline
-    /// and not considered host requirements). Used to color both the
-    /// row itself and the env/feature names that reference it.
+    /// the subdir check with the per-VP satisfaction check on user-customized
+    /// built-in virtual packages. Subdir defaults are pixi's baseline, not host
+    /// requirements. Used to color the row and its env/feature references.
     fn supports(&self, platform: &PixiPlatform) -> bool {
         let subdir = platform.subdir();
         if !self.covers_subdir(subdir) {
