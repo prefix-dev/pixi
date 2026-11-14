@@ -4,7 +4,8 @@
     "formatComments": true,
     "braceSpacing": false,
   },
-  "excludes": ["**/*-lock.json", "**/*.lock", "**/node_modules/", "dist/"],
+  // pixi-build-ros's rosdep mappings are copied from RoboStack/robostack as they are
+  "excludes": ["**/*-lock.json", "**/*.lock", "**/node_modules/", "dist/", "crates/pixi_build_ros/robostack*.yaml"],
   "plugins": [
     "https://plugins.dprint.dev/g-plane/pretty_yaml-v0.5.1.wasm",
   ],

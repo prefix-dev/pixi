@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_ros/src/main.rs
+assertion_line: 1000
 expression: generated.recipe
 ---
 schema_version: 1
@@ -38,10 +39,8 @@ requirements:
     - ros-noetic-ros-package-msgs <=2.0.0
     - ros-noetic-ros-package2 <2.0.0a0
     - "qt-main >=5.15.0,<5.16.0"
-    - libgl-devel
     - libopengl-devel
-    - xorg-libx11
-    - xorg-libxext
+    - libgl-devel
     - tinyxml2 ==10.0.0
     - asio <10.0.0
     - ninja
@@ -64,10 +63,8 @@ requirements:
     - ros-noetic-ros-package-msgs <=2.0.0
     - ros-noetic-ros-package2 <2.0.0a0
     - "qt-main >=5.15.0,<5.16.0"
-    - libgl-devel
     - libopengl-devel
-    - xorg-libx11
-    - xorg-libxext
+    - libgl-devel
     - tinyxml2 ==10.0.0
     - asio <10.0.0
     - python
@@ -81,10 +78,8 @@ requirements:
     - ros-noetic-ros-package-msgs <=2.0.0
     - ros-noetic-ros-package2 <2.0.0a0
     - "qt-main >=5.15.0,<5.16.0"
-    - libgl-devel
     - libopengl-devel
-    - xorg-libx11
-    - xorg-libxext
+    - libgl-devel
     - tinyxml2 ==10.0.0
     - asio <10.0.0
     - ros-distro-mutex
