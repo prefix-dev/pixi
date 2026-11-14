@@ -1,11 +1,17 @@
 //! Package mapping resolution between ROS and conda package names.
 //!
-//! Loads `robostack.yaml` and user-provided mappings, resolves ROS dependency
-//! names to conda package specs with platform-specific handling.
+//! Loads the bundled RoboStack mappings and user-provided ones, and resolves ROS
+//! dependency names to conda package specs with platform-specific handling.
+//!
+//! The bundled `robostack.yaml` (every distribution) and `robostack_distros.yaml`
+//! (per distribution, over it) are generated from the RoboStack repository, which
+//! RoboStack's own recipe generator reads too: both resolve rosdep keys the same way.
 
+use std::cell::LazyCell;
 use std::collections::HashMap;
 
 use miette::Diagnostic;
+use rattler_build_jinja::{Jinja, JinjaConfig};
 use rattler_build_recipe::stage0::{ConditionalList, Item, SerializableMatchSpec, Value};
 use rattler_conda_types::{MatchSpec, ParseStrictness, Subdir};
 use serde::{Deserialize, Serialize};
@@ -18,8 +24,27 @@ use crate::package_xml::{Dependency, PackageXml};
 /// Errors that can occur during package mapping resolution.
 #[derive(Debug, Error, Diagnostic)]
 pub enum PackageMapError {
-    #[error("unsupported platform: {platform}")]
-    UnsupportedPlatform { platform: String },
+    #[error("failed to read package map {path}")]
+    ReadFile {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("invalid package map {name}")]
+    ParseFile {
+        name: String,
+        #[source]
+        source: serde_yaml::Error,
+    },
+
+    #[error("failed to render package mapping '{spec}' for '{dep_name}'")]
+    RenderSpec {
+        dep_name: String,
+        spec: String,
+        #[source]
+        source: minijinja::Error,
+    },
 
     #[error(
         "unknown package map entry for '{dep_name}': expected 'ros', 'conda', or 'robostack' key"
@@ -35,12 +60,6 @@ pub enum PackageMapError {
         dep_name: String,
         existing_spec: String,
     },
-
-    #[error(
-        "version specifier can only be used for one package, \
-         but found {count} packages for '{dep_name}' in the package map"
-    )]
-    VersionSpecMultiplePackages { dep_name: String, count: usize },
 
     #[error(
         "incorrect version specification in package.xml for '{dep_name}': version is empty string"
@@ -96,44 +115,114 @@ pub enum PlatformMapping {
     List(Vec<String>),
     /// A single string: `"pkg-a"`
     SingleString(String),
-    /// Subdir-specific mapping: `{"linux": ["pkg"], "osx": []}`
-    PlatformSpecific(HashMap<String, Vec<String>>),
+    /// Platform-specific mapping, by subdir (`linux-aarch64`) or by OS (`linux`,
+    /// `osx`, `win64`, `emscripten`): `{"linux": ["pkg"], "osx": []}` (`osx:`
+    /// without a value is the same as `[]`)
+    PlatformSpecific(HashMap<String, Option<Vec<String>>>),
 }
 
 impl PlatformMapping {
-    /// Resolve the mapping for a given platform string.
-    fn resolve(&self, target_platform: &str) -> Vec<String> {
+    /// The packages for a platform: its subdir's entry, else its OS's, else none.
+    fn resolve(&self, platform: Subdir) -> Vec<String> {
         match self {
             PlatformMapping::List(list) => list.clone(),
             PlatformMapping::SingleString(s) => vec![s.clone()],
-            PlatformMapping::PlatformSpecific(map) => {
-                map.get(target_platform).cloned().unwrap_or_default()
-            }
+            PlatformMapping::PlatformSpecific(map) => map
+                .get(platform.as_str())
+                .or_else(|| {
+                    let os = match platform.only_platform()? {
+                        "win" => "win64",
+                        os => os,
+                    };
+                    map.get(os)
+                })
+                .cloned()
+                .flatten()
+                .unwrap_or_default(),
         }
     }
 }
 
-/// Load and merge package map data from multiple sources.
-/// Later sources (lower index) take priority — we iterate in reverse so
-/// the first source in the list wins.
-pub fn load_package_map_data(sources: &[PackageMappingSource]) -> HashMap<String, PackageMapEntry> {
+/// What a rosdep key maps to on a platform.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MappedPackages {
+    /// ROS packages (`ros:`), by their ROS name
+    Ros(Vec<String>),
+    /// conda package specs (`robostack:` or `conda:`)
+    Conda(Vec<String>),
+}
+
+/// What `name` maps to on `platform`, or `None` when no mapping has it.
+pub fn lookup(
+    package_map_data: &HashMap<String, PackageMapEntry>,
+    name: &str,
+    platform: Subdir,
+) -> Result<Option<MappedPackages>, PackageMapError> {
+    let Some(entry) = package_map_data.get(name) else {
+        return Ok(None);
+    };
+    if let Some(ros) = entry.get("ros") {
+        return Ok(Some(MappedPackages::Ros(ros.resolve(platform))));
+    }
+    match entry.get("robostack").or_else(|| entry.get("conda")) {
+        Some(conda) => Ok(Some(MappedPackages::Conda(conda.resolve(platform)))),
+        None => Err(PackageMapError::UnknownMapEntry {
+            dep_name: name.to_string(),
+        }),
+    }
+}
+
+fn parse_map(
+    name: &str,
+    content: &str,
+) -> Result<HashMap<String, PackageMapEntry>, PackageMapError> {
+    serde_yaml::from_str::<Option<_>>(content)
+        .map(Option::unwrap_or_default)
+        .map_err(|source| PackageMapError::ParseFile {
+            name: name.to_string(),
+            source,
+        })
+}
+
+/// The bundled RoboStack mappings for a distribution: its own entries over the
+/// ones for every distribution.
+pub fn bundled_package_map(
+    distro: &str,
+) -> Result<HashMap<String, PackageMapEntry>, PackageMapError> {
+    let mut map = parse_map("robostack.yaml", include_str!("../robostack.yaml"))?;
+    let mut distros: HashMap<String, Option<HashMap<String, PackageMapEntry>>> =
+        serde_yaml::from_str(include_str!("../robostack_distros.yaml")).map_err(|source| {
+            PackageMapError::ParseFile {
+                name: "robostack_distros.yaml".to_string(),
+                source,
+            }
+        })?;
+    map.extend(distros.remove(distro).flatten().unwrap_or_default());
+    Ok(map)
+}
+
+/// Load and merge package map data from multiple sources: the first source that
+/// has a key wins.
+pub fn load_package_map_data(
+    sources: &[PackageMappingSource],
+) -> Result<HashMap<String, PackageMapEntry>, PackageMapError> {
     let mut result = HashMap::new();
     for source in sources.iter().rev() {
         match source {
             PackageMappingSource::File { path } => {
-                if let Ok(content) = fs_err::read_to_string(path)
-                    && let Ok(data) =
-                        serde_yaml::from_str::<HashMap<String, PackageMapEntry>>(&content)
-                {
-                    result.extend(data);
-                }
+                let content =
+                    fs_err::read_to_string(path).map_err(|source| PackageMapError::ReadFile {
+                        path: path.display().to_string(),
+                        source,
+                    })?;
+                result.extend(parse_map(&path.display().to_string(), &content)?);
             }
             PackageMappingSource::Mapping(mapping) => {
                 result.extend(mapping.clone());
             }
         }
     }
-    result
+    Ok(result)
 }
 
 /// Convert a ROS dependency to conda package spec(s).
@@ -171,98 +260,55 @@ fn resolve_rosdep_to_conda_package_spec(
     host_platform: Subdir,
     package_map_data: &HashMap<String, PackageMapEntry>,
 ) -> Result<Vec<String>, PackageMapError> {
-    let target_platform = if host_platform.is_linux() {
-        "linux"
-    } else if host_platform.is_windows() {
-        "win64"
-    } else if host_platform.is_osx() {
-        "osx"
-    } else {
-        return Err(PackageMapError::UnsupportedPlatform {
-            platform: host_platform.to_string(),
-        });
-    };
-
     let spec_str = rosdep_nameless_matchspec(dep)?;
-
-    // Not in package map -> assume it's a ROS package
-    let Some(entry) = package_map_data.get(&dep.name) else {
-        let ros_name = format!(
+    let ros_name = |name: &str| {
+        format!(
             "{}{}",
-            distro.conda_name(&dep.name),
+            distro.conda_name(name),
             spec_str.as_deref().unwrap_or("")
-        );
-        return Ok(vec![ros_name]);
+        )
     };
 
-    // Case 1: custom ROS dependency
-    if let Some(ros_mapping) = entry.get("ros") {
-        let packages = ros_mapping.resolve(target_platform);
-        return Ok(packages
-            .iter()
-            .map(|name| {
-                format!(
-                    "{}{}",
-                    distro.conda_name(name),
-                    spec_str.as_deref().unwrap_or("")
-                )
-            })
-            .collect());
-    }
-
-    // Case 2: conda/robostack mapping
-    let key = if entry.contains_key("robostack") {
-        "robostack"
-    } else if entry.contains_key("conda") {
-        "conda"
-    } else {
-        return Err(PackageMapError::UnknownMapEntry {
-            dep_name: dep.name.clone(),
-        });
+    let mut conda_packages = match lookup(package_map_data, &dep.name, host_platform)? {
+        // Not in package map -> assume it's a ROS package
+        None => return Ok(vec![ros_name(&dep.name)]),
+        Some(MappedPackages::Ros(names)) => {
+            return Ok(names.iter().map(|n| ros_name(n)).collect());
+        }
+        Some(MappedPackages::Conda(packages)) => packages,
     };
 
-    let mapping = entry.get(key).unwrap();
-    let mut conda_packages = mapping.resolve(target_platform);
-    let mut additional_packages = Vec::new();
-
-    // Handle REQUIRE_GL
-    if let Some(pos) = conda_packages.iter().position(|p| p == "REQUIRE_GL") {
-        conda_packages.remove(pos);
-        if target_platform.contains("linux") {
-            additional_packages.push("libgl-devel".to_string());
-        }
-    }
-
-    // Handle REQUIRE_OPENGL
-    if let Some(pos) = conda_packages.iter().position(|p| p == "REQUIRE_OPENGL") {
-        conda_packages.remove(pos);
-        if target_platform.contains("linux") {
-            additional_packages.extend(["libgl-devel".to_string(), "libopengl-devel".to_string()]);
-        }
-        if matches!(target_platform, "linux" | "osx" | "unix") {
-            additional_packages.extend(["xorg-libx11".to_string(), "xorg-libxext".to_string()]);
-        }
-    }
-
-    // Add version specifier if applicable
-    if let Some(spec) = &spec_str {
-        if conda_packages.len() == 1 {
-            if conda_packages[0].contains(' ') {
-                return Err(PackageMapError::VersionSpecConflict {
+    let jinja = LazyCell::new(|| {
+        Jinja::new(JinjaConfig {
+            target_platform: host_platform,
+            host_platform,
+            ..Default::default()
+        })
+    });
+    for package in &mut conda_packages {
+        if package.contains("${{") {
+            *package = jinja
+                .render_str(package)
+                .map_err(|source| PackageMapError::RenderSpec {
                     dep_name: dep.name.clone(),
-                    existing_spec: conda_packages[0].clone(),
-                });
-            }
-            conda_packages[0] = format!("{}{}", conda_packages[0], spec);
-        } else if !conda_packages.is_empty() {
-            return Err(PackageMapError::VersionSpecMultiplePackages {
+                    spec: package.clone(),
+                    source,
+                })?;
+        }
+    }
+
+    // A version specifier applies to the mapping's first package; the others are
+    // its companions (e.g. libgl-devel for Qt on Linux).
+    if let (Some(spec), Some(first)) = (&spec_str, conda_packages.first_mut()) {
+        if first.contains(' ') {
+            return Err(PackageMapError::VersionSpecConflict {
                 dep_name: dep.name.clone(),
-                count: conda_packages.len(),
+                existing_spec: first.clone(),
             });
         }
+        first.push_str(spec);
     }
 
-    conda_packages.extend(additional_packages);
     Ok(conda_packages)
 }
 
@@ -653,8 +699,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn robostack_data() -> HashMap<String, PackageMapEntry> {
-        let content = include_str!("../robostack.yaml");
-        serde_yaml::from_str(content).unwrap()
+        bundled_package_map("jazzy").unwrap()
     }
 
     fn jazzy_distro() -> Distro {
@@ -672,7 +717,8 @@ mod tests {
             PackageMappingSource::File {
                 path: robostack_file,
             },
-        ]);
+        ])
+        .unwrap();
 
         assert!(result.contains_key("new_package"), "Should be added");
         // alsa-oss should be overwritten by other_package_map
@@ -752,27 +798,80 @@ mod tests {
     }
 
     #[test]
-    fn test_robostack_require_opengl_handling() {
-        let distro = jazzy_distro();
+    fn test_platform_keys_subdir_before_os() {
+        let package_map: HashMap<String, PackageMapEntry> = serde_yaml::from_str(
+            "gl: {robostack: {linux: [libgl-devel], linux-aarch64: [], win64: [opengl32], osx: }}",
+        )
+        .unwrap();
+        let resolve = |platform| match lookup(&package_map, "gl", platform).unwrap() {
+            Some(MappedPackages::Conda(packages)) => packages,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(resolve(Subdir::Linux64), vec!["libgl-devel"]);
+        assert_eq!(resolve(Subdir::LinuxAarch64), Vec::<String>::new());
+        assert_eq!(resolve(Subdir::Win64), vec!["opengl32"]);
+        assert_eq!(resolve(Subdir::Osx64), Vec::<String>::new());
+        assert_eq!(
+            lookup(&package_map, "other", Subdir::Linux64).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_bundled_distro_mappings_override_shared_ones() {
+        let humble = bundled_package_map("humble").unwrap();
+        let kilted = bundled_package_map("kilted").unwrap();
+        let rolling = bundled_package_map("rolling").unwrap();
+        let qt = |map| lookup(map, "qtbase5-dev", Subdir::Osx64).unwrap();
+        for qt5 in [&humble, &kilted] {
+            assert_eq!(
+                qt(qt5),
+                Some(MappedPackages::Conda(vec!["qt-main".to_string()]))
+            );
+        }
+        assert_eq!(
+            lookup(&kilted, "python3-qt5-bindings", Subdir::Osx64).unwrap(),
+            Some(MappedPackages::Conda(vec![
+                "pyqt".to_string(),
+                "pyqt-builder".to_string()
+            ]))
+        );
+        assert_eq!(
+            qt(&rolling),
+            Some(MappedPackages::Conda(vec!["qt6-main".to_string()]))
+        );
+    }
+
+    #[test]
+    fn test_cuda_mapping_uses_the_target_platform() {
         let package_map = robostack_data();
+        for platform in [Subdir::Linux64, Subdir::LinuxAarch64] {
+            let specs = rosdep_to_conda_package_spec(
+                &Dependency::from("nvidia-cuda"),
+                &jazzy_distro(),
+                platform,
+                &package_map,
+            )
+            .unwrap();
+            assert_eq!(
+                specs,
+                vec![
+                    "cuda-cudart-dev".to_string(),
+                    format!("cuda-nvcc-dev_{platform}"),
+                ]
+            );
+        }
+    }
 
-        let dep = Dependency::from("opengl");
-
-        let linux =
-            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
-        let osx = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Osx64, &package_map).unwrap();
-        let win = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Win64, &package_map).unwrap();
-
-        assert!(linux.contains(&"libgl-devel".to_string()));
-        assert!(linux.contains(&"libopengl-devel".to_string()));
-        assert!(linux.contains(&"xorg-libx11".to_string()));
-        assert!(linux.contains(&"xorg-libxext".to_string()));
-
-        assert!(osx.contains(&"xorg-libx11".to_string()));
-        assert!(osx.contains(&"xorg-libxext".to_string()));
-        assert!(!osx.contains(&"libgl-devel".to_string()));
-
-        assert_eq!(win, Vec::<String>::new());
+    #[test]
+    fn test_unreadable_package_map_is_an_error() {
+        let missing = PackageMappingSource::File {
+            path: PathBuf::from("does-not-exist.yaml"),
+        };
+        assert!(matches!(
+            load_package_map_data(&[missing]),
+            Err(PackageMapError::ReadFile { .. })
+        ));
     }
 
     #[test]
@@ -828,7 +927,8 @@ mod tests {
     #[test]
     fn test_spec_with_entry_in_map_error() {
         let distro = jazzy_distro();
-        let package_map = robostack_data();
+        let package_map: HashMap<String, PackageMapEntry> =
+            serde_yaml::from_str("xtensor: {robostack: [xtensor ==0.24.7]}").unwrap();
 
         let dep = Dependency {
             version_eq: Some("2.0".to_string()),
@@ -848,25 +948,19 @@ mod tests {
     }
 
     #[test]
-    fn test_spec_with_multiple_entries_error() {
+    fn test_spec_applies_to_the_first_package() {
         let distro = jazzy_distro();
-        let package_map = robostack_data();
+        let package_map: HashMap<String, PackageMapEntry> =
+            serde_yaml::from_str("qt: {robostack: {linux: [qt-main, libgl-devel]}}").unwrap();
 
         let dep = Dependency {
-            version_eq: Some("2.0".to_string()),
-            ..Dependency::from("boost")
+            version_gte: Some("5.15".to_string()),
+            ..Dependency::from("qt")
         };
 
-        let result = rosdep_to_conda_package_spec(
-            &dep,
-            &distro,
-            Subdir::current().unwrap_or(Subdir::NoArch),
-            &package_map,
-        );
-        assert!(matches!(
-            result,
-            Err(PackageMapError::VersionSpecMultiplePackages { .. })
-        ));
+        let result =
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
+        assert_eq!(result, vec!["qt-main >=5.15", "libgl-devel"]);
     }
 
     #[test]
