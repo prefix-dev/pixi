@@ -6194,6 +6194,7 @@ dependencies = [
  "indexmap 2.14.2",
  "insta",
  "miette 7.6.0",
+ "minijinja",
  "pathdiff",
  "pixi_build_backend",
  "pixi_build_discovery",

@@ -133,7 +133,7 @@ This does not work with the `robostack-staging` channel, as it contains packages
 Because the definition of a dependency in a `package.xml` file is not similar to a conda package name, the backend needs to map ROS dependencies to conda packages.
 
 - **Workspace siblings**: Other ROS packages in the same workspace are discovered automatically and resolved as **source** dependencies, built from their sibling directory. See [Workspace Source Discovery](#workspace-source-discovery).
-- **Known dependencies**: Mapped using the [`robostack.yaml`](https://github.com/prefix-dev/pixi-build-backends/blob/main/backends/pixi-build-ros/robostack.yaml).
+- **Known dependencies**: Mapped using RoboStack's [shared mappings](https://github.com/RoboStack/robostack/blob/main/shared/robostack.yaml), with distribution-specific overrides bundled in the backend.
 - **Custom mappings**: You can provide additional mappings in your `pixi.toml` under [`[package.build.config.extra-package-mappings]`](#extra-package-mappings)
 - **Other packages**: Mapped to `ros-<distro>-<package-name>` format.
 
@@ -247,17 +247,19 @@ ignore-workspace-sources = true
 
 ### `extra-package-mappings`
 
-- **Type**: `List<Map<String, Map<String, List<String> | RelativeFileName>>>`
+- **Type**: list of inline mappings or `{ path = "mapping.yml" }` entries
 - **Default**: `[]`
 
 Additional dependency mappings to apply to the dependency mapping process.
 These mappings are used to extend the usage of the dependencies in the `package.xml` file.
+The first source containing a dependency key wins, ahead of the bundled distribution-specific and shared mappings.
+File paths are relative to the package directory. Unreadable or malformed files are errors.
 
 ```toml title="pixi.toml"
 [package.build.config]
 extra-package-mappings = [
     {"ros-custom" = { ros =  ["ros-custom-msgs"] }},
-    "mapping.yml"
+    { path = "mapping.yml" }
 ]
 ```
 
@@ -272,7 +274,7 @@ Or you can use a file directly in the list:
 
 ```toml title="pixi.toml"
 [package.build.config]
-extra-package-mappings = ["mapping.yml"]
+extra-package-mappings = [{ path = "mapping.yml" }]
 ```
 
 The mapping file can contain the following:
@@ -285,6 +287,22 @@ package_name2: # The name of the package in the package.xml
 ros_package:   # The name of the package in the package.xml
   ros: ros_package # Maps to a RoboStack style package name, e.g. `ros-<distro>-ros-package`
 ```
+
+Mappings can also select packages by OS (`linux`, `osx`, `win64`, `emscripten`) or exact subdir:
+
+```yaml
+example:
+  conda:
+    linux: [primary-package, companion-package]
+    linux-aarch64: []
+    osx: [primary-package]
+```
+
+An exact subdir entry takes precedence over the OS entry, including an empty or null entry.
+A missing platform entry, `[]`, or YAML `null` means no dependency for that platform; it does not trigger the ROS-name fallback.
+Package templates such as `cuda-nvcc-dev_${{ target_platform }}` are rendered for the requested target before validating the conda spec.
+For a conda mapping with several packages, a `package.xml` version constraint applies only to the first package. A pre-existing constraint on that package remains an error.
+The old `REQUIRE_GL` and `REQUIRE_OPENGL` markers are not supported; use explicit platform-specific conda packages instead.
 
 
 ## Default Variants
