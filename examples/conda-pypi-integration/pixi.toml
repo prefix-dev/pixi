@@ -1,12 +1,13 @@
 [workspace]
 name = "conda-pypi-integration"
-channels = ["conda-forge", "https://conda.anaconda.org/conda-pypi"]
-platforms = ["osx-arm64"]
+channels = ["conda-forge", "conda-pypi"]
+platforms = ["osx-arm64", "win-arm64"]
+requires-pixi = ">=0.84.1"
 
 [dependencies]
-python = "3.12.*"
-boltons = { version = "*", channel = "https://conda.anaconda.org/conda-pypi" }
-black = { version = "*", channel = "https://conda.anaconda.org/conda-pypi" }
+python = "3.14.*"
+boltons = { version = "*", channel = "conda-pypi" }
+black = { version = "*", channel = "conda-pypi" }
 
 [tasks]
 test = "python check.py"
