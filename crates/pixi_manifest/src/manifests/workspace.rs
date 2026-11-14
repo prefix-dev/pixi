@@ -94,11 +94,11 @@ impl WorkspaceManifest {
     }
 
     /// Register the per-subdir platforms each environment and solve group
-    /// composes from the rich platforms its features reference, so the composed
+    /// composes from the platforms its features reference, so the composed
     /// names resolve for name-based consumers (lock keying, platform lookup).
     ///
     /// Only runs on the subdir-only `[system-requirements]` path; workspaces
-    /// with custom rich platforms match by name and need no composition.
+    /// declaring inline-table platform entries match by name and need no composition.
     pub(crate) fn register_composed_platforms(&mut self) -> Result<(), TomlError> {
         if !self.workspace.use_platform_composition {
             return Ok(());
@@ -1051,10 +1051,10 @@ impl WorkspaceManifestMut<'_> {
 
         // A newly-added non-subdir platform is the only edit that commits the
         // legacy `[system-requirements]` migration to disk.
-        let added_rich = new_platforms.iter().any(|p| !p.is_subdir_platform());
-        if added_rich {
-            // The workspace now declares a custom rich platform, so it is no
-            // longer subdir-only: match platforms by name instead of composing.
+        let added_non_subdir = new_platforms.iter().any(|p| !p.is_subdir_platform());
+        if added_non_subdir {
+            // The workspace is no longer subdir-only: match platforms by name
+            // instead of composing.
             self.workspace.workspace.use_platform_composition = false;
         }
         self.workspace
@@ -1066,7 +1066,7 @@ impl WorkspaceManifestMut<'_> {
         // migration rewrites every entry's shape, so the stale on-disk array
         // has to be re-rendered wholesale rather than appended to.
         let was_migrating = self.workspace.workspace.must_migrate;
-        migrate_to_rich_platforms::commit_if_needed(self, added_rich)?;
+        migrate_system_requirements::commit_if_needed(self, added_non_subdir)?;
 
         if self.workspace.workspace.must_migrate {
             // Still in legacy shape (only subdir platforms were added): append
@@ -1106,8 +1106,8 @@ impl WorkspaceManifestMut<'_> {
     }
 
     /// Append `new_platforms` to the `platforms` array in their existing
-    /// in-memory shape (bare string for subdir-platforms, inline table for rich
-    /// entries), leaving the entries already in the document untouched so their
+    /// in-memory shape (string entries for subdir platforms, inline-table entries
+    /// otherwise), leaving the entries already in the document untouched so their
     /// order, formatting, and comments are preserved. Used for steady-state
     /// `add` once any legacy migration has settled.
     fn append_workspace_platforms_toml(
@@ -1128,8 +1128,8 @@ impl WorkspaceManifestMut<'_> {
 
     /// Rewrite the `platforms` array in the TOML document from the current
     /// in-memory workspace state, preserving declaration order. Each entry is
-    /// emitted as a bare string for subdir-platforms and as an inline table for
-    /// rich entries (custom name and/or declared virtual packages). Reserved
+    /// emitted as a string entry for subdir platforms and as an inline-table entry
+    /// otherwise (custom name and/or declared virtual packages). Reserved
     /// for the legacy migration commit, where every entry changes shape;
     /// steady-state edits use the in-place helpers so they don't reflow the
     /// whole array.
@@ -1219,12 +1219,12 @@ impl WorkspaceManifestMut<'_> {
         }
 
         // A pending legacy migration re-renders the whole array (every subdir
-        // entry becomes its rich form and `[system-requirements]` drops out),
+        // entry becomes an inline-table entry and `[system-requirements]` drops out),
         // so the in-memory set and the document diverge. Capture this before
         // `commit_if_needed` clears the flag.
         let was_migrating = self.workspace.workspace.must_migrate;
 
-        // An edit that yields a custom rich platform leaves the workspace no
+        // An edit that yields a non-subdir platform leaves the workspace no
         // longer subdir-only: match platforms by name instead of composing.
         if !updated.is_subdir_platform() {
             self.workspace.workspace.use_platform_composition = false;
@@ -1244,10 +1244,10 @@ impl WorkspaceManifestMut<'_> {
             self.rename_feature_platform_references(name, &new_name)?;
         }
 
-        // A real edit of a rich platform commits a pending legacy migration:
-        // the on-disk subdir entry becomes its rich form and the
-        // `[system-requirements]` tables drop out.
-        migrate_to_rich_platforms::commit_if_needed(self, true)?;
+        // A real edit of a platform with custom virtual packages commits a pending
+        // legacy migration: the on-disk subdir entry becomes an inline-table entry
+        // and the `[system-requirements]` tables drop out.
+        migrate_system_requirements::commit_if_needed(self, true)?;
 
         if was_migrating {
             // The migration rebuilt the whole platform set; re-render it.
@@ -1623,7 +1623,7 @@ impl WorkspaceManifestMut<'_> {
     /// [`TargetSelector`] used to key target tables. For platforms whose name
     /// matches the conda subdir and that declare no virtual packages we use
     /// `Subdir(...)` so the in-memory key matches the natural `target.linux-64`
-    /// TOML form; richer platforms key under `Platform(name)`.
+    /// TOML form; other platforms key under `Platform(name)`.
     fn platform_target_selector(
         &self,
         platform_name: Option<&PixiPlatformName>,
@@ -2401,7 +2401,7 @@ pub enum SetRequiresPixiError {
 /// once the legacy syntax is fully retired: drop the module, drop the
 /// `must_migrate` field on `Workspace`, drop the two call sites in
 /// `add_workspace_platforms` and `edit_workspace_platform`.
-mod migrate_to_rich_platforms {
+mod migrate_system_requirements {
     use super::WorkspaceManifestMut;
     use crate::{FeatureName, TomlError};
 
@@ -2411,9 +2411,9 @@ mod migrate_to_rich_platforms {
     /// synthesised names. Clears `must_migrate` afterwards.
     pub(super) fn commit_if_needed(
         manifest: &mut WorkspaceManifestMut<'_>,
-        edit_produces_rich: bool,
+        edit_produces_non_subdir: bool,
     ) -> Result<(), TomlError> {
-        if !manifest.workspace.workspace.must_migrate || !edit_produces_rich {
+        if !manifest.workspace.workspace.must_migrate || !edit_produces_non_subdir {
             return Ok(());
         }
 
@@ -4040,7 +4040,7 @@ platforms = ["linux-64", "osx-64"]
     }
 
     #[test]
-    fn test_rich_platform_and_feature_reference_are_all_listed() {
+    fn test_platform_with_virtual_packages_and_feature_reference_are_all_listed() {
         let file_contents = r#"
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
@@ -4054,8 +4054,8 @@ platforms = ["linux-64-cuda-12-9"]
 "#;
         let workspace = parse_pixi_toml(file_contents);
 
-        // The workspace must list both the bare subdir and the rich
-        // cuda-tagged platform, with the rich entry synthesised to a stable
+        // The workspace must list both the bare subdir and the
+        // cuda-tagged platform, with the latter synthesised to a stable
         // name. The feature reference resolves to the existing entry without
         // adding a duplicate.
         let names: Vec<String> = workspace
@@ -6879,7 +6879,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
     }
 
     #[test]
-    fn test_legacy_sysreqs_migration_commits_on_rich_add() {
+    fn test_legacy_sysreqs_migration_commits_on_virtual_package_add() {
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -6906,7 +6906,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         assert!(initial.contains("system-requirements ="));
 
         let mut editable = workspace.editable();
-        let rich = PixiPlatform::new(
+        let platform = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-12-4").unwrap(),
             Subdir::Linux64,
             vec![rattler_conda_types::GenericVirtualPackage {
@@ -6915,9 +6915,9 @@ exclude-newer = "2015-12-02T02:07:43Z"
                 build_string: BuildString::new_unchecked("0"),
             }],
         )
-        .expect("rich platform with name != subdir");
+        .expect("platform with name != subdir");
         editable
-            .add_platforms([&rich], &FeatureName::Default)
+            .add_platforms([&platform], &FeatureName::Default)
             .unwrap();
 
         // Flag clears, legacy tables are gone, feature platforms point at the
@@ -6971,7 +6971,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             .unwrap();
 
         // Subdir-only add: legacy syntax stays put, flag still set so a later
-        // rich add will trigger the migration.
+        // add with custom virtual packages will trigger the migration.
         assert!(editable.workspace.workspace.must_migrate);
         let after = editable.document.to_string();
         assert!(after.contains("[system-requirements]"));
@@ -6989,8 +6989,8 @@ exclude-newer = "2015-12-02T02:07:43Z"
         // is already declared (the parse-time shim extended it with the
         // synthesised VPs), so re-adding it must touch neither the `platforms`
         // array nor the `[system-requirements]` table -- otherwise the file
-        // ends up with a rich platform alongside the legacy table and no longer
-        // parses.
+        // ends up with an inline-table platform entry alongside the legacy table
+        // and no longer parses.
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -7045,10 +7045,10 @@ exclude-newer = "2015-12-02T02:07:43Z"
     }
 
     #[test]
-    fn test_legacy_sysreqs_migration_commits_on_rich_edit() {
-        // Editing the virtual packages of the rich platform the parse-time shim
+    fn test_legacy_sysreqs_migration_commits_on_virtual_package_edit() {
+        // Editing the virtual packages of the platform the parse-time shim
         // synthesised from `[system-requirements]` upgrades the manifest: the
-        // on-disk subdir entry becomes rich and the legacy table drops out.
+        // on-disk subdir entry becomes an inline-table entry and the legacy table drops out.
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -7067,7 +7067,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             .platforms
             .iter()
             .find(|p| !p.is_subdir_platform())
-            .expect("legacy sysreqs should have produced a synthesised rich platform")
+            .expect("legacy sysreqs should have produced a synthesised platform")
             .name()
             .clone();
 
@@ -7083,13 +7083,13 @@ exclude-newer = "2015-12-02T02:07:43Z"
             .unwrap();
 
         // The migration committed: flag cleared, legacy table gone, the edited
-        // VP version landed in the rich entry.
+        // VP version landed in the inline-table entry.
         assert!(!editable.workspace.workspace.must_migrate);
         let after = editable.document.to_string();
         assert_no_sysreqs(&after);
         assert!(
             after.contains("cuda = \"12.5\""),
-            "edited cuda version should be in the rich platform entry:\n{after}",
+            "edited cuda version should be in the platform entry:\n{after}",
         );
     }
 
@@ -7129,9 +7129,9 @@ exclude-newer = "2015-12-02T02:07:43Z"
     }
 
     #[test]
-    fn test_edit_rich_vp_change_rewrites_toml() {
-        // Editing the VPs of an already-rich platform (no legacy migration in
-        // play) rewrites just that entry.
+    fn test_edit_virtual_package_change_rewrites_toml() {
+        // Editing the VPs of a platform with no legacy migration in play
+        // rewrites just that entry.
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -7238,7 +7238,7 @@ platforms = [
 
     #[test]
     fn test_remove_platform_modifies_toml_without_upgrade() {
-        // Removal must edit the array but never enrich the surviving entries or
+        // Removal must edit the array but never change the surviving entries or
         // commit a pending migration.
         let file_contents = r#"
             [workspace]
@@ -7327,7 +7327,7 @@ platforms = [
     #[test]
     fn test_edit_adds_vp_to_subdir_platform_and_renames_references() {
         // Adding a VP to a bare subdir-platform renames it; the feature that
-        // pointed at the bare name must be updated to the new rich name.
+        // pointed at the bare name must be updated to the new platform name.
         let file_contents = r#"
             [workspace]
             name = "foo"

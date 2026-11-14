@@ -50,7 +50,8 @@ The JSON is built-up like so:
 
 - `version` of the schema (at the time of writing, only `1` exists)
 - `virtual_packages`, reporting the `version` and optional `build_string` of the virtual package `__username_length`
-- `cache`, optionally describing when the detector result is invalidated. If this is not set, the result is cached for 1 hour
+- `cache`, optionally describing when the detector result is invalidated. If that is unset, reports are cached for one hour.
+
 
 The Cargo manifest names the binary and declares its `serde_json` dependency:
 
@@ -133,7 +134,7 @@ In most cases, you will upload your detector to a hosted channel like [prefix.de
 
 Now we switch to the role of the author of a consumer workspace which wants to use the `long-username` package.
 The workspace author declares the supported platforms so Pixi can lock all environments and their dependencies for those platforms, regardless of the machine generating the lock file.
-When a consumer runs the workspace, Pixi checks whether the host satisfies one of those platforms.
+When a consumer runs the workspace, Pixi checks whether the host satisfies its locked package requirements.
 
 Here, the workspace author supports `linux-64` machines with `__username_length` of at least `3`.
 
@@ -141,22 +142,25 @@ Here, the workspace author supports `linux-64` machines with `__username_length`
 --8<-- "docs/source_files/pixi_workspaces/virtual_package_detector/consumer/pixi.toml"
 ```
 
-In `workspace.platforms`, `__username_length = "3"` declares version `3` for the solver.
-The host check accepts a detected version of `3` or newer, so this platform supports usernames with at least three characters.
-This is a version declaration, not a dependency constraint like `__username_length = ">=3"` in `package.run-dependencies`.
-See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for the platform syntax.
+In `workspace.platforms`, `__username_length = "3"` declares version `3` for the solver, regardless of the username length on the machine creating the lock file.
+The locked `long-username` package requires `__username_length >=3`, so the host must report a username length of at least three.
+Pixi does not compare custom declarations such as `__username_length` with detected values.
+If platforms differ only in a custom declaration, the first one whose locked requirements fit wins, regardless of the declared values.
+Without a locked package requiring that capability, selection cannot distinguish the platforms.
+See [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the rules.
 
 The local channel supplies `long-username` and the detector, while conda-forge supplies the application's runtime dependencies.
 
-Let's run the task `start` which simply runs the executable `long-username`.
+### Run on the host
+
+Run the task `start`, which runs the executable `long-username`.
 
 ```bash
 pixi run --manifest-path consumer start
 ```
 
-First, Pixi checks which platform is suitable for your system.
-We only defined one platform, so Pixi only has to check that one.
-Then it notices that `__username_length` is provided by a virtual package detector.
+Pixi needs the detected `__username_length` to check the locked requirement.
+The local channel registers a detector for that name.
 
 In an interactive terminal, Pixi asks whether to trust detectors from the channel.
 The absolute channel path depends on where the example is saved:
@@ -171,9 +175,19 @@ Trust applies to current and future detectors from this channel.
 
 Virtual package detectors can run arbitrary code, so only choose **Trust** if the channel is trusted.
 Pixi then asks where to save the decision; **Don't save** keeps it limited to the current invocation.
-After consent, the detector `username-length-detect` runs.
-If it reports that your username has fewer than three characters, the platform isn't selected.
-Since that is the only platform we defined, Pixi will then report that your host isn't supported.
+
+In the lock file, the environment for platform "linux-64" will now have an entry like this:
+
+```yaml title="consumer/pixi.lock"
+packages:
+- conda: /path/to/example/channel/linux-64/long-username-0.1.0-h2fb17a6_0.conda
+  subdir: linux-64
+  depends:
+  - __username_length >=3
+  - libgcc >=16
+  - __glibc >=2.28,<3.0.a0
+```
+
 
 If the username was long enough, Pixi selects the platform, installs the environment and runs the executable:
 
@@ -181,5 +195,3 @@ If the username was long enough, Pixi selects the platform, installs the environ
 ✨ Pixi task (start): long-username
 long-username
 ```
-
-The same mechanism lets packages require arbitrary host properties reported by a detector, without those properties being built into Pixi.

@@ -157,8 +157,8 @@ def test_pytorch_documentation_examples(
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(toml)
 
-    # These examples declare rich platforms (e.g. `linux-64-cuda-12-0`) whose
-    # subdir is the base platform. Only solve when the host subdir is among
+    # These examples declare platforms with custom virtual packages
+    # (e.g. `linux-64-cuda-12-0`). Only solve when the host conda subdir is among
     # the declared platforms; CUDA-only examples can't be solved on e.g. macOS.
     platform_ls = json.loads(
         verify_cli_command(

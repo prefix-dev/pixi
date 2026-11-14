@@ -1344,8 +1344,8 @@ impl<'p> LockFileDerivedData<'p> {
         if environment_file.environment_lock_file_hash == *hash {
             // If the environment contains source packages the hash alone can't
             // prove freshness, so update the prefix by default. Resolve the lock
-            // row like an install would: rich platforms (e.g. one declaring CUDA)
-            // are keyed by their custom name, not the bare subdir.
+            // row like an install would: platforms with custom virtual packages
+            // (e.g. CUDA) are keyed by their platform name, not the bare subdir.
             let contains_conda_source_pkgs = self
                 .lock_file
                 .environment(environment.name().as_str())
@@ -1406,8 +1406,8 @@ impl<'p> LockFileDerivedData<'p> {
                     &filter.skip_direct,
                     &filter.target_packages,
                 );
-                // Fall back to the base subdir so a pre-rich, base-keyed lock still
-                // resolves when the install platform is rich (e.g. `osx-arm64-macos-12-0`).
+                // Fall back to the conda subdir so a pre-v7, subdir-keyed lock still
+                // resolves for a platform like `osx-arm64-macos-12-0`.
                 let lock_platform = resolve_lock_platform(
                     &self.lock_file,
                     platform.name(),
@@ -1677,8 +1677,8 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the locked environment from the lock file.
                 let locked_env = self.locked_env(environment)?;
-                // Same base-subdir fallback as the pypi prefix update above, for a
-                // rich `pixi_platform` against a pre-rich, base-keyed lock.
+                // Same conda-subdir fallback as the pypi prefix update above, for a
+                // `pixi_platform` with custom virtual packages against a pre-v7 lock.
                 let lock_platform = resolve_lock_platform(
                     &self.lock_file,
                     pixi_platform.name(),
@@ -2317,8 +2317,8 @@ impl<'p> UpdateContextBuilder<'p> {
         };
         let lock_file = input.lock_file;
 
-        // Key locked conda records by the env's declared (possibly rich) platform
-        // names so pre-rich, base-subdir-keyed lock files still feed rich lookups.
+        // Key locked conda records by the env's declared platform names so
+        // pre-v7, subdir-keyed lock files still feed platform-name lookups.
         #[allow(clippy::type_complexity)]
         let unresolved_by_env: Vec<(
             crate::workspace::Environment<'_>,

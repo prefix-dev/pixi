@@ -17,7 +17,7 @@ We will publish both builds to a local channel and install them in a separate wo
 We will create a `mojo-matmul` package that multiplies two matrices.
 This example needs Linux x86-64, glibc 2.34 or newer, and an x86-64-v3-capable CPU for both builds.
 The GPU build targets `gfx1103`, such as the Radeon 780M.
-See [rich platforms](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for hardware declarations, including other AMD targets.
+See [platform configuration](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for hardware declarations, including other AMD targets.
 
 Create these files in a new directory:
 
@@ -67,10 +67,13 @@ Create the consumer manifest beside `package/`:
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/mojo_accelerators/pixi.toml"
 ```
 
-The two rich platforms describe separate solves for the same `linux-64` subdir.
-`amd` comes first, so Pixi selects it automatically on compatible hardware, otherwise it selects `cpu`.
+The two platforms describe separate solves for the same `linux-64` conda subdir.
+`amd` comes first, so Pixi tries it before `cpu` when its built-in declarations match the machine.
 Both require `archspec = "x86_64_v3"` because the prebuilt Modular runtime needs that CPU baseline.
-`amdgpu = "gfx1103"` requires exactly that [ISA](https://gpuopen.com/amd-gpu-architecture-programming-documentation/); even newer ISAs do not match.
+`amdgpu = "gfx1103"` solves `amd` for a GPU with the gfx1103 [ISA](https://gpuopen.com/amd-gpu-architecture-programming-documentation/).
+The backend adds the run dependency `__amdgpu_arch ==11.0.3` to the AMD build.
+That locked requirement enforces the exact ISA match; a different ISA makes Pixi skip `amd` and try `cpu`.
+See [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the details.
 If the GPU build is suitable, typically the CPU is suitable as well.
 To prioritize the GPU build in that case, `pixi-build-mojo` makes sure to [down prioritize](https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration) the CPU build.
 

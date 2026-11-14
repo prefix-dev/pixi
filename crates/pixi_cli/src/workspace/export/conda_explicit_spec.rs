@@ -139,10 +139,10 @@ fn render_env_platform(
     ignore_source_errors: bool,
     sha256: bool,
 ) -> miette::Result<()> {
-    // Rich platforms (platforms carrying system-requirements) are named
-    // independently of their conda subdir, and several of them can share one
-    // subdir. Each is rendered to its own file keyed by platform name, while
-    // the spec itself records the conda subdir it installs into.
+    // Platforms with custom virtual packages are named independently of their
+    // conda subdir, and several of them can share one subdir. Each is rendered
+    // to its own file keyed by platform name, while the spec itself records
+    // the conda subdir it installs into.
     let platform_name: &PlatformName = platform.name();
     let subdir = platform.subdir();
 
@@ -487,18 +487,18 @@ mod tests {
         }
     }
 
-    /// Loads the rich-platform fixture, which declares five platforms across
+    /// Loads the platform fixture, which declares five platforms across
     /// three subdirs, two of which (`osx-arm64` and `linux-64`) are covered by
     /// more than one platform.
-    fn rich_platforms_lock_file() -> LockFile {
+    fn platforms_lock_file() -> LockFile {
         let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
-            .join("tests/data/mock-projects/test-project-export/pixi-rich-platforms.lock");
+            .join("tests/data/mock-projects/test-project-export/pixi-platforms.lock");
         LockFile::from_path(&path).unwrap()
     }
 
     #[test]
-    fn test_render_conda_explicit_spec_rich_platforms() {
-        let lock_file = rich_platforms_lock_file();
+    fn test_render_conda_explicit_spec_platforms() {
+        let lock_file = platforms_lock_file();
 
         let output_dir = tempdir().unwrap();
 
@@ -520,7 +520,7 @@ mod tests {
                     .path()
                     .join(format!("{env_name}_{platform_name}_conda_spec.txt"));
                 insta::assert_snapshot!(
-                    format!("test_render_conda_explicit_spec_rich_{env_name}_{platform_name}"),
+                    format!("test_render_conda_explicit_spec_platform_{env_name}_{platform_name}"),
                     fs_err::read_to_string(file_path).unwrap()
                 );
             }
@@ -541,8 +541,8 @@ mod tests {
     }
 
     #[test]
-    fn test_platform_selection_by_subdir_matches_every_rich_platform() {
-        let lock_file = rich_platforms_lock_file();
+    fn test_platform_selection_by_subdir_matches_every_platform() {
+        let lock_file = platforms_lock_file();
         let (_, env) = lock_file.environments().next().unwrap();
 
         // A bare conda subdir selects every platform built for that subdir,
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_platform_selection_by_name_matches_a_single_platform() {
-        let lock_file = rich_platforms_lock_file();
+        let lock_file = platforms_lock_file();
         let (_, env) = lock_file.environments().next().unwrap();
 
         assert_eq!(select_platforms(&env, "x86-cuda13"), vec!["x86-cuda13"]);

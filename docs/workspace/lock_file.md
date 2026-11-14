@@ -35,8 +35,8 @@ Many Pixi commands will create a lock file if one doesn't already exist, or upda
 3. Generating and writing of lock file
 4. Install resulting packages
 
-Additionally - Pixi ensures that the lock file remains in sync with both your manifest, as well as your installed environment.
-If it detects that they aren't in sync, it will regenerate the lock file. You can read more about this in the [Lock file satisfiability](#lock-file-satisfiability) section.
+Pixi checks whether the lock file is up to date with the manifest before installing.
+If it is not, Pixi updates it unless the selected lock-file mode prevents this. See [Lock file satisfiability](#lock-file-satisfiability).
 
 The following commands will check and automatically update the lock file if needed:
 
@@ -53,9 +53,13 @@ If you want to remove the lock file, you can simply delete it - ready for it to 
 
 You may want to have more control over the interplay between the manifest, the lock file, and the created environment. There are additional command line options to help with this:
 
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--frozen`: use the lock file without checking whether it is up to date with the [manifest file](../reference/pixi_manifest.md), and do not update it. It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: check that `pixi.lock` is up to date with the [manifest file](../reference/pixi_manifest.md), and fail rather than update it if not. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: don't modify the environment, only modify the lock file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
+
+Neither `--locked` nor `--frozen` alone bypasses host compatibility validation.
+See [Which platform gets installed?](multi_platform_configuration.md#which-platform-gets-installed) for target selection and explicit platform overrides.
+The installed prefix is separate state: a fresh lock file does not mean that its packages are already installed.
 
 ## Committing your lock file
 
@@ -101,64 +105,52 @@ If you decide in the end not to commit the lock file, forgoing its benefits, you
 
 ### File structure
 
-The Pixi lock file is structured into two parts.
-
-
-- The environments that are used in the workspace - listing the packages contained. e.g.:
+Version 7 lock files contain platform declarations, per-environment package references, and shared package records.
 
 ```yaml
+version: 7
+platforms:
+- name: username-3
+  subdir: linux-64
+  virtual-packages:
+  - __username_length=3
+- name: username-7
+  subdir: linux-64
+  virtual-packages:
+  - __username_length=7
 environments:
-    default:
-        channels:
-          - url: https://conda.anaconda.org/conda-forge/
-        packages:
-            linux-64:
-            ...
-            - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.2-hab00c5b_0_cpython.conda
-            ...
-            osx-64:
-            ...
-            - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda
-            ...
-```
-
-- The definition of the packages themselves. e.g.:
-
-```yaml
-- kind: conda
-  name: python
-  version: 3.12.2
-  build: h9f0c242_0_cpython
-  subdir: osx-64
-  url: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda
-  sha256: 7647ac06c3798a182a4bcb1ff58864f1ef81eb3acea6971295304c23e43252fb
-  md5: 0179b8007ba008cf5bec11f3b3853902
+  default:
+    channels:
+    - url: file:///example/channel/
+    packages:
+      username-3:
+      - conda: channel/linux-64/long-username-0.1.0-0.conda
+      username-7:
+      - conda: channel/linux-64/long-username-0.1.0-0.conda
+packages:
+- conda: channel/linux-64/long-username-0.1.0-0.conda
+  subdir: linux-64
   depends:
-    - bzip2 >=1.0.8,<2.0a0
-    - libexpat >=2.5.0,<3.0a0
-    - libffi >=3.4,<4.0a0
-    - libsqlite >=3.45.1,<4.0a0
-    - libzlib >=1.2.13,<1.3.0a0
-    - ncurses >=6.4,<7.0a0
-    - openssl >=3.2.1,<4.0a0
-    - readline >=8.2,<9.0a0
-    - tk >=8.6.13,<8.7.0a0
-    - tzdata
-    - xz >=5.2.6,<6.0a0
-  constrains:
-    - python_abi 3.12.* *_cp312
-  license: Python-2.0
-  size: 14596811
-  timestamp: 1708118065292
+  - __username_length >=3
 ```
+
+- `platforms` records each platform's name, `subdir`, and declared virtual packages.
+  Names such as `username-3` are lookup keys, not subdirs. Both platforms here use the `linux-64` subdir.
+- `environments.default.packages` maps those names to references into the shared `packages` records.
+- `packages` describes the real packages, including their dependencies.
+  Here `long-username` requires `__username_length >=3`, which both declarations satisfy.
+
+The declared values `3` and `7` are solve inputs, not detected host values.
+A host could report `__username_length=9` without that value replacing either declaration in the lock file.
+Detection alone does not add a virtual package or its detector as an installed package record in the consumer environment.
+See [Declared, detected, and required virtual packages](multi_platform_configuration.md#declared-detected-and-required-virtual-packages).
+
+The serialized order of platform entries is not installation priority.
+See [Which platform gets installed?](multi_platform_configuration.md#which-platform-gets-installed) for how Pixi selects and validates a target.
 
 ### The version of the lock file
 
-The lock file also has a version number, this is to ensure that the lock file is compatible with the local version of `pixi`.
-
-```yaml
-version: 6
-```
+The top-level `version` identifies the lock-file format, currently `7`.
 
 Pixi is backward compatible with the lock file, but not forward compatible.
 This means that you can use an older lock file with a newer version of `pixi`, but not the other way around.
@@ -166,9 +158,9 @@ This means that you can use an older lock file with a newer version of `pixi`, b
 
 ## Lock file satisfiability
 
-The lock file is a description of the environment, and it should always be satisfiable.
-Satisfiable means that the given manifest file and the created environment are in sync with the lock file.
-If the lock file is not satisfiable, Pixi will generate a new lock file automatically.
+Lock-file satisfiability checks whether the locked resolution matches the manifest.
+It is separate from validating the selected target against the host and from checking the installed prefix.
+If the lock file is not satisfiable, Pixi updates it automatically unless `--locked` or `--frozen` prevents this.
 
 Steps to check if the lock file is satisfiable:
 

@@ -198,7 +198,7 @@ fn describe_resolution_gap(
         // Unreachable in practice: `OnlyMinimum` implies a subdir or
         // virtual-package gap. Keep a generic message rather than panic.
         return format!(
-            "was resolved for a richer platform than '{base}' provides; this machine \
+            "was resolved for a platform requiring more than '{base}' provides; this machine \
              only meets the installed packages' minimum requirements."
         );
     }

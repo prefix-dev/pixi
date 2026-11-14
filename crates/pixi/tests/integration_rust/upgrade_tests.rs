@@ -218,8 +218,8 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
 
 /// Regression test: when a coarse target table (a `Subdir`/family selector)
 /// declares a dependency and the workspace platform that selector matches has
-/// a richer name, `pixi upgrade` must rewrite the spec in the declared table
-/// rather than materializing a new `[target.<rich-name>.dependencies]` block.
+/// a name distinct from its subdir, `pixi upgrade` must rewrite the spec in the
+/// declared table rather than materializing a new `[target.<platform-name>.dependencies]` block.
 #[tokio::test]
 async fn upgrade_command_keeps_specs_in_declared_target() {
     setup_tracing();
@@ -237,7 +237,7 @@ async fn upgrade_command_keeps_specs_in_declared_target() {
         .unwrap();
     let channel = Url::from_file_path(channel_dir.path()).unwrap();
 
-    // `my-linux` is a richly-named `linux-64` platform, so its target selector
+    // `my-linux` is a platform for the `linux-64` subdir, so its target selector
     // is `Platform("my-linux")` while the dependency below is declared under
     // the `linux` family and the `linux-64` subdir selectors.
     let pixi = PixiControl::from_manifest(&format!(
@@ -266,7 +266,7 @@ async fn upgrade_command_keeps_specs_in_declared_target() {
 
     assert!(
         !content.contains("[target.my-linux"),
-        "upgrade must not create a target table for the rich platform name:\n{content}"
+        "upgrade must not create a target table for the platform name:\n{content}"
     );
     assert!(
         !content.contains("==3.12"),

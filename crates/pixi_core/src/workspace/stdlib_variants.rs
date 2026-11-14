@@ -143,8 +143,12 @@ mod tests {
         }
     }
 
-    /// Build a rich (named) platform declaring exactly `packages`.
-    fn rich(name: &str, subdir: Subdir, packages: Vec<GenericVirtualPackage>) -> PixiPlatform {
+    /// Build a platform declaring exactly `packages`.
+    fn make_platform(
+        name: &str,
+        subdir: Subdir,
+        packages: Vec<GenericVirtualPackage>,
+    ) -> PixiPlatform {
         PixiPlatform::new(PixiPlatformName::from_str(name).unwrap(), subdir, packages).unwrap()
     }
 
@@ -164,7 +168,7 @@ mod tests {
 
     #[test]
     fn osx_derives_macosx_deployment_target() {
-        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
+        let platform = make_platform("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &conda_forge(),
@@ -185,7 +189,7 @@ mod tests {
 
     #[test]
     fn linux_derives_sysroot_from_glibc() {
-        let platform = rich("lin", Subdir::Linux64, vec![vp("__glibc", "2.28")]);
+        let platform = make_platform("lin", Subdir::Linux64, vec![vp("__glibc", "2.28")]);
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &conda_forge(),
@@ -207,7 +211,7 @@ mod tests {
     /// host version like `15.7.1` that the exact pin could never resolve.
     #[test]
     fn atmost_bounds_full_version() {
-        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "15.7.1")]);
+        let platform = make_platform("mac", Subdir::OsxArm64, vec![vp("__osx", "15.7.1")]);
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &conda_forge(),
@@ -222,7 +226,7 @@ mod tests {
 
     #[test]
     fn windows_skips() {
-        let platform = rich("windows-rich", Subdir::Win64, vec![vp("__win", "10.0")]);
+        let platform = make_platform("windows-10", Subdir::Win64, vec![vp("__win", "10.0")]);
         assert!(
             derive_stdlib_variants(&platform, &conda_forge(), StdlibVersionPin::Exact).is_empty()
         );
@@ -232,15 +236,15 @@ mod tests {
     /// produces nothing rather than inventing a version.
     #[test]
     fn linux_without_glibc_skips() {
-        let platform = rich("lin-cuda", Subdir::Linux64, vec![vp("__cuda", "12.0")]);
+        let platform = make_platform("lin-cuda", Subdir::Linux64, vec![vp("__cuda", "12.0")]);
         assert!(
             derive_stdlib_variants(&platform, &conda_forge(), StdlibVersionPin::Exact).is_empty()
         );
     }
 
     /// Bare subdir platforms carry pixi's portable defaults (`__glibc=2.28`,
-    /// `__osx=13.0`), so derivation works off them too -- no rich platform
-    /// required.
+    /// `__osx=13.0`), so derivation works off them too -- no custom virtual
+    /// packages required.
     #[test]
     fn bare_subdir_derives_from_defaults() {
         let linux = into_map(derive_stdlib_variants(
@@ -267,7 +271,7 @@ mod tests {
     /// conda-forge referenced by full URL still gates the derivation on.
     #[test]
     fn conda_forge_by_url_derives() {
-        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
+        let platform = make_platform("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &channel("https://prefix.dev/conda-forge"),
@@ -285,7 +289,7 @@ mod tests {
     /// against conda-forge derives nothing.
     #[test]
     fn non_conda_forge_channel_skips() {
-        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
+        let platform = make_platform("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
         assert!(
             derive_stdlib_variants(
                 &platform,
@@ -298,7 +302,7 @@ mod tests {
 
     #[test]
     fn no_channels_skips() {
-        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
+        let platform = make_platform("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
         assert!(derive_stdlib_variants(&platform, &[], StdlibVersionPin::Exact).is_empty());
     }
 }

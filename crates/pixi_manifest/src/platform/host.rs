@@ -311,9 +311,9 @@ pub fn host_baseline() -> PixiPlatform {
 
 /// `subdir`'s defaults with `CONDA_OVERRIDE_*` on top.
 ///
-/// Without an override that is the plain subdir platform. An override makes it
-/// a rich platform, because a subdir-named entry has to carry exactly the
-/// subdir defaults.
+/// Without an override that is the plain subdir platform. An override gives it
+/// custom virtual packages, because a subdir-named entry has to carry exactly
+/// the subdir defaults.
 fn subdir_baseline(subdir: Subdir) -> PixiPlatform {
     let mut virtual_packages = PixiPlatform::from_subdir(subdir)
         .solver_virtual_package_records()
@@ -808,7 +808,7 @@ mod tests {
     }
 
     /// A machine that reports exactly the subdir baseline is the subdir
-    /// platform -- detection should not manufacture a rich platform whose
+    /// platform -- detection should not manufacture a platform whose
     /// customisations are all defaults.
     #[test]
     fn host_platform_matching_the_defaults_collapses_to_the_subdir() {

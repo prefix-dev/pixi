@@ -2,8 +2,8 @@
 //!
 //! A v6 lockfile keys its platform rows by the bare conda subdir (`osx-arm64`)
 //! and records no virtual packages -- that format predates them. When the
-//! workspace migrates a `[system-requirements]` into a rich platform, that
-//! platform's name (`osx-arm64-macos-12-0`) no longer matches the lock's subdir
+//! workspace migrates `[system-requirements]` into a platform's virtual packages,
+//! that platform's name (`osx-arm64-macos-12-0`) no longer matches the lock's subdir
 //! key, and a raw `lock_file.platform(name)` lookup misses the row -- the bug
 //! that made `pixi list`/`pixi tree` report an empty environment on the
 //! affected machine. These exercise the resolution wiring against a real parsed
@@ -14,7 +14,7 @@ use pixi_core::lock_file::resolve_lock_platform_for;
 use pixi_manifest::HasWorkspaceManifest;
 use rattler_lock::{LockFile, LockedPackage};
 
-/// Workspace whose `[system-requirements]` migrates `osx-arm64` into the rich
+/// Workspace whose `[system-requirements]` migrates `osx-arm64` into the
 /// platform `osx-arm64-macos-12-0`.
 const MANIFEST: &str = r#"
 [workspace]
@@ -85,7 +85,7 @@ fn lock_reports_dummy(lock: &LockFile, resolved: rattler_lock::Platform<'_>) -> 
         .any(|package| package.name().as_normalized() == "dummy")
 }
 
-/// Naming the migrated rich platform directly resolves to its packages, which
+/// Naming the migrated platform directly resolves to its packages, which
 /// still live under the bare `osx-arm64` key in the v6 lock.
 #[tokio::test]
 async fn v6_lock_resolves_for_explicit_migrated_platform() {
@@ -100,7 +100,7 @@ async fn v6_lock_resolves_for_explicit_migrated_platform() {
         .platforms
         .iter()
         .find(|p| p.name().as_str() == "osx-arm64-macos-12-0")
-        .expect("macos system-requirement migrates osx-arm64 into a rich platform");
+        .expect("macos system-requirement adds custom virtual packages to osx-arm64");
 
     let lock = pixi.lock_file().await.unwrap();
     let resolved = resolve_lock_platform_for(&lock, platform)

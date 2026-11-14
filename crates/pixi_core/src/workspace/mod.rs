@@ -299,7 +299,7 @@ pub enum ScriptWorkspaceError {
 /// `use_platform_composition` is decided while parsing, and a script without
 /// `platforms` parses with an empty set, which reads as "every platform is a
 /// bare subdir". Composition would then resolve an environment's
-/// platform by *subdir name* and never find the rich platform injected here, so
+/// platform by *subdir name* and never find the platform injected here, so
 /// the flag is recomputed for the platforms actually installed.
 fn set_implicit_script_platforms(
     workspace: &mut pixi_manifest::Workspace,

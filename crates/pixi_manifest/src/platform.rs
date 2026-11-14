@@ -377,8 +377,8 @@ impl PixiPlatform {
     /// load-bearing: a subdir platform represents what pixi assumes about
     /// `subdir` with no customisation, and the rest of the platform API
     /// makes it impossible to mutate them away. To transition off the
-    /// subdir baseline a caller must build a rich platform via
-    /// [`Self::new_with_defaults`] or run an `apply_edit` that adds a
+    /// subdir baseline a caller must build a platform with custom virtual packages
+    /// via [`Self::new_with_defaults`] or run an `apply_edit` that adds a
     /// non-default virtual package.
     pub fn from_subdir(subdir: Subdir) -> Self {
         Self {
@@ -600,13 +600,13 @@ impl PixiPlatform {
     /// Subdir platforms (entries where `name == subdir`) carry an immutable
     /// set of defaults. An edit on a subdir platform is rejected unless its
     /// upsert list contains at least one virtual package that differs from
-    /// the subdir defaults -- those edits transition the platform to a
-    /// rich entry, which is the only legal "change" to a subdir platform.
+    /// the subdir defaults -- adding custom virtual packages is the only
+    /// legal "change" to a subdir platform.
     /// Anything else (removing or re-stating a default, changing the
     /// subdir, clearing the VP list) is rejected with
     /// [`PixiPlatformError::IsSubdirPlatform`].
     ///
-    /// On rich platforms:
+    /// On platforms with custom virtual packages:
     /// - the synthesised auto-name is recomputed from the new subdir/VPs;
     /// - an edit that strips every virtual package collapses the platform
     ///   back to a subdir platform (the defaults are re-materialised from
@@ -617,7 +617,7 @@ impl PixiPlatform {
     pub fn apply_edit(&mut self, edit: PlatformEdit) -> Result<(), PixiPlatformError> {
         let was_subdir = self.is_subdir_platform();
         if was_subdir {
-            // Subdir platforms can only be transformed into rich entries.
+            // Subdir platforms can only be changed by adding custom virtual packages.
             // The single signal that the caller wants that transformation
             // is an upsert whose virtual package differs from the subdir
             // defaults. Without it the edit either restates a default
@@ -673,7 +673,7 @@ impl PixiPlatform {
         }
 
         if declared.is_empty() {
-            // Dropping the last virtual package collapses a rich platform
+            // Dropping the last virtual package collapses the platform
             // back to a subdir platform: the name resets to the subdir,
             // and the subdir defaults are re-materialised so the
             // subdir-platform invariant holds.
@@ -681,11 +681,11 @@ impl PixiPlatform {
             return Ok(());
         }
 
-        // The platform is rich after the edit; make sure the subdir defaults
-        // are materialised alongside whatever the edit produced. Any user
-        // entry with the same name wins, so an `--remove-virtual-package`
-        // pass that strips a default value will be re-seeded from the subdir
-        // default rather than left absent.
+        // The platform has custom virtual packages after the edit; make sure
+        // the subdir defaults are materialised alongside whatever the edit
+        // produced. Any user entry with the same name wins, so an
+        // `--remove-virtual-package` pass that strips a default value will be
+        // re-seeded from the subdir default rather than left absent.
         merge_subdir_defaults(declared, self.subdir);
 
         check_gpu_arch_coupling(declared)?;
@@ -1295,13 +1295,13 @@ mod tests {
 
     use super::*;
 
-    fn rich(name: &str, subdir: Subdir, vps: Vec<GenericVirtualPackage>) -> PixiPlatform {
+    fn make_platform(name: &str, subdir: Subdir, vps: Vec<GenericVirtualPackage>) -> PixiPlatform {
         PixiPlatform::new(
             PixiPlatformName::try_from(name).expect("valid name"),
             subdir,
             vps,
         )
-        .expect("rich platform with name != subdir")
+        .expect("platform with name != subdir")
     }
 
     fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
@@ -1444,7 +1444,7 @@ mod tests {
 
     /// Returns `true` if the platform declares any virtual package whose
     /// name matches `name`. The default-merging policy guarantees the
-    /// subdir defaults are always present on a rich platform, so the
+    /// subdir defaults are always present on a platform, so the
     /// apply-edit tests use this to assert that removing a non-default
     /// VP actually strips it while removing a default-named VP gets
     /// re-seeded from the subdir defaults.
@@ -1646,7 +1646,7 @@ mod tests {
                 ..gvp("__unix", "3")
             },
         ];
-        let platform = rich("explicit", Subdir::Linux64, packages.clone());
+        let platform = make_platform("explicit", Subdir::Linux64, packages.clone());
         assert_eq!(
             platform.solver_virtual_package_records().as_ref(),
             packages.as_slice()
@@ -1794,7 +1794,7 @@ mod tests {
 
     #[test]
     fn apply_edit_upserts_replace_by_name() {
-        let mut p = rich(
+        let mut p = make_platform(
             "gpu-linux",
             Subdir::Linux64,
             vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
@@ -1817,7 +1817,7 @@ mod tests {
 
     #[test]
     fn apply_edit_clear_then_upsert_drops_old() {
-        let mut p = rich(
+        let mut p = make_platform(
             "gpu-linux",
             Subdir::Linux64,
             vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
@@ -1839,7 +1839,7 @@ mod tests {
 
     #[test]
     fn apply_edit_remove_by_name_removes_only_matches() {
-        let mut p = rich(
+        let mut p = make_platform(
             "gpu-linux",
             Subdir::Linux64,
             vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
@@ -1879,7 +1879,7 @@ mod tests {
     /// independent of how the caller orders the fields.
     #[test]
     fn apply_edit_combined_runs_in_documented_order() {
-        let mut p = rich(
+        let mut p = make_platform(
             "gpu-linux",
             Subdir::Linux64,
             vec![
@@ -1926,10 +1926,10 @@ mod tests {
 
     #[test]
     fn apply_edit_dropping_last_vp_collapses_to_subdir() {
-        // Removing the only non-default VP collapses the rich platform back
+        // Removing the only non-default VP collapses the platform back
         // to a subdir platform. The subdir defaults are re-materialised so
         // the result is identical to `PixiPlatform::from_subdir`.
-        let mut p = rich("gpu-linux", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
+        let mut p = make_platform("gpu-linux", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
         p.apply_edit(PlatformEdit {
             remove_virtual_packages: vec![PackageName::try_from("__cuda").unwrap()],
             ..Default::default()
@@ -1947,7 +1947,7 @@ mod tests {
     fn apply_edit_rejected_when_subdir_starts_matching_name() {
         // Renaming the subdir onto the platform's own name while it still
         // carries virtual packages would forge an illegal subdir-platform.
-        let mut p = rich("linux-64", Subdir::Win64, vec![gvp("__cuda", "12.0")]);
+        let mut p = make_platform("linux-64", Subdir::Win64, vec![gvp("__cuda", "12.0")]);
         let err = p
             .apply_edit(PlatformEdit {
                 set_subdir: Some(Subdir::Linux64),
@@ -1959,7 +1959,7 @@ mod tests {
 
     #[test]
     fn apply_edit_set_subdir_changes_only_subdir() {
-        let mut p = rich("gpu-linux", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
+        let mut p = make_platform("gpu-linux", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
         p.apply_edit(PlatformEdit {
             set_subdir: Some(Subdir::LinuxAarch64),
             ..Default::default()
@@ -1992,7 +1992,7 @@ mod tests {
     #[test]
     fn set_name_to_subdir_name_rejected_when_vps_present() {
         // A VP-bearing platform may not be renamed onto its own subdir name.
-        let mut p = rich("gpu", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
+        let mut p = make_platform("gpu", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
         let err = p
             .set_name(PixiPlatformName::try_from("linux-64").unwrap())
             .unwrap_err();
@@ -2128,7 +2128,7 @@ mod tests {
     /// `target.<family>.*` keys; a `PixiPlatformName` carrying any of them
     /// would shadow that selector. The name validator must reject them
     /// before we ever get a chance to call `PixiPlatform::new` with such a
-    /// name, so no rich entry can end up family-named.
+    /// name, so no platform can end up family-named.
     #[test]
     fn name_validator_blocks_target_selector_family_names() {
         for family in ["linux", "unix", "win", "osx", "macos"] {
@@ -2225,9 +2225,9 @@ mod tests {
 
     /// A subdir platform can only be transformed by adding a virtual package
     /// whose value differs from the subdir defaults. That transition turns
-    /// it into a rich platform with a synthesised name.
+    /// it into a platform with custom virtual packages and a synthesised name.
     #[test]
-    fn apply_edit_transitions_subdir_platform_to_rich() {
+    fn apply_edit_adds_custom_virtual_packages_to_subdir_platform() {
         let mut p = PixiPlatform::from_subdir(Subdir::Linux64);
         assert!(p.is_subdir_platform());
         p.apply_edit(PlatformEdit {
@@ -2250,7 +2250,7 @@ mod tests {
             subdir,
             vps,
         )
-        .expect("rich platform with name != subdir")
+        .expect("platform with name != subdir")
     }
 
     /// A linux platform declaring `__musl` must not get the default `__glibc`
