@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_ros/src/main.rs
+assertion_line: 870
 expression: generated.recipe
 ---
 schema_version: 1
@@ -33,61 +34,53 @@ build:
   post_process: []
 requirements:
   build:
-    - ros-noetic-catkin
-    - ros-noetic-ros-package <=2.0.0
-    - ros-noetic-ros-package-msgs <=2.0.0
-    - ros-noetic-ros-package2 <2.0.0a0
-    - "qt-main >=5.15.0,<5.16.0"
-    - libgl-devel
-    - libopengl-devel
-    - xorg-libx11
-    - xorg-libxext
-    - tinyxml2 ==10.0.0
-    - asio <10.0.0
+    - "${{ compiler('cxx') }}"
+    - "${{ compiler('c') }}"
     - ninja
     - python
     - setuptools
     - git
     - git-lfs
-    - cmake
-    - cpython
     - patch
     - make
     - coreutils
-    - "${{ compiler('c') }}"
-    - "${{ compiler('cxx') }}"
+    - cmake
+    - cython
+    - if: build_platform != target_platform
+      then: pkg-config
+    - if: build_platform != target_platform
+      then: python
     - if: build_platform != target_platform
       then: "cross-python_${{ target_platform }}"
+    - if: build_platform != target_platform
+      then: numpy
   host:
+    - asio <10.0.0
+    - libgl-devel
+    - libopengl-devel
+    - numpy
+    - pip
+    - python
+    - "qt-main >=5.15.0,<5.16.0"
+    - ros-distro-mutex * noetic_*
     - ros-noetic-catkin
     - ros-noetic-ros-package <=2.0.0
     - ros-noetic-ros-package-msgs <=2.0.0
     - ros-noetic-ros-package2 <2.0.0a0
-    - "qt-main >=5.15.0,<5.16.0"
+    - tinyxml2 ==10.0.0
+    - if: build_platform == target_platform
+      then: pkg-config
+  run:
+    - asio <10.0.0
     - libgl-devel
     - libopengl-devel
-    - xorg-libx11
-    - xorg-libxext
-    - tinyxml2 ==10.0.0
-    - asio <10.0.0
     - python
-    - numpy
-    - pip
-    - pkg-config
-    - setuptools
-    - ros-distro-mutex
-  run:
+    - "qt-main >=5.15.0,<5.16.0"
+    - ros-distro-mutex * noetic_*
     - ros-noetic-ros-package <=2.0.0
     - ros-noetic-ros-package-msgs <=2.0.0
     - ros-noetic-ros-package2 <2.0.0a0
-    - "qt-main >=5.15.0,<5.16.0"
-    - libgl-devel
-    - libopengl-devel
-    - xorg-libx11
-    - xorg-libxext
     - tinyxml2 ==10.0.0
-    - asio <10.0.0
-    - ros-distro-mutex
 about:
   license: Apache-2.0
   summary: Demo

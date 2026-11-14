@@ -44,6 +44,9 @@ pre-commit:
       run: pixi {run} cargo-shear
     - name: shell-format
       glob: "*.{sh, bash}"
+      exclude:
+        # templates of build scripts, with `@[...]`/`@(...)` placeholders
+        - crates/pixi_build_ros/templates/*
       run: pixi {run} shell-fmt {staged_files}
     - name: tombi
       stage_fixed: true
