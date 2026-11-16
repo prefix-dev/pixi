@@ -1970,3 +1970,40 @@ def test_task_inputs_outputs_missing_no_initial_cache(
         stdout_contains="running; no files are created",
         stderr_excludes="cache hit",
     )
+
+
+def test_run_without_task_lists_only_environments_with_the_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Without `--environment`, `--platform` selects which environments to list
+    instead of failing on the first one that does not declare it."""
+    (tmp_pixi_workspace / "pixi.toml").write_text("""
+[workspace]
+name = "listing"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[tasks]
+shared = "echo shared"
+
+[feature.linux-only]
+platforms = ["linux-64"]
+
+[feature.linux-only.tasks]
+linux-task = "echo linux"
+
+[environments]
+linux-only = ["linux-only"]
+""")
+    listing = verify_cli_command(
+        [pixi, "run", "--platform", "win-64"], cwd=tmp_pixi_workspace, strip_ansi=True
+    )
+    listed = (listing.stdout + listing.stderr).split()
+    assert "shared" in listed
+    assert "linux-task" not in listed
+    verify_cli_command(
+        [pixi, "run", "--environment", "linux-only", "--platform", "win-64"],
+        ExitCode.FAILURE,
+        cwd=tmp_pixi_workspace,
+        stderr_contains="platform 'win-64' is not part of environment 'linux-only'",
+    )

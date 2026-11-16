@@ -23,7 +23,9 @@ use pixi_core::{
     Workspace,
     workspace::{
         Environment, EnvironmentFromNameError,
-        platform_selection::{diagnostic_selection_needs_lock, resolve_diagnostic_platform},
+        platform_selection::{
+            diagnostic_selection_needs_lock, load_diagnostic_lock, resolve_diagnostic_platform,
+        },
         virtual_packages::EnvironmentRunnability,
     },
 };
@@ -528,16 +530,10 @@ async fn print_tasks_json(
         .iter()
         .any(|selection| diagnostic_selection_needs_lock(selection.as_ref()))
     {
-        let lock = match project.load_lock_file().await {
-            Ok(result) => match result.into_lock_file() {
-                Ok(lock) => Some(lock),
-                Err(error) => {
-                    tracing::warn!("could not load lock file for task listing: {error}");
-                    None
-                }
-            },
+        let lock = match load_diagnostic_lock(project).await {
+            Ok(lock) => Some(lock),
             Err(error) => {
-                tracing::warn!("could not load lock file for task listing: {error}");
+                tracing::warn!("{}", error.warning());
                 None
             }
         };

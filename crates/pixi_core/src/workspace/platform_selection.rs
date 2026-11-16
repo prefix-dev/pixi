@@ -18,10 +18,11 @@ use super::{
     virtual_packages::{environment_has_dependencies, environment_has_dependencies_for_platform},
 };
 use crate::{
+    Workspace,
     environment::PlatformNotInEnvironmentError,
     host::HostDetection,
     lock_file::{
-        resolve_lock_platform_for,
+        LoadLockFileError, LockFileVersionMismatchError, resolve_lock_platform_for,
         virtual_packages::{
             MachineValidationError, UnknownNames, validate_system_meets_environment_requirements,
         },
@@ -175,6 +176,41 @@ pub fn resolve_operational_platform<'p>(
     };
     validate_lock_platform(environment, lock_file, selected.platform())?;
     Ok(selected)
+}
+
+/// Why diagnostics continue without the lock file.
+#[derive(Debug, Error, Diagnostic)]
+pub enum DiagnosticLockError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Load(#[from] LoadLockFileError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnsupportedVersion(#[from] LockFileVersionMismatchError),
+}
+
+impl DiagnosticLockError {
+    /// The error with its causes and help as plain text, for a warning.
+    pub fn warning(&self) -> String {
+        let mut message = self.to_string();
+        let mut source = std::error::Error::source(self);
+        while let Some(cause) = source {
+            message.push_str(&format!(": {cause}"));
+            source = cause.source();
+        }
+        if let Some(help) = self.help() {
+            message.push_str(&format!(
+                "\n  help: {}",
+                help.to_string().replace('\n', "\n        ")
+            ));
+        }
+        message
+    }
+}
+
+/// Loads the lock file to refine diagnostic platform selection.
+pub async fn load_diagnostic_lock(workspace: &Workspace) -> Result<LockFile, DiagnosticLockError> {
+    Ok(workspace.load_lock_file().await?.into_lock_file()?)
 }
 
 /// Whether a diagnostic selection made without the lock file can change once

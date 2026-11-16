@@ -868,6 +868,11 @@ def test_unresolved_diagnostics_do_not_require_a_current_lock(
         stderr_excludes="Rosetta",
     )
     assert "which" in output.stdout + output.stderr
+    # The warning keeps the cause and the remedy, not just the summary.
+    if lock_state == "malformed":
+        assert "pixi.lock`: " in output.stderr
+    elif lock_state == "newer":
+        assert "help: Maximum supported version" in output.stderr
     if command == ["info", "--json"]:
         [environment] = json.loads(output.stdout)["environments_info"]
         if lock_state != "stale":

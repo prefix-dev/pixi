@@ -19,11 +19,11 @@ use pixi_core::{
         Environment,
         platform_selection::{
             ResolvedPlatform, diagnostic_selection_needs_lock, explicit_platform,
-            resolve_diagnostic_platform,
+            load_diagnostic_lock, resolve_diagnostic_platform,
         },
     },
 };
-use pixi_manifest::{PixiPlatformName, TaskName, WithWarnings};
+use pixi_manifest::{FeaturesExt, PixiPlatformName, TaskName, WithWarnings};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::Subdir;
 
@@ -401,9 +401,17 @@ async fn diagnostic_tasks<'p>(
     explicit_environment: Option<Environment<'p>>,
     platform: Option<&PixiPlatformName>,
 ) -> miette::Result<()> {
-    let environments = explicit_environment
-        .map(|environment| vec![environment])
-        .unwrap_or_else(|| workspace.environments());
+    let environments = match explicit_environment {
+        Some(environment) => vec![environment],
+        // Only an explicitly requested environment must list the platform.
+        None => workspace
+            .environments()
+            .into_iter()
+            .filter(|environment| {
+                platform.is_none_or(|name| environment.platforms().contains(name))
+            })
+            .collect(),
+    };
     let mut selections: Vec<_> = environments
         .iter()
         .map(|environment| match platform {
@@ -417,16 +425,10 @@ async fn diagnostic_tasks<'p>(
         .iter()
         .any(|selection| diagnostic_selection_needs_lock(selection.as_ref()))
     {
-        let lock = match workspace.load_lock_file().await {
-            Ok(result) => match result.into_lock_file() {
-                Ok(lock) => Some(lock),
-                Err(error) => {
-                    tracing::warn!("{error}");
-                    None
-                }
-            },
+        let lock = match load_diagnostic_lock(workspace).await {
+            Ok(lock) => Some(lock),
             Err(error) => {
-                tracing::warn!("{error}");
+                tracing::warn!("{}", error.warning());
                 None
             }
         };

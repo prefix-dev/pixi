@@ -23,7 +23,7 @@ use pixi_core::workspace::{
     errors::SkippedPlatform,
     grouped_environment::GroupedEnvironment,
     platform_selection::{
-        PlatformSelectionSource, diagnostic_selection_needs_lock,
+        PlatformSelectionSource, diagnostic_selection_needs_lock, load_diagnostic_lock,
         resolve_diagnostic_platform_with_host,
     },
 };
@@ -832,16 +832,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 resolve_diagnostic_platform_with_host(&env, &environment_host, None);
             if diagnostic_selection_needs_lock(selected.as_ref()) {
                 if lock.is_none() {
-                    lock = Some(match ws.load_lock_file().await {
-                        Ok(result) => match result.into_lock_file() {
-                            Ok(lock) => Some(lock),
-                            Err(error) => {
-                                tracing::warn!("could not load lock file for info: {error}");
-                                None
-                            }
-                        },
+                    lock = Some(match load_diagnostic_lock(ws).await {
+                        Ok(lock) => Some(lock),
                         Err(error) => {
-                            tracing::warn!("could not load lock file for info: {error}");
+                            tracing::warn!("{}", error.warning());
                             None
                         }
                     });

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
@@ -6,7 +6,9 @@ use pixi_core::{
     Workspace,
     workspace::{
         EnvironmentFromNameError, WorkspaceMut,
-        platform_selection::{diagnostic_selection_needs_lock, resolve_diagnostic_platform},
+        platform_selection::{
+            diagnostic_selection_needs_lock, load_diagnostic_lock, resolve_diagnostic_platform,
+        },
         virtual_packages::{EnvironmentRunnability, classify_resolved_platform_runnability},
     },
 };
@@ -116,22 +118,10 @@ pub async fn list_tasks<I: Interface>(
         .iter()
         .any(|selection| diagnostic_selection_needs_lock(selection.as_ref()))
     {
-        let lock_file = match workspace.load_lock_file().await {
-            Ok(result) => match result.into_lock_file() {
-                Ok(lock) => Some(lock),
-                Err(error) => {
-                    interface.warning(&error.to_string()).await;
-                    None
-                }
-            },
-            Err(err) => {
-                let mut message = err.to_string();
-                let mut source = err.source();
-                while let Some(cause) = source {
-                    message.push_str(&format!(": {cause}"));
-                    source = cause.source();
-                }
-                interface.warning(&message).await;
+        let lock_file = match load_diagnostic_lock(workspace).await {
+            Ok(lock) => Some(lock),
+            Err(error) => {
+                interface.warning(&error.warning()).await;
                 None
             }
         };
