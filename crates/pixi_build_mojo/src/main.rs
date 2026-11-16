@@ -129,6 +129,7 @@ impl GenerateRecipe for MojoGenerator {
 
         if needs_compiler_pin {
             // Libraries require the producing compiler; binaries also need its shared runtime.
+            // TODO: Pin only the runtime for binaries once Modular ships it separately from `mojo-compiler`.
             requirements.run.push(Item::Value(accelerator::template(
                 "${{ pin_compatible('mojo-compiler', exact=True) }}",
             )?));
