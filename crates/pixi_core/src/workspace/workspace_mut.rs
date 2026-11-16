@@ -9,7 +9,6 @@ use crate::lock_file::{
     LoadLockFileError, SolveCondaEnvironmentError, UpdateLockFileError, UpdatePrefixError,
     WriteLockFileError,
 };
-use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource};
@@ -37,7 +36,7 @@ use toml_edit::DocumentMut;
 use crate::{
     Workspace,
     environment::LockFileUsage,
-    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
+    lock_file::{LockFileDerivedData, UpdateContext},
     workspace::{
         CommandDispatcherBuilderError, MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage,
         SourceSpecs, UpdateDeps, WorkspaceStorage, grouped_environment::GroupedEnvironment,
@@ -692,38 +691,9 @@ impl WorkspaceMut {
             && self.workspace().environments().len() == 1
             && default_environment_is_affected
         {
-            let default_environment = self.workspace().default_environment();
-            // Adding dependencies remains useful on hosts that cannot run the environment.
-            match updated_lock_file
-                .resolve_platform(
-                    &default_environment,
-                    super::platform_selection::PrefixPolicy::Replace,
-                    UpdateMode::Revalidate,
-                )
-                .await
-            {
-                Ok(selection) => {
-                    default_environment.emit_emulation_warning(selection.platform());
-                    updated_lock_file
-                        .prefix(
-                            &default_environment,
-                            &selection,
-                            UpdateMode::Revalidate,
-                            &ReinstallPackages::default(),
-                            &crate::environment::InstallFilter::default(),
-                        )
-                        .await?;
-                }
-                Err(crate::lock_file::UpdatePrefixError::PlatformResolution(
-                    super::platform_selection::PlatformResolutionError::UnsupportedPlatform(_),
-                )) => {
-                    tracing::info!(
-                        "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
-                        default_environment.name().fancy_display()
-                    );
-                }
-                Err(error) => return Err(error.into()),
-            }
+            updated_lock_file
+                .install_after_edit(&self.workspace().default_environment())
+                .await?;
         }
 
         let lock_file_diff =

@@ -12,12 +12,8 @@ use pixi_manifest::FeaturesExt;
 
 use pixi_core::{
     UpdateLockFileOptions,
-    environment::{
-        InstallFilter, LockFileAndPrefixesError, LockFileSource, LockFileUsage,
-        get_update_lock_file_and_prefix,
-    },
+    environment::{LockFileAndPrefixesError, LockFileUsage, update_lock_file_after_edit},
     host::HostProbeError,
-    lock_file::{ReinstallPackages, UpdateMode},
 };
 
 use crate::Interface;
@@ -101,21 +97,7 @@ async fn update_platform_lock_file_and_prefix(
         max_concurrent_solves: workspace.config().max_concurrent_solves(),
         ..Default::default()
     };
-    if no_install {
-        LockFileSource::Update(update_options)
-            .prepare(workspace, progress)
-            .await?;
-    } else {
-        get_update_lock_file_and_prefix(
-            &default_env,
-            progress,
-            UpdateMode::Revalidate,
-            update_options,
-            ReinstallPackages::default(),
-            &InstallFilter::default(),
-        )
-        .await?;
-    }
+    update_lock_file_after_edit(workspace, progress, update_options).await?;
     Ok(())
 }
 

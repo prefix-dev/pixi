@@ -1,9 +1,8 @@
 use indexmap::IndexMap;
 use miette::Diagnostic;
 use pixi_core::{
-    InstallFilter, UpdateLockFileOptions,
-    environment::{LockFileAndPrefixesError, LockFileUsage, get_update_lock_file_and_prefix},
-    lock_file::{ReinstallPackages, UpdateMode},
+    UpdateLockFileOptions,
+    environment::{LockFileAndPrefixesError, LockFileUsage, update_lock_file_after_edit},
     workspace::{PypiDeps, WorkspaceMut},
 };
 use pixi_manifest::{
@@ -93,18 +92,15 @@ pub async fn remove_conda_deps(
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
     if options.lock_file_usage == LockFileUsage::Update {
-        get_update_lock_file_and_prefix(
-            &workspace.default_environment(),
+        update_lock_file_after_edit(
+            &workspace,
             progress,
-            UpdateMode::Revalidate,
             UpdateLockFileOptions {
                 lock_file_usage: options.lock_file_usage,
                 no_install: options.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
                 ..Default::default()
             },
-            ReinstallPackages::default(),
-            &InstallFilter::default(),
         )
         .await?;
     }
@@ -129,18 +125,15 @@ pub async fn remove_pypi_deps(
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
     if options.lock_file_usage == LockFileUsage::Update {
-        get_update_lock_file_and_prefix(
-            &workspace.default_environment(),
+        update_lock_file_after_edit(
+            &workspace,
             progress,
-            UpdateMode::Revalidate,
             UpdateLockFileOptions {
                 lock_file_usage: options.lock_file_usage,
                 no_install: options.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
                 ..Default::default()
             },
-            ReinstallPackages::default(),
-            &InstallFilter::default(),
         )
         .await?;
     }

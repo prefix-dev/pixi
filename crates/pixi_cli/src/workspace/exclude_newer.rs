@@ -6,9 +6,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
-    InstallFilter, UpdateLockFileOptions, Workspace, WorkspaceLocator,
-    environment::{LockFileSource, get_update_lock_file_and_prefix},
-    lock_file::{ReinstallPackages, UpdateMode},
+    UpdateLockFileOptions, Workspace, WorkspaceLocator, environment::update_lock_file_after_edit,
     workspace::WorkspaceMut,
 };
 use pixi_manifest::{
@@ -592,21 +590,7 @@ async fn update_lock_file(workspace: &WorkspaceMut, update: &LockUpdateArgs) -> 
         max_concurrent_solves: workspace.config().max_concurrent_solves(),
         ..Default::default()
     };
-    if no_install {
-        LockFileSource::Update(update_options)
-            .prepare(workspace, progress)
-            .await?;
-    } else {
-        get_update_lock_file_and_prefix(
-            &workspace.default_environment(),
-            progress,
-            UpdateMode::Revalidate,
-            update_options,
-            ReinstallPackages::default(),
-            &InstallFilter::default(),
-        )
-        .await?;
-    }
+    update_lock_file_after_edit(workspace, progress, update_options).await?;
     Ok(())
 }
 

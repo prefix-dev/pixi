@@ -1116,6 +1116,41 @@ impl<'p> LockFileDerivedData<'p> {
         Ok(selected)
     }
 
+    /// Installs `environment` after a manifest edit, or skips it when none of
+    /// its platforms can run on this machine: the updated lock file is still
+    /// useful there.
+    pub async fn install_after_edit(
+        &self,
+        environment: &Environment<'p>,
+    ) -> Result<(), UpdatePrefixError> {
+        match self
+            .resolve_platform(environment, PrefixPolicy::Replace, UpdateMode::Revalidate)
+            .await
+        {
+            Ok(selection) => {
+                environment.emit_emulation_warning(selection.platform());
+                self.prefix(
+                    environment,
+                    &selection,
+                    UpdateMode::Revalidate,
+                    &ReinstallPackages::default(),
+                    &InstallFilter::default(),
+                )
+                .await?;
+            }
+            Err(UpdatePrefixError::PlatformResolution(
+                PlatformResolutionError::UnsupportedPlatform(_),
+            )) => {
+                tracing::info!(
+                    "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
+                    environment.name().fancy_display()
+                );
+            }
+            Err(error) => return Err(error),
+        }
+        Ok(())
+    }
+
     /// The platform data recorded in the `conda-meta/pixi` marker file for the
     /// installed prefix.
     fn installed_platform_data(

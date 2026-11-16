@@ -944,6 +944,32 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     Ok((lock_file, prefix, platform))
 }
 
+/// Updates the lock file after a manifest edit, then installs the default
+/// environment unless `update_lock_file_options.no_install` is set.
+///
+/// A lock-only update never selects a runnable platform, and the install is
+/// skipped when none of the environment's platforms can run on this machine,
+/// so an edit succeeds on hosts that cannot run the environment.
+pub async fn update_lock_file_after_edit(
+    workspace: &Workspace,
+    progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
+    update_lock_file_options: UpdateLockFileOptions,
+) -> Result<(), LockFileAndPrefixesError> {
+    // Held across the solve and install so the caller's summary output is not
+    // written over bars that have finished but are still rendered.
+    let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(progress.as_ref());
+    let no_install = update_lock_file_options.no_install;
+    let lock_file = LockFileSource::Update(update_lock_file_options)
+        .prepare(workspace, progress.clone())
+        .await?;
+    if !no_install {
+        lock_file
+            .install_after_edit(&workspace.default_environment())
+            .await?;
+    }
+    Ok(())
+}
+
 /// A platform was requested for an environment that doesn't list it.
 #[derive(Debug, Error, Diagnostic)]
 #[error("platform '{platform}' is not part of environment '{environment}'")]

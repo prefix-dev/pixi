@@ -125,6 +125,41 @@ gpu-package = "*"
     )
 
 
+@pytest.mark.parametrize("no_install", [True, False])
+def test_remove_succeeds_on_host_that_cannot_run_environment(
+    pixi: Path, tmp_pixi_workspace: Path, no_install: bool
+) -> None:
+    """A manifest edit must not fail after already rewriting the manifest and
+    lock file: a lock-only edit selects no runnable platform, and otherwise the
+    install is skipped like `pixi add` does."""
+    channel = _channel(tmp_pixi_workspace)
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(f"""
+[workspace]
+name = "lock-only-remove"
+channels = ["{channel.url}"]
+platforms = [{{ name = "gpu", platform = "linux-64", cuda = "12" }}]
+
+[dependencies]
+cpu-package = "*"
+gpu-package = "*"
+""")
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+    verify_cli_command(
+        [
+            pixi,
+            "remove",
+            *(["--no-install"] if no_install else []),
+            "--manifest-path",
+            manifest,
+            "cpu-package",
+        ],
+        env={"CONDA_OVERRIDE_CUDA": ""},
+    )
+    assert "cpu-package" not in (tmp_pixi_workspace / "pixi.lock").read_text()
+    assert not _marker(tmp_pixi_workspace).exists()
+
+
 def test_conda_script_activates_the_platform_chosen_from_lock(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
