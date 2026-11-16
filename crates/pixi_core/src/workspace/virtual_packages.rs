@@ -414,10 +414,8 @@ pub(crate) fn environment_has_dependencies(environment: &Environment<'_>) -> boo
 /// Whether `environment` declares anything to install for `platform` in
 /// particular.
 ///
-/// [`environment_has_dependencies`] answers the same question for the
-/// environment as a whole, which is too coarse to decide what a single
-/// platform's prefix should hold: a `[target.win-64.dependencies]` table says
-/// nothing about what belongs in a linux-64 prefix.
+/// Dependencies for another platform do not belong in this prefix. For example,
+/// `[target.win-64.dependencies]` does not require a linux-64 prefix.
 pub fn environment_has_dependencies_for_platform(
     environment: &Environment<'_>,
     platform: &PixiPlatform,

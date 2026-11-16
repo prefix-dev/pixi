@@ -802,11 +802,8 @@ def test_optional_cuda_constraint_at_install_and_run(
         [pixi, "run", "--frozen", "--no-install", "--manifest-path", manifest, "hello"],
         ExitCode.FAILURE if cuda == "11.8" else ExitCode.SUCCESS,
         env={"CONDA_OVERRIDE_CUDA": cuda},
-        **(
-            {"stderr_contains": "__cuda >=12"}
-            if cuda == "11.8"
-            else {"stdout_contains": "TASK-RAN"}
-        ),
+        stderr_contains="__cuda >=12" if cuda == "11.8" else None,
+        stdout_contains="TASK-RAN" if cuda != "11.8" else None,
     )
     assert not _marker(tmp_pixi_workspace).exists()
     verify_cli_command(
