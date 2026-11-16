@@ -9666,7 +9666,10 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">#</a></h2>
 <p>This backend automatically generates conda packages from Mojo projects.</p>
 <p>The generated packages can be installed into local envs for development, or packaged for distribution.</p>
-<p>On macOS, executable packages include an exact runtime dependency on <code>mojo-compiler</code>, which also supplies <code>libKGENCompilerRTShared.dylib</code>.</p>
+<p>Precompiled libraries (<code>.mojoc</code>, or <code>.mojopkg</code> with older compilers) require the compiler that produced them; executables also need its shared runtime.
+Declare <code>mojo-compiler</code> in <code>[package.build-dependencies]</code>; the backend aligns the host compiler with it and adds an exact runtime pin, including the build string.
+Packages that declare the compiler only in <code>[package.host-dependencies]</code> receive an exact runtime pin to that compiler instead.
+Builds use the host compiler when available, matching the runtime pin; otherwise they use the build compiler.</p>
 <div class="admonition warning">
 <p class="admonition-title">Cross-compilation</p>
 <p>Cross-compiling between conda platforms is not supported by <code>pixi-build-mojo</code>.
