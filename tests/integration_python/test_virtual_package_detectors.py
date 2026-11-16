@@ -715,6 +715,35 @@ def test_locked_run_keeps_the_installed_alias_until_it_is_reinstalled(
     assert (workspace / "pixi.lock").read_bytes() == lock
 
 
+def test_explicit_platform_install_records_detected_capabilities(
+    detector_sandbox: DetectorSandbox,
+) -> None:
+    """An explicit target skips host validation, but the prefix must still
+    record what the detectors report: later runs of the installed prefix and
+    its PyPI wheel tags rely on those values instead of detecting again."""
+    sandbox = detector_sandbox
+    channel = DetectorChannel(sandbox.root / "channel")
+    channel.detector("scope-detect", CAPABILITY)
+    channel.consumer("bounded-consumer", CAPABILITY, ">=1,<2 0")
+    workspace = sandbox.workspace("explicit-records", [channel])
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "explicit-records"\n'
+        f"channels = {json.dumps([channel.url])}\n"
+        f'platforms = [{{ name = "low", platform = "{CURRENT_PLATFORM}", {CAPABILITY} = "1.0" }}]\n'
+        '\n[dependencies]\nbounded-consumer = "*"\n',
+        encoding="utf-8",
+    )
+    sandbox.decision(workspace, channel, "allow")
+    sandbox.run(workspace, "lock")
+    sandbox.run(workspace, "install", "--locked", "--platform", "low")
+    marker = json.loads(
+        (default_env_path(workspace) / "conda-meta" / "pixi").read_text(encoding="utf-8")
+    )
+    assert marker.get("detector_virtual_packages") == {
+        CAPABILITY: {"version": "3.0", "build_string": "0"}
+    }
+
+
 def test_channel_add_uses_new_effective_detector_scope_before_installing(
     detector_sandbox: DetectorSandbox,
 ) -> None:

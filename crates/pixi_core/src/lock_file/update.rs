@@ -1195,6 +1195,12 @@ impl<'p> LockFileDerivedData<'p> {
         {
             return Ok(Prefix::new(environment.dir()));
         }
+        // Selecting an explicit target skips host detection, but the marker
+        // must still record what the host provides, so later runs of the
+        // installed prefix check the locked requirements against it.
+        self.workspace
+            .refresh_locked_environment_host(environment, &self.lock_file)
+            .await?;
         let selected_platform = selection.platform();
         let hash = LockedEnvironmentHash::from_environment(
             self.locked_env(environment)?,
