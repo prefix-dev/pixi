@@ -17,7 +17,10 @@ This backend automatically generates conda packages from Mojo projects.
 
 The generated packages can be installed into local envs for development, or packaged for distribution.
 
-On macOS, executable packages include an exact runtime dependency on `mojo-compiler`, which also supplies `libKGENCompilerRTShared.dylib`.
+Precompiled libraries (`.mojoc`, or `.mojopkg` with older compilers) require the compiler that produced them; executables also need its shared runtime.
+Declare `mojo-compiler` in `[package.build-dependencies]`; the backend aligns the host compiler with it and adds an exact runtime pin, including the build string.
+Packages that declare the compiler only in `[package.host-dependencies]` receive an exact runtime pin to that compiler instead.
+Builds use the host compiler when available, matching the runtime pin; otherwise they use the build compiler.
 
 !!! warning "Cross-compilation"
     Cross-compiling between conda platforms is not supported by `pixi-build-mojo`.
