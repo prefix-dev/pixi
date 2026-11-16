@@ -55,7 +55,7 @@ As an environment goes beyond just `dependencies`, both environments and feature
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
 - `activation`: The activation information for the environment
-- `platforms`: The names of the platforms (declared on `workspace.platforms`) the environment can run on. Use [inline-table entries](./multi_platform_configuration.md#declaring-virtual-packages-per-platform) on the workspace to pin per-platform virtual packages (CUDA, glibc, macOS, …) the solver should treat as available.
+- `platforms`: The names of the platforms (declared on `workspace.platforms`) the environment can run on. Use [inline-table entries](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages) on the workspace to pin per-platform virtual packages (CUDA, glibc, macOS, …) the solver should treat as available.
 - `channels`: The channels used to create the environment. Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.

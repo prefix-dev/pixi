@@ -54,7 +54,7 @@ This ensures that the correct version of the `cudatoolkit` package is installed 
 
 With `conda-forge` you can also install the `cpu` version of PyTorch.
 A common use-case is supporting both CUDA machines and non-CUDA machines.
-This does not need separate environments: declare one platform per variant and pick the dependencies with a [target](../workspace/multi_platform_configuration.md#target-specifier) block.
+This does not need separate environments: declare one platform per variant and pick the dependencies with a [target](../reference/pixi_manifest.md#the-target-table) block.
 
 === "`pixi.toml`"
     ```toml title="Adding a cpu platform"
@@ -127,7 +127,7 @@ Best to do this per dependency to force the index to be used.
     ```
 
 The same per-platform split works for the PyPI wheels: declare one platform per variant and point each group at the matching index.
-Because the platform names end in `-cuda` and `-cpu` here, a single [wildcard selector](../workspace/multi_platform_configuration.md#wildcard-platform-selectors) covers both `linux-64` and `win-64`.
+Because the platform names end in `-cuda` and `-cpu` here, a single [wildcard selector](../reference/pixi_manifest.md#wildcard-platform-selectors) covers both `linux-64` and `win-64`.
 
 === "`pixi.toml`"
     ```toml title="Use a cpu and a cuda platform for the pypi pytorch installation"

@@ -1,6 +1,6 @@
 !!! warning "`[system-requirements]` is deprecated"
     Declare these constraints directly on `[workspace].platforms` instead --
-    see [Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform)
+    see [Declaring virtual packages per platform](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages)
     for the inline-table syntax and the matching
     [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) CLI.
     Existing `[system-requirements]` tables are still parsed and migrated
@@ -93,7 +93,7 @@ Putting the constraints on the platform makes the data flow obvious:
 
 The recognised friendly keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`,
 `windows`) and the raw `__name = "version"` escape hatch are documented under
-[Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform).
+[Declaring virtual packages per platform](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages).
 
 ## CLI migration
 

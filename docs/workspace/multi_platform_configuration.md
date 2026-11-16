@@ -20,7 +20,7 @@ version = "python --version"
 The environment is resolved separately for each platform, and `pixi.lock` stores one package set per platform.
 Pixi resolves all of them on any machine, so a Linux machine also locks the macOS and Windows package sets.
 `pixi install` and `pixi run` install the package set that fits the current machine.
-[Target specifiers](#target-specifier) add dependencies, tasks, or activation scripts for individual platforms.
+[Target tables](../reference/pixi_manifest.md#the-target-table) add dependencies, tasks, or activation scripts for individual platforms.
 
 ## Declared, detected, and required virtual packages
 
@@ -122,6 +122,8 @@ Target selectors match in two ways:
 - A subdir such as `[target.linux-64]` matches every platform with that subdir.
   Here it would apply to both `linux-64-cuda` and `linux-64-cpu`, and adding `pytorch-cpu` to the CUDA solve would conflict with `pytorch-gpu`.
 
+The manifest reference lists all [platform entry keys](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages) and [target selectors](../reference/pixi_manifest.md#the-target-table).
+
 `linux-64-cuda` is solved as if the machine had a driver for CUDA 12.0, and the run dependencies and constraints of the CUDA packages decide which builds fit that.
 
 On a `linux-64` machine with CUDA 12.0 or newer, Pixi tries `linux-64-cuda` first.
@@ -134,158 +136,7 @@ Run `pixi install` to select again.
 
 The [PyTorch guide](../python/pytorch.md) covers pinning the CUDA version with `cuda-version` and installing PyTorch from PyPI.
 
-## Target specifier
-
-`[target.<selector>]` tables override configuration for some platforms.
-The selector is a platform name, a subdir, a [wildcard pattern](#wildcard-platform-selectors), or one of `unix`, `linux`, `win`, and `osx`.
-When several selectors match a platform, the one defined later in the manifest wins.
-A selector that doesn't match any platform in `workspace.platforms` produces a warning.
-
-### Dependencies
-
-```toml title="pixi.toml"
-[dependencies]
-python = ">=3.12"
-
-[target.win-64.dependencies]
-msmpi = "*"
-python = "3.12.*"
-```
-
-On `win-64`, this adds `msmpi` and pins `python` to `3.12`.
-`pixi add --platform win-64 msmpi` writes such an entry; it works with `--host` and `--build` as well.
-
-### Activation
-
-```toml title="pixi.toml"
-[activation]
-scripts = ["setup.sh"]
-
-[target.win-64.activation]
-scripts = ["setup.bat"]
-```
-
-On `win-64`, Pixi runs only the target scripts, not the default ones.
-
-### Wildcard platform selectors
-
-A `*` in a selector matches against platform names, which is useful with custom names:
-
-```toml title="pixi.toml"
-[workspace]
-platforms = [
-  { name = "cuda-win-64", platform = "win-64", cuda = "12" },
-  { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
-  "win-64",
-  "linux-64",
-]
-
-[target."cuda-*".tasks]
-test = "python test.py --cuda"
-```
-
-`cuda-win-64` and `cuda-linux-64` get the `test` task; `win-64` and `linux-64` don't.
-Patterns match the whole name and are case-sensitive, and `*` is the only metacharacter.
-Put specific overrides such as `[target.cuda-win-64]` after `[target."cuda-*"]`.
-Wildcards are rejected in `[package.target]` and `[package.build.target]`, which resolve by subdir.
-
-## Declaring virtual packages per platform
-
-A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with Pixi's [default declared virtual packages](#default-declared-virtual-packages)".
-An inline table declares additional [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) for the solve, for example a CUDA driver capability or a glibc version.
-
-```toml title="pixi.toml"
-[workspace]
-platforms = [
-  "osx-arm64",
-  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
-  { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
-]
-```
-
-Each inline-table entry has:
-
-- `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
-- `name`: optional workspace-scoped identifier the platform is referenced by elsewhere (in target selectors, in `feature.<name>.platforms`, in lock file rows, in CLI commands).
-  When omitted, Pixi synthesizes a name from `platform` plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.
-- Friendly keys for the common virtual packages: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
-  Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `amdgpu` -> `__amdgpu`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
-- `archspec` names a CPU microarchitecture (`x86_64_v3`, `skylake`, `m1`,
-  `armv8.2a`, ...) rather than a version. The name must be one the bundled
-  [archspec](https://github.com/archspec/archspec) database knows, and Pixi
-  rejects anything else, suggesting a close match if there is one: a name no host can ever report would
-  otherwise silently produce a platform that never matches. Conda build strings
-  cannot contain `-`, so the spelling uses underscores and dots (`x86_64_v3`,
-  not `x86-64-v3`). A CPU newer than the bundled database can't be named until
-  Pixi ships an updated archspec; set `archspec = "0"` to declare the
-  microarchitecture explicitly unknown.
-  Unlike many other virtual packages, a machine does not satisfy `archspec` by
-  carrying a high enough version.
-  It satisfies it by being that microarchitecture or one the archspec database
-  says is a strict superset of it, so a `zen2` host covers a platform declaring
-  `x86_64_v3` but a `haswell` host does not cover one declaring `zen2`.
-  A machine whose own microarchitecture is unknown is accepted, since Pixi can
-  neither prove nor disprove that it covers the requirement.
-- `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver
-  version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
-
-  ```toml title="pixi.toml"
-  platforms = [
-    { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
-  ]
-  ```
-
-  `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
-  conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
-  `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
-
-- `amdgpu = true` declares `__amdgpu`, which only states that an AMD GPU is
-  present. An AMDGPU target name (`gfx90a`, `gfx1100`, ...) additionally
-  declares the GPU architecture as `__amdgpu_arch`, which conda stores as an
-  ISA version (`gfx90a` is `9.0.10`):
-
-  ```toml title="pixi.toml"
-  platforms = [
-    { name = "rocm", platform = "linux-64", amdgpu = true },
-    { name = "mi250", platform = "linux-64", amdgpu = "gfx90a" },
-  ]
-  ```
-
-  A raw `__amdgpu_arch` takes the ISA version and is rejected without
-  `__amdgpu`.
-  AMD GPU ISAs are not generally backward compatible.
-  Packages targeting a specific ISA must require it exactly, for example
-  `__amdgpu_arch ==9.0.10` for `gfx90a`.
-  Pixi compares the declaration as a minimum version when ordering candidates;
-  the locked package requirement enforces the exact match.
-
-- For virtual packages without a friendly key, use a raw `__name = "version"` entry, such as `__username_length = "3"` in the [detector tutorial](../advanced/virtual_package_detectors.md).
-  The value is a concrete version, not a dependency expression such as `">=3"`.
-  Use `"version=build_string"` to specify a build; the default build is `0`.
-  Custom host capabilities come from a registered detector or a recognized [host override](#environment-variable-overrides), not from declaring the name in the manifest.
-
-A feature's `platforms` array lists names of workspace platforms.
-A bare subdir such as `"linux-64"` selects only the platform with that name, not every platform with that subdir.
-This is how you bind a feature to the CUDA platform:
-
-```toml title="pixi.toml"
-[workspace]
-platforms = [
-  "osx-arm64",
-  { platform = "linux-64", cuda = "12.0" },
-]
-
-[feature.gpu]
-platforms = ["linux-64-cuda-12-0"]  # the synthesized name for the entry above
-```
-
-!!! note "Platform names in `pixi.lock`"
-    Platforms are written to `pixi.lock` under their manifest names, explicit or synthesized.
-    An unambiguous name-only change can reuse the existing resolution when the target definition and effective dependencies stay the same.
-    Pixi matches platforms by subdir and declared virtual packages, and writes the new names the next time a command may update the lock file.
-    Changing a target selector can change dependencies, so a rename is not always resolution-free.
-
-### Adding the current machine
+## Adding the current machine
 
 `--auto-detect` writes the subdir and the virtual packages detected on the current machine (macOS version, glibc, archspec, CUDA, ...) into a platform entry:
 
@@ -347,7 +198,7 @@ If none fit, installation fails.
 The declaration comparison only covers names Pixi defines:
 `__unix`, `__linux`, `__osx`, `__win`, `__ios`, `__android`, `__glibc`, `__musl`, `__eglibc`, `__cuda`, `__cuda_arch`, `__amdgpu`, `__amdgpu_arch`, and `__archspec`.
 This applies even when a channel detector supplies their values.
-Except for [`__archspec`](#declaring-virtual-packages-per-platform), the detected version must be at least the declared version, with the same name and build string; an empty build string counts as `0`.
+Except for [`__archspec`](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages), the detected version must be at least the declared version, with the same name and build string; an empty build string counts as `0`.
 Declarations equal to Pixi's [subdir defaults](#default-declared-virtual-packages) are excluded from this comparison.
 Version `0` is a concrete version, not a wildcard.
 Diagnostics distinguish declared values such as `__cuda=0` from locked predicates such as `__cuda ==0`.
@@ -435,56 +286,33 @@ Declaring `__musl` or `__eglibc` replaces the default `__glibc` rather than addi
 
 ## Environment-variable overrides
 
-`CONDA_OVERRIDE_*` variables change Pixi's view of the host.
-They do not change the virtual packages supplied to a declared workspace solve.
-To change the solve target, edit its platform declaration.
+`CONDA_OVERRIDE_*` variables change what Pixi assumes about the current machine, for example to see which platform a CUDA machine would get:
 
-Overrides are useful for deliberately mocking host capabilities, for example to see which dependencies a CUDA machine would get:
-
-```nushell
-with-env { CONDA_OVERRIDE_CUDA: "12.0" } {
-    pixi info
-}
+```shell
+CONDA_OVERRIDE_CUDA=12.0 pixi info
 ```
 
-This reports a claimed CUDA capability, and the `Dependencies` of each environment come from the platform such a machine would select.
-It does not install a driver or make a GPU-dependent application runnable.
+They don't change the virtual packages declared for a workspace solve, and they don't make GPU applications runnable.
+An empty value removes that capability.
 
-| Override | Host capability |
+| Override | Virtual package |
 |---|---|
-| `CONDA_OVERRIDE_CUDA` | `__cuda` driver capability, for example `12` |
-| `CONDA_OVERRIDE_CUDA_ARCH` | `__cuda_arch` compute capability, for example `8.6`; requires CUDA presence |
-| `CONDA_OVERRIDE_AMDGPU` | `__amdgpu` presence; the only valid version is `0` |
-| `CONDA_OVERRIDE_AMDGPU_ARCH` | `__amdgpu_arch` ISA version, for example `11.0.0`; requires AMDGPU presence |
-| `CONDA_OVERRIDE_GLIBC` | `__glibc` version, for example `2.28` |
-| `CONDA_OVERRIDE_OSX` | `__osx` version, for example `13.0` |
-| `CONDA_OVERRIDE_LINUX` | `__linux` version, for example `4.18` |
-| `CONDA_OVERRIDE_WIN` | `__win` version, for example `0` |
-| `CONDA_OVERRIDE_ARCHSPEC` | CPU microarchitecture, for example `skylake`; `0` marks it unknown |
+| `CONDA_OVERRIDE_CUDA` | `__cuda`, for example `12` |
+| `CONDA_OVERRIDE_CUDA_ARCH` | `__cuda_arch`, for example `8.6`; requires `__cuda` |
+| `CONDA_OVERRIDE_AMDGPU` | `__amdgpu`; the only valid version is `0` |
+| `CONDA_OVERRIDE_AMDGPU_ARCH` | `__amdgpu_arch`, for example `11.0.0`; requires `__amdgpu` |
+| `CONDA_OVERRIDE_GLIBC` | `__glibc`, for example `2.28` |
+| `CONDA_OVERRIDE_OSX` | `__osx`, for example `13.0` |
+| `CONDA_OVERRIDE_LINUX` | `__linux`, for example `4.18` |
+| `CONDA_OVERRIDE_WIN` | `__win`, for example `0` |
+| `CONDA_OVERRIDE_ARCHSPEC` | `__archspec`, for example `skylake`; `0` marks it unknown |
 
-For example, mocking an AMD GPU architecture requires both `CONDA_OVERRIDE_AMDGPU=0` and `CONDA_OVERRIDE_AMDGPU_ARCH=11.0.0`.
-Built-in overrides have platform-specific parsing rules; an OS override does not turn the host into that OS.
-An empty value disables the corresponding capability in the host view, not in the target declaration.
-
-For custom detector names, accepted channel registrations establish the override names.
-For example, `__username_length` uses `CONDA_OVERRIDE_USERNAME_LENGTH`, with a value such as `"9"` or `"9=0"` to include a build string.
-An override can supply that host value without executing or trusting the detector.
-Arbitrary `CONDA_OVERRIDE_*` variables are not automatically imported as capabilities without a recognized name.
-User-supplied override variables can be inherited by child processes like other environment variables; this is not detector-result injection.
+Virtual packages from [detectors](#virtual-package-detectors) can be overridden the same way, for example `__username_length` with `CONDA_OVERRIDE_USERNAME_LENGTH=9`, without running the detector.
 
 ## Virtual package detectors
 
-Channels can register virtual package detectors: packages that report system capabilities, such as an MPI runtime or a driver installed outside the environment.
-Pixi compares built-in names with declarations and checks all names against locked package requirements.
-Custom names are not compared with declarations; see the [selection rules and custom-name limitation](#which-platform-gets-installed).
-Detectors can extend or replace Pixi's built-in detection.
+Channels can register virtual package detectors: packages that report capabilities of the current machine, such as an MPI runtime or a driver installed outside the environment.
+Their values are only used to [select a platform](#which-platform-gets-installed); workspace solves still use the declared virtual packages.
+Detectors run code from the channel, so Pixi asks before trusting them; you can save that decision in the [configuration](../reference/pixi_configuration.md#virtual-package-detectors).
 
-Pixi runs detectors when their virtual packages are needed for the current machine, not for foreign target platforms.
-`pixi lock` can run them too, to select the platform for the current machine, but workspace solves only use the virtual packages declared in the manifest.
-
-Detectors execute code from the channel, so Pixi asks whether to trust them before running them.
-You can save the decision in the [configuration](../reference/pixi_configuration.md#virtual-package-detectors).
-Without a terminal, detectors without a saved decision are skipped.
-Detector report caching and installed-prefix reuse are separate; see the [consent and cache policy](../reference/pixi_configuration.md#virtual-package-detectors).
-
-See [Channel-provided virtual package detectors](../advanced/virtual_package_detectors.md) for a complete example with a Rust detector, a local channel, and a package depending on its result.
+See [Channel-provided virtual package detectors](../advanced/virtual_package_detectors.md) for a complete example.

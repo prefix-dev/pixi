@@ -307,7 +307,7 @@ command does not take a separate platform override.
 ### Scripts without declared platforms
 
 A script does not have to declare `platforms`.
-When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) it detects there: your CUDA driver, your glibc version, your macOS version.
+When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) it detects there: your CUDA driver, your glibc version, your macOS version.
 A script that needs a glibc newer than Pixi's [default](../workspace/multi_platform_configuration.md#default-declared-virtual-packages) resolves without you writing anything down.
 
 To resolve for a fixed target instead:

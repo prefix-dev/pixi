@@ -89,7 +89,8 @@ The available (save `noarch`) platforms are listed [here](https://docs.rs/rattle
 
 #### Inline-table entries (per-platform virtual packages)
 
-Each entry can also be an inline table that pins which virtual packages the solver should treat as available on that subdir. This is the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. It replaces the legacy `[system-requirements]` table.
+A bare-string entry such as `"linux-64"` solves for that subdir with Pixi's [default declared virtual packages](../workspace/multi_platform_configuration.md#default-declared-virtual-packages).
+An inline table declares additional virtual packages for the solve, for example a CUDA driver capability or a glibc version:
 
 ```toml
 [workspace]
@@ -103,13 +104,18 @@ platforms = [
 Recognised keys on an inline-table entry:
 
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
-- `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
+- `name`: identifier used by target selectors, `feature.<name>.platforms`, `pixi.lock`, and the CLI.
+  Defaults to a name synthesized from `platform` and the declared virtual packages, such as `linux-64-cuda-12-0`.
 - Built-in virtual-package keys: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
-- Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`. Without a build string, the virtual package has the default build `0`. A build string may only contain ASCII letters, digits, `_`, `.` and `+`, as CEP 26 requires.
+  Each maps onto the matching conda virtual package, for example `macos` onto `__osx`.
+  - `cuda` also accepts `{ driver = "12.0", arch = "8.6" }` to declare the compute capability as `__cuda_arch`; `arch` requires `driver`.
+  - `amdgpu = true` declares an AMD GPU; a target name such as `amdgpu = "gfx90a"` also declares its ISA version as `__amdgpu_arch` (`9.0.10`).
+  - `archspec` takes a CPU microarchitecture name known to the bundled [archspec](https://github.com/archspec/archspec) database, spelled with underscores (`x86_64_v3`), or `"0"` for unknown.
+    A machine covers it if its microarchitecture is the same or a strict superset.
+- Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`.
+  The value is a concrete version, not a dependency expression. Without a build string, the virtual package has the default build `0`. A build string may only contain ASCII letters, digits, `_`, `.` and `+`, as CEP 26 requires.
 
-Bare-string entries (`"linux-64"`) solve for that subdir against Pixi's [default declared virtual packages](../workspace/multi_platform_configuration.md#default-declared-virtual-packages).
-
-See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for binding features to platforms by name, and [declared, detected, and required virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) for the solve and host-checking inputs.
+See [declared, detected, and required virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) for how declarations are used, and [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for how they are compared with the machine.
 
 !!! tip "Special macOS and Windows ARM behavior"
     To support both architectures on macOS or Windows, include both platforms in your list.
@@ -540,7 +546,7 @@ When build variants are specified, Pixi will:
 3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
 4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
 
-On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [declared virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
+On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [declared virtual packages](#inline-table-entries-per-platform-virtual-packages). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
 
 #### Platform-Specific Variants
 
@@ -1246,30 +1252,23 @@ ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
 
 ## The `target` table
 
-The target table is a table that allows for platform specific configuration.
-Allowing you to make different sets of tasks or dependencies per platform.
-
-The target table is currently implemented for the following sub-tables:
+Target tables configure individual platforms, for example `[target.linux-64.dependencies]`.
+They are available for the following sub-tables:
 
 - [`activation`](#the-activation-table)
-- [`dependencies`](#dependencies)
+- [`dependencies`](#dependencies), including `host-dependencies` and `build-dependencies`
 - [`constraints`](#constraints)
 - [`tasks`](#the-tasks-table)
 
-The target table is defined using `[target.PLATFORM.SUB-TABLE]`.
-E.g `[target.linux-64.dependencies]`
+The selector can be:
 
-The platform can be any of:
+- a platform name from [`workspace.platforms`](#platforms), which matches exactly that platform,
+- a subdir such as `linux-64`, which matches every platform with that subdir,
+- one of `win`, `osx` (alias `macos`), `linux`, or `unix` (`linux` and `osx`),
+- a [wildcard pattern](#wildcard-platform-selectors) over platform names.
 
-- `win`, `osx`, `linux` or `unix` (`unix` matches `linux` and `osx`)
-- or any of the (more) specific [target platforms](#platforms), e.g. `linux-64`, `osx-arm64`
-
-The sub-table can be any of the specified above.
-
-To make it a bit more clear, let's look at an example below.
-Currently, Pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
-Which, in the case of dependencies, can both add or overwrite dependencies.
-In the example below, we have `cmake` being used for all targets but on `osx-64` or `osx-arm64` a different version of python will be selected.
+Target tables are merged with the top-level tables.
+In the example below, `cmake` is used on all platforms, while `osx-64` and `osx-arm64` get a different `python`:
 
 ```toml
 [dependencies]
@@ -1280,24 +1279,31 @@ python = "3.10"
 python = "3.11"
 ```
 
-Here are some more examples:
+When several selectors match a platform, the one defined later in the manifest wins.
+Target activation scripts replace the top-level scripts instead of adding to them.
+A selector that doesn't match any platform produces a warning.
+
+### Wildcard platform selectors
+
+A `*` in a selector matches against platform names, which is useful with custom names:
 
 ```toml
-[target.win-64.activation]
-scripts = ["setup.bat"]
+[workspace]
+platforms = [
+  { name = "cuda-win-64", platform = "win-64", cuda = "12" },
+  { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+  "win-64",
+  "linux-64",
+]
 
-[target.win-64.dependencies]
-msmpi = "~=10.1.1"
-
-[target.win-64.build-dependencies]
-vs2022_win-64 = "19.36.32532"
-
-[target.win-64.tasks]
-tmp = "echo $TEMP"
-
-[target.osx-64.dependencies]
-clang = ">=16.0.6"
+[target."cuda-*".tasks]
+test = "python test.py --cuda"
 ```
+
+`cuda-win-64` and `cuda-linux-64` get the `test` task; `win-64` and `linux-64` don't.
+Patterns match the whole name and are case-sensitive, and `*` is the only metacharacter.
+Put specific overrides such as `[target.cuda-win-64]` after `[target."cuda-*"]`.
+Wildcards are rejected in `[package.target]` and `[package.build.target]`, which resolve by subdir.
 
 ## The `feature` and `environments` tables
 
@@ -1325,7 +1331,7 @@ The `feature` table allows you to define the following fields per feature.
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
 - `system-requirements`: Deprecated; see [the migration page](../workspace/system_requirements.md). Declare per-platform virtual packages on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) and bind the feature to the relevant entries via `platforms` below.
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: A list of names referencing entries in [`workspace.platforms`](#platforms) (bare conda subdirs are accepted as aliases). Unless overridden, the `platforms` of the feature are those defined at workspace level. Use this to bind a feature to a [platform entry](#inline-table-entries-per-platform-virtual-packages) such as `"linux-64-cuda"`.
+- `platforms`: A list of names referencing entries in [`workspace.platforms`](#platforms). A bare subdir such as `"linux-64"` selects only the platform with that name, not every platform with that subdir. Unless overridden, the `platforms` of the feature are those defined at workspace level. Use this to bind a feature to a [platform entry](#inline-table-entries-per-platform-virtual-packages) such as `"linux-64-cuda"`.
 - `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at workspace level.
 - `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
 - `solve-strategy`: Same as the [solve-strategy](#solve-strategy-optional).

@@ -17,7 +17,7 @@ We will publish both builds to a local channel and install them in a separate wo
 We will create a `mojo-matmul` package that multiplies two matrices.
 This example needs Linux x86-64, glibc 2.34 or newer, and an x86-64-v3-capable CPU for both builds.
 The GPU build targets `gfx1103`, such as the Radeon 780M.
-See [platform configuration](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for hardware declarations, including other AMD targets.
+See [platform configuration](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages) for hardware declarations, including other AMD targets.
 
 Create these files in a new directory:
 

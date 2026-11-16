@@ -93,7 +93,7 @@ python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
 ## Variants Pixi Sets for You
 
 Not every variant has to be spelled out in `[workspace.build-variants]`.
-When you build a package, Pixi fills in a few variants automatically based on the platform you build for and its [declared virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform).
+When you build a package, Pixi fills in a few variants automatically based on the platform you build for and its [declared virtual packages](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages).
 An explicit `[workspace.build-variants]` entry always wins over a value Pixi derives, so you can override any of these by hand.
 
 ### `target_platform`

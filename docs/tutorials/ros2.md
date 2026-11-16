@@ -124,7 +124,7 @@ Normally this would be the script you add to your `.bashrc` but instead you tell
 
 ??? tip "Multi platform support"
     You can add multiple activation scripts for different platforms, so you can support multiple platforms with one workspace.
-    Use the following example to add support for both Linux and Windows, using the [target](../workspace/multi_platform_configuration.md#activation) syntax.
+    Use the following example to add support for both Linux and Windows, using the [target](../reference/pixi_manifest.md#the-target-table) syntax.
 
     ```toml
     [workspace]

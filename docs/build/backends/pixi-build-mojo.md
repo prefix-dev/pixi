@@ -398,7 +398,7 @@ The minimum `hip-runtime-amd` version is 7.0 for `gfx950` and 6.3.3 for all othe
 
 Pixi tries the AMD platform first when its built-in declarations match the host.
 If its locked requirements, including the exact ISA dependency, don't fit, Pixi tries the CPU platform.
-Define AMD and CPU platforms in [`workspace.platforms`](../../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform), with AMD first.
+Define AMD and CPU platforms in [`workspace.platforms`](../../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages), with AMD first.
 See [Which platform gets installed?](../../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the selection rules.
 
 See [Building Mojo CPU and AMD Packages](../mojo_accelerators.md) for a complete example.
