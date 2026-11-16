@@ -108,24 +108,7 @@ pub async fn feature_by_task(
     platform: Option<&PixiPlatform>,
 ) -> Option<FeatureName> {
     let environment = workspace.environment(environment)?;
-    let feature_tasks = match platform {
-        Some(platform) => environment.feature_tasks(platform),
-        None => environment
-            .features()
-            .map(|feature| {
-                (
-                    &feature.name,
-                    feature
-                        .targets
-                        .resolve(None)
-                        .flat_map(|target| target.tasks.iter())
-                        .collect(),
-                )
-            })
-            .collect(),
-    };
-
-    for (feature_name, tasks) in feature_tasks {
+    for (feature_name, tasks) in environment.feature_tasks(platform) {
         if tasks.contains_key(task) {
             return Some(feature_name.clone());
         }

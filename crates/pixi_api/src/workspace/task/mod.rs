@@ -6,9 +6,7 @@ use pixi_core::{
     Workspace,
     workspace::{
         EnvironmentFromNameError, WorkspaceMut,
-        platform_selection::{
-            diagnostic_selection_needs_lock, load_diagnostic_lock, resolve_diagnostic_platform,
-        },
+        platform_selection::DiagnosticSelector,
         virtual_packages::{EnvironmentRunnability, classify_resolved_platform_runnability},
     },
 };
@@ -109,29 +107,10 @@ pub async fn list_tasks<I: Interface>(
         ],
         None => workspace.environments(),
     };
-    let mut selections: Vec<_> = environments
-        .iter()
-        .map(|env| resolve_diagnostic_platform(env, None))
-        .collect();
-
-    if selections
-        .iter()
-        .any(|selection| diagnostic_selection_needs_lock(selection.as_ref()))
-    {
-        let lock_file = match load_diagnostic_lock(workspace).await {
-            Ok(lock) => Some(lock),
-            Err(error) => {
-                interface.warning(&error.warning()).await;
-                None
-            }
-        };
-        if let Some(lock_file) = lock_file.as_ref() {
-            for (env, selection) in environments.iter().zip(&mut selections) {
-                if diagnostic_selection_needs_lock(selection.as_ref()) {
-                    *selection = resolve_diagnostic_platform(env, Some(lock_file));
-                }
-            }
-        }
+    let mut selector = DiagnosticSelector::new(workspace);
+    let selections = selector.select_all(&environments).await;
+    if let Some(error) = selector.lock_error() {
+        interface.warning(&error.warning()).await;
     }
 
     Ok(environments

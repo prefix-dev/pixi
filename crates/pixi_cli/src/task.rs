@@ -13,7 +13,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_manifest::{
-    EnvironmentName, FeatureName, HasFeaturesIter, PixiPlatform, PixiPlatformName,
+    EnvironmentName, FeatureName, PixiPlatform, PixiPlatformName,
     task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, TemplateString, quote},
 };
 use serde::Serialize;
@@ -22,10 +22,7 @@ use serde_with::serde_as;
 use pixi_core::{
     Workspace,
     workspace::{
-        Environment, EnvironmentFromNameError,
-        platform_selection::{
-            diagnostic_selection_needs_lock, load_diagnostic_lock, resolve_diagnostic_platform,
-        },
+        Environment, EnvironmentFromNameError, platform_selection::DiagnosticSelector,
         virtual_packages::EnvironmentRunnability,
     },
 };
@@ -522,28 +519,10 @@ async fn print_tasks_json(
             .sorted_by_key(|env| env.name().to_string())
             .collect(),
     };
-    let mut selections: Vec<_> = environments
-        .iter()
-        .map(|env| resolve_diagnostic_platform(env, None))
-        .collect();
-    if selections
-        .iter()
-        .any(|selection| diagnostic_selection_needs_lock(selection.as_ref()))
-    {
-        let lock = match load_diagnostic_lock(project).await {
-            Ok(lock) => Some(lock),
-            Err(error) => {
-                tracing::warn!("{}", error.warning());
-                None
-            }
-        };
-        if let Some(lock) = lock.as_ref() {
-            for (env, selection) in environments.iter().zip(&mut selections) {
-                if diagnostic_selection_needs_lock(selection.as_ref()) {
-                    *selection = resolve_diagnostic_platform(env, Some(lock));
-                }
-            }
-        }
+    let mut selector = DiagnosticSelector::new(project);
+    let selections = selector.select_all(&environments).await;
+    if let Some(error) = selector.lock_error() {
+        tracing::warn!("{}", error.warning());
     }
     let env_feature_task_map: Vec<_> = environments
         .iter()
@@ -571,22 +550,7 @@ impl EnvTasks {
     fn new(env: &Environment, platform: Option<&PixiPlatform>) -> Self {
         let mut tasks = Vec::new();
         let mut features = Vec::new();
-        let feature_tasks = match platform {
-            Some(platform) => env.feature_tasks(platform),
-            None => env
-                .features()
-                .map(|feature| {
-                    (
-                        &feature.name,
-                        feature
-                            .targets
-                            .resolve(None)
-                            .flat_map(|target| target.tasks.iter())
-                            .collect(),
-                    )
-                })
-                .collect(),
-        };
+        let feature_tasks = env.feature_tasks(platform);
         for (feature_name, task_map) in &feature_tasks {
             if feature_name.is_environment() {
                 tasks.extend(serializable_tasks(task_map));

@@ -22,10 +22,7 @@ use pixi_core::host::{
 use pixi_core::workspace::{
     errors::SkippedPlatform,
     grouped_environment::GroupedEnvironment,
-    platform_selection::{
-        PlatformSelectionSource, diagnostic_selection_needs_lock, load_diagnostic_lock,
-        resolve_diagnostic_platform_with_host,
-    },
+    platform_selection::{DiagnosticSelector, PlatformSelectionSource},
 };
 use pixi_global::{BinDir, EnvRoot};
 use pixi_manifest::platform::subdir_default_virtual_packages;
@@ -158,6 +155,32 @@ fn format_platform(info: &PlatformInfo) -> String {
     }
 }
 
+/// The platform diagnostics selected for an environment, and how.
+struct SelectedPlatform {
+    platform: PlatformInfo,
+    source: PlatformSelectionSource,
+}
+
+/// Serializes as `selected_platform` and `selected_platform_source`, both null
+/// when no platform was selected.
+struct SelectedPlatformFields(Option<SelectedPlatform>);
+
+impl Serialize for SelectedPlatformFields {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut fields = serializer.serialize_struct("SelectedPlatformFields", 2)?;
+        fields.serialize_field(
+            "selected_platform",
+            &self.0.as_ref().map(|selected| &selected.platform),
+        )?;
+        fields.serialize_field(
+            "selected_platform_source",
+            &self.0.as_ref().map(|selected| selected.source),
+        )?;
+        fields.end()
+    }
+}
+
 #[derive(Serialize)]
 pub struct EnvironmentInfo {
     name: EnvironmentName,
@@ -167,8 +190,8 @@ pub struct EnvironmentInfo {
     dependencies: Vec<String>,
     pypi_dependencies: Vec<String>,
     platforms: Vec<PlatformInfo>,
-    selected_platform: Option<PlatformInfo>,
-    selected_platform_source: Option<PlatformSelectionSource>,
+    #[serde(flatten)]
+    selected_platform: SelectedPlatformFields,
     skipped_platforms: Vec<SkippedPlatform>,
     resolved_platform: Option<PlatformInfo>,
     minimum_supported_platform: Option<PlatformInfo>,
@@ -260,16 +283,14 @@ impl Display for EnvironmentInfo {
             )?;
         }
 
-        if let Some(selected) = &self.selected_platform {
+        if let Some(selected) = &self.selected_platform.0 {
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Selected platform"),
-                format_platform(selected)
+                format_platform(&selected.platform)
             )?;
-        }
-        if let Some(source) = self.selected_platform_source {
-            let source = match source {
+            let source = match selected.source {
                 PlatformSelectionSource::Explicit => "explicit",
                 PlatformSelectionSource::Installed => "installed",
                 PlatformSelectionSource::HostMatch => "host match",
@@ -786,7 +807,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     });
     let mut environments_info = Vec::new();
     if let Some(ws) = &workspace {
-        let mut lock = None;
+        let mut selector = DiagnosticSelector::new(ws);
         let mut detected_scopes = HashMap::new();
         for env in ws.environments() {
             let channels = GroupedEnvironment::from(env.clone()).channel_urls(&ws.channel_config());
@@ -828,26 +849,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if let Err(error) = environment_host.platform() {
                 detection_error.get_or_insert_with(|| error.to_string());
             }
-            let (mut selected, mut skipped_platforms) =
-                resolve_diagnostic_platform_with_host(&env, &environment_host, None);
-            if diagnostic_selection_needs_lock(selected.as_ref()) {
-                if lock.is_none() {
-                    lock = Some(match load_diagnostic_lock(ws).await {
-                        Ok(lock) => Some(lock),
-                        Err(error) => {
-                            tracing::warn!("{}", error.warning());
-                            None
-                        }
-                    });
-                }
-                if let Some(existing_lock) = lock.as_ref().and_then(Option::as_ref) {
-                    (selected, skipped_platforms) = resolve_diagnostic_platform_with_host(
-                        &env,
-                        &environment_host,
-                        Some(existing_lock),
-                    );
-                }
-            }
+            let (selected, skipped_platforms) =
+                selector.select_with_host(&env, &environment_host).await;
             let best = selected.as_ref().map(|selection| selection.platform());
             let tasks = env
                 .tasks(best)
@@ -888,8 +891,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(PlatformInfo::from)
                     })
                     .collect(),
-                selected_platform: best.map(PlatformInfo::from),
-                selected_platform_source: selected.as_ref().map(|selection| selection.source()),
+                selected_platform: SelectedPlatformFields(selected.as_ref().map(|selection| {
+                    SelectedPlatform {
+                        platform: PlatformInfo::from(selection.platform()),
+                        source: selection.source(),
+                    }
+                })),
                 skipped_platforms,
                 resolved_platform: resolved_platform.as_ref().map(PlatformInfo::from),
                 minimum_supported_platform: minimum_supported_platform
@@ -900,6 +907,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 tasks,
                 virtual_package_detection_error: detection_error,
             });
+        }
+        if let Some(error) = selector.lock_error() {
+            tracing::warn!("{}", error.warning());
         }
     }
 
@@ -989,8 +999,10 @@ mod tests {
                 platform("cuda", vec!["cuda=12.0".to_string()]),
                 platform("cpu", Vec::new()),
             ],
-            selected_platform: Some(platform("cpu", Vec::new())),
-            selected_platform_source: Some(PlatformSelectionSource::LockFallback),
+            selected_platform: SelectedPlatformFields(Some(SelectedPlatform {
+                platform: platform("cpu", Vec::new()),
+                source: PlatformSelectionSource::LockFallback,
+            })),
             skipped_platforms: vec![SkippedPlatform {
                 platform: PixiPlatformName::try_from("cuda").unwrap(),
                 reason: "requires __cuda >=12.4, but the host provides __cuda=12.2=0".to_string(),

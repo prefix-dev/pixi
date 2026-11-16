@@ -490,10 +490,11 @@ impl<'p> Environment<'p> {
 
     /// Returns a map of all the features and their tasks for this environment.
     ///
-    /// Resolves for the authoritative operational platform.
+    /// Resolves for the authoritative operational platform, or only the
+    /// platform-independent targets when no platform was selected.
     pub fn feature_tasks(
         &self,
-        platform: &PixiPlatform,
+        platform: Option<&PixiPlatform>,
     ) -> HashMap<&'p FeatureName, HashMap<&'p TaskName, &'p Task>> {
         self.features()
             .map(|feature| {
@@ -501,7 +502,7 @@ impl<'p> Environment<'p> {
                     &feature.name,
                     feature
                         .targets
-                        .resolve(Some(platform))
+                        .resolve(platform)
                         .flat_map(|target| target.tasks.iter())
                         .collect::<HashMap<_, _>>(),
                 )

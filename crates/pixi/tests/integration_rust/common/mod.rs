@@ -734,10 +734,11 @@ impl PixiControl {
         .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.
+        let platforms = search_env.into_platforms();
         let mut task_envs = std::collections::HashMap::new();
         let mut result = RunOutput::default();
         for task_id in task_graph.topological_order() {
-            let resolved = &search_env.platforms[task_graph[task_id].run_environment.name()];
+            let resolved = &platforms[task_graph[task_id].run_environment.name()];
             let task =
                 ExecutableTask::from_task_graph(&task_graph, task_id, None, resolved.platform());
             if !task.task().is_executable() {

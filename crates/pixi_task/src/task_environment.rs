@@ -72,8 +72,8 @@ pub struct SearchEnvironments<'p, F, D: TaskDisambiguation<'p> = NoDisambiguatio
     pub platform: Option<PixiPlatformName>,
     pub disambiguate: D,
     resolve_platform: F,
-    pub platforms: HashMap<EnvironmentName, ResolvedPlatform<'p>>,
-    failures: HashMap<EnvironmentName, Arc<UpdatePrefixError>>,
+    /// Each environment's platform resolution, made at most once.
+    resolutions: HashMap<EnvironmentName, Result<ResolvedPlatform<'p>, Arc<UpdatePrefixError>>>,
     installed_ambiguity: HashMap<EnvironmentName, bool>,
 }
 
@@ -149,8 +149,7 @@ where
             platform,
             disambiguate: NoDisambiguation,
             resolve_platform,
-            platforms: HashMap::new(),
-            failures: HashMap::new(),
+            resolutions: HashMap::new(),
             installed_ambiguity: HashMap::new(),
         }
     }
@@ -201,38 +200,38 @@ where
             platform: self.platform,
             disambiguate: DisambiguateFn(func),
             resolve_platform: self.resolve_platform,
-            platforms: self.platforms,
-            failures: self.failures,
+            resolutions: self.resolutions,
             installed_ambiguity: self.installed_ambiguity,
         }
     }
 
+    fn resolved_platform(&self, env: &Environment<'p>) -> Option<&ResolvedPlatform<'p>> {
+        self.resolutions.get(env.name())?.as_ref().ok()
+    }
+
     pub fn search_platform_for(&self, env: &Environment<'p>) -> Option<&PixiPlatform> {
-        self.platforms
-            .get(env.name())
-            .map(ResolvedPlatform::platform)
+        self.resolved_platform(env).map(ResolvedPlatform::platform)
+    }
+
+    /// The platforms of the environments that resolved successfully.
+    pub fn into_platforms(self) -> HashMap<EnvironmentName, ResolvedPlatform<'p>> {
+        self.resolutions
+            .into_iter()
+            .filter_map(|(name, resolution)| Some((name, resolution.ok()?)))
+            .collect()
     }
 
     pub(crate) async fn prepare_environment(
         &mut self,
         env: &Environment<'p>,
     ) -> Result<(), Arc<UpdatePrefixError>> {
-        if self.platforms.contains_key(env.name()) {
-            return Ok(());
+        if !self.resolutions.contains_key(env.name()) {
+            let resolution = (self.resolve_platform)(env).await.map_err(Arc::new);
+            self.resolutions.insert(env.name().clone(), resolution);
         }
-        if let Some(error) = self.failures.get(env.name()) {
-            return Err(Arc::clone(error));
-        }
-        match (self.resolve_platform)(env).await {
-            Ok(platform) => {
-                self.platforms.insert(env.name().clone(), platform);
-                Ok(())
-            }
-            Err(error) => {
-                let error = Arc::new(error);
-                self.failures.insert(env.name().clone(), Arc::clone(&error));
-                Err(error)
-            }
+        match &self.resolutions[env.name()] {
+            Ok(_) => Ok(()),
+            Err(error) => Err(Arc::clone(error)),
         }
     }
 
@@ -259,7 +258,10 @@ where
     }
 
     fn can_disambiguate(&mut self, environment: &Environment<'p>) -> bool {
-        let selection = self.platforms.get(environment.name());
+        let selection = self
+            .resolutions
+            .get(environment.name())
+            .and_then(|resolution| resolution.as_ref().ok());
         match selection {
             Some(
                 ResolvedPlatform::Explicit(_)

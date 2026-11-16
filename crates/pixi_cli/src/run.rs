@@ -17,10 +17,7 @@ use pixi_core::{
     Workspace,
     workspace::{
         Environment,
-        platform_selection::{
-            ResolvedPlatform, diagnostic_selection_needs_lock, explicit_platform,
-            load_diagnostic_lock, resolve_diagnostic_platform,
-        },
+        platform_selection::{DiagnosticSelector, ResolvedPlatform, explicit_platform},
     },
 };
 use pixi_manifest::{FeaturesExt, PixiPlatformName, TaskName, WithWarnings};
@@ -412,34 +409,23 @@ async fn diagnostic_tasks<'p>(
             })
             .collect(),
     };
-    let mut selections: Vec<_> = environments
-        .iter()
-        .map(|environment| match platform {
-            Some(name) => explicit_platform(environment, name)
-                .map(ResolvedPlatform::Explicit)
-                .map(Some),
-            None => Ok(resolve_diagnostic_platform(environment, None)),
-        })
-        .collect::<Result<_, _>>()?;
-    if selections
-        .iter()
-        .any(|selection| diagnostic_selection_needs_lock(selection.as_ref()))
-    {
-        let lock = match load_diagnostic_lock(workspace).await {
-            Ok(lock) => Some(lock),
-            Err(error) => {
+    let selections: Vec<_> = match platform {
+        Some(name) => environments
+            .iter()
+            .map(|environment| {
+                explicit_platform(environment, name)
+                    .map(|platform| Some(ResolvedPlatform::Explicit(platform)))
+            })
+            .collect::<Result<_, _>>()?,
+        None => {
+            let mut selector = DiagnosticSelector::new(workspace);
+            let selections = selector.select_all(&environments).await;
+            if let Some(error) = selector.lock_error() {
                 tracing::warn!("{}", error.warning());
-                None
             }
-        };
-        if let Some(lock) = lock.as_ref() {
-            for (environment, selection) in environments.iter().zip(&mut selections) {
-                if diagnostic_selection_needs_lock(selection.as_ref()) {
-                    *selection = resolve_diagnostic_platform(environment, Some(lock));
-                }
-            }
+            selections
         }
-    }
+    };
     print_available_tasks(
         environments
             .iter()

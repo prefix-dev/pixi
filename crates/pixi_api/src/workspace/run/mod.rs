@@ -459,7 +459,7 @@ async fn build_task_graph<'p, I: Interface>(
         options.templated,
     )
     .await?;
-    Ok((graph, search_environment.platforms))
+    Ok((graph, search_environment.into_platforms()))
 }
 
 /// Called to execute a single command. Returns its exit code.

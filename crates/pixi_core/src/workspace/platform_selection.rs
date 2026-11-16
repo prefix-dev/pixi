@@ -209,7 +209,7 @@ impl DiagnosticLockError {
 }
 
 /// Loads the lock file to refine diagnostic platform selection.
-pub async fn load_diagnostic_lock(workspace: &Workspace) -> Result<LockFile, DiagnosticLockError> {
+async fn load_diagnostic_lock(workspace: &Workspace) -> Result<LockFile, DiagnosticLockError> {
     Ok(workspace.load_lock_file().await?.into_lock_file()?)
 }
 
@@ -217,7 +217,7 @@ pub async fn load_diagnostic_lock(workspace: &Workspace) -> Result<LockFile, Dia
 /// the locked requirements are checked. Only selections that do not depend on
 /// the lock file are final: explicit choices, installed prefixes, and the host
 /// baseline of a dependency-free environment.
-pub fn diagnostic_selection_needs_lock(selection: Option<&ResolvedPlatform<'_>>) -> bool {
+fn diagnostic_selection_needs_lock(selection: Option<&ResolvedPlatform<'_>>) -> bool {
     !matches!(
         selection,
         Some(
@@ -226,6 +226,83 @@ pub fn diagnostic_selection_needs_lock(selection: Option<&ResolvedPlatform<'_>>)
                 | ResolvedPlatform::HostBaseline(_)
         )
     )
+}
+
+enum DiagnosticLock {
+    Unloaded,
+    Loaded(LockFile),
+    Unusable(DiagnosticLockError),
+}
+
+/// Selects platforms for best-effort diagnostics. The lock file is loaded at
+/// most once, and only when a selection made without it is not final.
+pub struct DiagnosticSelector<'w> {
+    workspace: &'w Workspace,
+    lock: DiagnosticLock,
+}
+
+impl<'w> DiagnosticSelector<'w> {
+    pub fn new(workspace: &'w Workspace) -> Self {
+        Self {
+            workspace,
+            lock: DiagnosticLock::Unloaded,
+        }
+    }
+
+    /// Selects a platform for each of `environments` on its own host.
+    pub async fn select_all<'p>(
+        &mut self,
+        environments: &[Environment<'p>],
+    ) -> Vec<Option<ResolvedPlatform<'p>>> {
+        let mut selections = Vec::with_capacity(environments.len());
+        for environment in environments {
+            selections.push(self.select(environment).await);
+        }
+        selections
+    }
+
+    /// Selects a platform for `environment` on its own host.
+    pub async fn select<'p>(
+        &mut self,
+        environment: &Environment<'p>,
+    ) -> Option<ResolvedPlatform<'p>> {
+        self.select_with_host(environment, &environment.host())
+            .await
+            .0
+    }
+
+    /// Selects a platform for `environment` on `host`, with the platforms
+    /// skipped on the way.
+    pub async fn select_with_host<'p>(
+        &mut self,
+        environment: &Environment<'p>,
+        host: &HostDetection,
+    ) -> (Option<ResolvedPlatform<'p>>, Vec<SkippedPlatform>) {
+        let selection = resolve_diagnostic_platform_with_host(environment, host, None);
+        if !diagnostic_selection_needs_lock(selection.0.as_ref()) {
+            return selection;
+        }
+        if let DiagnosticLock::Unloaded = self.lock {
+            self.lock = match load_diagnostic_lock(self.workspace).await {
+                Ok(lock) => DiagnosticLock::Loaded(lock),
+                Err(error) => DiagnosticLock::Unusable(error),
+            };
+        }
+        match &self.lock {
+            DiagnosticLock::Loaded(lock) => {
+                resolve_diagnostic_platform_with_host(environment, host, Some(lock))
+            }
+            DiagnosticLock::Unloaded | DiagnosticLock::Unusable(_) => selection,
+        }
+    }
+
+    /// Why the selections could not use the lock file, for the caller to warn.
+    pub fn lock_error(&self) -> Option<&DiagnosticLockError> {
+        match &self.lock {
+            DiagnosticLock::Unusable(error) => Some(error),
+            DiagnosticLock::Unloaded | DiagnosticLock::Loaded(_) => None,
+        }
+    }
 }
 
 pub fn resolve_diagnostic_platform<'p>(
