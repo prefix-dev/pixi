@@ -336,6 +336,37 @@ def test_manifest_export_selects_platform_from_lock(pixi: Path, tmp_pixi_workspa
     assert "SELECTION: cpu" in exported.stdout
 
 
+def test_diagnostics_skip_declared_match_rejected_by_lock(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A platform matching by declaration alone must not be reported when its
+    locked requirements exclude the host, because `pixi run` would skip it."""
+    _bounded_gpu_workspace(tmp_pixi_workspace)
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    host = {"CONDA_OVERRIDE_CUDA": "12.5"}
+    info = json.loads(
+        verify_cli_command([pixi, "info", "--json"], env=host, cwd=tmp_pixi_workspace).stdout
+    )
+    [environment] = info["environments_info"]
+    assert environment["selected_platform"]["name"] == "cpu"
+    assert environment["tasks"] == ["cpu-only"]
+    tasks = json.loads(
+        verify_cli_command(
+            [pixi, "task", "list", "--json"], env=host, cwd=tmp_pixi_workspace
+        ).stdout
+    )
+    [listed] = tasks
+    assert [task["name"] for feature in listed["features"] for task in feature["tasks"]] == [
+        "cpu-only"
+    ]
+    listing = verify_cli_command([pixi, "run"], env=host, cwd=tmp_pixi_workspace)
+    assert "cpu-only" in listing.stdout + listing.stderr
+    assert "gpu-only" not in listing.stdout + listing.stderr
+    verify_cli_command(
+        [pixi, "run", "cpu-only"], env=host, cwd=tmp_pixi_workspace, stdout_contains="cpu-only"
+    )
+
+
 def test_task_list_selects_platform_from_lock(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _lock_fallback_workspace(tmp_pixi_workspace)
     verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)

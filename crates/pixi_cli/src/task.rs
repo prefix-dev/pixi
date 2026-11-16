@@ -22,7 +22,8 @@ use serde_with::serde_as;
 use pixi_core::{
     Workspace,
     workspace::{
-        Environment, EnvironmentFromNameError, platform_selection::resolve_diagnostic_platform,
+        Environment, EnvironmentFromNameError,
+        platform_selection::{diagnostic_selection_needs_lock, resolve_diagnostic_platform},
         virtual_packages::EnvironmentRunnability,
     },
 };
@@ -523,7 +524,10 @@ async fn print_tasks_json(
         .iter()
         .map(|env| resolve_diagnostic_platform(env, None))
         .collect();
-    if selections.iter().any(Option::is_none) {
+    if selections
+        .iter()
+        .any(|selection| diagnostic_selection_needs_lock(selection.as_ref()))
+    {
         let lock = match project.load_lock_file().await {
             Ok(result) => match result.into_lock_file() {
                 Ok(lock) => Some(lock),
@@ -539,7 +543,7 @@ async fn print_tasks_json(
         };
         if let Some(lock) = lock.as_ref() {
             for (env, selection) in environments.iter().zip(&mut selections) {
-                if selection.is_none() {
+                if diagnostic_selection_needs_lock(selection.as_ref()) {
                     *selection = resolve_diagnostic_platform(env, Some(lock));
                 }
             }

@@ -17,7 +17,10 @@ use pixi_core::{
     Workspace,
     workspace::{
         Environment,
-        platform_selection::{ResolvedPlatform, explicit_platform, resolve_diagnostic_platform},
+        platform_selection::{
+            ResolvedPlatform, diagnostic_selection_needs_lock, explicit_platform,
+            resolve_diagnostic_platform,
+        },
     },
 };
 use pixi_manifest::{PixiPlatformName, TaskName, WithWarnings};
@@ -410,7 +413,10 @@ async fn diagnostic_tasks<'p>(
             None => Ok(resolve_diagnostic_platform(environment, None)),
         })
         .collect::<Result<_, _>>()?;
-    if selections.iter().any(Option::is_none) {
+    if selections
+        .iter()
+        .any(|selection| diagnostic_selection_needs_lock(selection.as_ref()))
+    {
         let lock = match workspace.load_lock_file().await {
             Ok(result) => match result.into_lock_file() {
                 Ok(lock) => Some(lock),
@@ -426,7 +432,7 @@ async fn diagnostic_tasks<'p>(
         };
         if let Some(lock) = lock.as_ref() {
             for (environment, selection) in environments.iter().zip(&mut selections) {
-                if selection.is_none() {
+                if diagnostic_selection_needs_lock(selection.as_ref()) {
                     *selection = resolve_diagnostic_platform(environment, Some(lock));
                 }
             }

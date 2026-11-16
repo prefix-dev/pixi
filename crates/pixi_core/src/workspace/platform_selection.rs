@@ -177,6 +177,21 @@ pub fn resolve_operational_platform<'p>(
     Ok(selected)
 }
 
+/// Whether a diagnostic selection made without the lock file can change once
+/// the locked requirements are checked. Only selections that do not depend on
+/// the lock file are final: explicit choices, installed prefixes, and the host
+/// baseline of a dependency-free environment.
+pub fn diagnostic_selection_needs_lock(selection: Option<&ResolvedPlatform<'_>>) -> bool {
+    !matches!(
+        selection,
+        Some(
+            ResolvedPlatform::Explicit(_)
+                | ResolvedPlatform::Installed(_)
+                | ResolvedPlatform::HostBaseline(_)
+        )
+    )
+}
+
 pub fn resolve_diagnostic_platform<'p>(
     environment: &Environment<'p>,
     existing_lock: Option<&LockFile>,

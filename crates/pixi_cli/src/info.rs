@@ -22,7 +22,10 @@ use pixi_core::host::{
 use pixi_core::workspace::{
     errors::SkippedPlatform,
     grouped_environment::GroupedEnvironment,
-    platform_selection::{PlatformSelectionSource, resolve_diagnostic_platform_with_host},
+    platform_selection::{
+        PlatformSelectionSource, diagnostic_selection_needs_lock,
+        resolve_diagnostic_platform_with_host,
+    },
 };
 use pixi_global::{BinDir, EnvRoot};
 use pixi_manifest::platform::subdir_default_virtual_packages;
@@ -827,7 +830,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             let (mut selected, mut skipped_platforms) =
                 resolve_diagnostic_platform_with_host(&env, &environment_host, None);
-            if selected.is_none() {
+            if diagnostic_selection_needs_lock(selected.as_ref()) {
                 if lock.is_none() {
                     lock = Some(match ws.load_lock_file().await {
                         Ok(result) => match result.into_lock_file() {
