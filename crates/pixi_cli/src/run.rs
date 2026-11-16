@@ -20,7 +20,10 @@ use pixi_core::{
         platform_selection::{DiagnosticSelector, ResolvedPlatform, explicit_platform},
     },
 };
-use pixi_manifest::{FeaturesExt, PixiPlatformName, TaskName, WithWarnings};
+use pixi_manifest::{
+    FeaturesExt, HasWorkspaceManifest, PixiPlatformName, TaskName, WithWarnings,
+    platform::candidate_subdirs,
+};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::Subdir;
 
@@ -439,9 +442,29 @@ async fn diagnostic_tasks<'p>(
     );
     if selections.iter().all(Option::is_none) {
         let subdir = Subdir::current().unwrap_or(Subdir::NoArch);
-        pixi_progress::println!(
-            "\nHelp: This platform ({subdir}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {subdir}"
-        );
+        // Adding the platform only helps when none is declared for this
+        // machine. A declared one was skipped for its locked requirements.
+        let runnable_subdirs = candidate_subdirs(subdir);
+        let declared_for_host = environments.iter().any(|environment| {
+            let names = environment.platforms();
+            workspace
+                .workspace_manifest()
+                .workspace
+                .platforms
+                .iter()
+                .any(|platform| {
+                    names.contains(platform.name()) && runnable_subdirs.contains(&platform.subdir())
+                })
+        });
+        if declared_for_host {
+            pixi_progress::println!(
+                "\nHelp: No declared platform fits this machine ({subdir}). Run `pixi info` to see why each platform was skipped."
+            );
+        } else {
+            pixi_progress::println!(
+                "\nHelp: This platform ({subdir}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {subdir}"
+            );
+        }
     }
     Ok(())
 }

@@ -401,6 +401,38 @@ def test_manifest_export_selects_platform_from_lock(pixi: Path, tmp_pixi_workspa
     assert "SELECTION: cpu" in exported.stdout
 
 
+@pytest.mark.parametrize("declared_for_host", [True, False])
+def test_run_listing_hint_matches_why_no_platform_was_selected(
+    pixi: Path, tmp_pixi_workspace: Path, declared_for_host: bool
+) -> None:
+    """Suggest adding the host platform only when none is declared for it;
+    a declared platform rejected by its locked requirements needs `pixi info`."""
+    channel = _channel(tmp_pixi_workspace)
+    subdir = "linux-64" if declared_for_host else "win-64"
+    (tmp_pixi_workspace / "pixi.toml").write_text(f"""
+[workspace]
+name = "listing-hint"
+channels = ["{channel.url}"]
+platforms = [{{ name = "gpu", platform = "{subdir}", cuda = "12" }}]
+
+[dependencies]
+gpu-package = "*"
+
+[tasks]
+which = "echo which"
+""")
+    verify_cli_command([pixi, "lock"], cwd=tmp_pixi_workspace)
+    listing = verify_cli_command(
+        [pixi, "run"], env={"CONDA_OVERRIDE_CUDA": ""}, cwd=tmp_pixi_workspace
+    )
+    output = listing.stdout + listing.stderr
+    if declared_for_host:
+        assert "pixi info" in output
+        assert "pixi workspace platform add" not in output
+    else:
+        assert "pixi workspace platform add linux-64" in output
+
+
 def test_diagnostics_skip_declared_match_rejected_by_lock(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
