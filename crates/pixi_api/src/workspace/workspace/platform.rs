@@ -1,4 +1,3 @@
-use fancy_display::FancyDisplay;
 use miette::Diagnostic;
 use pixi_manifest::{
     EnvironmentName, FeatureName, HasWorkspaceManifest, LoadManifestsError, PixiPlatform,
@@ -13,7 +12,6 @@ use pixi_manifest::FeaturesExt;
 use pixi_core::{
     UpdateLockFileOptions,
     environment::{LockFileAndPrefixesError, LockFileUsage, update_lock_file_after_edit},
-    host::HostProbeError,
 };
 
 use crate::Interface;
@@ -28,10 +26,6 @@ pub enum PlatformError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Edit(#[from] PlatformEditError),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    HostProbe(#[from] HostProbeError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -66,38 +60,23 @@ pub async fn get_workspace_platform(
 }
 
 /// Helper to update the lock file and environment prefix for platform commands.
-///
-/// The lock file is solved for every declared platform, but a prefix can only
-/// be materialised for the current system. When none of the environment's
-/// platforms match this machine, skip prefix installation. Lock-only mutations
-/// resolve workspace storage without selecting a runnable platform.
 async fn update_platform_lock_file_and_prefix(
     workspace: &Workspace,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     no_install: bool,
     lock_file_usage: LockFileUsage,
 ) -> Result<(), PlatformError> {
-    let default_env = workspace.default_environment();
-    let no_install = if no_install {
-        true
-    } else {
-        workspace.refresh_environment_hosts().await?;
-        let unsupported = default_env.best_declared_platform().is_none();
-        if unsupported {
-            tracing::info!(
-                "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
-                default_env.name().fancy_display()
-            );
-        }
-        unsupported
-    };
-    let update_options = UpdateLockFileOptions {
-        lock_file_usage,
-        no_install,
-        max_concurrent_solves: workspace.config().max_concurrent_solves(),
-        ..Default::default()
-    };
-    update_lock_file_after_edit(workspace, progress, update_options).await?;
+    update_lock_file_after_edit(
+        workspace,
+        progress,
+        UpdateLockFileOptions {
+            lock_file_usage,
+            no_install,
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
+        },
+    )
+    .await?;
     Ok(())
 }
 

@@ -160,6 +160,36 @@ gpu-package = "*"
     assert not _marker(tmp_pixi_workspace).exists()
 
 
+def test_platform_add_skips_install_when_locked_requirements_exclude_host(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Like `pixi add`, a platform edit keeps the updated lock file and skips
+    the install when the host matches a declaration but not its locked
+    requirements."""
+    channel = _channel(tmp_pixi_workspace)
+    channel.package("bounded-gpu-package", ["__cuda >=12,<12.2"])
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(f"""
+[workspace]
+name = "platform-edit"
+channels = ["{channel.url}"]
+platforms = [{{ name = "gpu", platform = "linux-64", cuda = "12" }}]
+
+[dependencies]
+cpu-package = "*"
+
+[target.gpu.dependencies]
+bounded-gpu-package = "*"
+""")
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
+    verify_cli_command(
+        [pixi, "workspace", "platform", "add", "--manifest-path", manifest, "win-64"],
+        env={"CONDA_OVERRIDE_CUDA": "12.5"},
+    )
+    assert "win-64" in (tmp_pixi_workspace / "pixi.lock").read_text()
+    assert not _marker(tmp_pixi_workspace).exists()
+
+
 def test_conda_script_activates_the_platform_chosen_from_lock(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
