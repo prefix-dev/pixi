@@ -8,6 +8,10 @@ homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[features]
+self_update = []
+slow_integration_tests = []
+
 [dependencies]
 async-once-cell = { workspace = true }
 async-trait = { workspace = true }
@@ -123,7 +127,3 @@ tracing-test = { workspace = true }
 
 [target."cfg(unix)".dependencies]
 libc = { workspace = true }
-
-[features]
-self_update = []
-slow_integration_tests = []
