@@ -112,6 +112,15 @@ The list of dependencies defined for this environment.
 
 The platforms the workspace has defined.
 
+### Selected platform and selection source
+
+The platform used to filter this diagnostic output, separate from the installed platform below.
+`Selection source` reports whether it came from the installed prefix, a host match, lock fallback, or the host baseline for a dependency-free environment.
+In JSON, `selected_platform_source` uses `installed`, `host_match`, `lock_fallback`, or `host_baseline`.
+
+Info never solves or verifies lock freshness, and only reads the lock when direct selection fails.
+The next installation can select differently; see [diagnostic selection](../workspace/multi_platform_configuration.md#diagnostic-selection).
+
 ### Resolved platform
 
 The platform the environment was resolved for the last time it was installed, shown as the conda subdir plus the virtual packages it was resolved with.

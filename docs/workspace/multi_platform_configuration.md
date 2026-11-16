@@ -388,14 +388,16 @@ The locked-requirement check covers:
 - PyPI wheel tags: the locked wheels must be compatible with the machine.
 
 The conda checks exclude `__archspec`; its declaration comparison uses the archspec database instead.
-Without a lock file, Pixi only uses the declaration comparison for preselection.
+Operational commands resolve the lock file before selecting a platform.
+`--no-install` skips prefix installation, not lock resolution: the default mode may update the lock, `--locked` rejects a missing or stale lock, and `--frozen` uses existing lock data without checking freshness.
 
 For example, a machine reporting CUDA `13.0` matches a `cuda = "12.0"` declaration.
 If that platform's locked packages require `__cuda <13`, Pixi skips it and tries the next candidate, such as a CPU platform.
 Skipped declaration-matching platforms and their unmet requirements appear in info-level logs.
-`pixi info` lists every skipped platform.
+Diagnostic commands may not inspect the lock file; see [Diagnostic selection](#diagnostic-selection).
 
-Pixi permits a platform from the second group despite its declarations, and `pixi run` warns once.
+Pixi permits a platform from the second group despite its declarations.
+Activating it through `pixi run`, `pixi shell`, or `pixi shell-hook` warns once.
 For example, a platform declaring `cuda = "12.8"` can still install on CUDA `12.6` if its locked packages only require `__cuda >=12` and no declaration-matching platform fits.
 A future resolution can pick packages that need the declared `12.8`.
 
@@ -411,8 +413,9 @@ For GPU-enabled wheels without a locked `__cuda` requirement, a CUDA declaration
 ### Installed environments and explicit selection
 
 `pixi install` selects a platform as described above.
-If no declaration-matching platform has compatible locked packages and the environment is already installed for a still-declared platform, it keeps that platform instead of selecting one from the second group.
-`pixi run` keeps the platform an environment was installed for, even when it updates the prefix after a lock file change.
+`pixi run` keeps the installed platform while reusing an up-to-date prefix.
+If a lock change requires the prefix to be rebuilt, Pixi selects again; the rebuilt prefix, target-specific tasks, and activation all use that selection.
+With `--no-install`, the prefix is not rebuilt and its installed platform remains authoritative even if the lock changes.
 The recorded platform name distinguishes targets with identical virtual-package declarations but different dependencies or activation settings.
 For older environments without a recorded name, Pixi reuses the platform only if its definition identifies a single declaration; otherwise it selects again using the lock file.
 It skips detection only when the installed prefix is still up to date.
@@ -421,13 +424,25 @@ See [detector consent and caching](../reference/pixi_configuration.md#virtual-pa
 
 `pixi install --platform <NAME>` and `pixi run --platform <NAME>` select a declared platform explicitly and skip the host requirement checks.
 They can install an environment for another machine; success does not prove that the environment runs locally.
-Later `pixi run` calls without `--platform` keep that platform but check its locked requirements against the machine again, so they fail if the machine can't run it.
+Later `pixi run` calls without `--platform` keep that platform while reusing the prefix but check its recorded package requirements against the machine, so they fail if the machine can't run it.
 `PIXI_OVERRIDE_PLATFORM` changes the host subdir Pixi considers.
 A foreign override skips the locked requirement checks, but declarations such as `cuda` must still be provided by the machine or a `CONDA_OVERRIDE_*` variable.
 Neither option provides the target's hardware or system libraries.
 
 `--locked` and `--frozen` control lock file freshness, not these host checks.
 See [lock file satisfiability](./lock_file.md#lock-file-satisfiability).
+
+### Diagnostic selection
+
+`pixi info`, `pixi task list`, and `pixi run` without a task never solve or update the lock file.
+They first use an installed platform or a declaration matching the host.
+Only unresolved environments fall back to an existing lock file; missing, unreadable, malformed, or newer-format locks do not prevent diagnostic output.
+An existing lock is not checked for freshness.
+
+Consequently, a diagnostic selection is opportunistic, not a promise about the next installation.
+It can differ from operational selection when locked requirements reject a declaration-matching platform.
+`pixi info` reports the selection source and, when it uses lock fallback, skipped candidates.
+An environment with no dependencies and no usable declared platform may still run host-only tasks; an environment with dependencies does not receive that fallback.
 
 ## Default declared virtual packages
 
