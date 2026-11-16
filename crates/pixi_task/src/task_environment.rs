@@ -6,7 +6,7 @@ use pixi_core::{
     lock_file::UpdatePrefixError,
     workspace::{
         Environment,
-        platform_selection::ResolvedPlatform,
+        platform_selection::{PlatformResolutionError, ResolvedPlatform},
         virtual_packages::{EnvironmentRunnability, classify_resolved_platform_runnability},
     },
 };
@@ -236,6 +236,28 @@ where
         }
     }
 
+    /// Like [`Self::prepare_environment`], but `Ok(false)` when `env` cannot
+    /// run on this machine, so the caller can look for the task elsewhere.
+    /// Other failures are errors: skipping them would silently run the task in
+    /// a different environment.
+    async fn prepare_if_runnable(&mut self, env: &Environment<'p>) -> Result<bool, FindTaskError> {
+        match self.prepare_environment(env).await {
+            Ok(()) => Ok(true),
+            Err(error)
+                if matches!(
+                    *error,
+                    UpdatePrefixError::PlatformResolution(
+                        PlatformResolutionError::UnsupportedPlatform(_)
+                            | PlatformResolutionError::RequirementsUnmet(_)
+                    )
+                ) =>
+            {
+                Ok(false)
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+
     fn can_disambiguate(&mut self, environment: &Environment<'p>) -> bool {
         let selection = self.platforms.get(environment.name());
         match selection {
@@ -294,7 +316,7 @@ where
         if self.explicit_environment.is_none() && task_specific_environment.is_none() {
             let default_env = self.project.default_environment();
             let default_env_task = if self.has_task_candidate(&default_env, &name, None)
-                && self.prepare_environment(&default_env).await.is_ok()
+                && self.prepare_if_runnable(&default_env).await?
             {
                 default_env
                     .task(&name, self.search_platform_for(&default_env))
@@ -313,7 +335,7 @@ where
                         .into_iter()
                         .find(|e| e.name() == default_env_name)
                     && self.has_task_candidate(&env, &name, None)
-                    && self.prepare_environment(&env).await.is_ok()
+                    && self.prepare_if_runnable(&env).await?
                     && let Ok(task_in_env) = env.task(&name, self.search_platform_for(&env))
                 {
                     return Ok((env, task_in_env));
@@ -600,6 +622,62 @@ mod tests {
             .find_task("hi".into(), FindTaskSource::CmdArgs, None)
             .await;
         assert!(matches!(result, Err(FindTaskError::Disambiguation(_))));
+    }
+
+    /// A default environment that cannot run on this machine yields the task
+    /// to another environment, but any other failure to resolve it is reported
+    /// instead of silently running the task elsewhere.
+    #[tokio::test]
+    async fn test_default_environment_failure_is_only_skipped_when_unrunnable() {
+        let manifest_str = r#"
+            [workspace]
+            name = "foo"
+            channels = ["foo"]
+            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64"]
+
+            [tasks]
+            test = "echo default"
+            [feature.other.tasks]
+            test = "echo other"
+
+            [environments]
+            other = ["other"]
+        "#;
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        for unrunnable in [true, false] {
+            let mut search = SearchEnvironments::from_opt_env(
+                &project,
+                None,
+                None,
+                async |env: &Environment<'_>| {
+                    if !env.name().is_default() {
+                        return Ok(ResolvedPlatform::HostMatch(
+                            &env.workspace_manifest().workspace.platforms[0],
+                        ));
+                    }
+                    Err(if unrunnable {
+                        PlatformResolutionError::UnsupportedPlatform(Box::new(
+                            env.unsupported_platform_error(),
+                        ))
+                        .into()
+                    } else {
+                        UpdatePrefixError::LockFileMissingEnv(env.name().clone())
+                    })
+                },
+            );
+            let result = search
+                .find_task("test".into(), FindTaskSource::CmdArgs, None)
+                .await;
+            if unrunnable {
+                assert_eq!(result.unwrap().0.name().as_str(), "other");
+            } else {
+                assert!(matches!(
+                    result.map(|(env, _)| env.name().clone()),
+                    Err(FindTaskError::PlatformResolution(error))
+                        if matches!(*error, UpdatePrefixError::LockFileMissingEnv(_))
+                ));
+            }
+        }
     }
 
     #[tokio::test]
