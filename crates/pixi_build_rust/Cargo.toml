@@ -10,6 +10,11 @@ license.workspace = true
 [package.metadata.dist]
 dist = false
 
+[features]
+default = ["rustls"]
+native-tls = ["pixi_build_backend/native-tls"]
+rustls = ["pixi_build_backend/rustls"]
+
 [dependencies]
 async-trait = { workspace = true }
 cargo_toml = { workspace = true }
@@ -32,8 +37,3 @@ rattler_build_recipe = { workspace = true }
 insta = { workspace = true, features = ["filters", "redactions", "yaml"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-
-[features]
-default = ["rustls"]
-native-tls = ["pixi_build_backend/native-tls"]
-rustls = ["pixi_build_backend/rustls"]
