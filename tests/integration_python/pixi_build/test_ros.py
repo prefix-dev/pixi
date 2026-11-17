@@ -187,6 +187,11 @@ def test_ros_python_package_cross_compiles(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
     workspace = _prepare_ros_workspace(build_data, tmp_pixi_workspace)
+    # As in RoboStack's builds, the Python variant has to match the distro's:
+    # the build environment has no ROS packages to constrain it, and
+    # cross-python pins the host Python to the build one.
+    with workspace.joinpath("pixi.toml").open("a") as manifest:
+        manifest.write('\n[workspace.build-variants]\npython = ["3.14.*"]\n')
     manifest_path = workspace.joinpath("src", "navigator_py", "pixi.toml")
     output_dir = workspace.joinpath("dist")
 
