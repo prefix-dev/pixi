@@ -281,6 +281,37 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize(
+    ("verbosity_args", "installer_debug_shown"),
+    [([], False), (["-vvv"], True)],
+    ids=["default", "verbose"],
+)
+def test_python_installer_verbosity_follows_pixi(
+    pixi: Path,
+    build_data: Path,
+    tmp_pixi_workspace: Path,
+    verbosity_args: list[str],
+    installer_debug_shown: bool,
+) -> None:
+    """
+    The installer's debug output only shows up when pixi's own verbosity asks for it.
+    """
+    project = "editable-pyproject"
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    copytree_with_local_backend(build_data.joinpath(project), target_dir)
+
+    uv_debug_line = "DEBUG uv "
+    verify_cli_command(
+        [pixi, "install", *verbosity_args, "--manifest-path", target_dir / "pyproject.toml"],
+        stderr_contains=[BUILD_RUNNING_STRING, uv_debug_line]
+        if installer_debug_shown
+        else BUILD_RUNNING_STRING,
+        stderr_excludes=None if installer_debug_shown else uv_debug_line,
+        strip_ansi=True,
+    )
+
+
+@pytest.mark.slow
 @pytest.mark.xdist_group("serial")
 def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     """
