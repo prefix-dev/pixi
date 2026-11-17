@@ -9692,15 +9692,15 @@ Most of the logic is done by the ROS2 CLI, so you can follow normal ROS 2 packag
 </span></code></pre></div>
 <p>Notes:</p>
 <ul>
-<li>When <code>package.build.config.distro</code> is set, the produced package name is prefixed like <code>ros-&lt;distro&gt;-&lt;name&gt;</code>.</li>
+<li>When <code>package.build.config.distro</code> is set, the produced package name is prefixed like <code>ros2-&lt;name&gt;</code> (<code>ros-&lt;distro&gt;-&lt;name&gt;</code> for ROS 1), and the distro mutex pins the distribution.</li>
 <li>The backend automatically reads <code>package.xml</code> (name, version, license, maintainers, URLs, dependencies). Any explicitly set fields in <code>pixi.toml</code> override <code>package.xml</code>.</li>
-<li>Dependencies in <code>package.xml</code> are mapped to conda packages via RoboStack (for example <code>std_msgs</code> → <code>ros-&lt;distro&gt;-std-msgs</code>). Unknown deps pass through unchanged.</li>
+<li>Dependencies in <code>package.xml</code> are mapped to conda packages via RoboStack (for example <code>std_msgs</code> → <code>ros2-std-msgs</code>). Unknown deps pass through unchanged.</li>
 </ul>
 <h3 id="add-the-package-to-the-pixi-workspace">Add the package to the pixi workspace<a class="headerlink" href="#add-the-package-to-the-pixi-workspace" title="Permanent link">#</a></h3>
 <p>Tell the root workspace to depend on the package via a path dependency that matches the ROS-prefixed name:</p>
 <div class="language-toml highlight"><span class="filename">ros_ws/pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[dependencies]</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">ros-jazzy-ros2run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;=0.32.4,&lt;0.33"</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">ros-jazzy-my-python-ros-pkg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"src/my_python_ros_pkg"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">ros2-my-python-ros-pkg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"src/my_python_ros_pkg"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="testing-your-package">Testing your package<a class="headerlink" href="#testing-your-package" title="Permanent link">#</a></h3>
 <p>Now install and run:</p>
@@ -9728,8 +9728,8 @@ The backend reads most metadata from <code>package.xml</code>, so you only need 
 <p>Tell the root workspace to depend on the package via a path dependency that matches the ROS-prefixed name:</p>
 <div class="language-toml highlight"><span class="filename">ros_ws/pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[dependencies]</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">ros-jazzy-ros2run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;=0.32.4,&lt;0.33"</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">ros-jazzy-my-python-ros-pkg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"src/my_python_ros_pkg"</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">ros-jazzy-my-cmake-ros-pkg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"src/my_cmake_ros_pkg"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">ros2-my-python-ros-pkg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"src/my_python_ros_pkg"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">ros2-my-cmake-ros-pkg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"src/my_cmake_ros_pkg"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="testing-your-package_1">Testing your package<a class="headerlink" href="#testing-your-package_1" title="Permanent link">#</a></h3>
 <p>Now install and run:

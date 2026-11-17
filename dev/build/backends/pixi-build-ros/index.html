@@ -9850,11 +9850,17 @@ For example, with a workspace structure like this:
 </span></code></pre></div></p>
 <p>When you want to install it into your environment, you can do so by adding the following to your workspace <code>pixi.toml</code>:</p>
 <p><div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[dependencies]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">ros-jazzy-my-ros-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"."</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">ros2-my-ros-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"."</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># or if the package is in a separate pixi.toml</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># ros-jazzy-my-ros-package = { path = "src/my_ros_package" }</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># ros2-my-ros-package = { path = "src/my_ros_package" }</span>
 </span></code></pre></div>
-Note that you need to specify the <code>ros-jazzy-</code> prefix when you use a distro configuration.</p>
+Note that you need to specify the <code>ros2-</code> prefix (<code>ros-&lt;distro&gt;-</code> for ROS 1) when you use a distro configuration.</p>
+<div class="admonition note">
+<p class="admonition-title">Migrating from <code>ros-&lt;distro&gt;-</code> names</p>
+<p>Earlier versions of the backend named ROS 2 packages <code>ros-&lt;distro&gt;-&lt;name&gt;</code>, as RoboStack's compatibility aliases are named.
+Rename such entries in your <code>pixi.toml</code>, e.g. <code>ros-jazzy-my-ros-package</code> becomes <code>ros2-my-ros-package</code>.
+RoboStack builds its ROS 2 packages for macOS 14 or newer, so on macOS add <code>[system-requirements]</code> with <code>macos = "14.0"</code> to your workspace.</p>
+</div>
 <h3 id="automatic-metadata-detection">Automatic Metadata Detection<a class="headerlink" href="#automatic-metadata-detection" title="Permanent link">#</a></h3>
 <p>The backend will automatically read metadata from your <code>package.xml</code> file to populate package information <strong>that is not</strong> explicitly defined in your <code>pixi.toml</code>.
 This includes:</p>
@@ -9883,7 +9889,7 @@ This includes:</p>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">homepage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"https://github.com/user/my_ros_package"</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">repository</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"https://github.com/user/my_ros_package"</span>
 </span></code></pre></div>
-<p>The backend will automatically use the metadata from <code>package.xml</code> to generate a complete conda package named <code>ros-jazzy-my-ros-package</code>.
+<p>The backend will automatically use the metadata from <code>package.xml</code> to generate a complete conda package named <code>ros2-my-ros-package</code>.
 The fields in the <code>pixi.toml</code> will override the values from <code>package.xml</code> if they are explicitly set.</p>
 <h3 id="automatic-distro-detection">Automatic Distro Detection<a class="headerlink" href="#automatic-distro-detection" title="Permanent link">#</a></h3>
 <p><code>pixi-build-ros</code> will automatically detect the ROS distro based on the <code>channels</code> in the workspace.
@@ -9905,19 +9911,21 @@ If a <code>distro</code> is not specified in the <code>pixi.toml</code>, it will
 <li><strong>Workspace siblings</strong>: Other ROS packages in the same workspace are discovered automatically and resolved as <strong>source</strong> dependencies, built from their sibling directory. See <a href="#workspace-source-discovery">Workspace Source Discovery</a>.</li>
 <li><strong>Known dependencies</strong>: Mapped using the <a href="https://github.com/prefix-dev/pixi-build-backends/blob/main/backends/pixi-build-ros/robostack.yaml"><code>robostack.yaml</code></a>.</li>
 <li><strong>Custom mappings</strong>: You can provide additional mappings in your <code>pixi.toml</code> under <a href="#extra-package-mappings"><code>[package.build.config.extra-package-mappings]</code></a></li>
-<li><strong>Other packages</strong>: Mapped to <code>ros-&lt;distro&gt;-&lt;package-name&gt;</code> format.</li>
+<li><strong>Other packages</strong>: Mapped to RoboStack's names: <code>ros2-&lt;package-name&gt;</code> for ROS 2 and <code>ros-&lt;distro&gt;-&lt;package-name&gt;</code> for ROS 1.</li>
 </ul>
-<p>The <code>&lt;distro&gt;</code> part of the package name is automatically generated based on the <code>distro</code> configuration.</p>
+<p>ROS 2 names don't include the distribution: the generated recipe pins the distro mutex (<code>ros2-distro-mutex * &lt;distro&gt;_*</code>) to the <code>distro</code> configuration in the build, host, and run environments.
+An explicit mutex build constraint can be <code>*</code>, the same distro pattern, or an exact build matching that pattern (for example, <code>jazzy_0</code>).
+Merging different non-exact build patterns is not supported.</p>
 <h3 id="workspace-source-discovery">Workspace Source Discovery<a class="headerlink" href="#workspace-source-discovery" title="Permanent link">#</a></h3>
 <p>When a <code>package.xml</code> declares a <code>&lt;depend&gt;</code> (or <code>build_depend</code> / <code>run_depend</code> / <code>exec_depend</code>) on another ROS package that lives in the same workspace, the backend automatically resolves it as a source dependency. There is no need to hand-write <code>path = "..."</code> entries in <code>pixi.toml</code> for every sibling reference.</p>
-<p>Concretely, the backend walks the workspace root looking for every <code>package.xml</code>, and for each declared dependency in the current package whose <code>&lt;name&gt;</code> matches a sibling's <code>&lt;name&gt;</code>, it emits <code>ros-&lt;distro&gt;-&lt;sibling-name&gt;</code> as a source dep pointing at the sibling's <code>package.xml</code> instead of mapping it through RoboStack as a binary.</p>
+<p>Concretely, the backend walks the workspace root looking for every <code>package.xml</code>, and for each declared dependency in the current package whose <code>&lt;name&gt;</code> matches a sibling's <code>&lt;name&gt;</code>, it emits <code>ros2-&lt;sibling-name&gt;</code> as a source dep pointing at the sibling's <code>package.xml</code> instead of mapping it through RoboStack as a binary.</p>
 <p>Discovery follows colcon conventions: directories that contain a <code>COLCON_IGNORE</code>, <code>AMENT_IGNORE</code>, or <code>CATKIN_IGNORE</code> marker file are pruned from the walk. Colcon writes these markers into its own <code>build/</code>, <code>install/</code>, and <code>log/</code> directories on first use, so those are skipped automatically once a colcon build has run.</p>
 <p>Two <code>package.xml</code> files declaring the same <code>&lt;name&gt;</code> is an error.</p>
 <p>A manual entry in <code>pixi.toml</code> always wins over discovery, per requirement class. For example, if you declare:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[package.run-dependencies]</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">ros-jazzy-pkg-b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">binary</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"==1.2.3"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">ros2-pkg-b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">binary</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"==1.2.3"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>then <code>ros-jazzy-pkg-b</code> stays a pinned binary in the <code>run</code> class, while discovery still applies in <code>build</code> and <code>host</code> if the same sibling is referenced there. Use this to pin a single sibling against a stability baseline while still iterating on the rest of the workspace. To skip discovery entirely for a single package, set <a href="#ignore-workspace-sources"><code>ignore-workspace-sources = true</code></a> on that package.</p>
+<p>then <code>ros2-pkg-b</code> stays a pinned binary in the <code>run</code> class, while discovery still applies in <code>build</code> and <code>host</code> if the same sibling is referenced there. Use this to pin a single sibling against a stability baseline while still iterating on the rest of the workspace. To skip discovery entirely for a single package, set <a href="#ignore-workspace-sources"><code>ignore-workspace-sources = true</code></a> on that package.</p>
 <h2 id="configuration-options">Configuration Options<a class="headerlink" href="#configuration-options" title="Permanent link">#</a></h2>
 <p>You can customize the ROS backend behavior using the <code>[package.build.config]</code> section in your <code>pixi.toml</code>. The backend supports the following configuration options:</p>
 <h3 id="distro-optional"><code>distro</code> (Optional)<a class="headerlink" href="#distro-optional" title="Permanent link">#</a></h3>
@@ -9927,7 +9935,7 @@ If a <code>distro</code> is not specified in the <code>pixi.toml</code>, it will
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific distro takes precedence over base</li>
 </ul>
 <p>The ROS distribution to build for. This affects dependency mapping and build configuration.
-If set the package name will be prefixed with <code>ros-&lt;distro&gt;-</code> automatically, otherwise the package name from <code>pixi.toml</code> or <code>package.xml</code> is used.</p>
+If set the package name will be prefixed with <code>ros2-</code> (<code>ros-&lt;distro&gt;-</code> for ROS 1) automatically, otherwise the package name from <code>pixi.toml</code> or <code>package.xml</code> is used.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[package.build.config]</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">distro</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"jazzy"</span><span class="w">  </span><span class="c1"># or "humble", "noetic", "iron", etc.</span>
 </span></code></pre></div>
@@ -10028,7 +10036,7 @@ These mappings are used to extend the usage of the dependencies in the <code>pac
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="nt">package_name2</span><span class="p">:</span><span class="w"> </span><span class="c1"># The name of the package in the package.xml</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">package1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">package2</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># Maps to a list of conda packages</span>
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="nt">ros_package</span><span class="p">:</span><span class="w">   </span><span class="c1"># The name of the package in the package.xml</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="nt">ros</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ros_package</span><span class="w"> </span><span class="c1"># Maps to a RoboStack style package name, e.g. `ros-&lt;distro&gt;-ros-package`</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="nt">ros</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ros_package</span><span class="w"> </span><span class="c1"># Maps to a RoboStack style package name, e.g. `ros2-ros-package`</span>
 </span></code></pre></div>
 <h2 id="default-variants">Default Variants<a class="headerlink" href="#default-variants" title="Permanent link">#</a></h2>
 <p>On Windows platforms, the backend automatically sets the following default variants:</p>
