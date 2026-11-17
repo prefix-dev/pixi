@@ -6,7 +6,7 @@ use pixi_global::{
     common::{self, CondaMetaError, find_package_records},
     project::{ManifestError, ParsedEnvironment},
 };
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, PrefixRecord, Subdir};
+use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, PackageName, PrefixRecord, Subdir};
 use serde::Serialize;
 
 /// An error from listing the global environments.
@@ -38,6 +38,16 @@ pub struct GlobalDependency {
     pub version: Option<String>,
 }
 
+/// A channel of a global environment
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalChannel {
+    /// The channel as written in the manifest
+    pub channel: NamedChannelOrUrl,
+    /// The channel resolved to its base URL, or `None` if it couldn't be
+    /// resolved
+    pub url: Option<ChannelUrl>,
+}
+
 /// The state of a global environment
 #[derive(Debug, Clone, Serialize)]
 pub struct GlobalEnvironment {
@@ -46,7 +56,7 @@ pub struct GlobalEnvironment {
     pub dependencies: Vec<GlobalDependency>,
     pub exposed: Vec<GlobalExposedMapping>,
     pub shortcuts: IndexSet<PackageName>,
-    pub channels: Vec<NamedChannelOrUrl>,
+    pub channels: Vec<GlobalChannel>,
     pub platform: Option<Subdir>,
     pub records: Vec<PrefixRecord>,
 }
@@ -106,7 +116,17 @@ async fn environment(
             })
             .collect(),
         shortcuts: env.shortcuts.clone().unwrap_or_default(),
-        channels: env.channels().into_iter().cloned().collect(),
+        channels: env
+            .channels()
+            .into_iter()
+            .map(|channel| GlobalChannel {
+                channel: channel.clone(),
+                url: channel
+                    .clone()
+                    .into_base_url(project.global_channel_config())
+                    .ok(),
+            })
+            .collect(),
         platform: env.platform,
         records,
     })

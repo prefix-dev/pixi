@@ -230,7 +230,7 @@ fn print_specific_global_environment(
             environment
                 .channels
                 .iter()
-                .map(|channel| Item::plain(Marker::None, channel.to_string()))
+                .map(|channel| Item::plain(Marker::None, channel.channel.to_string()))
                 .collect(),
         ));
     }
