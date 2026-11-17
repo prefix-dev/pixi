@@ -45,6 +45,7 @@ use rattler_conda_types::{
     compression_level::CompressionLevel,
     package::{BuildString, CondaArchiveType},
 };
+use rattler_virtual_packages::VirtualPackageOverrides;
 use tracing::warn;
 pub struct RattlerBuildBackendInstantiator {
     logging_output_handler: LoggingOutputHandler,
@@ -492,14 +493,19 @@ impl Protocol for RattlerBuildBackend {
             recipe: discovered_output.recipe,
             build_configuration: BuildConfiguration {
                 target_platform: discovered_output.target_platform,
-                host_platform: PlatformWithVirtualPackages {
-                    platform: host_platform,
-                    virtual_packages: vec![],
-                },
-                build_platform: PlatformWithVirtualPackages {
-                    platform: build_platform,
-                    virtual_packages: vec![],
-                },
+                // pixi solves the build and host prefixes, but rattler-build
+                // solves the environments of staging outputs itself and needs
+                // the virtual packages for that.
+                host_platform: PlatformWithVirtualPackages::detect_for_platform(
+                    host_platform,
+                    &VirtualPackageOverrides::from_env(),
+                )
+                .into_diagnostic()?,
+                build_platform: PlatformWithVirtualPackages::detect_for_platform(
+                    build_platform,
+                    &VirtualPackageOverrides::from_env(),
+                )
+                .into_diagnostic()?,
                 hash: discovered_output.hash,
                 variant: discovered_output.used_vars.clone(),
                 directories,
