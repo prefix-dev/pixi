@@ -503,7 +503,13 @@ impl Protocol for RattlerBuildBackend {
                 hash: discovered_output.hash,
                 variant: discovered_output.used_vars.clone(),
                 directories,
-                channels: vec![],
+                // TODO: pixi pre-solves the build and host prefixes of the
+                // final outputs, but the environments of staging outputs are
+                // still solved by rattler-build here, without pixi's virtual
+                // packages, exclude-newer, or channel priority. Remove this
+                // once pixi pre-solves and locks staging environments too.
+                // See https://github.com/prefix-dev/pixi/issues/7553.
+                channels: params.channels,
                 channel_priority: Default::default(),
                 solve_strategy: Default::default(),
                 timestamp: jiff::Timestamp::now(),

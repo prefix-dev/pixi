@@ -113,6 +113,43 @@ def test_publish_honors_exclude_newer(
 
 
 @pytest.mark.slow
+def test_publish_resolves_staging_output_from_workspace_channels(
+    pixi: Path,
+    simple_workspace: Workspace,
+    dummy_channel_1: str,
+) -> None:
+    """The build environment of a `staging` output is solved by the backend
+    rather than by pixi, so it must get the workspace channels too."""
+    name = simple_workspace.recipe["package"]["name"]
+    simple_workspace.recipe = {
+        "recipe": {"name": name, "version": "1.0.0"},
+        "outputs": [
+            {
+                "staging": {"name": f"{name}-staging"},
+                "requirements": {"build": ["dummy-b"]},
+            },
+            {"package": {"name": name}, "inherit": f"{name}-staging"},
+        ],
+    }
+    simple_workspace.package_manifest["package"]["build"]["config"] = {"experimental": True}
+    simple_workspace.workspace_manifest["workspace"]["channels"].insert(0, dummy_channel_1)
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--target-dir",
+            str(simple_workspace.workspace_dir),
+            "--path",
+            simple_workspace.package_dir,
+        ],
+    )
+
+    assert len(list(simple_workspace.workspace_dir.glob("*.conda"))) == 1
+
+
+@pytest.mark.slow
 def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     verify_cli_command(
