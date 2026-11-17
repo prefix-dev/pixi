@@ -136,6 +136,19 @@ pub struct JsonRpcBackend {
     stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
 }
 
+/// Raises the backend's log level when pixi's own debug or trace logging is
+/// enabled. Quiet is not forwarded: pixi buffers backend output and prints it
+/// when a build fails, which needs the backend's default output.
+fn backend_verbosity_args() -> &'static [&'static str] {
+    if tracing::enabled!(tracing::Level::TRACE) {
+        &["-vv"]
+    } else if tracing::enabled!(tracing::Level::DEBUG) {
+        &["-v"]
+    } else {
+        &[]
+    }
+}
+
 #[allow(clippy::result_large_err)]
 impl JsonRpcBackend {
     /// Set up a new protocol instance.
@@ -159,7 +172,8 @@ impl JsonRpcBackend {
         debug_assert!(workspace_root.is_absolute());
         debug_assert!(checkout_root.as_ref().is_none_or(|p| p.is_absolute()));
         // Spawn the tool and capture stdin/stdout.
-        let command = tool.command();
+        let mut command = tool.command();
+        command.args(backend_verbosity_args());
         let program_name = command.get_program().to_string_lossy().into_owned();
         let mut process = match tokio::process::Command::from(command)
             .stdout(std::process::Stdio::piped())
