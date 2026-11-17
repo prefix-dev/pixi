@@ -267,7 +267,7 @@ rattler_upload = { version = "0.15.3", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
-rattler_virtual_package_detectors = { version = "=0.3.8", default-features = false }
+rattler_virtual_package_detectors = { version = "=0.3.9", default-features = false }
 rattler_virtual_packages = { version = "8.1.4", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
