@@ -58,6 +58,13 @@ def test_ros_packages_build(
     built_packages = list(output_dir.glob("*.conda"))
     assert built_packages, f"no package artifacts produced for {expected_name}"
     assert any(expected_name in artifact.name for artifact in built_packages)
+    if package_dir == "navigator_py":
+        entrypoint = (
+            "Library/lib/navigator_py/navigator.exe"
+            if CURRENT_PLATFORM == "win-64"
+            else "lib/navigator_py/navigator"
+        )
+        assert entrypoint in package_files(built_packages[0])
 
 
 @pytest.mark.slow

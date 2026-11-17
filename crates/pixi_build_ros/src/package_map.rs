@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use miette::Diagnostic;
 use rattler_build_recipe::stage0::{ConditionalList, Item, SerializableMatchSpec, Value};
-use rattler_conda_types::{MatchSpec, ParseStrictness, Subdir};
+use rattler_conda_types::{MatchSpec, ParseStrictness, StringMatcher, Subdir};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -546,10 +546,43 @@ fn merge_specs(
     spec2: Option<&str>,
     package_name: &str,
 ) -> Result<String, PackageMapError> {
+    // A name-only requirement adds no constraint. Keep the other spec intact,
+    // including its channel and bracket selectors.
+    let unconstrained = |spec: Option<&str>| {
+        spec.is_none_or(|spec| {
+            let rest = spec.strip_prefix(package_name).unwrap_or(spec).trim();
+            rest.is_empty() || rest == "*"
+        })
+    };
+    if unconstrained(spec1) {
+        return Ok(spec2.unwrap_or("").to_string());
+    }
+    if unconstrained(spec2) {
+        return Ok(spec1.unwrap_or("").to_string());
+    }
+
     let (v1, b1) = version_and_build(spec1, package_name)?;
     let (v2, b2) = version_and_build(spec2, package_name)?;
 
     let build = match (b1, b2) {
+        (Some(b1), Some(b2)) if b1 == "*" => Some(b2),
+        (Some(b1), Some(b2)) if b2 == "*" => Some(b1),
+        (Some(b1), Some(b2))
+            if matches!(b1.parse::<StringMatcher>(), Ok(StringMatcher::Exact(_)))
+                && b2
+                    .parse::<StringMatcher>()
+                    .is_ok_and(|matcher| matcher.matches(&b1)) =>
+        {
+            Some(b1)
+        }
+        (Some(b1), Some(b2))
+            if matches!(b2.parse::<StringMatcher>(), Ok(StringMatcher::Exact(_)))
+                && b1
+                    .parse::<StringMatcher>()
+                    .is_ok_and(|matcher| matcher.matches(&b2)) =>
+        {
+            Some(b2)
+        }
         (Some(b1), Some(b2)) if b1 != b2 => {
             return Err(PackageMapError::ConflictingBuildStrings {
                 dep_name: package_name.to_string(),
@@ -1048,6 +1081,53 @@ mod tests {
             result,
             Err(PackageMapError::ConflictingBuildStrings { .. })
         ));
+    }
+
+    #[test]
+    fn test_merge_unconstrained_preserves_selectors() {
+        for qualified in [
+            "conda-forge::python",
+            "conda-forge::python >=3.10",
+            "python[build_number='>=2']",
+        ] {
+            let spec = SerializableMatchSpec::from(qualified);
+            let qualified = vec![Item::Value(Value::new_concrete(spec.clone(), None))];
+            let unconstrained = vec![Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from("python"),
+                None,
+            ))];
+            for (first, second) in [(&qualified, &unconstrained), (&unconstrained, &qualified)] {
+                let merged = merge_unique_items_vec(first, second).unwrap();
+                assert_eq!(
+                    merged,
+                    vec![Item::Value(Value::new_concrete(spec.clone(), None))]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_compatible_mutex_builds() {
+        for (build, expected) in [("*", "jazzy_*"), ("jazzy_0", "jazzy_0")] {
+            let explicit = format!("ros2-distro-mutex >=0.5 {build}");
+            let distro = "ros2-distro-mutex * jazzy_*";
+            for (first, second) in [(explicit.as_str(), distro), (distro, explicit.as_str())] {
+                let merged = merge_specs(Some(first), Some(second), "ros2-distro-mutex").unwrap();
+                assert_eq!(merged, format!("ros2-distro-mutex >=0.5 {expected}"));
+            }
+        }
+
+        for build in ["humble_0", "*_0"] {
+            let explicit = format!("ros2-distro-mutex >=0.5 {build}");
+            assert!(matches!(
+                merge_specs(
+                    Some(&explicit),
+                    Some("ros2-distro-mutex * jazzy_*"),
+                    "ros2-distro-mutex",
+                ),
+                Err(PackageMapError::ConflictingBuildStrings { .. })
+            ));
+        }
     }
 
     #[test]

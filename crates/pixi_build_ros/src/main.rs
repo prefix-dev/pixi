@@ -279,9 +279,12 @@ impl GenerateRecipe for RosGenerator {
             )));
         }
 
-        // Add the distro mutex to host and run: the package names don't carry
-        // the distribution, the mutex pins it
+        // Pin the distribution in each independently solved environment.
         let mutex = distro.mutex_spec();
+        build_items.push(Item::Value(Value::new_concrete(
+            SerializableMatchSpec::from(mutex.as_str()),
+            None,
+        )));
         host_items.push(Item::Value(Value::new_concrete(
             SerializableMatchSpec::from(mutex.as_str()),
             None,
@@ -299,7 +302,7 @@ impl GenerateRecipe for RosGenerator {
 
         // Generate build script
         let build_type = package_xml.build_type();
-        let build_script_content = render_build_script(&build_type, &distro.name, &manifest_root)?;
+        let build_script_content = render_build_script(&build_type, &distro, &manifest_root)?;
 
         let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
         script_env.insert(
@@ -611,6 +614,7 @@ mod tests {
           - "${{ compiler('cxx') }}"
           - if: build_platform != target_platform
             then: "cross-python_${{ target_platform }}"
+          - ros2-distro-mutex * jazzy_*
         host:
           - ros2-ament-cmake
           - ros2-example-interfaces

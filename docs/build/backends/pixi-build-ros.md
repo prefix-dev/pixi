@@ -142,7 +142,9 @@ Because the definition of a dependency in a `package.xml` file is not similar to
 - **Custom mappings**: You can provide additional mappings in your `pixi.toml` under [`[package.build.config.extra-package-mappings]`](#extra-package-mappings)
 - **Other packages**: Mapped to RoboStack's names: `ros2-<package-name>` for ROS 2 and `ros-<distro>-<package-name>` for ROS 1.
 
-ROS 2 names don't include the distribution: the generated recipe pins the distro mutex (`ros2-distro-mutex * <distro>_*`) to the `distro` configuration instead.
+ROS 2 names don't include the distribution: the generated recipe pins the distro mutex (`ros2-distro-mutex * <distro>_*`) to the `distro` configuration in the build, host, and run environments.
+An explicit mutex build constraint can be `*`, the same distro pattern, or an exact build matching that pattern (for example, `jazzy_0`).
+Merging different non-exact build patterns is not supported.
 
 ### Workspace Source Discovery
 

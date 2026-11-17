@@ -58,6 +58,7 @@ requirements:
     - "${{ compiler('cxx') }}"
     - if: build_platform != target_platform
       then: "cross-python_${{ target_platform }}"
+    - ros-distro-mutex * noetic_*
   host:
     - ros-noetic-catkin
     - ros-noetic-ros-package <=2.0.0

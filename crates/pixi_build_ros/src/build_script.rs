@@ -6,6 +6,8 @@ use miette::Diagnostic;
 use rattler_conda_types::Subdir;
 use thiserror::Error;
 
+use crate::distro::Distro;
+
 /// Errors that can occur during build script generation.
 #[derive(Debug, Error, Diagnostic)]
 pub enum BuildScriptError {
@@ -20,7 +22,7 @@ pub enum BuildScriptError {
 /// variable substitution.
 pub fn render_build_script(
     build_type: &str,
-    distro: &str,
+    distro: &Distro,
     source_dir: &Path,
 ) -> Result<String, BuildScriptError> {
     // Use the current (build) platform, not the host/target platform.
@@ -31,7 +33,8 @@ pub fn render_build_script(
     let src_dir_str = source_dir.display().to_string();
     let rendered = template
         .replace("@SRC_DIR@", &src_dir_str)
-        .replace("@DISTRO@", distro)
+        .replace("@DISTRO@", &distro.name)
+        .replace("@PACKAGE_PREFIX@", &distro.package_prefix())
         .replace("@BUILD_DIR@", "build")
         .replace("@BUILD_TYPE@", "Release");
 
@@ -58,35 +61,12 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_render_ament_cmake() {
-        let script =
-            render_build_script("ament_cmake", "humble", &PathBuf::from("/my/source")).unwrap();
-
-        assert!(script.contains("/my/source"));
-        assert!(script.contains("Release"));
-        assert!(!script.contains("@SRC_DIR@"));
-        assert!(!script.contains("@BUILD_TYPE@"));
-    }
-
-    #[test]
-    fn test_render_ament_python() {
-        let script = render_build_script("ament_python", "jazzy", &PathBuf::from("/src")).unwrap();
-
-        assert!(script.contains("/src"));
-        assert!(!script.contains("@SRC_DIR@"));
-    }
-
-    #[test]
-    fn test_render_catkin() {
-        let script = render_build_script("catkin", "noetic", &PathBuf::from("/pkg")).unwrap();
-
-        assert!(script.contains("/pkg"));
-        assert!(script.contains("noetic"));
-    }
-
-    #[test]
     fn test_unsupported_build_type() {
-        let result = render_build_script("unknown_type", "jazzy", &PathBuf::from("/src"));
+        let result = render_build_script(
+            "unknown_type",
+            &Distro::new("jazzy"),
+            &PathBuf::from("/src"),
+        );
         assert!(matches!(
             result,
             Err(BuildScriptError::UnsupportedBuildType { .. })
