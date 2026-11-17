@@ -242,6 +242,10 @@ mod tests {
                     assert!(script.contains("/my/source"), "{build_type:?}");
                     assert!(!script.contains("@("), "{build_type:?} {windows}");
                     assert!(!script.contains("@["), "{build_type:?} {windows}");
+                    // bash and brush reject CRLF (see .gitattributes)
+                    if !is_batch(build_type, windows) {
+                        assert!(!script.contains('\r'), "{build_type:?} {windows}");
+                    }
                 }
             }
         }
