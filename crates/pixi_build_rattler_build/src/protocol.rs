@@ -34,6 +34,7 @@ use rattler_build_core::{
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
     metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
+    subpackages_for_output,
     tool_configuration::Configuration,
     types::{PackageIdentifier, PackagingSettings},
 };
@@ -465,7 +466,15 @@ impl Protocol for RattlerBuildBackend {
                 }
             })
             .collect();
-        let discovered_output = find_matching_output(&params.output, discovered_outputs)?;
+
+        let discovered_output = find_matching_output(&params.output, discovered_outputs.clone())?;
+
+        // rattler-build resolves `pin_subpackage` against this map when it
+        // solves the environments of a staging output.
+        let index = discovered_outputs
+            .get_index_of(&discovered_output)
+            .expect("the matching output was taken from the discovered outputs");
+        let subpackages = subpackages_for_output(&discovered_outputs, index);
 
         // Set up the proper directories for the build.
         let directories = conda_build_v1_directories(
@@ -507,7 +516,7 @@ impl Protocol for RattlerBuildBackend {
                 channel_priority: Default::default(),
                 solve_strategy: Default::default(),
                 timestamp: jiff::Timestamp::now(),
-                subpackages: BTreeMap::new(),
+                subpackages,
                 packaging_settings: PackagingSettings::from_args(
                     params
                         .package_format
