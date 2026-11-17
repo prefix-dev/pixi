@@ -10282,7 +10282,7 @@ At the moment, only <code>platform_system</code>, <code>os_name</code>, <code>pl
 <li><strong>Package Installation</strong>: Executes the selected installer with the following options:<ul>
 <li><code>--no-deps</code>: Don't install dependencies (handled by conda)</li>
 <li><code>--no-build-isolation</code>: Use the conda environment for building</li>
-<li><code>-vv</code>: Verbose output for debugging</li>
+<li>Verbosity follows the build log level: no flag by default, <code>-v</code> with <code>pixi -vv</code>, and <code>-vv</code> with <code>pixi -vvv</code> or more</li>
 </ul>
 </li>
 <li><strong>Package Creation</strong>: Creates either a noarch or platform-specific conda package</li>

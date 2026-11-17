@@ -2093,6 +2093,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#verbose-build-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Verbose Build Output
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#rebuilding-generated-recipes" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9462,6 +9473,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#verbose-build-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Verbose Build Output
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#rebuilding-generated-recipes" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9617,6 +9639,8 @@ For example: <code>pixi-build-cmake=/path/to/bin,pixi-build-python</code> will:<
 <li><code>PIXI_BUILD_BACKEND_OVERRIDE_ALL</code>: If this environment variable is set to <em>some</em> value e.g <code>1</code> or <code>true</code>, it will not install any backends in isolation and will assume that all backends are overridden and available in the <code>PATH</code>. This is useful for development purposes. e.g <code>PIXI_BUILD_BACKEND_OVERRIDE_ALL=1 pixi install</code></li>
 </ol>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">#</a></h2>
+<h3 id="verbose-build-output">Verbose Build Output<a class="headerlink" href="#verbose-build-output" title="Permanent link">#</a></h3>
+<p>Pixi passes its verbosity on to the build backends: <code>pixi -vv</code> enables debug logging in the backend, and <code>pixi -vvv</code> or more enables trace logging.</p>
 <h3 id="rebuilding-generated-recipes">Rebuilding Generated Recipes<a class="headerlink" href="#rebuilding-generated-recipes" title="Permanent link">#</a></h3>
 <p>When you build a package (for example via <code>pixi publish</code>), the build backends generate a complete rattler-build recipe that is stored in your project's build directory. This can be useful for debugging build issues or understanding exactly how your package is being built.</p>
 <h3 id="recipe-locations">Recipe Locations<a class="headerlink" href="#recipe-locations" title="Permanent link">#</a></h3>

@@ -7816,6 +7816,10 @@ For example: `pixi-build-cmake=/path/to/bin,pixi-build-python` will:
 
 ## Troubleshooting
 
+### Verbose Build Output
+
+Pixi passes its verbosity on to the build backends: `pixi -vv` enables debug logging in the backend, and `pixi -vvv` or more enables trace logging.
+
 ### Rebuilding Generated Recipes
 
 When you build a package (for example via `pixi publish`), the build backends generate a complete rattler-build recipe that is stored in your project's build directory. This can be useful for debugging build issues or understanding exactly how your package is being built.
