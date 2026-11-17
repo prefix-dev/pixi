@@ -14,10 +14,10 @@ ROS_WORKSPACE_NAME = "ros-workspace"
 ROS_PACKAGE_DIRS = ["navigator", "navigator_py", "distro_less_package"]
 ROS_IMPLICIT_PACKAGE_DIR = "navigator_implicit"
 ROS_PACKAGE_OUTPUT_NAMES = {
-    "navigator": "ros-humble-navigator",
-    "navigator_py": "ros-humble-navigator-py",
+    "navigator": "ros2-navigator",
+    "navigator_py": "ros2-navigator-py",
     # The `humble` distro is automatically selected from the channels in the pixi.toml
-    "distro_less_package": "ros-humble-distro-less-package",
+    "distro_less_package": "ros2-distro-less-package",
 }
 
 
@@ -58,6 +58,13 @@ def test_ros_packages_build(
     built_packages = list(output_dir.glob("*.conda"))
     assert built_packages, f"no package artifacts produced for {expected_name}"
     assert any(expected_name in artifact.name for artifact in built_packages)
+    if package_dir == "navigator_py":
+        entrypoint = (
+            "Library/lib/navigator_py/navigator.exe"
+            if CURRENT_PLATFORM == "win-64"
+            else "lib/navigator_py/navigator"
+        )
+        assert entrypoint in package_files(built_packages[0])
 
 
 @pytest.mark.slow

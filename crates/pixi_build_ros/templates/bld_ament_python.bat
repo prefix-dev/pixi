@@ -6,7 +6,7 @@ set "PYTHONPATH=%LIBRARY_PREFIX%\lib\site-packages;%SP_DIR%"
 set "SRC_DIR=@SRC_DIR@"
 
 pushd %SRC_DIR%
-set "PKG_NAME_SHORT=%PKG_NAME:*ros-@DISTRO@-=%"
+set "PKG_NAME_SHORT=%PKG_NAME:*@PACKAGE_PREFIX@-=%"
 set "PKG_NAME_SHORT=%PKG_NAME_SHORT:-=_%"
 
 :: The prefix is reused, so record what this build installed instead of letting
