@@ -310,7 +310,7 @@ Virtual packages from [detectors](#virtual-package-detectors) can be overridden 
 ## Virtual package detectors
 
 Channels can register virtual package detectors: packages that report capabilities of the current machine, such as an MPI runtime or a driver installed outside the environment.
-Their values are only used to [select a platform](#which-platform-gets-installed); workspace solves still use the virtual packages declared under `workspace.platforms`.
+In a workspace, their values are only used to [select a platform](#which-platform-gets-installed); workspace solves still use the virtual packages declared under `workspace.platforms`.
 Detectors run code from the channel, so Pixi asks before trusting them; you can save that decision in the [configuration](../reference/pixi_configuration.md#virtual-package-detectors).
 
 See [Channel-provided virtual package detectors](../advanced/virtual_package_detectors.md) for a complete example.
