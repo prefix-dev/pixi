@@ -386,12 +386,14 @@ Keep binary `extra-args` consistent with the selected target and package require
 
 The backend supplies C/C++ compilers, `patchelf`, and a sysroot matching the declared glibc version.
 No manual compiler paths or sysroot pins are needed.
-Pin `mojo-compiler >=1.2` in `[package.build-dependencies]` to select the compiler version.
-Host and runtime requirements follow that selection.
+It also adds `mojo-compiler >=1.2` automatically.
+Optionally constrain `mojo-compiler` in `[package.build-dependencies]` to select a compiler version.
 
 ### Runtime and selection
 
-Both builds require glibc 2.34 or newer, x86-64-v3, and matching `mojo-compiler` and `max-core >=26.7` runtimes.
+Both builds require glibc 2.34 or newer and x86-64-v3.
+The backend automatically adds `max-core >=26.7` and exact runtime pins for `mojo-compiler` and `max-core`, matching the versions used during the build.
+Consumers do not need to add these runtime dependencies manually.
 AMD builds also require `__amdgpu` and an exact `__amdgpu_arch` match for the selected target.
 For example, `gfx1103` requires `__amdgpu_arch ==11.0.3`, not that architecture or newer.
 The minimum `hip-runtime-amd` version is 7.0 for `gfx950` and 6.3.3 for all other supported AMD targets.
