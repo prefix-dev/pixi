@@ -258,12 +258,13 @@ See [lock file satisfiability](./lock_file.md#lock-file-satisfiability).
 ### Diagnostic selection
 
 `pixi info`, `pixi task list`, and `pixi run` without a task never solve or update the lock file.
-They first use an installed platform or a declaration matching the host.
-Only unresolved environments fall back to an existing lock file; missing, unreadable, malformed, or newer-format locks do not prevent diagnostic output.
+They reuse an installed platform without consulting the lock.
+Otherwise, unless a dependency-free environment uses the host baseline, they try to read the existing lock and select against its requirements, even when a declaration matches the host.
+Missing, unreadable, malformed, or newer-format locks leave the initial selection unchanged and do not prevent diagnostic output.
 An existing lock is not checked for freshness.
 
 Consequently, a diagnostic selection is opportunistic, not a promise about the next installation.
-It can differ from operational selection when locked requirements reject a declaration-matching platform.
+It can differ from the next installation if the lock is unavailable or stale, or installation updates it.
 `pixi info` reports the selection source and, when it consults the lock file, skipped candidates.
 An environment with no dependencies and no usable declared platform may still run host-only tasks; an environment with dependencies does not receive that fallback.
 
