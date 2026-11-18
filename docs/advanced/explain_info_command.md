@@ -41,14 +41,7 @@ If this is incorrect, please file an issue on the [Pixi repo](https://github.com
 
 ### Virtual packages
 
-The virtual packages that Pixi detects on your machine.
-
-In the Conda ecosystem, you can depend on virtual packages.
-These packages aren't real dependencies that are going to be installed.
-A package that needs a CUDA driver depends on the `__cuda` virtual package.
-Solving the workspace doesn't use this list.
-Pixi solves each platform with the virtual packages [declared for it](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages), so you can lock for a CUDA machine without having one.
-Pixi uses the detected ones when installing: if a locked package depends on `__cuda` and Pixi does not detect it on your machine, the installation fails.
+The [virtual packages](../conda_ecosystem.md#virtual-packages-describing-the-host-system) that Pixi detects on your machine.
 
 ### Cache dir
 
