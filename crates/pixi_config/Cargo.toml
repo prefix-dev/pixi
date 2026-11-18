@@ -12,6 +12,7 @@ license.workspace = true
 [dependencies]
 clap = { workspace = true, features = ["derive", "env", "std"] }
 console = { workspace = true }
+derive_more = { workspace = true, features = ["display"] }
 dirs = { workspace = true }
 fs-err = { workspace = true }
 indexmap = { workspace = true }
