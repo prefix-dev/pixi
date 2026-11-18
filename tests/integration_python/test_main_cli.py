@@ -1008,6 +1008,20 @@ def test_list_exits_unsuccessful_on_unknown_pkg(
     )
 
 
+@pytest.mark.slow
+def test_list_empty_environment_exits_successfully(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    # Create a new project with no dependencies
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    # Listing an empty environment should succeed with exit code 0
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", tmp_pixi_workspace / "pixi.toml"],
+        ExitCode.SUCCESS,
+    )
+
+
 def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 

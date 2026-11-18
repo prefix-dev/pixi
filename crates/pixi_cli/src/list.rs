@@ -219,6 +219,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )?;
     let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
 
+    let has_regex = args.regex.is_some();
     let workspace_ctx = cli_workspace_context(workspace.clone());
     let (mut packages_to_output, selected_platform) = workspace_ctx
         .list_packages(
@@ -245,11 +246,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if packages_to_output.is_empty() && !args.json {
-        miette::bail!(
-            "no packages found in '{}' environment for '{}' platform",
-            environment.name().fancy_display(),
-            consts::ENVIRONMENT_STYLE.apply_to(&selected_platform),
-        );
+        if has_regex {
+            miette::bail!(
+                "no packages found in '{}' environment for '{}' platform",
+                environment.name().fancy_display(),
+                consts::ENVIRONMENT_STYLE.apply_to(&selected_platform),
+            );
+        } else {
+            eprintln!(
+                "No packages found in '{}' environment for '{}' platform",
+                environment.name().fancy_display(),
+                consts::ENVIRONMENT_STYLE.apply_to(&selected_platform),
+            );
+            return Ok(());
+        }
     }
 
     // Print as table string or JSON
