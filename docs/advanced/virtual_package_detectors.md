@@ -143,8 +143,9 @@ Here, the workspace author supports `linux-64` machines with `__username_length`
 ```
 
 In `workspace.platforms`, `__username_length = "3"` declares version `3` for the solver, regardless of the username length on the machine creating the lock file.
-The locked `long-username` package requires `__username_length >=3`, so the host must report a username length of at least three.
-Pixi does not compare custom declarations such as `__username_length` with detected values.
+The locked `long-username` package requires `__username_length >=3`, so the host must report a username length of at least three in order to be able to use the environment for this platform.
+
+Pixi does not compare custom virtual-package declarations such as `__username_length = "3"` in [inline-table platform entries](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages) with detected values.
 If platforms differ only in a custom declaration, the first one whose locked requirements fit wins, regardless of the declared values.
 Without a locked package requiring that capability, selection cannot distinguish the platforms.
 See [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the rules.
