@@ -257,6 +257,8 @@ See [lock file satisfiability](./lock_file.md#lock-file-satisfiability).
 They reuse an installed platform without consulting the lock.
 Otherwise, unless a dependency-free environment uses the host baseline, they try to read the existing lock and select against its requirements, even when a declaration matches the host.
 Missing, unreadable, malformed, or newer-format locks leave the initial selection unchanged and do not prevent diagnostic output.
+A lock file with no entry a specified environment likewise
+leaves selection unchanged.
 An existing lock is not checked for freshness.
 
 Consequently, a diagnostic selection is opportunistic, not a promise about the next installation.
