@@ -129,5 +129,5 @@ exclude = [
 include = ["docs/**", "examples/**"]
 
 [tool.ty.overrides.rules]
-unresolved-attribute = "ignore"
-unresolved-import = "ignore"
+missing-attribute = "ignore"
+import-not-found = "ignore"

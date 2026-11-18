@@ -7,7 +7,7 @@ import sys
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast, override
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, override
 
 import tomli
 from pydantic import (
@@ -1671,7 +1671,7 @@ class SchemaJsonEncoder(json.JSONEncoder):
     def encode(self, o: object):
         """Overload the default ``encode`` behavior."""
         if isinstance(o, dict):
-            o = self.normalize_schema(cast("dict[str, Any]", deepcopy(o)))
+            o = self.normalize_schema(deepcopy(o))
 
         return super().encode(o)
 
