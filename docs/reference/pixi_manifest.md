@@ -113,7 +113,7 @@ Recognised keys on an inline-table entry:
   - `archspec` takes a CPU microarchitecture name known to the bundled [archspec](https://github.com/archspec/archspec) database, spelled with underscores (`x86_64_v3`), or `"0"` for unknown.
     A machine covers it if its microarchitecture is the same or a strict superset.
 - Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`.
-  The value is a concrete version, not a dependency expression. Without a build string, the virtual package has the default build `0`. A build string may only contain ASCII letters, digits, `_`, `.` and `+`, as CEP 26 requires.
+  The value is a concrete version, not a dependency expression. Without a build string, the virtual package has the default build `0`. A build string may only contain ASCII letters, digits, `_`, `.`, and `+`, as CEP 26 requires.
 
 See [declared, detected, and required virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) for how declarations are used, and [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for how they are compared with the machine.
 
