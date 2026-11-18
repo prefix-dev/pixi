@@ -138,9 +138,9 @@ packages:
   Names such as `username-3` are lookup keys, not subdirs. Both platforms here use the `linux-64` subdir.
 - `environments.default.packages` maps those names to references into the shared `packages` records.
 - `packages` describes the real packages, including their dependencies.
-  Here `long-username` requires `__username_length >=3`, which both declarations satisfy.
+  Here `long-username` requires `__username_length >=3`, which both platform declarations satisfy.
 
-The declared values `3` and `7` are solve inputs, not detected host values.
+The declared virtual package values `3` and `7` are solve inputs, not detected host values.
 A host could report `__username_length=9` without that value replacing either declaration in the lock file.
 Detection alone does not add a virtual package or its detector as an installed package record in the consumer environment.
 See [Declared, detected, and required virtual packages](multi_platform_configuration.md#declared-detected-and-required-virtual-packages).
@@ -158,7 +158,7 @@ This means that you can use an older lock file with a newer version of `pixi`, b
 
 ## Lock file satisfiability
 
-Lock-file satisfiability checks whether the locked resolution matches the manifest.
+Lock file satisfiability checks whether the locked resolution matches the manifest.
 It is separate from validating the selected target against the host and from checking the installed prefix.
 If the lock file is not satisfiable, Pixi updates it automatically unless `--locked` or `--frozen` prevents this.
 
@@ -172,5 +172,5 @@ Steps to check if the lock file is satisfiable:
 - All hashes for the `pypi` editable packages are correct.
 - There is only a single entry for every package in the lock file.
 
-If you want to get more details checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/crates/pixi_core/src/lock_file/satisfiability/mod.rs) as this is a simplification of the actual code.
+If you want to get more details, checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/crates/pixi_core/src/lock_file/satisfiability/mod.rs) as this is a simplification of the actual code.
 

@@ -154,9 +154,7 @@ platforms = [
 ```
 
 See [Declaring virtual packages per platform](reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages)
-for the full inline-table syntax (friendly keys for `cuda`, `glibc`,
-`macos`, …, raw `__name` escape hatch, naming entries to bind them to
-features). When installing, Pixi compares built-in declarations and locked
+for the full inline-table syntax. When installing, Pixi compares built-in declarations and locked
 package requirements with the virtual packages detected on your machine.
 See [Which platform gets installed?](workspace/multi_platform_configuration.md#which-platform-gets-installed)
 for the selection rules.

@@ -5,7 +5,7 @@
     [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) CLI.
     Existing `[system-requirements]` tables are still parsed and migrated
     transparently, so older manifests keep working, but new manifests should
-    use the per-platform form.
+    use the per-platform syntax.
 
 # Migrating from `[system-requirements]`
 

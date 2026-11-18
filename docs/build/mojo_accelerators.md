@@ -72,7 +72,7 @@ The two platforms describe separate solves for the same `linux-64` conda subdir.
 Both require `archspec = "x86_64_v3"` because the prebuilt Modular runtime needs that CPU baseline.
 `amdgpu = "gfx1103"` solves `amd` for a GPU with the gfx1103 [ISA](https://gpuopen.com/amd-gpu-architecture-programming-documentation/).
 The backend adds the run dependency `__amdgpu_arch ==11.0.3` to the AMD build.
-That locked requirement enforces the exact ISA match; a different ISA makes Pixi skip `amd` and try `cpu`.
+That locked requirement enforces the exact ISA match; a different ISA on the host machine makes Pixi skip `amd` and try `cpu`.
 See [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the details.
 If the GPU build is suitable, typically the CPU is suitable as well.
 To prioritize the GPU build in that case, `pixi-build-mojo` makes sure to [down prioritize](https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration) the CPU build.

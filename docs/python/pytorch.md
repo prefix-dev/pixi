@@ -39,8 +39,6 @@ You can make direct use of the Nvidia provided packages to make sure the package
     --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge.toml:minimal"
     ```
 
-To deliberately install a specific version of the `cuda` packages you can depend on the `cuda-version` package which will then be interpreted by the other packages during resolution.
-The `cuda-version` package constraints the version of the `__cuda` virtual package and `cudatoolkit` package.
 To deliberately install a specific version of the `cuda` packages, you can depend on the `cuda-version` package,
 which constrains the version of the `__cuda` virtual package and `cudatoolkit` package.
 This ensures that the correct version of the `cudatoolkit` package is installed and the tree of dependencies is resolved correctly.
@@ -67,8 +65,8 @@ This does not need separate environments: declare one platform per variant and p
     --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge-envs.toml:use-envs"
     ```
 
-Both platforms belong to the same `default` environment but are solved separately, so the lock file holds a CUDA and a CPU-only package set.
-On a `linux-64` machine, Pixi tries `linux-64-cuda` first if its CUDA declaration matches the driver.
+Both platforms are present in this `default` environment, but are solved separately, so the lock file holds both CUDA and CPU-only package sets for the respective platforms.
+On a `linux-64` machine, Pixi tries `linux-64-cuda` first if its CUDA declaration matches the detected driver.
 It selects the CUDA set only if its locked packages fit the machine; otherwise it tries `linux-64-cpu`.
 See [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the details.
 

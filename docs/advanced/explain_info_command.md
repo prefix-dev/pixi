@@ -116,7 +116,7 @@ The platform used to filter this diagnostic output, separate from the installed 
 `Selection source` reports whether it came from the installed prefix, a host match, lock fallback, or the host baseline for a dependency-free environment.
 In JSON, `selected_platform_source` uses `installed`, `host_match`, `lock_fallback`, or `host_baseline`.
 
-Info never solves or verifies lock freshness.
+`pixi info` never solves or verifies lock freshness.
 Unless it reuses an installed platform or selects the host baseline, it reads the existing lock to check requirements, even when a declaration matches the host.
 The next installation can select differently; see [diagnostic selection](../workspace/multi_platform_configuration.md#diagnostic-selection).
 

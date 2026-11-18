@@ -37,9 +37,9 @@ Pixi uses them in three separate roles:
 Pixi solves each platform with the virtual packages it declares, not with what the current machine reports.
 For `cuda = "12.0"`, the solver sees exactly `__cuda=12.0`, so a CPU-only CI runner can lock it.
 Which packages fit is up to their run dependencies and constraints, for example `__cuda >=12` in `cuda-version`'s `constrains`.
-Whether the current machine can run the result is checked when installing.
+Whether the current machine can run the resulting environment is checked when installing.
 
-`pixi.lock` stores the declarations of each platform and the requirements of each package, never the detected values.
+`pixi.lock` stores the declarations of each platform and the requirements of each package, never the detected virtual package values.
 With a `linux-64-cuda` platform declaring `cuda = "12.0"` and a plain `linux-64-cpu` platform, the relevant parts look like this:
 
 ```yaml title="pixi.lock"
@@ -111,9 +111,9 @@ pytorch-cpu = "*"
 pytorch = "*"
 ```
 
-`pixi lock` resolves three package sets for the `default` environment, including the CUDA one on a machine without a GPU.
+`pixi lock` resolves three package sets for the `default` environment, including the CUDA one, even when run on a machine without a GPU.
 
-The CPU platform selects `pytorch-cpu` explicitly.
+The CPU platform requires `pytorch-cpu` explicitly.
 Leaving out the CUDA declaration only means that the solver can't use packages that require `__cuda`; it does not request a CPU build.
 
 Target selectors match in two ways:
@@ -213,15 +213,15 @@ The conda checks exclude `__archspec`; its declaration comparison uses the archs
 Operational commands resolve the lock file before selecting a platform.
 `--no-install` skips prefix installation, not lock resolution: the default mode may update the lock, `--locked` rejects a missing or stale lock, and `--frozen` uses existing lock data without checking freshness.
 
-For example, a machine reporting CUDA `13.0` matches a `cuda = "12.0"` declaration.
-If that platform's locked packages require `__cuda <13`, Pixi skips it and tries the next candidate, such as a CPU platform.
+For example, a machine reporting CUDA `13.0` matches a `cuda = "12.0"` declaration, since `13.0` compares `>= 12.0`.
+However, if that platform's locked packages require `__cuda <13`, Pixi will skip it and try the next candidate (such as a CPU platform with no packages that require `__cuda`).
 Declaration-matching platforms skipped for unmet requirements appear in info-level logs.
 Diagnostic commands may not inspect the lock file; see [Diagnostic selection](#diagnostic-selection).
 
-Pixi permits a platform from the second group despite its declarations.
+Pixi can permit a platform from the second group despite its declarations.
 Activating it warns once per environment.
-For example, a platform declaring `cuda = "12.8"` can still install on CUDA `12.6` if its locked packages only require `__cuda >=12` and no declaration-matching platform fits.
-A future resolution can pick packages that need the declared `12.8`.
+For example, a platform declaring `cuda = "12.8"` can still install on a machine with CUDA `12.6` if its locked packages only require `__cuda >=12` and no declaration-matching platform fits.
+A future resolution may however pick packages that require `__cuda >=12.8`, at which point the environment will no longer be installable on that machine.
 
 Wheel tags describe Python, ABI, operating-system, and CPU-architecture compatibility, not CUDA driver or GPU requirements.
 For GPU-enabled wheels without a locked `__cuda` requirement, a CUDA declaration therefore affects preference but does not prevent fallback to that platform on a machine without CUDA.
@@ -313,7 +313,7 @@ Virtual packages from [detectors](#virtual-package-detectors) can be overridden 
 ## Virtual package detectors
 
 Channels can register virtual package detectors: packages that report capabilities of the current machine, such as an MPI runtime or a driver installed outside the environment.
-Their values are only used to [select a platform](#which-platform-gets-installed); workspace solves still use the declared virtual packages.
+Their values are only used to [select a platform](#which-platform-gets-installed); workspace solves still use the virtual packages declared under `workspace.platforms`.
 Detectors run code from the channel, so Pixi asks before trusting them; you can save that decision in the [configuration](../reference/pixi_configuration.md#virtual-package-detectors).
 
 See [Channel-provided virtual package detectors](../advanced/virtual_package_detectors.md) for a complete example.
