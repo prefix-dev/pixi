@@ -10,7 +10,8 @@ use pixi_utils::{
     prefix::{Executable, Prefix, PrefixError},
 };
 use rattler_conda_types::{
-    MatchSpec, Matches, PackageName, PackageRecord, ParseMatchSpecOptions, RepodataRevision, Subdir,
+    GenericVirtualPackage, MatchSpec, MatchSpecCondition, Matches, PackageName, PackageRecord,
+    ParseMatchSpecOptions, RepodataRevision, Subdir,
 };
 use rattler_shell::activation::prefix_path_entries;
 use std::collections::{HashMap, HashSet};
@@ -265,36 +266,75 @@ fn path_diff(
     env::join_paths(path_diff).map(|p| p.to_string_lossy().to_string())
 }
 
+/// Parses a dependency string of a package record into a [`MatchSpec`].
+fn parse_dependency(dependency: &str) -> Option<MatchSpec> {
+    MatchSpec::from_str(
+        dependency,
+        ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+    )
+    .ok()
+}
+
+/// Evaluates a dependency condition (e.g. `__unix` or `python >=3.12`)
+/// against the installed records and the virtual packages the environment was
+/// solved for.
+///
+/// Returns `None` if the outcome depends on virtual packages that aren't
+/// known.
+fn evaluate_condition(
+    condition: &MatchSpecCondition,
+    records: &[PackageRecord],
+    virtual_packages: Option<&[GenericVirtualPackage]>,
+) -> Option<bool> {
+    match condition {
+        MatchSpecCondition::MatchSpec(spec) => {
+            if records.iter().any(|record| spec.matches(record)) {
+                return Some(true);
+            }
+            virtual_packages.map(|virtual_packages| {
+                virtual_packages
+                    .iter()
+                    .any(|virtual_package| spec.matches(virtual_package))
+            })
+        }
+        MatchSpecCondition::And(lhs, rhs) => {
+            match (
+                evaluate_condition(lhs, records, virtual_packages),
+                evaluate_condition(rhs, records, virtual_packages),
+            ) {
+                (Some(false), _) | (_, Some(false)) => Some(false),
+                (Some(true), Some(true)) => Some(true),
+                _ => None,
+            }
+        }
+        MatchSpecCondition::Or(lhs, rhs) => {
+            match (
+                evaluate_condition(lhs, records, virtual_packages),
+                evaluate_condition(rhs, records, virtual_packages),
+            ) {
+                (Some(true), _) | (_, Some(true)) => Some(true),
+                (Some(false), Some(false)) => Some(false),
+                _ => None,
+            }
+        }
+    }
+}
+
 /// Checks if the local environment matches the given specifications.
 ///
 /// This function verifies that all the given specifications are present in the
 /// local environment's prefix records and that there are no extra entries in
-/// the prefix records that do not match any of the specifications.
+/// the prefix records that are not reachable from any of the specifications.
+///
+/// Source dependencies are passed as name-only specs, optionally with extras.
+/// `virtual_packages` are the virtual packages the environment was solved for,
+/// if known.
 pub(crate) fn local_environment_matches_spec(
     prefix_records: Vec<PackageRecord>,
-    binary_specs: &IndexSet<MatchSpec>,
-    source_package_names: &HashSet<PackageName>,
+    specs: &IndexSet<MatchSpec>,
     platform: Option<Subdir>,
+    virtual_packages: Option<&[GenericVirtualPackage]>,
 ) -> bool {
-    // Check whether all specs in the manifest are present in the installed
-    // environment
-    let specs_in_manifest_are_present = binary_specs
-        .iter()
-        .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
-
-    let prefix_record_set: HashSet<_> = prefix_records
-        .iter()
-        .map(|record| record.name.clone())
-        .collect();
-    let source_specs_in_manifest_are_present = source_package_names
-        .iter()
-        .all(|name| prefix_record_set.contains(name));
-
-    if !specs_in_manifest_are_present || !source_specs_in_manifest_are_present {
-        tracing::debug!("Not all specs in the manifest are present in the environment");
-        return false;
-    }
-
     // Check whether all packages in the installed environment have the correct
     // platform
     if let Some(platform) = platform {
@@ -316,69 +356,84 @@ pub(crate) fn local_environment_matches_spec(
         }
     }
 
-    // Prune dependencies from the repodata that are valid for the requested specs
-    fn prune_dependencies(
-        mut remaining_prefix_records: Vec<PackageRecord>,
-        matched_record: &PackageRecord,
-    ) -> Vec<PackageRecord> {
-        let mut work_queue = Vec::from([matched_record.as_ref().clone()]);
-
-        while let Some(current_record) = work_queue.pop() {
-            let dependencies = &current_record.depends;
-            for dependency in dependencies {
-                let Ok(match_spec) = MatchSpec::from_str(
-                    dependency,
-                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
-                ) else {
-                    continue;
-                };
-                let Some(index) = remaining_prefix_records
-                    .iter()
-                    .position(|record| match_spec.matches(record))
-                else {
-                    continue;
-                };
-
-                let matched_record = remaining_prefix_records.remove(index).as_ref().clone();
-                work_queue.push(matched_record);
+    // Walk the dependency graph from the specs in the manifest. Like the
+    // solver, an extra is enabled for a package as soon as any spec in the
+    // graph requests it, so the extras of a package are the union over all of
+    // its requesters.
+    //
+    // The specs in the manifest and the dependencies added by an enabled extra
+    // must be present, unless their condition (e.g. `foo[when="__win"]`)
+    // doesn't hold. If a condition can't be evaluated because the virtual
+    // packages are unknown, the dependency is required, which triggers a
+    // one-time re-solve that records them. Regular dependencies are only
+    // followed, so that a missing transitive dependency doesn't force a
+    // re-solve.
+    let mut reached = vec![false; prefix_records.len()];
+    let mut enabled_extras = vec![HashSet::<&str>::new(); prefix_records.len()];
+    let mut work_queue: Vec<(MatchSpec, bool)> =
+        specs.iter().map(|spec| (spec.clone(), true)).collect();
+    while let Some((spec, required)) = work_queue.pop() {
+        let Some(index) = prefix_records
+            .iter()
+            .position(|record| spec.matches(record))
+        else {
+            if required {
+                tracing::debug!("`{spec}` is not satisfied by the environment");
+                return false;
             }
+            continue;
+        };
+        let record = &prefix_records[index];
+
+        if !std::mem::replace(&mut reached[index], true) {
+            work_queue.extend(
+                record
+                    .depends
+                    .iter()
+                    .filter_map(|dependency| parse_dependency(dependency))
+                    .map(|dependency| (dependency, false)),
+            );
         }
 
-        remaining_prefix_records
+        for extra in spec.extras.iter().flatten() {
+            // Extras that the record doesn't define are ignored, just like the
+            // solver does.
+            let Some((extra, dependencies)) = record.extra_depends.get_key_value(extra) else {
+                continue;
+            };
+            if enabled_extras[index].insert(extra) {
+                work_queue.extend(
+                    dependencies
+                        .iter()
+                        .filter_map(|dependency| parse_dependency(dependency))
+                        .map(|dependency| {
+                            let required = dependency.condition.as_ref().is_none_or(|condition| {
+                                evaluate_condition(condition, &prefix_records, virtual_packages)
+                                    .unwrap_or(true)
+                            });
+                            (dependency, required)
+                        }),
+                );
+            }
+        }
     }
 
-    // Process each spec and remove matched entries and their dependencies
-    let remaining_prefix_records = binary_specs.iter().fold(prefix_records, |mut acc, spec| {
-        let Some(index) = acc.iter().position(|record| spec.matches(record.as_ref())) else {
-            return acc;
-        };
-        let matched_record = acc.swap_remove(index);
-        prune_dependencies(acc, &matched_record)
-    });
-
-    // Do the same for source package names
-    let remaining_prefix_records =
-        source_package_names
-            .iter()
-            .fold(remaining_prefix_records, |mut acc, package_name| {
-                let Some(index) = acc.iter().position(|record| &record.name == package_name) else {
-                    return acc;
-                };
-                let matched_record = acc.swap_remove(index);
-                prune_dependencies(acc, &matched_record)
-            });
-
-    // If there are no remaining prefix records, then this means that
-    // the environment doesn't contain records that don't match the manifest
-    if !remaining_prefix_records.is_empty() {
+    // If all prefix records are reachable, then the environment doesn't
+    // contain records that don't match the manifest
+    let unreachable_records = prefix_records
+        .iter()
+        .zip(&reached)
+        .filter(|(_, reached)| !**reached)
+        .map(|(record, _)| record.name.as_normalized())
+        .collect_vec();
+    if !unreachable_records.is_empty() {
         tracing::debug!(
-            "Environment contains extra entries that don't match the manifest: {:?}",
-            remaining_prefix_records
+            "Environment contains extra entries that don't match the manifest: {unreachable_records:?}"
         );
-        false
-    } else {
-        true
+        return false;
     }
+
+    true
 }
 
 /// Finds the package name in the prefix and automatically exposes it if an executable is found.
@@ -471,7 +526,7 @@ mod tests {
         assert!(local_environment_matches_spec(
             ripgrep_records,
             &ripgrep_specs,
-            &HashSet::new(),
+            None,
             None
         ));
     }
@@ -487,7 +542,7 @@ mod tests {
         assert!(!local_environment_matches_spec(
             ripgrep_records,
             &ripgrep_specs,
-            &HashSet::new(),
+            None,
             None
         ));
     }
@@ -502,19 +557,14 @@ mod tests {
             !local_environment_matches_spec(
                 ripgrep_bat_records.clone(),
                 &ripgrep_specs,
-                &HashSet::new(),
+                None,
                 None
             ),
             "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
         );
 
         assert!(
-            local_environment_matches_spec(
-                ripgrep_bat_records,
-                &ripgrep_bat_specs,
-                &HashSet::new(),
-                None
-            ),
+            local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, None, None),
             "The records and specs match and the function should return `true`."
         );
     }
@@ -528,8 +578,8 @@ mod tests {
             local_environment_matches_spec(
                 ripgrep_records,
                 &ripgrep_specs,
-                &HashSet::new(),
-                Some(Subdir::Linux64)
+                Some(Subdir::Linux64),
+                None
             ),
             "The records contains only linux-64 entries"
         );
@@ -544,11 +594,213 @@ mod tests {
             !local_environment_matches_spec(
                 ripgrep_records,
                 &ripgrep_specs,
-                &HashSet::new(),
-                Some(Subdir::Win64)
+                Some(Subdir::Win64),
+                None
             ),
             "The record contains linux-64 entries, so the function should always return `false`"
         );
+    }
+
+    fn package_record(name: &str, depends: &[&str]) -> PackageRecord {
+        let mut record = PackageRecord::new(
+            PackageName::from_str(name).unwrap(),
+            rattler_conda_types::Version::from_str("1.0").unwrap(),
+            "0".parse().unwrap(),
+        );
+        record.depends = depends.iter().map(ToString::to_string).collect();
+        record
+    }
+
+    fn specs(specs: &[&str]) -> IndexSet<MatchSpec> {
+        specs.iter().map(|s| parse_dependency(s).unwrap()).collect()
+    }
+
+    /// Records for a package `diffle` with an extra `rust` that pulls in
+    /// `rust` (which itself depends on `libgcc`), plus `python` as a regular
+    /// dependency.
+    fn diffle_records() -> Vec<PackageRecord> {
+        let mut diffle = package_record("diffle", &["python"]);
+        diffle.extra_depends = [("rust".to_string(), vec!["rust >=1".to_string()])].into();
+        vec![
+            diffle,
+            package_record("python", &[]),
+            package_record("rust", &["libgcc"]),
+            package_record("libgcc", &[]),
+        ]
+    }
+
+    #[test]
+    fn test_local_environment_extras() {
+        let all_records = diffle_records();
+        let without_extra_records: Vec<_> = all_records
+            .iter()
+            .filter(|r| !["rust", "libgcc"].contains(&r.name.as_normalized()))
+            .cloned()
+            .collect();
+        let spec = |s: &str| specs(&[s]);
+
+        // Plain spec against environment without the extra installed.
+        assert!(local_environment_matches_spec(
+            without_extra_records.clone(),
+            &spec("diffle"),
+            None,
+            None
+        ));
+
+        // Requesting an extra that isn't installed yet must be out of sync.
+        assert!(!local_environment_matches_spec(
+            without_extra_records,
+            &spec("diffle[extras=[rust]]"),
+            None,
+            None
+        ));
+
+        // With the extra dependencies installed, the extra (and its transitive
+        // dependencies) must not count as unexpected entries.
+        assert!(local_environment_matches_spec(
+            all_records.clone(),
+            &spec("diffle[extras=[rust]]"),
+            None,
+            None
+        ));
+
+        // Dropping the extra from the manifest leaves stale packages behind.
+        assert!(!local_environment_matches_spec(
+            all_records.clone(),
+            &spec("diffle"),
+            None,
+            None
+        ));
+
+        // Unknown extras are ignored, like the solver does.
+        assert!(local_environment_matches_spec(
+            all_records
+                .into_iter()
+                .filter(|r| !["rust", "libgcc"].contains(&r.name.as_normalized()))
+                .collect(),
+            &spec("diffle[extras=[unknown]]"),
+            None,
+            None
+        ));
+    }
+
+    #[test]
+    fn test_local_environment_conditional_extras() {
+        let mut gpu = package_record("gpu", &[]);
+        gpu.extra_depends = [(
+            "cuda".to_string(),
+            vec![
+                r#"cuda[when="__linux"]"#.to_string(),
+                r#"metal[when="__osx or python >=3.12"]"#.to_string(),
+                r#"directml[when="__win and python"]"#.to_string(),
+            ],
+        )]
+        .into();
+        let records = vec![gpu, package_record("python", &[])];
+        let with_cuda = || {
+            let mut records = records.clone();
+            records.push(package_record("cuda", &[]));
+            records
+        };
+        let spec = specs(&["gpu[extras=[cuda]]", "python"]);
+        let linux = [GenericVirtualPackage {
+            name: PackageName::from_str("__linux").unwrap(),
+            version: rattler_conda_types::Version::from_str("6.1").unwrap(),
+            build_string: "0".parse().unwrap(),
+        }];
+
+        // Dependencies whose condition holds must be installed.
+        assert!(!local_environment_matches_spec(
+            records.clone(),
+            &spec,
+            None,
+            Some(&linux)
+        ));
+        assert!(local_environment_matches_spec(
+            with_cuda(),
+            &spec,
+            None,
+            Some(&linux)
+        ));
+
+        // Dependencies whose condition doesn't hold are not required.
+        assert!(local_environment_matches_spec(
+            records.clone(),
+            &spec,
+            None,
+            Some(&[])
+        ));
+
+        // Unknown virtual packages trigger a re-solve if a conditional
+        // dependency is missing, so they get recorded.
+        assert!(!local_environment_matches_spec(
+            with_cuda(),
+            &spec,
+            None,
+            None
+        ));
+    }
+
+    /// `top` depends on `mid` and `other`, and has an extra `deep` that
+    /// enables the extra `deep` of `mid`, which pulls in `deepdep`. `other`
+    /// depends on `mid[extras=[wide]]`, which pulls in `widedep`.
+    fn nested_extra_records() -> Vec<PackageRecord> {
+        let mut top = package_record("top", &["mid"]);
+        top.extra_depends = [("deep".to_string(), vec!["mid[extras=[deep]]".to_string()])].into();
+        let mut mid = package_record("mid", &[]);
+        mid.extra_depends = [
+            ("deep".to_string(), vec!["deepdep".to_string()]),
+            ("wide".to_string(), vec!["widedep".to_string()]),
+        ]
+        .into();
+        vec![
+            top,
+            mid,
+            package_record("deepdep", &[]),
+            package_record("other", &["mid[extras=[wide]]"]),
+            package_record("widedep", &[]),
+        ]
+    }
+
+    #[test]
+    fn test_local_environment_nested_extras() {
+        let records = nested_extra_records();
+        let without = |names: &[&str]| {
+            records
+                .iter()
+                .filter(|r| !names.contains(&r.name.as_normalized()))
+                .cloned()
+                .collect_vec()
+        };
+
+        // Extras requested from several places are enabled together, regardless
+        // of the order in which the packages are reached.
+        for order in [
+            ["top[extras=[deep]]", "other", "mid"],
+            ["mid", "other", "top[extras=[deep]]"],
+            ["other", "mid", "top[extras=[deep]]"],
+        ] {
+            assert!(
+                local_environment_matches_spec(records.clone(), &specs(&order), None, None),
+                "{order:?}"
+            );
+        }
+
+        // An extra requested by an extra must be installed too.
+        assert!(!local_environment_matches_spec(
+            without(&["other", "widedep", "deepdep"]),
+            &specs(&["top[extras=[deep]]"]),
+            None,
+            None
+        ));
+
+        // Without the extra, its nested dependencies are stale.
+        assert!(!local_environment_matches_spec(
+            without(&["other", "widedep"]),
+            &specs(&["top"]),
+            None,
+            None
+        ));
     }
 
     #[tokio::test]

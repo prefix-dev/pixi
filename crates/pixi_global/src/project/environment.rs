@@ -4,10 +4,9 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
 use miette::Diagnostic;
 use pixi_consts::consts;
-use rattler_conda_types::{MatchSpec, PackageName, PrefixRecord, Subdir};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PrefixRecord, Subdir};
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
-use std::collections::HashSet;
 use std::{fmt, str::FromStr};
 use thiserror::Error;
 
@@ -85,15 +84,15 @@ pub struct ParseEnvironmentNameError {
 pub(crate) fn environment_specs_in_sync(
     prefix_records: &[PrefixRecord],
     specs: &IndexSet<MatchSpec>,
-    source_package_names: &HashSet<PackageName>,
     platform: Option<Subdir>,
+    virtual_packages: Option<&[GenericVirtualPackage]>,
 ) -> bool {
     let package_records = prefix_records
         .iter()
         .map(|r| r.repodata_record.package_record.clone())
         .collect();
 
-    local_environment_matches_spec(package_records, specs, source_package_names, platform)
+    local_environment_matches_spec(package_records, specs, platform, virtual_packages)
 }
 
 #[cfg(test)]
@@ -137,7 +136,7 @@ mod tests {
         let specs = IndexSet::new();
         let prefix = Prefix::new(env_dir.path());
         let prefix_records = prefix.find_installed_packages().unwrap();
-        let result = environment_specs_in_sync(&prefix_records, &specs, &HashSet::new(), None);
+        let result = environment_specs_in_sync(&prefix_records, &specs, None, None);
         assert!(result);
 
         // Test with spec
@@ -156,7 +155,7 @@ mod tests {
             .unwrap();
 
         let prefix_records = prefix.find_installed_packages().unwrap();
-        let result = environment_specs_in_sync(&prefix_records, &specs, &HashSet::new(), None);
+        let result = environment_specs_in_sync(&prefix_records, &specs, None, None);
         assert!(result);
     }
 }
