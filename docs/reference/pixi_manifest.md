@@ -85,7 +85,9 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available (save `noarch`) platforms are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/subdir/enum.Subdir.html).
+A conda subdir identifies an operating system and architecture, such as `linux-64` or `osx-arm64`.
+A Pixi platform entry has a name, a subdir, and declared virtual packages; multiple entries can share a subdir.
+The available subdirs (except `noarch`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/subdir/enum.Subdir.html).
 
 #### Inline-table entries (per-platform virtual packages)
 
