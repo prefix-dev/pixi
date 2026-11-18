@@ -92,6 +92,7 @@ nav = [
           { "R" = "build/backends/pixi-build-r.md" },
           { "Rust" = "build/backends/pixi-build-rust.md" },
           { "Mojo" = "build/backends/pixi-build-mojo.md" },
+          { "Hardened Backends" = "build/hardened_backends.md" },
         ]
       },
       {

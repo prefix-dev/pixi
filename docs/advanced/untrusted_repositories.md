@@ -133,6 +133,7 @@ Trusted packages have no effect while untrusted code execution is enabled.
     Some source dependencies do not name a backend themselves.
     A source that only contains a `recipe.yaml` uses `pixi-build-rattler-build`, and ROS packages use `pixi-build-ros`.
     These backends need trusted packages too.
+    `pixi-build-rattler-build` is [not hardened](../build/hardened_backends.md#backends-in-this-repository) and should not be trusted, so a workspace with such a source cannot be locked while untrusted code execution is disabled.
 
 ## The repository's configuration file
 
@@ -152,6 +153,8 @@ The protection also depends on assumptions about software that Pixi does not con
   Pixi asks a backend for package metadata only and never asks it to build.
   A backend that executes code from the repository at that stage, or lets the repository's configuration enable such code, breaks the protection.
   By trusting a backend you rely on it to behave this way.
+  A backend that is built to behave this way is called a [hardened backend](../build/hardened_backends.md).
+  Only trust hardened backends.
 - **The package cache was not written by a run on an untrusted repository with untrusted code execution enabled.**
   Pixi verifies packages against their checksum, but a run that executed malicious code could have changed the cache.
   On machines that work on both trusted and untrusted repositories, give the untrusted runs their own cache with `PIXI_CACHE_DIR`.

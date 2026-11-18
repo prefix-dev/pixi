@@ -48,7 +48,8 @@ For custom backend channels, you can add the channel to the `channels` field of 
 
 Pixi runs the build backend while it solves the workspace, so `pixi lock` on a workspace with source dependencies runs code chosen by that workspace.
 If you [disable untrusted code execution](../advanced/untrusted_repositories.md), Pixi only runs a backend whose environment consists entirely of [trusted packages](../reference/pixi_configuration.md#security).
-This includes backends that Pixi picks itself, such as `pixi-build-rattler-build` for a source that only contains a `recipe.yaml`.
+This includes backends that Pixi picks itself, such as `pixi-build-ros` for a ROS package.
+Only [hardened backends](hardened_backends.md) should be trusted for that.
 
 
 ### Overriding the Build Backend
