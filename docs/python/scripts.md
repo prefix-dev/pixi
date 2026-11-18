@@ -298,9 +298,9 @@ pixi workspace platform list --script analysis.py
 pixi workspace platform remove --script analysis.py osx-arm64
 ```
 
-The platform command also supports declaring virtual packages and the `edit`
+The platform command also supports declaring [virtual packages](../conda_ecosystem.md#virtual-packages-describing-the-host-system) and the `edit`
 and `move` operations. Platform order determines selection priority among
-platforms of the same subdir. Declared
+platforms of the same [subdir](../conda_ecosystem.md#subdirs-how-conda-targets-platforms). Declared
 platforms are also the platforms consumed by `pixi lock --script`; the lock
 command does not take a separate platform override.
 

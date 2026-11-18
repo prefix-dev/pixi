@@ -3,7 +3,7 @@ This page starts with a workspace for several operating systems, adds CPU and CU
 
 ## Supporting several operating systems
 
-List the conda subdirs your workspace supports in `workspace.platforms`:
+List the [conda subdirs](../conda_ecosystem.md#subdirs-how-conda-targets-platforms) your workspace supports in `workspace.platforms`:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -36,7 +36,7 @@ Pixi uses them in three separate roles:
 
 Pixi solves each platform with the virtual packages it declares, not with what the current machine reports.
 For `cuda = "12.0"`, the solver sees exactly `__cuda=12.0`, so a CPU-only CI runner can lock it.
-Which packages fit is up to their run dependencies and constraints, for example `__cuda >=12` in `cuda-version`'s `constrains`.
+Which packages fit is up to their run dependencies and constraints, for example `__cuda >=12` in `cuda-version`'s [`constrains`](https://rattler.prefix.dev/py-rattler/latest/package_record/#rattler.repo_data.package_record.PackageRecord.constrains).
 Whether the current machine can run the resulting environment is checked when installing.
 
 `pixi.lock` stores the declarations of each platform and the requirements of each package, never the detected virtual package values.
@@ -116,17 +116,11 @@ pytorch = "*"
 The CPU platform requires `pytorch-cpu` explicitly.
 Leaving out the CUDA declaration only means that the solver can't use packages that require `__cuda`; it does not request a CPU build.
 
-Target selectors match in two ways:
-
-- A platform name such as `[target.linux-64-cuda]` matches exactly that platform.
-- A subdir such as `[target.linux-64]` matches every platform with that subdir.
-  Here it would apply to both `linux-64-cuda` and `linux-64-cpu`, and adding `pytorch-cpu` to the CUDA solve would conflict with `pytorch-gpu`.
-
 The manifest reference lists all [platform entry keys](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages) and [target selectors](../reference/pixi_manifest.md#the-target-table).
 
 `linux-64-cuda` is solved as if the machine had a driver for CUDA 12.0, and the run dependencies and constraints of the CUDA packages decide which builds fit that.
 
-On a `linux-64` machine with CUDA 12.0 or newer, Pixi tries `linux-64-cuda` first.
+On a `linux-64` machine with CUDA 12.0 or newer, Pixi tries `linux-64-cuda` first because it appears first among the matching `linux-64` platforms in `workspace.platforms`.
 If its locked packages don't fit the machine, Pixi tries `linux-64-cpu` instead.
 Machines without a matching CUDA declaration try the CPU platform first.
 Order matters: if `linux-64-cpu` came first and its locked packages fit, the CUDA platform would never be selected automatically.
@@ -194,6 +188,7 @@ Declaration order applies within a subdir.
 For each candidate, Pixi checks the locked requirements and selects the first one that fits.
 If a candidate fails, Pixi moves on to the next one.
 If none fit, installation fails.
+The CUDA 12.8/12.6 example below shows selection from the second group.
 
 The declaration comparison only covers names Pixi defines:
 `__unix`, `__linux`, `__osx`, `__win`, `__ios`, `__android`, `__glibc`, `__musl`, `__eglibc`, `__cuda`, `__cuda_arch`, `__amdgpu`, `__amdgpu_arch`, and `__archspec`.
@@ -209,7 +204,8 @@ The locked-requirement check covers:
 - Conda virtual package `constrains`: the predicate applies only if the machine provides that virtual package.
 - PyPI wheel tags: the locked wheels must be compatible with the machine.
 
-The conda checks exclude `__archspec`; its declaration comparison uses the archspec database instead.
+The locked conda `depends` and `constrains` checks exclude `__archspec`: literal build names and regex predicates can reject compatible newer CPUs.
+The separate declaration comparison uses the archspec database.
 Operational commands resolve the lock file before selecting a platform.
 `--no-install` skips prefix installation, not lock resolution: the default mode may update the lock, `--locked` rejects a missing or stale lock, and `--frozen` uses existing lock data without checking freshness.
 
@@ -240,11 +236,11 @@ If a lock change requires the prefix to be rebuilt, Pixi selects again; the rebu
 With `--no-install`, the prefix is not rebuilt and its installed platform is kept even if the lock changes; the command fails if the new lock lacks that platform or its requirements don't fit the machine.
 The recorded platform name distinguishes targets with identical virtual-package declarations but different dependencies or activation settings.
 For older environments without a recorded name, Pixi reuses the platform only if its definition identifies a single declaration; otherwise it selects again using the lock file.
-It skips detection when it reuses an installed platform or `--platform` selects one.
+Pixi skips detection when it reuses an installed platform.
 Pixi does not monitor drivers or other host capabilities for changes.
 See [detector consent and caching](../reference/pixi_configuration.md#virtual-package-detectors) for the validation boundary.
 
-`pixi install --platform <NAME>` and `pixi run --platform <NAME>` select a declared platform explicitly and skip the host requirement checks.
+`pixi install --platform <NAME>` and `pixi run --platform <NAME>` select a declared platform explicitly and skip detection and the host requirement checks.
 They can install an environment for another machine; success does not prove that the environment runs locally.
 Later `pixi run` calls without `--platform` keep that platform while reusing the prefix but check its recorded package requirements against the machine, so they fail if the machine can't run it.
 `PIXI_OVERRIDE_PLATFORM` changes the host subdir Pixi considers.
@@ -305,7 +301,7 @@ An empty value removes that capability.
 | `CONDA_OVERRIDE_GLIBC` | `__glibc`, for example `2.28` |
 | `CONDA_OVERRIDE_OSX` | `__osx`, for example `13.0` |
 | `CONDA_OVERRIDE_LINUX` | `__linux`, for example `4.18` |
-| `CONDA_OVERRIDE_WIN` | `__win`, for example `0` |
+| `CONDA_OVERRIDE_WIN` | `__win`, the Windows OS version, for example `10.0` |
 | `CONDA_OVERRIDE_ARCHSPEC` | `__archspec`, for example `skylake`; `0` marks it unknown |
 
 Virtual packages from [detectors](#virtual-package-detectors) can be overridden the same way, for example `__username_length` with `CONDA_OVERRIDE_USERNAME_LENGTH=9`, without running the detector.

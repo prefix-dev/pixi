@@ -74,8 +74,10 @@ Both require `archspec = "x86_64_v3"` because the prebuilt Modular runtime needs
 The backend adds the run dependency `__amdgpu_arch ==11.0.3` to the AMD build.
 That locked requirement enforces the exact ISA match; a different ISA on the host machine makes Pixi skip `amd` and try `cpu`.
 See [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the details.
-If the GPU build is suitable, typically the CPU is suitable as well.
-To prioritize the GPU build in that case, `pixi-build-mojo` makes sure to [down prioritize](https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration) the CPU build.
+
+During locking, the solver chooses between package variants within each platform's solve, separately from install-time platform selection.
+If the GPU build is suitable, typically the CPU build is suitable as well.
+To prefer the GPU build in that solve, `pixi-build-mojo` [down-prioritizes](https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration) the CPU build.
 
 Run from the consumer directory:
 

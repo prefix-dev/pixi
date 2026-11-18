@@ -398,9 +398,9 @@ AMD builds also require `__amdgpu` and an exact `__amdgpu_arch` match for the se
 For example, `gfx1103` requires `__amdgpu_arch ==11.0.3`, not that architecture or newer.
 The minimum `hip-runtime-amd` version is 7.0 for `gfx950` and 6.3.3 for all other supported AMD targets.
 
-Pixi tries the AMD GPU platform first when its built-in declarations match the host.
+To enable GPU selection with CPU fallback during installation, declare both AMD and CPU platforms in the consumer workspace's [`workspace.platforms`](../../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages), with AMD first.
+When installing that workspace, Pixi tries the AMD GPU platform first when its built-in declarations match the host.
 If its locked requirements, including the exact ISA dependency, don't fit, Pixi tries the CPU platform.
-Define AMD and CPU platforms in [`workspace.platforms`](../../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages), with AMD first.
 See [Which platform gets installed?](../../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the selection rules.
 
 See [Building Mojo CPU and AMD Packages](../mojo_accelerators.md) for a complete example.
