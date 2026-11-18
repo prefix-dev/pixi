@@ -9646,7 +9646,8 @@
 <p>Install an environment.</p>
 <p>This command installs an environment, if the lock file is not up-to-date it will be updated.</p>
 <p><code>pixi install</code> only installs one environment at a time, if you have multiple environments you can select the right one with the <code>--environment</code> flag. If you don't provide an environment, the <code>default</code> environment will be installed.</p>
-<p>If you want to install all environments, you can use the <code>--all</code> flag.</p>
+<p>Without <code>--platform</code>, an environment must have a compatible declared or locked platform, even if its dependency-free tasks can run directly on the host.</p>
+<p>If you want to install all environments, you can use the <code>--all</code> flag. Unless <code>--platform</code> is specified, environments incompatible with this machine are skipped using the lock file.</p>
 <p>Running <code>pixi install</code> is not required before running other commands like <code>pixi run</code> or <code>pixi shell</code>. These commands will automatically install the environment if it is not already installed.</p>
 <p>You can use <code>pixi reinstall</code> to reinstall all environments, one environment or just some packages of an environment.</p>
 <p><code>pixi install --script</code> installs a PEP 723 script's environment without running the script. It uses the same environment as <code>pixi run --script</code>. Pixi updates an adjacent lock file when one exists. Otherwise, it updates the cached resolution.</p>
