@@ -1171,6 +1171,40 @@ def test_workspace_channel_add_with_environment_flag(
     assert parsed["environments"]["dev"]["channels"] == []
 
 
+def test_workspace_channel_prepend_with_environment_flag(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = (
+        workspace_header(dummy_channel_1)
+        + f"""
+    [environments.dev]
+    channels = ["{dummy_channel_1}"]
+    dependencies = {{ dummy-a = "*" }}
+    """
+    )
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "prepend",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "--no-install",
+            dummy_channel_2,
+        ],
+    )
+
+    parsed = tomli.loads(manifest.read_text())
+    assert parsed["environments"]["dev"]["channels"] == [dummy_channel_2, dummy_channel_1]
+    assert parsed["workspace"]["channels"] == [dummy_channel_1]
+
+
 def test_workspace_platform_add_with_environment_flag(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:

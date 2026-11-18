@@ -29,7 +29,7 @@ pub struct Args {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
-pub struct AddRemoveArgs {
+pub struct ChannelArgs {
     /// The channel name or URL
     #[clap(required = true, num_args=1..)]
     pub channel: Vec<NamedChannelOrUrl>,
@@ -37,10 +37,6 @@ pub struct AddRemoveArgs {
     /// Specify the channel priority
     #[clap(long, num_args = 1)]
     pub priority: Option<i32>,
-
-    /// Add the channel(s) to the beginning of the channels list, making them the highest priority
-    #[clap(long)]
-    pub prepend: bool,
 
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
@@ -61,16 +57,26 @@ pub struct AddRemoveArgs {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
+pub struct AddArgs {
+    #[clap(flatten)]
+    pub args: ChannelArgs,
+
+    /// Deprecated: use `pixi workspace channel prepend` instead
+    #[clap(long)]
+    pub prepend: bool,
+}
+
+#[derive(Parser, Debug, Default, Clone)]
 pub struct ListArgs {
     /// Whether to display the channel's names or urls
     #[clap(long)]
     pub urls: bool,
 }
 
-impl TryFrom<&AddRemoveArgs> for ChannelOptions {
+impl TryFrom<&ChannelArgs> for ChannelOptions {
     type Error = miette::Report;
 
-    fn try_from(args: &AddRemoveArgs) -> Result<Self, Self::Error> {
+    fn try_from(args: &ChannelArgs) -> Result<Self, Self::Error> {
         Ok(Self {
             channels: args.channel.clone(),
             feature: crate::cli_config::feature_from_flags(
@@ -85,15 +91,28 @@ impl TryFrom<&AddRemoveArgs> for ChannelOptions {
 
 #[derive(Parser, Debug, Clone)]
 pub enum Command {
-    /// Adds a channel to the manifest and updates the lock file.
+    /// Adds channels to the manifest and updates the lock file.
+    ///
+    /// New channels are appended to the channel list. Channels that are
+    /// already listed keep their position; `--priority` updates their
+    /// priority and other existing settings are kept.
     #[clap(visible_alias = "a")]
-    Add(AddRemoveArgs),
+    Add(AddArgs),
     /// List the channels in the manifest.
     #[clap(visible_alias = "ls")]
     List(ListArgs),
+    /// Moves or adds channels to the front of the manifest's channel list and
+    /// updates the lock file.
+    ///
+    /// The given channels end up first, in the given order. Channels that are
+    /// already listed are moved instead of duplicated and keep their existing
+    /// settings unless `--priority` overrides the priority. Channels with a
+    /// higher numeric priority still take precedence over channels listed
+    /// before them.
+    Prepend(ChannelArgs),
     /// Remove channel(s) from the manifest and updates the lock file.
     #[clap(visible_alias = "rm")]
-    Remove(AddRemoveArgs),
+    Remove(ChannelArgs),
 }
 
 impl Args {
@@ -102,16 +121,18 @@ impl Args {
             return Ok(());
         }
 
-        let add_remove = match &self.command {
-            Command::Add(args) | Command::Remove(args) => args,
+        let mutation_args = match &self.command {
+            Command::Add(AddArgs { args, .. }) | Command::Prepend(args) | Command::Remove(args) => {
+                args
+            }
             Command::List(_) => return Ok(()),
         };
 
         let mut unsupported = Vec::new();
-        if add_remove.feature.is_some() {
+        if mutation_args.feature.is_some() {
             unsupported.push("--feature");
         }
-        if add_remove.environment.is_some() {
+        if mutation_args.environment.is_some() {
             unsupported.push("--environment");
         }
 
@@ -128,6 +149,16 @@ impl Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    if let Command::Add(AddArgs { prepend: true, .. }) = &args.command {
+        eprintln!(
+            "{}the '{}' option is deprecated; use '{}' instead",
+            console::style(console::Emoji("⚠️ ", "")).yellow(),
+            console::style("--prepend").bold().red(),
+            console::style("pixi workspace channel prepend")
+                .bold()
+                .green(),
+        );
+    }
     args.validate_script_options()?;
 
     let workspace = crate::workspace_locator()
@@ -142,14 +173,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_ctx = cli_workspace_context(workspace);
 
     match args.command {
-        Command::Add(add_args) => {
-            let priority = add_args.priority;
-            let prepend = add_args.prepend;
-            let mut options: ChannelOptions = (&add_args).try_into()?;
-            options.lock_file_usage =
-                channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
+        Command::Add(AddArgs { args, prepend }) => {
+            let options = channel_options(&args, is_script, lock_file_exists)?;
             Ok(workspace_ctx
-                .add_channel(options, priority, prepend)
+                .add_channel(options, args.priority, prepend)
+                .await?)
+        }
+        Command::Prepend(args) => {
+            let options = channel_options(&args, is_script, lock_file_exists)?;
+            Ok(workspace_ctx
+                .add_channel(options, args.priority, true)
                 .await?)
         }
         Command::List(args) => {
@@ -180,14 +213,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Ok(())
         }
-        Command::Remove(remove_args) => {
-            let priority = remove_args.priority;
-            let mut options: ChannelOptions = (&remove_args).try_into()?;
-            options.lock_file_usage =
-                channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
-            Ok(workspace_ctx.remove_channel(options, priority).await?)
+        Command::Remove(args) => {
+            let options = channel_options(&args, is_script, lock_file_exists)?;
+            Ok(workspace_ctx.remove_channel(options, args.priority).await?)
         }
     }
+}
+
+fn channel_options(
+    args: &ChannelArgs,
+    is_script: bool,
+    lock_file_exists: bool,
+) -> miette::Result<ChannelOptions> {
+    let mut options: ChannelOptions = args.try_into()?;
+    options.lock_file_usage =
+        channel_lock_file_usage(options.lock_file_usage, is_script, lock_file_exists);
+    Ok(options)
 }
 
 fn channel_lock_file_usage(

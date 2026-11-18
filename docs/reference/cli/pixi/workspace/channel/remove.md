@@ -22,8 +22,6 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 ## Options
 - <a id="arg---priority" href="#arg---priority">`--priority <PRIORITY>`</a>
 :  Specify the channel priority
-- <a id="arg---prepend" href="#arg---prepend">`--prepend`</a>
-:  Add the channel(s) to the beginning of the channels list, making them the highest priority
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The name of the feature to modify
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>

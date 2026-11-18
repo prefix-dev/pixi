@@ -8,8 +8,8 @@ use pixi_core::{
 };
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{
-    EnvironmentName, FeatureName, LoadManifestsError, PrioritizedChannel, RemoveChannelsError,
-    TomlError,
+    AddChannelOutcome, EnvironmentName, FeatureName, LoadManifestsError, PrioritizedChannel,
+    RemoveChannelsError, TomlError,
 };
 use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, ParseChannelError};
 use serde::{Deserialize, Serialize};
@@ -77,7 +77,7 @@ pub async fn add<I: Interface>(
     prepend: bool,
 ) -> Result<(), ChannelError> {
     // Add the channels to the manifest
-    workspace.manifest().add_channels(
+    let outcomes = workspace.manifest().add_channels(
         prioritized_channels(&options.channels, priority),
         &options.feature,
         prepend,
@@ -100,14 +100,41 @@ pub async fn add<I: Interface>(
     let workspace = save(workspace).await?;
 
     // Report back to the user
-    report(
-        interface,
-        &options.channels,
-        priority,
-        "Added",
-        &workspace.channel_config(),
-    )
-    .await?;
+    let channel_config = workspace.channel_config();
+    let priority_suffix = priority_suffix(priority);
+    for (channel, outcome) in outcomes {
+        let channel = describe_channel(&channel, &channel_config)?;
+        match outcome {
+            AddChannelOutcome::Added => {
+                interface
+                    .success(&format!("Added {channel}{priority_suffix}"))
+                    .await
+            }
+            AddChannelOutcome::Moved => {
+                interface
+                    .success(&format!("Moved {channel} to the front"))
+                    .await
+            }
+            AddChannelOutcome::Updated => {
+                interface
+                    .success(&format!("Updated {channel}{priority_suffix}"))
+                    .await
+            }
+            AddChannelOutcome::MovedAndUpdated => {
+                interface
+                    .success(&format!("Moved {channel} to the front{priority_suffix}"))
+                    .await
+            }
+            AddChannelOutcome::Unchanged => {
+                let state = if prepend {
+                    "already at the front"
+                } else {
+                    "already listed"
+                };
+                interface.info(&format!("{channel} is {state}")).await
+            }
+        }
+    }
 
     Ok(())
 }
@@ -222,9 +249,23 @@ fn format_channel_message(
     operation: &str,
     channel_config: &ChannelConfig,
 ) -> Result<String, ChannelError> {
-    let priority_suffix = priority.map_or_else(String::new, |p| format!(" at priority {p}"));
+    Ok(format!(
+        "{operation} {}{}",
+        describe_channel(channel, channel_config)?,
+        priority_suffix(priority)
+    ))
+}
 
-    let message = match channel {
+fn priority_suffix(priority: Option<i32>) -> String {
+    priority.map_or_else(String::new, |p| format!(" at priority {p}"))
+}
+
+/// The channel as the user wrote it, followed by its URL for named channels.
+fn describe_channel(
+    channel: &NamedChannelOrUrl,
+    channel_config: &ChannelConfig,
+) -> Result<String, ChannelError> {
+    Ok(match channel {
         NamedChannelOrUrl::Name(name) => {
             let base_url = channel
                 .clone()
@@ -233,17 +274,11 @@ fn format_channel_message(
                     channel: name.clone(),
                     source,
                 })?;
-            format!("{operation} {name} ({base_url}){priority_suffix}")
+            format!("{name} ({base_url})")
         }
-        NamedChannelOrUrl::Url(url) => {
-            format!("{operation} {url}{priority_suffix}")
-        }
-        NamedChannelOrUrl::Path(path) => {
-            format!("{operation} {path}{priority_suffix}")
-        }
-    };
-
-    Ok(message)
+        NamedChannelOrUrl::Url(url) => url.to_string(),
+        NamedChannelOrUrl::Path(path) => path.to_string(),
+    })
 }
 
 #[cfg(test)]
