@@ -3,7 +3,7 @@
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-pypi-envs"
 platforms = [
-  # The CUDA platforms are listed first, so they win platform selection on a machine with a CUDA driver.
+  # Try CUDA before CPU when its declaration and locked requirements fit.
   { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
   { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
   { name = "linux-64-cpu", platform = "linux-64" },
