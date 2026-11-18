@@ -91,7 +91,7 @@ Putting the constraints on the platform makes the data flow obvious:
     gpu = ["gpu"]
     ```
 
-The recognised friendly keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`,
+The recognised friendly keys (`cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos`,
 `windows`) and the raw `__name = "version"` escape hatch are documented under
 [Declaring virtual packages per platform](../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages).
 
