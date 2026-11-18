@@ -1977,6 +1977,91 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
     assert!(outdated.is_err());
 }
 
+/// A locked package that is newer than the exclude-newer cutoff only has to
+/// be re-solved itself. The other locked packages are still valid, so they
+/// must keep their versions instead of being upgraded to the newest release
+/// before the cutoff. With a relative cutoff such as `7d`, discarding them
+/// upgrades every environment of the solve group by up to a week whenever a
+/// single package crosses the cutoff.
+#[tokio::test]
+async fn test_exclude_newer_mismatch_keeps_other_locked_packages() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2012-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("bar", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("bar", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    // Lock `foo 1`, and `bar 2` through an exemption.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-mismatch-keeps-locked-packages"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = {{ cutoff = "2015-12-02T02:07:43Z", exemptions = {{ bar = "*" }} }}
+
+    [dependencies]
+    foo = "==1"
+    bar = "*"
+    "#,
+        channel = channel.url(),
+    ))
+    .unwrap();
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "foo ==1"));
+    assert!(lock.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
+
+    // Relax `foo` and drop the exemption: the locked `foo 1` still satisfies
+    // the manifest, only the locked `bar 2` now violates the cutoff.
+    pixi.update_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-mismatch-keeps-locked-packages"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    bar = "*"
+    "#,
+        channel = channel.url(),
+    ))
+    .unwrap();
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(
+        lock.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==1"),
+        "the package newer than the cutoff is re-solved"
+    );
+    assert!(
+        lock.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "foo ==1"),
+        "the other locked packages keep their versions"
+    );
+}
+
 #[tokio::test]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),

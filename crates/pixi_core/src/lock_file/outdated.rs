@@ -321,12 +321,21 @@ async fn find_unsatisfiable_targets<'p>(
                     // the lock file's channel list without re-solving.
                     // Don't add to disregard_locked_content.
                 }
+                EnvironmentUnsat::ExcludeNewerMismatch(..) => {
+                    // A locked package is newer than the cutoff. The rest of
+                    // the locked content is still valid, so it keeps serving
+                    // as solver hints: the solver skips a hint that the cutoff
+                    // excludes and keeps every other locked version. Dropping
+                    // the hints would re-solve the whole solve group from
+                    // scratch, which with a relative cutoff upgrades every
+                    // package released since the lock file was written.
+                    // Don't add to disregard_locked_content.
+                }
                 EnvironmentUnsat::ChannelsMismatch
                 | EnvironmentUnsat::InvalidChannel(_)
                 | EnvironmentUnsat::ExcludeNewer(_)
                 | EnvironmentUnsat::ChannelPriorityMismatch { .. }
                 | EnvironmentUnsat::SolveStrategyMismatch { .. }
-                | EnvironmentUnsat::ExcludeNewerMismatch(..)
                 | EnvironmentUnsat::PlatformDefinitionChanged(_) => {
                     // We cannot trust any of the locked contents.
                     // For PlatformDefinitionChanged: the records under the

@@ -2343,7 +2343,7 @@ impl<'p> UpdateContextBuilder<'p> {
                 // produces an empty hint map, and the nested SPEK calls
                 // therefore start with empty installed slices too. So a
                 // workspace-level disregard (channel mismatch, strategy
-                // change, exclude-newer drift, ...) implicitly disregards
+                // change, platform definition change, ...) implicitly disregards
                 // every nested build/host env at the same time, without
                 // a separate per-build/host check.
                 if group
