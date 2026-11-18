@@ -155,6 +155,7 @@ nav = [
   {
     "Advanced" = [
       { "Security" = "security.md" },
+      { "Untrusted Repositories" = "advanced/untrusted_repositories.md" },
       { "Channel Logic" = "advanced/channel_logic.md" },
       { "Info Command" = "advanced/explain_info_command.md" },
       { "Dependency Overrides" = "advanced/override.md" },

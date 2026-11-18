@@ -34,6 +34,11 @@ Pixi can also be configured via environment variables.
       <td>Not set.</td>
     </tr>
     <tr>
+      <td><code>PIXI_NO_UNTRUSTED_CODE_EXEC</code></td>
+      <td>When set to a truthy value (e.g. <code>1</code>), pixi does not run code from the repository and only runs <a href="pixi_configuration.md#security">trusted</a> build backends; commands that install or run environments are refused. Equivalent to passing <code>--no-untrusted-code-exec</code>, and takes precedence over <code>security.untrusted-code-exec</code> in the configuration. Any other value, including an empty one, is an error. See <a href="../advanced/untrusted_repositories.md">Working with untrusted repositories</a>.</td>
+      <td>Not set.</td>
+    </tr>
+    <tr>
       <td><code>PIXI_CONFIG_FILE</code></td>
       <td>Path to a configuration file to load <em>instead of</em> the system and user-level config files. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still merged on top. Equivalent to passing <code>--config-file &lt;PATH&gt;</code>.</td>
       <td>Not set.</td>

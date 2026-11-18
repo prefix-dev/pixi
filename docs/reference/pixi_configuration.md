@@ -448,6 +448,36 @@ In the future we are planning to add a `sandbox` mode to execute these scripts i
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:run-post-link-scripts"
 ```
 
+### `security`
+
+Controls whether Pixi may run code from repositories you do not trust.
+See [Working with untrusted repositories](../advanced/untrusted_repositories.md) for the full picture.
+
+- `untrusted-code-exec`: set to `false` to disable untrusted code execution. Defaults to `true`, which is Pixi's usual behavior.
+  The `--no-untrusted-code-exec` flag and the `PIXI_NO_UNTRUSTED_CODE_EXEC` environment variable take precedence over this key.
+- `trusted-packages`: the packages a build backend environment may contain while untrusted code execution is disabled.
+  A list of rules, each with:
+    - `channel` (required): the full URL of one channel, such as `https://prefix.dev/conda-forge`. Channel names, credentials, query strings and fragments are not accepted.
+    - `packages` (required): a list of `{ name = "...", version = "..." }` entries. Both fields are required; write `version = "*"` to accept any version.
+    - `reject-newer` (optional): a date, timestamp or duration like `"7d"`. Packages published after this cutoff, or without a timestamp, are not trusted.
+
+  The list has no effect while untrusted code execution is enabled.
+  If several configuration files set `trusted-packages`, the one with the highest priority replaces the others; the lists are not merged.
+
+The `[security]` table is only read from system and user configuration files.
+Pixi ignores it, with a warning, in a workspace's `.pixi/config.toml`.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:security"
+```
+
+`pixi config set` accepts the trust list as JSON:
+
+```shell
+pixi config set security.untrusted-code-exec false
+pixi config set security.trusted-packages '[{"channel": "https://prefix.dev/conda-forge", "packages": [{"name": "pixi-build-python", "version": "*"}]}]'
+```
+
 ### `tool-platform`
 
 Defines the platform used when installing "tools" like build backends. By default pixi uses the platform of the current
