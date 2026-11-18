@@ -177,7 +177,7 @@ Trust applies to current and future detectors from this channel.
 Virtual package detectors can run arbitrary code, so only choose **Trust** if the channel is trusted.
 Pixi then asks where to save the decision; **Don't save** keeps it limited to the current invocation.
 
-In the lock file, the environment for platform "linux-64" will now have an entry like this:
+In the lock file, `packages` will now have an entry like this:
 
 ```yaml title="consumer/pixi.lock"
 packages:
