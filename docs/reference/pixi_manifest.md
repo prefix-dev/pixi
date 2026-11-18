@@ -548,7 +548,7 @@ When build variants are specified, Pixi will:
 3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
 4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
 
-On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [declared virtual packages](#inline-table-entries-per-platform-virtual-packages). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
+On top of the variants you declare, Pixi fills in some automatically, find out more at [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
 
 #### Platform-Specific Variants
 
@@ -1254,11 +1254,11 @@ ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
 
 ## The `target` table
 
-Target tables configure individual platforms, for example `[target.linux-64.dependencies]`.
+Target tables configure subtables based on selectors, for example `[target.linux-64.dependencies]`.
 They are available for the following sub-tables:
 
 - [`activation`](#the-activation-table)
-- [`dependencies`](#dependencies), including `host-dependencies` and `build-dependencies`
+- [`dependencies`](#dependencies)
 - [`constraints`](#constraints)
 - [`tasks`](#the-tasks-table)
 
