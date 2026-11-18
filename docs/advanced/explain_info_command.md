@@ -89,6 +89,11 @@ The environment info defined per environment. If you don't have any environments
 This lists which features are enabled in the environment.
 For the default this is only `default`
 
+### Solve group
+
+The [solve group](../workspace/multi_environment.md) the environment belongs to, shown only when configured.
+Environments in the same solve group use the same versions of shared dependencies.
+
 ### Channels
 
 The list of channels used in this environment.
