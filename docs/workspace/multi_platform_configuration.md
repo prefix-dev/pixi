@@ -275,9 +275,10 @@ The version floors are:
 | Linux, except `linux-riscv64` | `__linux = "4.18"`, `__glibc = "2.28"` |
 | `linux-riscv64` | `__linux = "4.18"`, `__glibc = "2.39"` |
 | `osx-64`, `osx-arm64` | `__osx = "13.0"` |
+| `win-64`, `win-arm64` | `__win = "10.0"` |
 
 This table is not the complete virtual-package set.
-Unix subdirs also include `__unix`, Windows includes `__win`, and an `__archspec` baseline is included where available.
+Unix subdirs also include `__unix` and an `__archspec` baseline is included where available.
 CUDA is not a default.
 Declaring `__musl` or `__eglibc` replaces the default `__glibc` rather than adding a second libc family.
 
