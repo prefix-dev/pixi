@@ -52,6 +52,12 @@ pub enum ShellError {
     #[diagnostic(transparent)]
     Activation(#[from] ActivationError),
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RunPlatformUnsupported(
+        #[from] pixi_core::workspace::virtual_packages::RunPlatformUnsupportedError,
+    ),
+
     #[error("unsupported shell '{0}'")]
     UnsupportedShell(String),
 
@@ -359,7 +365,7 @@ pub async fn shell(
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
     #[allow(unused_variables)]
-    let (lock_file_data, prefix) = get_update_lock_file_and_prefix(
+    let (lock_file_data, prefix, selection) = get_update_lock_file_and_prefix(
         &environment,
         progress.cloned(),
         UpdateMode::QuickValidate,
@@ -373,15 +379,16 @@ pub async fn shell(
         &InstallFilter::default(),
     )
     .await?;
-    let lock_file = lock_file_data.into_lock_file();
+    pixi_core::workspace::virtual_packages::verify_resolved_platform(&environment, &selection)?;
+    environment.emit_emulation_warning(selection.platform());
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = get_activated_environment_variables(
         workspace.env_vars(),
         &environment,
-        &environment.activation_platform(),
+        selection.platform(),
         CurrentEnvVarBehavior::Exclude,
-        Some(&lock_file),
+        Some(lock_file_data.as_lock_file()),
         workspace.config().force_activate(),
         workspace.config().experimental_activation_cache_usage(),
     )

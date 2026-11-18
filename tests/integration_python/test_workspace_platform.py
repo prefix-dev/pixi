@@ -1,8 +1,7 @@
 """Surface-area tests for `pixi workspace platform`.
 
-These tests exercise the CLI added by the "Add command line interface to
-interact with platforms" / "support richer platforms with virtual packages"
-commits. Heavy install/publish flows that don't fit pytest live in
+These tests exercise the platform CLI and support for custom virtual packages.
+Heavy install/publish flows that don't fit pytest live in
 `~/Downloads/platform_test.py`; this module focuses on:
 
 - argument parsing for add/edit/list/remove/show
@@ -77,7 +76,7 @@ def _lockfile_platforms(workspace_dir: Path) -> list[str | dict[str, Any]]:
 def _alias_platform_in_lockfile(workspace_dir: Path, real_name: str, alias: str) -> None:
     """Rewrite `pixi.lock` so the platform row named `real_name` is keyed by
     `alias` instead, mimicking the short `pN` aliases older pixi versions
-    wrote to disk for rich platforms."""
+    wrote to disk for platforms with custom virtual packages."""
     lock_path = workspace_dir / "pixi.lock"
     data = yaml.safe_load(lock_path.read_text())
     for platform in data.get("platforms", []):
@@ -309,7 +308,7 @@ def test_add_custom_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Pat
         pixi,
         tmp_pixi_workspace,
         "add",
-        "rich-linux=linux-64",
+        "gpu-linux=linux-64",
         "__cuda=12.0",
         "__glibc=2.40",
         "--no-install",
@@ -317,7 +316,7 @@ def test_add_custom_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Pat
     entry = next(
         p
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
-        if isinstance(p, dict) and p["name"] == "rich-linux"
+        if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
     assert entry["cuda"] == "12.0"
     assert entry["glibc"] == "2.40"
@@ -550,8 +549,8 @@ def test_add_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert "linux-64" in data["feature"]["gpu"]["platforms"]
 
 
-def test_add_rich_platform_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """`--feature` and a virtual-package flag compose: the rich platform
+def test_add_platform_with_cuda_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`--feature` and a virtual-package flag compose: the platform
     lands in both the workspace's platforms list (as an inline table) and
     the feature's platforms list (as a bare name reference)."""
     manifest = _seed_workspace(tmp_pixi_workspace, [CURRENT_PLATFORM])
@@ -572,14 +571,14 @@ def test_add_rich_platform_to_named_feature(pixi: Path, tmp_pixi_workspace: Path
     data = tomli.loads(manifest.read_text())
     # Feature lists the platform by name.
     assert "gpu-linux" in data["feature"]["gpu"]["platforms"]
-    # Workspace got the rich entry with the declared VP.
-    rich = next(
+    # Workspace got the inline-table entry with the declared VP.
+    gpu_platform = next(
         p
         for p in _platforms_from_toml(manifest)
         if isinstance(p, dict) and p.get("name") == "gpu-linux"
     )
-    assert rich["platform"] == "linux-64"
-    assert rich["cuda"] == "12.0"
+    assert gpu_platform["platform"] == "linux-64"
+    assert gpu_platform["cuda"] == "12.0"
 
 
 # ----------------------------------------------------------------------------
@@ -608,7 +607,7 @@ def test_lockfile_records_custom_platform_and_vps(pixi: Path, tmp_pixi_workspace
         "--no-install",
     )
     lock_platforms = _lockfile_platforms(tmp_pixi_workspace)
-    # Rich platforms are written under their manifest name so that lockfile
+    # Platforms are written under their manifest name so that lockfile
     # consumers (e.g. pixi-pack) can look a platform up by the same name the
     # manifest uses.
     entry = next(
@@ -623,7 +622,7 @@ def test_lockfile_records_custom_platform_and_vps(pixi: Path, tmp_pixi_workspace
 def test_install_locked_succeeds_with_legacy_platform_aliases(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
-    """A lockfile written by an older pixi keys rich platforms by short
+    """A lockfile written by an older pixi keys platforms with custom virtual packages by short
     aliases (`p1`). Such a lockfile is still satisfiable -- the alias is
     matched back to the manifest platform by identity (subdir + virtual
     packages) -- so `pixi install --locked` succeeds and, because `--locked`
@@ -733,7 +732,7 @@ def test_lockfile_records_removed_platform_lazy_pruning(
 # ----------------------------------------------------------------------------
 
 
-def _seed_with_rich_platform(workspace: Path, pixi: Path) -> None:
+def _seed_with_cuda_platform(workspace: Path, pixi: Path) -> None:
     """Helper: workspace with a custom `gpu-linux` platform carrying __cuda=11.0."""
     _seed_workspace(workspace)
     _run_platform(
@@ -748,7 +747,7 @@ def _seed_with_rich_platform(workspace: Path, pixi: Path) -> None:
 
 
 def test_edit_replaces_vp_version(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
@@ -767,7 +766,7 @@ def test_edit_replaces_vp_version(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_edit_add_second_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
@@ -787,7 +786,7 @@ def test_edit_add_second_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
@@ -816,7 +815,7 @@ def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_edit_clear_then_upsert(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
@@ -837,7 +836,7 @@ def test_edit_clear_then_upsert(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_edit_set_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
@@ -858,7 +857,7 @@ def test_edit_set_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_edit_noop_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
@@ -870,9 +869,9 @@ def test_edit_noop_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_edit_subdir_platform_transitions_to_rich(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Editing a bare subdir platform to add a virtual package transitions it
-    into a rich platform, auto-renamed away from the bare subdir form."""
+def test_edit_subdir_platform_adds_cuda(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Adding a virtual package to a subdir platform automatically renames it
+    away from the bare subdir form."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "--no-install")
     _run_platform(
@@ -885,8 +884,8 @@ def test_edit_subdir_platform_transitions_to_rich(pixi: Path, tmp_pixi_workspace
         "--no-install",
     )
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
-    # The bare `linux-64` string entry is gone; it is now a rich linux-64
-    # platform carrying the requested `__cuda`.
+    # The `linux-64` string entry is now an inline-table entry
+    # carrying the requested `__cuda`.
     assert "linux-64" not in platforms
     entry = next(p for p in platforms if isinstance(p, dict) and p["platform"] == "linux-64")
     assert entry["cuda"] == "12.0"
@@ -1229,8 +1228,7 @@ def test_add_auto_detected_to_script_updates_existing_lock_file(
     )
 
     assert _subdir(_platforms_from_script(script)[0]) == CURRENT_PLATFORM
-    # Rich entries are written to the lock file under a short alias, so match
-    # on the subdir rather than on the manifest name.
+    # Match the detected platform by conda subdir rather than manifest name.
     assert any(str(p.subdir) == CURRENT_PLATFORM for p in LockFile.from_path(lock).platforms())
     assert not (tmp_pixi_workspace / "pixi.lock").exists()
 
@@ -1279,7 +1277,7 @@ def test_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert "linux-64" in names and "osx-arm64" in names
 
 
-def test_list_shows_rich_platform_packages(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_list_shows_platform_virtual_packages(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
@@ -1357,7 +1355,7 @@ def test_remove_unknown_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_remove_custom_platform_drops_vps(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     _run_platform(pixi, tmp_pixi_workspace, "remove", "gpu-linux", "--no-install")
     names = [
         p if isinstance(p, str) else p["name"]
@@ -1367,13 +1365,13 @@ def test_remove_custom_platform_drops_vps(pixi: Path, tmp_pixi_workspace: Path) 
 
 
 # ----------------------------------------------------------------------------
-# list (richer scenarios)
+# list (virtual packages and output formats)
 # ----------------------------------------------------------------------------
 
 
-def test_list_shows_rich_platform_in_block(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Rich entries render as `<name>: platform=..., <friendly>=<value>`."""
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+def test_list_shows_cuda_platform_in_block(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Platforms with custom virtual packages render as `<name>: platform=..., <friendly>=<value>`."""
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
@@ -1408,7 +1406,7 @@ def test_list_shows_cuda_table_inline(pixi: Path, tmp_pixi_workspace: Path) -> N
 
 
 def test_list_json_payload_shape(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_with_rich_platform(tmp_pixi_workspace, pixi)
+    _seed_with_cuda_platform(tmp_pixi_workspace, pixi)
     out = _run_platform(pixi, tmp_pixi_workspace, "list", "--json")
     payload = json.loads(out.stdout)
     auto = payload["platforms"][0]
@@ -1583,10 +1581,10 @@ def test_list_respects_pixi_override_platform(pixi: Path, tmp_pixi_workspace: Pa
     assert f"platform={other}" in out.stdout
 
 
-def test_list_marks_rich_platform_unsupported_when_vps_unsatisfied(
+def test_list_marks_platform_unsupported_when_vps_unsatisfied(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
-    """A rich entry on the host subdir whose customised virtual package
+    """A platform on the host subdir whose custom virtual package
     the host can't satisfy is not marked as supported."""
     _seed_workspace(tmp_pixi_workspace)
     # `__cuda=999.0` is essentially guaranteed not to be present on any CI
@@ -1613,8 +1611,8 @@ def test_list_marks_rich_platform_unsupported_when_vps_unsatisfied(
 # ----------------------------------------------------------------------------
 
 
-def test_round_trip_mixed_bare_and_rich(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Mixed entries: bare entries stay as strings, rich entries stay as tables."""
+def test_round_trip_string_and_inline_table_entries(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Mixed entries: string entries stay as strings, inline-table entries stay as tables."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "--no-install")
     _run_platform(
@@ -1628,9 +1626,9 @@ def test_round_trip_mixed_bare_and_rich(pixi: Path, tmp_pixi_workspace: Path) ->
     )
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     assert "linux-64" in platforms  # bare string survives as bare string
-    rich = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
-    assert rich["platform"] == "linux-64"
-    assert rich["cuda"] == "12.0"
+    gpu_platform = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
+    assert gpu_platform["platform"] == "linux-64"
+    assert gpu_platform["cuda"] == "12.0"
 
 
 def test_round_trip_after_edit_preserves_other_entries(
@@ -1658,8 +1656,8 @@ def test_round_trip_after_edit_preserves_other_entries(
     )
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     assert "linux-64" in platforms
-    rich = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
-    assert rich["cuda"] == "12.4"
+    gpu_platform = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
+    assert gpu_platform["cuda"] == "12.4"
 
 
 if __name__ == "__main__":  # pragma: no cover - convenience entry point

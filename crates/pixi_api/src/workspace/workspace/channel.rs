@@ -2,9 +2,8 @@ use std::collections::HashMap;
 
 use miette::Diagnostic;
 use pixi_core::{
-    InstallFilter, UpdateLockFileOptions, Workspace,
-    environment::{LockFileAndPrefixesError, LockFileUsage, get_update_lock_file_and_prefix},
-    lock_file::{ReinstallPackages, UpdateMode},
+    UpdateLockFileOptions, Workspace,
+    environment::{LockFileAndPrefixesError, LockFileUsage, update_lock_file_after_edit},
     workspace::WorkspaceMut,
 };
 use pixi_manifest::FeaturesExt;
@@ -85,18 +84,16 @@ pub async fn add<I: Interface>(
     )?;
 
     // TODO: Update all environments touched by the features defined.
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    let update_options = UpdateLockFileOptions {
+        lock_file_usage: options.lock_file_usage,
+        no_install: options.no_install,
+        max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    update_lock_file_after_edit(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: options.lock_file_usage,
-            no_install: options.no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        update_options,
     )
     .await?;
 
@@ -128,18 +125,16 @@ pub async fn remove<I: Interface>(
     )?;
 
     // Try to update the lock file without the removed channels
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    let update_options = UpdateLockFileOptions {
+        lock_file_usage: options.lock_file_usage,
+        no_install: options.no_install,
+        max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    update_lock_file_after_edit(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: options.lock_file_usage,
-            no_install: options.no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        update_options,
     )
     .await?;
     let workspace = save(workspace).await?;
@@ -169,18 +164,16 @@ pub async fn set<I: Interface>(
     )?;
 
     // Update the lock file with the new channel configuration
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    let update_options = UpdateLockFileOptions {
+        lock_file_usage: options.lock_file_usage,
+        no_install: options.no_install,
+        max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    update_lock_file_after_edit(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: options.lock_file_usage,
-            no_install: options.no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        update_options,
     )
     .await?;
 

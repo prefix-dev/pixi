@@ -1,4 +1,3 @@
-import json
 import platform
 import shutil
 import signal
@@ -85,6 +84,9 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains=["a", "a1"],
     )
 
+    # An explicitly installed dependency-free sibling still makes the task ambiguous.
+    verify_cli_command([pixi, "install", "--manifest-path", manifest, "--environment", "a"])
+
     # Error on non-specified environment as ambiguous
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
@@ -134,14 +136,14 @@ def test_run_wildcard_target_selector_resolves_per_platform(
     the host subdir -- one named `gpu-<host>` (matched by `gpu-*`) and the bare
     `<host>` (not matched) -- so both are runnable on this machine and the
     resolved task body differs by `--platform`."""
-    rich = f"gpu-{CURRENT_PLATFORM}"
+    gpu_platform = f"gpu-{CURRENT_PLATFORM}"
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(
         f"""
 [workspace]
 name = "glob-target-test"
 channels = []
-platforms = ["{CURRENT_PLATFORM}", {{ name = "{rich}", platform = "{CURRENT_PLATFORM}" }}]
+platforms = ["{CURRENT_PLATFORM}", {{ name = "{gpu_platform}", platform = "{CURRENT_PLATFORM}" }}]
 
 [tasks]
 hello = "echo default-task"
@@ -153,7 +155,7 @@ hello = "echo glob-task"
 
     # The glob matches `gpu-<host>` -> the wildcard target's body wins.
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--platform", rich, "hello"],
+        [pixi, "run", "--manifest-path", manifest, "--platform", gpu_platform, "hello"],
         stdout_contains="glob-task",
         stdout_excludes="default-task",
     )
@@ -281,25 +283,38 @@ def test_using_prefix_validation(
         assert Path(file).exists()
 
 
-def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = f"""
-    {EMPTY_BOILERPLATE_PROJECT}
-    [activation.env]
-    TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test123"
+def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    value_file = tmp_pixi_workspace / "activation-value.txt"
+    value_file.write_text("test123\n")
+    activation_script = "activate.bat" if sys.platform == "win32" else "activate.sh"
+    (tmp_pixi_workspace / activation_script).write_text(
+        f'@set /p TEST_ENV_VAR_FOR_ACTIVATION_TEST=<"{value_file}"\n'
+        if sys.platform == "win32"
+        else f'export TEST_ENV_VAR_FOR_ACTIVATION_TEST="$(cat "{value_file}")"\n'
+    )
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(f"""
+    [workspace]
+    name = "activation-cache"
+    channels = ["{dummy_channel_1}"]
+    platforms = ["{CURRENT_PLATFORM}"]
+    [dependencies]
+    dummy-a = "*"
+    [activation]
+    scripts = ["{activation_script}"]
     [tasks]
     task = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
-    """
-    manifest.write_text(toml)
-
-    # Run the default task
+    """)
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test123",
     )
 
-    # Validate that without experimental caching it does not use the cache
-    assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
+    value_file.write_text("test456\n")
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+    )
 
     # Enable the experimental cache config
     verify_cli_command(
@@ -315,31 +330,24 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
     )
 
-    # Run the default task and create cache
+    value_file.write_text("test123\n")
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test123",
     )
 
-    # Modify the environment variable in cache
-    cache_path = tmp_pixi_workspace.joinpath(
-        ".pixi", "activation-env-v0", "activation_default.json"
-    )
-    data = json.loads(cache_path.read_text())
-    data["environment_variables"]["TEST_ENV_VAR_FOR_ACTIVATION_TEST"] = "test456"
-    cache_path.write_text(json.dumps(data, indent=4))
+    value_file.write_text("test456\n")
 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
-        # Contain overwritten value
-        stdout_contains="test456",
-        stdout_excludes="test123",
+        stdout_contains="test123",
+        stdout_excludes="test456",
     )
 
     # Ignore activation cache
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "--force-activate", "task", "-vvv"],
-        stdout_contains="test123",
+        stdout_contains="test456",
     )
 
 
@@ -1961,4 +1969,41 @@ def test_task_inputs_outputs_missing_no_initial_cache(
         [pixi, "run", "--manifest-path", manifest_path, "test"],
         stdout_contains="running; no files are created",
         stderr_excludes="cache hit",
+    )
+
+
+def test_run_without_task_lists_only_environments_with_the_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Without `--environment`, `--platform` selects which environments to list
+    instead of failing on the first one that does not declare it."""
+    (tmp_pixi_workspace / "pixi.toml").write_text("""
+[workspace]
+name = "listing"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[tasks]
+shared = "echo shared"
+
+[feature.linux-only]
+platforms = ["linux-64"]
+
+[feature.linux-only.tasks]
+linux-task = "echo linux"
+
+[environments]
+linux-only = ["linux-only"]
+""")
+    listing = verify_cli_command(
+        [pixi, "run", "--platform", "win-64"], cwd=tmp_pixi_workspace, strip_ansi=True
+    )
+    listed = (listing.stdout + listing.stderr).split()
+    assert "shared" in listed
+    assert "linux-task" not in listed
+    verify_cli_command(
+        [pixi, "run", "--environment", "linux-only", "--platform", "win-64"],
+        ExitCode.FAILURE,
+        cwd=tmp_pixi_workspace,
+        stderr_contains="platform 'win-64' is not part of environment 'linux-only'",
     )

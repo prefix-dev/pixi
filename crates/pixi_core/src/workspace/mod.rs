@@ -4,6 +4,7 @@ mod environment;
 pub mod errors;
 pub mod grouped_environment;
 mod has_project_ref;
+pub mod platform_selection;
 pub mod registry;
 mod repodata;
 mod solve_group;
@@ -34,7 +35,7 @@ pub use conda_pypi_map::CondaPypiMapError;
 pub use discovery::{
     DiscoveryStart, LocatorWarnings, WarningHandler, WorkspaceLocator, WorkspaceLocatorError,
 };
-pub use environment::Environment;
+pub use environment::{Environment, PlatformSelection};
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::{Equivalent, IndexSet};
 use miette::Diagnostic;
@@ -299,7 +300,7 @@ pub enum ScriptWorkspaceError {
 /// `use_platform_composition` is decided while parsing, and a script without
 /// `platforms` parses with an empty set, which reads as "every platform is a
 /// bare subdir". Composition would then resolve an environment's
-/// platform by *subdir name* and never find the rich platform injected here, so
+/// platform by *subdir name* and never find the platform injected here, so
 /// the flag is recomputed for the platforms actually installed.
 fn set_implicit_script_platforms(
     workspace: &mut pixi_manifest::Workspace,

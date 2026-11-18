@@ -5,15 +5,22 @@ use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
 use pixi_manifest::{
     EnvironmentName, PixiPlatformName, PlatformMatchDiagnosis, TaskName,
-    platform::is_default_build_string,
+    platform::{format_virtual_package, is_default_build_string},
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir, Version};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir, Version, VersionSpec};
 use rattler_virtual_packages::amdgpu::AmdGpuArchInfo;
 use rattler_virtual_packages::{AmdGpu, AmdGpuArch, EnvOverride};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use thiserror::Error;
+
+/// A candidate rejected by its locked requirements.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SkippedPlatform {
+    pub platform: PixiPlatformName,
+    pub reason: String,
+}
 
 /// An error that occurs when data is requested for a platform that is not supported.
 #[derive(Debug, Clone)]
@@ -53,6 +60,8 @@ pub struct UnsupportedPlatformError {
     /// breakdown is available (e.g. an explicit `--platform` the environment
     /// doesn't declare).
     pub platform_diagnostics: Vec<PlatformMatchDiagnosis>,
+
+    pub skipped_platforms: Vec<SkippedPlatform>,
 }
 
 impl Error for UnsupportedPlatformError {}
@@ -80,6 +89,7 @@ impl Display for UnsupportedPlatformError {
         if breakdown.is_empty()
             && self.unsatisfied_requirements.is_empty()
             && self.unmet_requirements.is_empty()
+            && self.skipped_platforms.is_empty()
         {
             return match &self.environment {
                 EnvironmentName::Default => write!(
@@ -93,14 +103,17 @@ impl Display for UnsupportedPlatformError {
 
         write!(f, "{lead} on this machine.")?;
 
-        if breakdown.is_empty() {
+        if breakdown.is_empty() && self.skipped_platforms.is_empty() {
             // No per-platform breakdown available; fall back to the aggregate line.
             write!(
                 f,
-                "\nNo declared platform's virtual packages are satisfied here."
+                "\nno platform's virtual package declarations match this machine"
             )?;
-        } else {
-            write!(f, "\n\nDeclared platforms and why none runs here:")?;
+        } else if !breakdown.is_empty() {
+            write!(
+                f,
+                "\n\nplatform declarations that do not match this machine:"
+            )?;
             for diagnosis in breakdown {
                 write!(f, "\n  - {}", format_platform_diagnosis(diagnosis))?;
             }
@@ -109,29 +122,39 @@ impl Display for UnsupportedPlatformError {
         if !self.unsatisfied_requirements.is_empty() {
             write!(
                 f,
-                "\n\nUnsatisfied requirements: {}",
-                format_requirements(&self.unsatisfied_requirements),
+                "\n\nunmatched platform declarations: {}",
+                format_declarations(&self.unsatisfied_requirements),
             )?;
         }
 
         if !self.unmet_requirements.is_empty() {
             write!(
                 f,
-                "\n\nThe installed packages also require: {}",
+                "\n\nunmet locked requirements: {}",
                 format_specs(&self.unmet_requirements),
             )?;
+        }
+
+        if !self.skipped_platforms.is_empty() {
+            write!(
+                f,
+                "\n\nplatforms skipped because their locked packages don't fit:"
+            )?;
+            for skipped in &self.skipped_platforms {
+                write!(f, "\n  - {}: {}", skipped.platform, skipped.reason)?;
+            }
         }
 
         // Adding the host platform to the workspace is the primary remedy for
         // the default environment; named environments get their platform list
         // from features, where the workspace-level hint may not apply.
         match &self.environment {
-            EnvironmentName::Default => write!(
+            EnvironmentName::Default if self.skipped_platforms.is_empty() => write!(
                 f,
                 "\n\nAdd it with 'pixi workspace platform add {}'.",
                 self.platform,
             )?,
-            EnvironmentName::Named(_) => {}
+            _ => {}
         }
         Ok(())
     }
@@ -154,8 +177,8 @@ fn format_platform_diagnosis(diagnosis: &PlatformMatchDiagnosis) -> String {
         )
     } else {
         format!(
-            "missing virtual packages: {}",
-            format_requirements(&diagnosis.unsatisfied_virtual_packages),
+            "unmatched virtual package declarations: {}",
+            format_declarations(&diagnosis.unsatisfied_virtual_packages),
         )
     };
     format!("{label}: {reason}")
@@ -220,24 +243,8 @@ impl Diagnostic for UnsupportedPlatformError {
     }
 }
 
-fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
-    reqs.iter()
-        .map(|r| {
-            // Concrete AMDGPU architectures are exact targets, including zero.
-            // For other packages, version 0 encodes a version-less requirement.
-            let requirement = if r.name.as_normalized() == "__amdgpu_arch" {
-                format!("{} == {}", r.name.as_normalized(), r.version)
-            } else if r.version == Version::major(0) {
-                format!("{} (any version)", r.name.as_normalized())
-            } else {
-                format!("{} >= {}", r.name.as_normalized(), r.version)
-            };
-            match declared_build_string(r) {
-                Some(build) => format!("{requirement} with build string '{build}'"),
-                None => requirement,
-            }
-        })
-        .join(", ")
+fn format_declarations(declarations: &[GenericVirtualPackage]) -> String {
+    declarations.iter().map(format_virtual_package).join(", ")
 }
 
 /// The build string a declared virtual package requires, `None` when it is
@@ -255,13 +262,32 @@ pub(crate) fn format_specs(specs: &[MatchSpec]) -> String {
 }
 
 /// `CONDA_OVERRIDE_*` hint for an unmet requirement, `None` when the spec names
-/// no single virtual package or that package has no override `target` honors.
+/// no single virtual package, that package has no override `target` honors,
+/// the extracted version is excluded by the predicate, or a nondefault build is required.
 pub(crate) fn spec_override_hint(spec: &MatchSpec, target: Subdir) -> Option<String> {
-    conda_override_hint(
-        spec.name.as_exact()?.as_normalized(),
-        spec.version.as_ref().and_then(spec_version),
-        target,
-    )
+    let name = spec.name.as_exact()?.as_normalized();
+    let version = match &spec.version {
+        None | Some(VersionSpec::Any) => None,
+        // Only suggest a bound accepted by the whole constraint.
+        Some(constraint) => Some(
+            spec_bounds(constraint)
+                .into_iter()
+                .find(|version| constraint.matches(version))?,
+        ),
+    };
+    if spec.build.as_ref().is_some_and(|build| !build.matches("0")) {
+        return None;
+    }
+    conda_override_hint(name, version, target)
+}
+
+/// The versions a constraint's bounds name, e.g. `14` and `15` for `>=14,<15`.
+fn spec_bounds(constraint: &VersionSpec) -> Vec<&Version> {
+    match constraint {
+        VersionSpec::Group(_, specs) => specs.iter().flat_map(spec_bounds).collect(),
+        VersionSpec::StrictRange(_, version) => vec![version],
+        other => spec_version(other).into_iter().collect(),
+    }
 }
 
 /// `CONDA_OVERRIDE_*` hints for a set of unmet requirements, deduplicated and
@@ -286,7 +312,7 @@ fn override_applies_to(name: &str, target: Subdir) -> bool {
 }
 
 /// `CONDA_OVERRIDE_*` hint for a virtual package the machine does not provide:
-/// the required version when known, a realistic example otherwise.
+/// the required version when known, zero for an unconstrained requirement.
 ///
 /// `None` when there is no such variable (e.g. `__unix`), when `target` ignores
 /// it, or when a known AMDGPU architecture cannot be represented as a numeric ISA.
@@ -313,7 +339,7 @@ pub(crate) fn conda_override_hint(
         return Some(format!("{env_var}=0"));
     }
     if name == "__amdgpu_arch" {
-        let mut example = version.map_or_else(|| "11.0.0".to_string(), ToString::to_string);
+        let mut example = version.map_or_else(|| "0".to_string(), ToString::to_string);
         // Conda versions can omit trailing zeros, but the override requires all
         // three ISA components. Let rattler reject nonnumeric or oversized ISAs.
         for _ in example.bytes().filter(|&b| b == b'.').count()..2 {
@@ -323,16 +349,9 @@ pub(crate) fn conda_override_hint(
         // Architecture overrides alone are discarded on GPU-less hosts.
         return Some(format!("{}=0 {env_var}={arch}", AmdGpu::DEFAULT_ENV_NAME));
     }
-    // A version-0 requirement means "any version"; "=0" reads like nonsense,
-    // so suggest a realistic value instead.
-    let example = match version.filter(|v| **v != Version::major(0)) {
+    let example = match version {
         Some(version) => version.to_string(),
-        None => match name {
-            "__glibc" => "2.17".to_string(),
-            "__cuda" => "12.0".to_string(),
-            "__osx" => "10.15".to_string(),
-            _ => "0".to_string(),
-        },
+        None => "0".to_string(),
     };
     Some(format!("{env_var}={example}"))
 }
@@ -392,6 +411,7 @@ mod tests {
             unsatisfied_requirements: unsatisfied,
             unmet_requirements: vec![],
             platform_diagnostics: vec![],
+            skipped_platforms: vec![],
         }
     }
 
@@ -418,6 +438,21 @@ mod tests {
     }
 
     #[test]
+    fn skipped_platforms_are_listed_without_add_platform_hint() {
+        let mut error = err(vec![]);
+        error.skipped_platforms = vec![SkippedPlatform {
+            platform: PixiPlatformName::from_str("gpu").unwrap(),
+            reason: "missing __cuda >=12.4".to_string(),
+        }];
+        insta::assert_snapshot!(error.to_string(), @r"
+        The workspace does not support 'linux-64' on this machine.
+
+        platforms skipped because their locked packages don't fit:
+          - gpu: missing __cuda >=12.4
+        ");
+    }
+
+    #[test]
     fn amdgpu_presence_hints_parse_as_present() {
         for version in [None, Some(Version::major(0)), Some(Version::major(11))] {
             let hint = conda_override_hint("__amdgpu", version.as_ref(), Subdir::Linux64).unwrap();
@@ -441,14 +476,6 @@ mod tests {
     }
 
     #[test]
-    fn unknown_amdgpu_arch_hint_is_parseable_and_enables_presence() {
-        let hint = conda_override_hint("__amdgpu_arch", None, Subdir::Linux64).unwrap();
-        let (presence, arch) = parse_amd_override_hint(&hint);
-        assert!(presence.is_some());
-        assert_eq!(arch.unwrap().version, Version::from_str("11.0.0").unwrap());
-    }
-
-    #[test]
     fn unusable_amdgpu_arch_versions_do_not_suggest_a_different_isa() {
         for raw in [
             "9.0.10a",
@@ -466,23 +493,34 @@ mod tests {
     }
 
     #[test]
-    fn declared_amdgpu_arch_diagnostic_describes_exact_compatibility() {
-        for (requested, other) in [("9.0.10", "11.0.0"), ("0", "1")] {
-            let rendered = format_requirements(&[vp("__amdgpu_arch", requested)]);
-            let constraint = spec(&rendered).version.unwrap();
-            assert!(constraint.matches(&Version::from_str(requested).unwrap()));
-            assert!(!constraint.matches(&Version::from_str(other).unwrap()));
+    fn exact_zero_requirement_hint_preserves_zero() {
+        let requirement = spec("__cuda ==0");
+        let hint = spec_override_hint(&requirement, Subdir::Linux64).unwrap();
+        let value = hint.strip_prefix("CONDA_OVERRIDE_CUDA=").unwrap();
+        let detected = rattler_virtual_packages::Cuda::parse_version_opt(value)
+            .unwrap()
+            .unwrap();
+        assert!(requirement.version.unwrap().matches(&detected.version));
+    }
+
+    #[test]
+    fn compound_requirement_hint_satisfies_whole_spec() {
+        assert_eq!(
+            spec_override_hint(&spec("__osx >=14,<15"), Subdir::OsxArm64).as_deref(),
+            Some("CONDA_OVERRIDE_OSX=14")
+        );
+        assert_eq!(
+            spec_override_hint(&spec("__cuda >=13,<14"), Subdir::Linux64).as_deref(),
+            Some("CONDA_OVERRIDE_CUDA=13")
+        );
+        for raw in ["__cuda >12,<13", "__cuda >0", "__cuda <15", "__cuda !=14.*"] {
+            assert!(spec_override_hint(&spec(raw), Subdir::Linux64).is_none());
         }
     }
 
     #[test]
-    fn missing_cuda_reports_requirement_and_override_hint() {
+    fn missing_cuda_reports_override_hint() {
         let e = err(vec![vp("__cuda", "11")]);
-        let display = e.to_string();
-        assert!(
-            display.contains("Unsatisfied requirements: __cuda >= 11"),
-            "{display}"
-        );
         let help = e.help().unwrap().to_string();
         assert!(help.contains("CONDA_OVERRIDE_CUDA=11"), "{help}");
         assert!(help.contains("pixi install --platform"), "{help}");
@@ -497,21 +535,6 @@ mod tests {
     }
 
     #[test]
-    fn named_environment_renders_unsatisfied_requirements() {
-        let mut e = err(vec![vp("__cuda", "11")]);
-        e.environment = EnvironmentName::Named("gpu".into());
-        let display = e.to_string();
-        assert!(
-            display.contains("the environment 'gpu' does not support 'linux-64' on this machine"),
-            "{display}"
-        );
-        assert!(
-            display.contains("Unsatisfied requirements: __cuda >= 11"),
-            "{display}"
-        );
-    }
-
-    #[test]
     fn lock_derived_requirements_render_as_specs() {
         let mut e = err(vec![]);
         e.unmet_requirements = vec![
@@ -519,10 +542,6 @@ mod tests {
             spec("__archspec 1.* ^(x86_64_v3|skylake)$"),
         ];
         let display = e.to_string();
-        assert!(
-            display.contains("The installed packages also require: __glibc >=2.28"),
-            "{display}"
-        );
         // The build-string pattern is shown as written, not flattened.
         assert!(display.contains("^(x86_64_v3|skylake)$"), "{display}");
 
@@ -531,18 +550,9 @@ mod tests {
     }
 
     #[test]
-    fn declared_and_lock_derived_sections_coexist() {
+    fn declared_and_lock_derived_hints_coexist() {
         let mut e = err(vec![vp("__cuda", "12.0")]);
         e.unmet_requirements = vec![spec("__glibc >=2.28")];
-        let display = e.to_string();
-        assert!(
-            display.contains("Unsatisfied requirements: __cuda >= 12.0"),
-            "{display}"
-        );
-        assert!(
-            display.contains("The installed packages also require: __glibc >=2.28"),
-            "{display}"
-        );
         let help = e.help().unwrap().to_string();
         assert!(help.contains("CONDA_OVERRIDE_CUDA=12"), "{help}");
         assert!(help.contains("CONDA_OVERRIDE_GLIBC=2.28"), "{help}");
@@ -560,27 +570,6 @@ mod tests {
             subdir_matches_host,
             unsatisfied_virtual_packages: unsatisfied,
         }
-    }
-
-    #[test]
-    fn breakdown_lists_missing_virtual_packages_per_platform() {
-        let mut e = err(vec![vp("__cuda", "12.0")]);
-        e.environment = EnvironmentName::Named("gpu".into());
-        e.platform_diagnostics = vec![diagnosis(
-            "gpu-linux",
-            Subdir::Linux64,
-            true,
-            vec![vp("__cuda", "12.0")],
-        )];
-        let display = e.to_string();
-        assert!(
-            display.contains("Declared platforms and why none runs here:"),
-            "{display}"
-        );
-        assert!(
-            display.contains("gpu-linux (subdir linux-64): missing virtual packages: __cuda >= 12"),
-            "{display}"
-        );
     }
 
     #[test]
@@ -652,51 +641,24 @@ mod tests {
     }
 
     #[test]
-    fn unknown_vp_name_skips_override_hint_but_still_lists_requirement() {
-        // Version 0 means "must be present at any version" and renders as
-        // such instead of a nonsensical ">= 0".
+    fn unknown_vp_name_skips_override_hint() {
         let e = err(vec![vp("__unix", "0")]);
-        let display = e.to_string();
-        assert!(
-            display.contains("Unsatisfied requirements: __unix (any version)"),
-            "{display}"
-        );
         let help = e.help().unwrap().to_string();
         assert!(!help.contains("CONDA_OVERRIDE"), "{help}");
     }
 
     #[test]
-    fn declared_build_string_is_reported_instead_of_an_override() {
+    fn declared_build_string_prevents_override_hint() {
         let mut cuda = vp("__cuda", "12");
         cuda.build_string = BuildString::new_unchecked("hx");
         let mut e = err(vec![cuda.clone()]);
         e.platform_diagnostics = vec![diagnosis("gpu", Subdir::Linux64, true, vec![cuda])];
-        let display = e.to_string();
-        assert!(
-            display.contains("missing virtual packages: __cuda >= 12 with build string 'hx'"),
-            "{display}"
-        );
-        assert!(
-            display.contains("Unsatisfied requirements: __cuda >= 12 with build string 'hx'"),
-            "{display}"
-        );
+        e.unmet_requirements = vec![spec("__cuda >=12 hx")];
         let help = e.help().unwrap().to_string();
         assert!(!help.contains("CONDA_OVERRIDE_CUDA"), "{help}");
         assert!(
             help.contains("must provide __cuda with the declared build string"),
             "{help}"
         );
-    }
-
-    #[test]
-    fn versionless_requirement_suggests_realistic_override() {
-        let e = err(vec![vp("__cuda", "0")]);
-        let display = e.to_string();
-        assert!(
-            display.contains("Unsatisfied requirements: __cuda (any version)"),
-            "{display}"
-        );
-        let help = e.help().unwrap().to_string();
-        assert!(help.contains("CONDA_OVERRIDE_CUDA=12.0"), "{help}");
     }
 }

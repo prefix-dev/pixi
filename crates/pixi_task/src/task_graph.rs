@@ -8,9 +8,13 @@ use std::{
 
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_core::{Workspace, workspace::Environment};
+use pixi_core::{
+    Workspace,
+    lock_file::UpdatePrefixError,
+    workspace::{Environment, platform_selection::ResolvedPlatform},
+};
 use pixi_manifest::{
-    EnvironmentName, PixiPlatform, Task, TaskName,
+    EnvironmentName, Task, TaskName,
     task::{
         ArgValues, CmdArgs, Custom, TaskArg, TemplateStringError, TypedArg, TypedDependency,
         TypedDependencyArg,
@@ -183,9 +187,6 @@ pub struct TaskGraph<'p> {
 
     /// The tasks in the graph
     nodes: Vec<TaskNode<'p>>,
-
-    /// The platform the search was pinned to by `pixi run --platform`, if any.
-    platform: Option<&'p PixiPlatform>,
 }
 impl fmt::Display for TaskGraph<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -211,11 +212,6 @@ impl<'p> TaskGraph<'p> {
         self.project
     }
 
-    /// The platform the search was pinned to by `pixi run --platform`, if any.
-    pub fn platform(&self) -> Option<&'p PixiPlatform> {
-        self.platform
-    }
-
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
     ///
     /// When `prefer_executable` is [`PreferExecutable::Always`], the first
@@ -223,14 +219,18 @@ impl<'p> TaskGraph<'p> {
     /// name exists. Instead, the arguments are treated as a custom command to
     /// execute within the environment, allowing running executables that
     /// collide with task names.
-    pub async fn from_cmd_args<D: TaskDisambiguation<'p>>(
+    pub async fn from_cmd_args<D, F>(
         project: &'p Workspace,
-        search_envs: &SearchEnvironments<'p, D>,
+        search_envs: &mut SearchEnvironments<'p, F, D>,
         args: Vec<String>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
         templated: bool,
-    ) -> Result<Self, TaskGraphError> {
+    ) -> Result<Self, TaskGraphError>
+    where
+        D: TaskDisambiguation<'p>,
+        F: AsyncFn(&Environment<'p>) -> Result<ResolvedPlatform<'p>, UpdatePrefixError>,
+    {
         // Split 'args' into arguments if it's a single string, supporting commands
         // like: `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or
         // `"echo 'Hello World'"` This prevents shell interpretation of pixi run
@@ -264,7 +264,7 @@ impl<'p> TaskGraph<'p> {
                                 .explicit_environment
                                 .as_ref()
                                 .map(|env| env.name().clone()),
-                            platform: search_envs.platform.map(|p| p.name().clone()),
+                            platform: search_envs.platform.clone(),
                         }));
                     }
                 }
@@ -274,6 +274,9 @@ impl<'p> TaskGraph<'p> {
                 Err(FindTaskError::Disambiguation(err)) => {
                     return Err(TaskGraphError::Disambiguation(err));
                 }
+                Err(FindTaskError::PlatformResolution(err)) => {
+                    return Err(TaskGraphError::PlatformResolution(err));
+                }
                 Ok((task_env, task)) => {
                     // If an explicit environment was specified and the task is from the default
                     // environment use the specified environment instead.
@@ -281,6 +284,7 @@ impl<'p> TaskGraph<'p> {
                         Some(explicit_env) if task_env.is_default() => explicit_env,
                         _ => task_env,
                     };
+                    search_envs.prepare_environment(&run_env).await?;
 
                     let task_name = args.remove(0);
 
@@ -341,7 +345,6 @@ impl<'p> TaskGraph<'p> {
                     if skip_deps {
                         return Ok(Self {
                             project,
-                            platform: search_envs.platform,
                             nodes: vec![TaskNode {
                                 name: Some(task_name.into()),
                                 task: Cow::Borrowed(task),
@@ -378,6 +381,7 @@ impl<'p> TaskGraph<'p> {
             .explicit_environment
             .clone()
             .unwrap_or_else(|| project.default_environment());
+        search_envs.prepare_environment(&run_environment).await?;
 
         // For CLI arguments, we want to construct a proper shell command.
         // When we have multiple arguments from CLI, they've already been parsed by the shell
@@ -420,12 +424,16 @@ impl<'p> TaskGraph<'p> {
     }
 
     /// Constructs a new instance of a [`TaskGraph`] from a root task.
-    async fn from_root<D: TaskDisambiguation<'p>>(
+    async fn from_root<D, F>(
         project: &'p Workspace,
-        search_environments: &SearchEnvironments<'p, D>,
+        search_environments: &mut SearchEnvironments<'p, F, D>,
         root: TaskNode<'p>,
         root_args: Option<Vec<TypedDependencyArg>>,
-    ) -> Result<Self, TaskGraphError> {
+    ) -> Result<Self, TaskGraphError>
+    where
+        D: TaskDisambiguation<'p>,
+        F: AsyncFn(&Environment<'p>) -> Result<ResolvedPlatform<'p>, UpdatePrefixError>,
+    {
         let mut task_name_with_args_to_node: HashMap<TypedDependency, TaskId> =
             HashMap::from_iter(root.name.clone().into_iter().map(|name| {
                 (
@@ -449,11 +457,10 @@ impl<'p> TaskGraph<'p> {
             let mut deps_to_process: Vec<(TypedDependency, Environment<'p>, &Task)> = Vec::new();
 
             // Iterate over all the dependencies of the node and add them to the graph.
-            let node_platform = search_environments.search_platform_for(&node.run_environment);
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
                 let context = pixi_manifest::task::TaskRenderContext {
-                    platform: node_platform,
+                    platform: search_environments.search_platform_for(&node.run_environment),
                     environment_name: node.run_environment.name(),
                     manifest_path: None,
                     args: node.args.as_ref(),
@@ -504,6 +511,9 @@ impl<'p> TaskGraph<'p> {
                     Err(FindTaskError::Disambiguation(err)) => {
                         return Err(TaskGraphError::Disambiguation(err));
                     }
+                    Err(FindTaskError::PlatformResolution(err)) => {
+                        return Err(TaskGraphError::PlatformResolution(err));
+                    }
                     Ok(result) => result,
                 };
 
@@ -542,11 +552,7 @@ impl<'p> TaskGraph<'p> {
             next_node_to_visit += 1;
         }
 
-        Ok(Self {
-            project,
-            nodes,
-            platform: search_environments.platform,
-        })
+        Ok(Self { project, nodes })
     }
 
     fn merge_args(
@@ -722,6 +728,10 @@ pub enum TaskGraphError {
     #[diagnostic(transparent)]
     Disambiguation(DisambiguationError),
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PlatformResolution(#[from] std::sync::Arc<UpdatePrefixError>),
+
     #[error("could not split task, assuming non valid task")]
     InvalidTask,
 
@@ -756,7 +766,7 @@ mod test {
     use rattler_conda_types::Subdir;
 
     use crate::{
-        task_environment::SearchEnvironments,
+        task_environment::search_for_test,
         task_graph::{PreferExecutable, TaskGraph, TaskGraphError, join_args_with_single_quotes},
     };
 
@@ -834,7 +844,7 @@ mod test {
                     .platform_by_name(&name)
                     .expect("test workspace must declare the named platform")
             });
-            let search_envs = SearchEnvironments::from_opt_env(
+            let mut search_envs = search_for_test(
                 &project,
                 environment,
                 named_platform.or(self.platform.as_ref()),
@@ -842,7 +852,7 @@ mod test {
 
             let graph = TaskGraph::from_cmd_args(
                 &project,
-                &search_envs,
+                &mut search_envs,
                 self.run_args.iter().map(|arg| arg.to_string()).collect(),
                 self.skip_deps,
                 self.prefer_executable,
@@ -865,6 +875,7 @@ mod test {
                     task.full_command(&context).ok().flatten()
                 })
                 .collect();
+            drop(search_envs);
 
             Ok((project, commands))
         }
@@ -1236,7 +1247,7 @@ mod test {
         let project =
             Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
-        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search_envs = search_for_test(&project, None, None);
 
         // Without --templated, {{ hello }} should pass through as-is.
         // Multiple args simulate how the shell + clap deliver them:
@@ -1244,7 +1255,7 @@ mod test {
         // becomes args = ["echo", "{{ hello }}"]
         let graph = TaskGraph::from_cmd_args(
             &project,
-            &search_envs,
+            &mut search_envs,
             vec!["echo".to_string(), "{{ hello }}".to_string()],
             false,
             PreferExecutable::TaskFirst,
@@ -1285,7 +1296,7 @@ mod test {
         let project =
             Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
-        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search_envs = search_for_test(&project, None, None);
 
         // With --templated, {{ pixi.platform }} should be rendered.
         // Multiple args simulate how the shell + clap deliver them:
@@ -1293,7 +1304,7 @@ mod test {
         // becomes args = ["echo", "{{ pixi.platform }}"]
         let graph = TaskGraph::from_cmd_args(
             &project,
-            &search_envs,
+            &mut search_envs,
             vec!["echo".to_string(), "{{ pixi.platform }}".to_string()],
             false,
             PreferExecutable::TaskFirst,
@@ -1419,11 +1430,11 @@ mod test {
         let project =
             Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
-        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search_envs = search_for_test(&project, None, None);
 
         let graph = TaskGraph::from_cmd_args(
             &project,
-            &search_envs,
+            &mut search_envs,
             vec!["foo".to_string()],
             false,
             PreferExecutable::Always,

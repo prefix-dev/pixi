@@ -8,7 +8,6 @@ use itertools::Itertools;
 use pixi_api::workspace::{Package, PackageKind};
 use pixi_consts::consts;
 use pixi_manifest::PixiPlatformName;
-use rattler_conda_types::Subdir;
 use serde::Serialize;
 
 use crate::{
@@ -219,19 +218,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace.lock_file_path().is_file(),
     )?;
     let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
-    let platform_display: String = match &args.platform {
-        Some(p) => p.to_string(),
-        None => environment
-            .best_declared_platform()
-            .map(|p| p.name().to_string())
-            .unwrap_or_else(|| Subdir::current().unwrap_or(Subdir::NoArch).to_string()),
-    };
 
     let workspace_ctx = cli_workspace_context(workspace.clone());
-    let mut packages_to_output = workspace_ctx
+    let (mut packages_to_output, selected_platform) = workspace_ctx
         .list_packages(
             args.regex,
-            args.platform,
+            args.platform.clone(),
             args.environment,
             args.explicit,
             args.no_install_config.no_install,
@@ -254,9 +246,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if packages_to_output.is_empty() && !args.json {
         miette::bail!(
-            "No packages found in '{}' environment for '{}' platform.",
+            "no packages found in '{}' environment for '{}' platform",
             environment.name().fancy_display(),
-            consts::ENVIRONMENT_STYLE.apply_to(&platform_display),
+            consts::ENVIRONMENT_STYLE.apply_to(&selected_platform),
         );
     }
 

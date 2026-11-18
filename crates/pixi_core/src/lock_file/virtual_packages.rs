@@ -75,11 +75,18 @@ pub enum MachineValidationError {
     #[error("Wheel: {0} doesn't match this systems virtual capabilities for tags: {1}")]
     WheelTagsMismatch(String, String),
 
-    #[error("No Python record found in the lock file for platform: {0}.")]
-    #[diagnostic(
-        help = "Please make sure that 'python' is added in conda dependencies. Otherwise , please report this issue to the developers."
-    )]
+    #[error("no python record found in the lock file for platform: {0}")]
+    #[diagnostic(help = "add 'python' to the conda dependencies")]
     NoPythonRecordFound(PixiPlatformName),
+}
+
+/// What the resolved packages require from the host.
+#[derive(Clone, Debug, Default)]
+pub struct VirtualPackageRequirements {
+    /// The host must provide a matching virtual package.
+    pub depends: Vec<MatchSpec>,
+    /// Applies only when the host provides the virtual package.
+    pub constrains: Vec<MatchSpec>,
 }
 
 /// Get the required virtual packages from dependency strings.
@@ -102,29 +109,53 @@ pub(crate) fn unmet_requirements(
 ) -> Vec<MatchSpec> {
     specs
         .iter()
-        // Archspec dependencies encode CPU compatibility in build strings, not
-        // ordinary package matching: a newer CPU can satisfy older baselines
-        // even when its name is absent from a dependency's build regex.
+        .filter(|spec| is_checked_virtual_package(spec))
+        .filter(|spec| !system.iter().any(|provided| spec_matches(spec, provided)))
+        .cloned()
+        .collect()
+}
+
+/// Constraints only bind virtual packages present on the host.
+pub(crate) fn unmet_constrains(
+    specs: &[MatchSpec],
+    system: &[GenericVirtualPackage],
+) -> Vec<MatchSpec> {
+    specs
+        .iter()
+        .filter(|spec| is_checked_virtual_package(spec))
         .filter(|spec| {
-            spec.name.as_exact().is_some_and(|name| {
-                name.as_normalized().starts_with("__") && name.as_normalized() != "__archspec"
-            })
-        })
-        .filter(|spec| {
-            !system.iter().any(|provided| {
-                spec.name.matches(&provided.name)
-                    && spec
-                        .version
-                        .as_ref()
-                        .is_none_or(|version| version.matches(&provided.version))
-                    && spec
-                        .build
-                        .as_ref()
-                        .is_none_or(|required| required.matches(provided.build_string.as_str()))
-            })
+            system
+                .iter()
+                .any(|provided| spec.name.matches(&provided.name) && !spec_matches(spec, provided))
         })
         .cloned()
         .collect()
+}
+
+fn is_checked_virtual_package(spec: &MatchSpec) -> bool {
+    // Archspec build strings describe CPU baselines, not exact host matches.
+    spec.name.as_exact().is_some_and(|name| {
+        name.as_normalized().starts_with("__") && name.as_normalized() != "__archspec"
+    })
+}
+
+fn spec_matches(spec: &MatchSpec, provided: &GenericVirtualPackage) -> bool {
+    spec.name.matches(&provided.name)
+        && spec
+            .version
+            .as_ref()
+            .is_none_or(|version| version.matches(&provided.version))
+        && spec
+            .build
+            .as_ref()
+            .is_none_or(|required| required.matches(provided.build_string.as_str()))
+}
+
+fn package_constrains(package: &CondaPackageData) -> &[String] {
+    match package {
+        CondaPackageData::Binary(data) => &data.package_record.constrains,
+        CondaPackageData::Source(data) => data.constrains(),
+    }
 }
 
 /// The version literal a virtual-package match spec mentions, ignoring its
@@ -142,33 +173,35 @@ pub(crate) fn compute_required_virtual_package_specs(
     lock_file: &LockFile,
     environment_name: &EnvironmentName,
     declared_platforms: &[&PixiPlatform],
-) -> HashMap<Subdir, Vec<MatchSpec>> {
+) -> HashMap<Subdir, VirtualPackageRequirements> {
     let Some(environment) = lock_file.environment(environment_name.as_str()) else {
         return HashMap::new();
     };
 
-    // subdir -> all `depends` strings of its resolved conda packages, across the
-    // declared platforms that share a subdir.
-    let mut depends_by_subdir: HashMap<Subdir, Vec<String>> = HashMap::new();
+    let mut specs_by_subdir: HashMap<Subdir, (Vec<&str>, Vec<&str>)> = HashMap::new();
 
     for platform in declared_platforms {
         let lock_platform = super::resolve_lock_platform_for(environment.lock_file(), platform);
         let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
             continue;
         };
-        let entry = depends_by_subdir.entry(platform.subdir()).or_default();
-        entry.extend(
-            conda_packages
-                .flat_map(|data| data.depends())
-                .map(ToString::to_string),
-        );
+        let (depends, constrains) = specs_by_subdir.entry(platform.subdir()).or_default();
+        for package in conda_packages {
+            depends.extend(package.depends().iter().map(String::as_str));
+            constrains.extend(package_constrains(package).iter().map(String::as_str));
+        }
     }
 
-    depends_by_subdir
+    specs_by_subdir
         .into_iter()
-        .map(|(subdir, depends)| {
-            let depends: Vec<&str> = depends.iter().map(String::as_str).collect_vec();
-            (subdir, required_virtual_package_specs(&depends))
+        .map(|(subdir, (depends, constrains))| {
+            (
+                subdir,
+                VirtualPackageRequirements {
+                    depends: required_virtual_package_specs(&depends),
+                    constrains: required_virtual_package_specs(&constrains),
+                },
+            )
         })
         .collect()
 }
@@ -242,16 +275,13 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
     // Retrieve all conda packages for the specified platform (both binary and source).
     let lock_platform = super::resolve_lock_platform_for(environment.lock_file(), platform);
-    let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
-        // Early out if there are no packages, as we don't need to check for virtual packages
-        return Ok(true);
-    };
-
-    // Collect conda packages (both binary and source) into a vector of CondaPackageData
-    let conda_packages: Vec<&CondaPackageData> = conda_packages.collect_vec();
-
-    if conda_packages.is_empty() {
-        // Early out if there are no conda records, as we don't need to check for virtual packages
+    let conda_packages: Vec<&CondaPackageData> = lock_platform
+        .and_then(|p| environment.conda_packages(p))
+        .into_iter()
+        .flatten()
+        .collect();
+    if conda_packages.is_empty() && !lock_platform.is_some_and(|p| environment.has_pypi_packages(p))
+    {
         return Ok(true);
     }
 
@@ -261,17 +291,27 @@ pub(crate) fn validate_system_meets_environment_requirements(
         .flat_map(|data| data.depends())
         .map(|s| s.as_str())
         .collect_vec();
+    let all_constrains: Vec<&str> = conda_packages
+        .iter()
+        .flat_map(|data| package_constrains(data))
+        .map(String::as_str)
+        .collect();
 
     // Get the virtual packages required by the conda records
+    let known = |spec: &MatchSpec| {
+        unknown == UnknownNames::Absent
+            || spec
+                .name
+                .as_exact()
+                .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+    };
     let required_virtual_packages = get_required_virtual_packages_from_depends(&all_depends)?
         .into_iter()
-        .filter(|spec| {
-            unknown == UnknownNames::Absent
-                || spec
-                    .name
-                    .as_exact()
-                    .is_none_or(|name| !host.is_unknown(name.as_normalized()))
-        })
+        .filter(known)
+        .collect_vec();
+    let constrained_virtual_packages = get_required_virtual_packages_from_depends(&all_constrains)?
+        .into_iter()
+        .filter(known)
         .collect_vec();
 
     // Find the python package record (needed for wheel tag validation below).
@@ -304,11 +344,16 @@ pub(crate) fn validate_system_meets_environment_requirements(
     );
 
     // Check if all the required virtual conda packages match the system virtual packages.
-    if let Some(unmet) =
-        unmet_requirements(&required_virtual_packages, &system_capabilities).first()
+    if let Some(unmet) = unmet_requirements(&required_virtual_packages, &system_capabilities)
+        .into_iter()
+        .chain(unmet_constrains(
+            &constrained_virtual_packages,
+            &system_capabilities,
+        ))
+        .next()
     {
         return Err(VirtualPackageNotFoundError::new(
-            unmet,
+            &unmet,
             &system_capabilities,
             platform.subdir(),
         )
@@ -360,7 +405,10 @@ mod test {
     use rattler_conda_types::{
         PackageName, PackageRecord, ParseStrictness, Subdir, package::BuildString,
     };
-    use rattler_lock::{CondaBinaryData, PlatformData, PlatformName, UrlOrPath};
+    use rattler_lock::{
+        CondaBinaryData, CondaSourceData, PartialSourceMetadata, PlatformData, PlatformName,
+        SourceMetadata, UrlOrPath,
+    };
     use rattler_virtual_packages::{Override, VirtualPackage, VirtualPackageOverrides};
     use std::path::Path;
     use url::Url;
@@ -443,7 +491,7 @@ mod test {
         // not padded in (`__archspec` is a linux-64 default but never appears
         // in `depends`).
         assert_eq!(
-            specs.iter().map(ToString::to_string).collect_vec(),
+            specs.depends.iter().map(ToString::to_string).collect_vec(),
             vec!["__cuda >=12"]
         );
     }
@@ -478,10 +526,10 @@ packages:
             .get(&Subdir::Linux64)
             .expect("linux-64 requirements");
         assert_eq!(
-            specs.iter().map(ToString::to_string).collect_vec(),
+            specs.depends.iter().map(ToString::to_string).collect_vec(),
             vec!["__cuda"]
         );
-        assert!(specs[0].version.is_none());
+        assert!(specs.depends[0].version.is_none());
     }
 
     #[test]
@@ -823,6 +871,156 @@ packages:
         assert!(result.is_err());
     }
 
+    #[test]
+    fn wheel_only_locks_require_a_python_record() {
+        let lock = LockFile::from_str_with_base_directory(
+            r#"version: 7
+platforms:
+- name: linux-64
+environments:
+  default:
+    channels: []
+    packages:
+      linux-64:
+      - pypi: https://example.com/foo-1.0-py3-none-any.whl
+packages:
+- pypi: https://example.com/foo-1.0-py3-none-any.whl
+  name: foo
+  version: '1.0'
+"#,
+            None,
+        )
+        .unwrap();
+        let host = HostDetection::from_platform(
+            platform_from_detected(Subdir::Linux64, Vec::new()).unwrap(),
+        );
+        let result = validate_system_meets_environment_requirements(
+            &lock,
+            &PixiPlatform::from_subdir(Subdir::Linux64),
+            &EnvironmentName::default(),
+            &host,
+            UnknownNames::Absent,
+        );
+        assert!(matches!(
+            result,
+            Err(MachineValidationError::NoPythonRecordFound(_))
+        ));
+    }
+
+    #[test]
+    fn constraints_from_binary_full_and_partial_sources_bind_only_present_packages() {
+        let mut record = PackageRecord::new(
+            PackageName::new_unchecked("cuda-version"),
+            Version::major(12),
+            "0".parse().unwrap(),
+        );
+        record.subdir = "linux-64".to_owned();
+        record.constrains = vec!["__cuda >=12".to_owned(), "python >=3".to_owned()];
+        let source = |metadata| {
+            CondaPackageData::Source(Box::new(CondaSourceData {
+                location: UrlOrPath::Url(Url::parse("https://example.com/cuda-version").unwrap()),
+                package_build_source: None,
+                variants: Default::default(),
+                identifier_hash: None,
+                sources: Default::default(),
+                source_data: Default::default(),
+                metadata,
+            }))
+        };
+        let packages = [
+            CondaPackageData::Binary(Box::new(CondaBinaryData {
+                package_record: record.clone(),
+                location: UrlOrPath::Url(
+                    Url::parse("https://example.com/cuda-version-12-0.conda").unwrap(),
+                ),
+                file_name: DistArchiveIdentifier::try_from_filename("cuda-version-12-0.conda")
+                    .unwrap(),
+                channel: None,
+            })),
+            source(SourceMetadata::Full(Box::new(record.clone()))),
+            source(SourceMetadata::Partial(Box::new(PartialSourceMetadata {
+                name: record.name,
+                depends: Vec::new(),
+                constrains: record.constrains,
+                extra_depends: Default::default(),
+                flags: Vec::new(),
+                license: None,
+                purls: None,
+                run_exports: None,
+            }))),
+        ];
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
+        for package in packages {
+            let lock = lock_containing(package);
+            let required = compute_required_virtual_package_specs(
+                &lock,
+                &EnvironmentName::default(),
+                &[&platform],
+            );
+            let required = &required[&Subdir::Linux64];
+            assert!(required.depends.is_empty());
+            assert_eq!(
+                required.constrains,
+                required_virtual_package_specs(&["__cuda >=12"]),
+            );
+            for (version, compatible) in [(None, true), (Some("11.8"), false), (Some("12.4"), true)]
+            {
+                let capabilities = version
+                    .map(|version| GenericVirtualPackage {
+                        name: "__cuda".parse().unwrap(),
+                        version: version.parse().unwrap(),
+                        build_string: "0".parse().unwrap(),
+                    })
+                    .into_iter()
+                    .collect();
+                let host = HostDetection::from_platform(
+                    platform_from_detected(Subdir::Linux64, capabilities).unwrap(),
+                );
+                for unknown in [UnknownNames::Absent, UnknownNames::Unchecked] {
+                    let result = validate_system_meets_environment_requirements(
+                        &lock,
+                        &platform,
+                        &EnvironmentName::default(),
+                        &host,
+                        unknown,
+                    );
+                    assert_eq!(
+                        result.is_ok(),
+                        compatible,
+                        "{version:?} {unknown:?}: {result:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn constraints_match_builds_and_versions_but_exclude_archspec() {
+        let specs = required_virtual_package_specs(&[
+            "__cuda >=12 real",
+            "__archspec 1.* ^(x86_64_v3|skylake)$",
+        ]);
+        let mut host = vec![
+            GenericVirtualPackage {
+                name: "__cuda".parse().unwrap(),
+                version: Version::major(12),
+                build_string: "other".parse().unwrap(),
+            },
+            GenericVirtualPackage {
+                name: "__archspec".parse().unwrap(),
+                version: Version::major(1),
+                build_string: "zen5".parse().unwrap(),
+            },
+        ];
+        assert!(unmet_constrains(&specs, &[]).is_empty());
+        assert_eq!(
+            unmet_constrains(&specs, &host),
+            required_virtual_package_specs(&["__cuda >=12 real"]),
+        );
+        host[0].build_string = "real".parse().unwrap();
+        assert!(unmet_constrains(&specs, &host).is_empty());
+    }
+
     /// Build a single-package linux-64 lock file whose lone conda package
     /// carries `depends`, used to drive the required-virtual-package check.
     fn lock_requiring(depends: &str) -> LockFile {
@@ -841,6 +1039,10 @@ packages:
             file_name: DistArchiveIdentifier::try_from_filename("needs-libc-1.0-0.conda").unwrap(),
             channel: None,
         }));
+        lock_containing(package)
+    }
+
+    fn lock_containing(package: CondaPackageData) -> LockFile {
         let mut builder = LockFile::builder()
             .with_platforms(vec![PlatformData {
                 name: PlatformName::try_from("linux-64").unwrap(),

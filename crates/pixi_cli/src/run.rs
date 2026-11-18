@@ -9,7 +9,7 @@ use fancy_display::FancyDisplay;
 use indicatif::ProgressDrawTarget;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_api::workspace::RunOptions;
+use pixi_api::workspace::{RunOptions, RunOutcome};
 use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::host::{cli_detector_consent, probe_conda_script, probe_pep723_script};
 
@@ -17,10 +17,13 @@ use pixi_core::{
     Workspace,
     workspace::{
         Environment,
-        virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
+        platform_selection::{DiagnosticSelector, ResolvedPlatform, explicit_platform},
     },
 };
-use pixi_manifest::{PixiPlatformName, TaskName, WithWarnings};
+use pixi_manifest::{
+    FeaturesExt, HasWorkspaceManifest, PixiPlatformName, TaskName, WithWarnings,
+    platform::candidate_subdirs,
+};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::Subdir;
 
@@ -346,10 +349,11 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
         } else {
             Some(environment.clone())
         };
+    let platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
-        command_not_found(&workspace, explicit_environment);
+        diagnostic_tasks(&workspace, explicit_environment, platform.as_ref()).await?;
         return Ok(ExitCode::SUCCESS);
     }
 
@@ -362,7 +366,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     let options = RunOptions {
         task: args.task,
         environment: explicit_environment.as_ref().map(|env| env.name().clone()),
-        platform: resolve_install_platform(&workspace, args.platform.as_ref())?,
+        platform,
         executable: args.executable,
         clean_env: args.clean_env,
         skip_deps: args.skip_deps,
@@ -383,29 +387,105 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
             }
         }),
     };
-    let code = cli_workspace_context(workspace.clone())
-        .run(options)
-        .await?;
+    let context = cli_workspace_context(workspace.clone());
+    let outcome = context.run(options).await?;
 
-    if code == 127 {
-        command_not_found(&workspace, explicit_environment);
+    if outcome.exit_code == 127 {
+        command_not_found(&workspace, &outcome);
     }
-    Ok(process_exit::exit_code_from_code(code))
+    Ok(process_exit::exit_code_from_code(outcome.exit_code))
 }
 
-/// Called when a command was not found.
-fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
-    let available_tasks: HashSet<TaskName> =
-        if let Some(explicit_environment) = explicit_environment {
-            explicit_environment.get_filtered_tasks()
-        } else {
+async fn diagnostic_tasks<'p>(
+    workspace: &'p Workspace,
+    explicit_environment: Option<Environment<'p>>,
+    platform: Option<&PixiPlatformName>,
+) -> miette::Result<()> {
+    let environments = match explicit_environment {
+        Some(environment) => vec![environment],
+        // Only an explicitly requested environment must list the platform.
+        None => workspace
+            .environments()
+            .into_iter()
+            .filter(|environment| {
+                platform.is_none_or(|name| environment.platforms().contains(name))
+            })
+            .collect(),
+    };
+    let selections: Vec<_> = match platform {
+        Some(name) => environments
+            .iter()
+            .map(|environment| {
+                explicit_platform(environment, name)
+                    .map(|platform| Some(ResolvedPlatform::Explicit(platform)))
+            })
+            .collect::<Result<_, _>>()?,
+        None => {
+            let mut selector = DiagnosticSelector::new(workspace);
+            let selections = selector.select_all(&environments).await;
+            if let Some(error) = selector.lock_error() {
+                tracing::warn!("{}", error.warning());
+            }
+            selections
+        }
+    };
+    print_available_tasks(
+        environments
+            .iter()
+            .zip(&selections)
+            .flat_map(|(environment, selection)| {
+                environment
+                    .visible_tasks(selection.as_ref().map(ResolvedPlatform::platform))
+                    .map(|(name, _)| name.clone())
+            })
+            .collect(),
+    );
+    if selections.iter().all(Option::is_none) {
+        let subdir = Subdir::current().unwrap_or(Subdir::NoArch);
+        // Adding the platform only helps when none is declared for this
+        // machine. A declared one was skipped for its locked requirements.
+        let runnable_subdirs = candidate_subdirs(subdir);
+        let declared_for_host = environments.iter().any(|environment| {
+            let names = environment.platforms();
             workspace
-                .environments()
-                .into_iter()
-                .flat_map(|env| env.get_filtered_tasks())
-                .collect()
-        };
+                .workspace_manifest()
+                .workspace
+                .platforms
+                .iter()
+                .any(|platform| {
+                    names.contains(platform.name()) && runnable_subdirs.contains(&platform.subdir())
+                })
+        });
+        if declared_for_host {
+            pixi_progress::println!(
+                "\nHelp: No declared platform fits this machine ({subdir}). Run `pixi info` to see why each platform was skipped."
+            );
+        } else {
+            pixi_progress::println!(
+                "\nHelp: This platform ({subdir}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {subdir}"
+            );
+        }
+    }
+    Ok(())
+}
 
+/// Suggestions use only environments already selected by the operational run.
+fn command_not_found(workspace: &Workspace, outcome: &RunOutcome<'_>) {
+    print_available_tasks(
+        outcome
+            .platforms
+            .iter()
+            .flat_map(|(name, selection)| {
+                workspace
+                    .environment(name)
+                    .into_iter()
+                    .flat_map(|environment| environment.get_filtered_tasks(selection.platform()))
+            })
+            .collect(),
+    );
+}
+
+fn print_available_tasks(available_tasks: HashSet<TaskName>) {
     if !available_tasks.is_empty() {
         pixi_progress::println!(
             "\nAvailable tasks:\n{}",
@@ -415,20 +495,6 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
                 .format_with("\n", |name, f| {
                     f(&format_args!("\t{}", name.fancy_display().bold()))
                 })
-        );
-    }
-
-    // Point at the missing platform only when it is genuinely what blocks the
-    // run. An environment that installs nothing, or whose packages the machine
-    // already satisfies, runs here regardless of the declared platforms, so
-    // suggesting `platform add` would send the user after the wrong problem.
-    if workspace.environments().iter().all(|env| {
-        classify_environment_runnability(env, None) == EnvironmentRunnability::Unsupported
-    }) {
-        pixi_progress::println!(
-            "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
-            Subdir::current().unwrap_or(Subdir::NoArch),
-            Subdir::current().unwrap_or(Subdir::NoArch)
         );
     }
 }

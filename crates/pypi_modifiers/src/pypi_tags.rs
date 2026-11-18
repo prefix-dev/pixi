@@ -694,7 +694,7 @@ mod tests {
         assert!(!wheel.is_compatible(&res));
     }
 
-    fn rich_platform(
+    fn make_platform(
         name: &str,
         subdir: Subdir,
         declared: Vec<GenericVirtualPackage>,
@@ -719,7 +719,7 @@ mod tests {
     /// family and version read straight from the declaration.
     #[test]
     fn linux_tag_reads_musl_from_platform() {
-        let platform = rich_platform(
+        let platform = make_platform(
             "alpine",
             Subdir::LinuxAarch64,
             vec![declared("__musl", "1.2.4")],
@@ -735,7 +735,7 @@ mod tests {
     /// declared version (not the default).
     #[test]
     fn linux_tag_reads_glibc_from_platform() {
-        let platform = rich_platform(
+        let platform = make_platform(
             "modern-linux",
             Subdir::Linux64,
             vec![declared("__glibc", "2.36")],
@@ -772,7 +772,7 @@ mod tests {
     /// version (not the subdir's default).
     #[test]
     fn macos_tag_reads_osx_from_platform() {
-        let platform = rich_platform(
+        let platform = make_platform(
             "modern-mac",
             Subdir::OsxArm64,
             vec![declared("__osx", "14.0")],
@@ -791,7 +791,7 @@ mod tests {
     /// minor defaulting to 0, instead of failing the pypi-tag build.
     #[test]
     fn macos_tag_accepts_major_only_version() {
-        let platform = rich_platform("macos-15", Subdir::OsxArm64, vec![declared("__osx", "15")]);
+        let platform = make_platform("macos-15", Subdir::OsxArm64, vec![declared("__osx", "15")]);
         let res = get_macos_platform_tags(&platform).unwrap();
         assert_eq!(
             res.os(),

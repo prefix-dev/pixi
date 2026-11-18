@@ -260,6 +260,10 @@ impl CondaPrefixUpdater {
     pub(crate) fn name(&self) -> &GroupedEnvironmentName {
         &self.inner.name
     }
+
+    pub(crate) fn platform(&self) -> &PixiPlatform {
+        &self.inner.platform
+    }
 }
 
 /// Updates the environment to contain the packages from the specified lock file

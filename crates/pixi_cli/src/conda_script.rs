@@ -5,12 +5,9 @@ use miette::{IntoDiagnostic, NamedSource, Report};
 use pixi_api::workspace::run_future_forwarding_signals;
 use pixi_core::{
     Workspace,
-    environment::{PlatformNotInEnvironmentError, sanity_check_workspace},
+    environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    workspace::virtual_packages::{
-        EnvironmentRunnability, classify_environment_runnability,
-        verify_current_platform_can_run_environment, verify_run_platform,
-    },
+    workspace::platform_selection::{PrefixPolicy, ResolvedPlatform},
 };
 use pixi_manifest::WithWarnings;
 use pixi_manifest::script::conda::{CondaScriptManifest, Entrypoint};
@@ -83,39 +80,22 @@ pub(crate) async fn execute_run(
     let environment = workspace.default_environment();
     let allow_installs = args.lock_and_install_config.allow_installs();
     let user_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
-    let run_platform = user_platform
-        .clone()
-        .or_else(|| environment.installed_resolved_platform_name());
-    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
-    if allow_installs
-        && best_declared_platform.is_none()
-        && let Some(name) = user_platform.as_ref()
-    {
-        return Err(PlatformNotInEnvironmentError {
-            platform: name.clone(),
-            environment: environment.name().clone(),
-        }
-        .into());
-    }
-    if allow_installs {
-        environment.emit_emulation_warning();
-    }
 
-    // Select and parse the entrypoint before solving, so a syntax error or a
-    // missing platform key surfaces without waiting for the environment.
-    let activation_platform = best_declared_platform
-        .cloned()
-        .unwrap_or_else(|| environment.activation_platform());
-    let subdir = activation_platform.subdir();
-    let Some(command) = entrypoint.select(subdir) else {
-        return Err(miette::miette!(
-            help = "add a matching key to the `entrypoint` table, for example `unix`, `win` or the exact platform",
-            "the entrypoint has no command for platform '{subdir}'"
-        ));
+    let parse_entrypoint = |subdir| -> miette::Result<_> {
+        let Some(command) = entrypoint.select(subdir) else {
+            return Err(miette::miette!(
+                help = "add a matching key to the `entrypoint` table, for example `unix`, `win` or the exact platform",
+                "the entrypoint has no command for platform '{subdir}'"
+            ));
+        };
+        let sequence = parse_sequence(command).map_err(|error| {
+            Report::new(error).with_source_code(NamedSource::new("entrypoint", command.to_owned()))
+        })?;
+        Ok((command, sequence))
     };
-    let sequence = parse_sequence(command).map_err(|error| {
-        Report::new(error).with_source_code(NamedSource::new("entrypoint", command.to_owned()))
-    })?;
+    let parsed_entrypoint = matches!(entrypoint, Entrypoint::Uniform(_))
+        .then(|| parse_entrypoint(rattler_conda_types::Subdir::NoArch))
+        .transpose()?;
 
     let progress = pixi_reporters::TopLevelProgress::from_global();
     let mut lock_file = workspace
@@ -130,27 +110,23 @@ pub(crate) async fn execute_run(
         )
         .await?
         .0;
-    if user_platform.is_some() {
-        lock_file.set_explicit_target_platform(user_platform.clone());
-    } else {
-        lock_file.set_installed_target_platform(run_platform);
-    }
+    lock_file.set_explicit_target_platform(user_platform);
+    let selection = lock_file
+        .resolve_platform(
+            &environment,
+            if allow_installs {
+                PrefixPolicy::Replace
+            } else {
+                PrefixPolicy::Reuse
+            },
+            UpdateMode::QuickValidate,
+        )
+        .await?;
 
-    if allow_installs && user_platform.is_none() {
-        let runnability =
-            classify_environment_runnability(&environment, Some(lock_file.as_lock_file()));
-        if runnability == EnvironmentRunnability::Unsupported {
-            return Err(
-                match verify_current_platform_can_run_environment(
-                    &environment,
-                    Some(lock_file.as_lock_file()),
-                ) {
-                    Err(err) => err.into(),
-                    Ok(()) => environment.unsupported_platform_error().into(),
-                },
-            );
-        }
-    }
+    let (command, sequence) = match parsed_entrypoint {
+        Some(parsed) => parsed,
+        None => parse_entrypoint(selection.platform().subdir())?,
+    };
 
     let print_command = |command: &str| {
         if tracing::enabled!(Level::WARN) {
@@ -184,23 +160,25 @@ pub(crate) async fn execute_run(
         return Ok(0);
     }
 
-    if allow_installs {
+    if allow_installs && !matches!(selection, ResolvedPlatform::HostBaseline(_)) {
         lock_file
             .prefix(
                 &environment,
+                &selection,
                 UpdateMode::QuickValidate,
                 &ReinstallPackages::default(),
                 &pixi_core::environment::InstallFilter::default(),
             )
             .await?;
-        verify_run_platform(&environment, user_platform.as_ref())?;
     }
+    pixi_core::workspace::virtual_packages::verify_resolved_platform(&environment, &selection)?;
+    environment.emit_emulation_warning(selection.platform());
     progress.on_clear();
     lock_file.command_dispatcher.clear_filesystem_caches().await;
 
     let command_env = get_task_env(
         &environment,
-        &activation_platform,
+        selection.platform(),
         args.clean_env,
         Some(lock_file.as_lock_file()),
         workspace.config().force_activate(),
