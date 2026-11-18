@@ -18,8 +18,8 @@ platforms = [
 ```
 
 `cuda = "12.0"` solves `linux-64` as if the machine had a driver for CUDA 12.0, even when you lock on a machine without a GPU.
-The run dependencies of the CUDA packages, such as `__cuda >=12` from `cuda-version`, decide which builds fit that.
-Without a CUDA declaration, the solver can't pick packages that require `__cuda`; to get the CPU-only build on purpose, depend on `pytorch-cpu`.
+The run dependencies or constraints of the CUDA packages, such as `__cuda >=12` from `cuda-version`, decide which builds fit that.
+Without a CUDA declaration, the solver can't pick packages that depend on `__cuda`; to get the CPU-only build on purpose, depend on `pytorch-cpu`.
 See [Declared, detected, and required virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) for details.
 
 !!! info "Migrating from `[system-requirements]`"
