@@ -9430,18 +9430,18 @@
 <div class="admonition warning">
 <p class="admonition-title"><code>[system-requirements]</code> is deprecated</p>
 <p>Declare these constraints directly on <code>[workspace].platforms</code> instead --
-see <a href=".././multi_platform_configuration/#declaring-virtual-packages-per-platform">Declaring virtual packages per platform</a>
+see <a href="../../reference/pixi_manifest/#inline-table-entries-per-platform-virtual-packages">Declaring virtual packages per platform</a>
 for the inline-table syntax and the matching
 <a href="../../reference/cli/pixi/workspace/platform/"><code>pixi workspace platform</code></a> CLI.
 Existing <code>[system-requirements]</code> tables are still parsed and migrated
 transparently, so older manifests keep working, but new manifests should
-use the per-platform form.</p>
+use the per-platform syntax.</p>
 </div>
 <h1 id="migrating-from-system-requirements">Migrating from <code>[system-requirements]</code><a class="headerlink" href="#migrating-from-system-requirements" title="Permanent link">#</a></h1>
 <p>The <code>[system-requirements]</code> table told the solver which <a href="https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual
 packages</a>
 (<code>__cuda</code>, <code>__glibc</code>, <code>__osx</code>, <code>__linux</code>, <code>__archspec</code>) to assume were available
-on the host. The same information now lives on the platform itself, declared as
+on the solve target. The same information now lives on the platform itself, declared as
 an inline-table entry on <code>workspace.platforms</code>. This page shows the equivalent
 forms for the patterns that used to live under <code>[system-requirements]</code>.</p>
 <h2 id="why-the-change">Why the change<a class="headerlink" href="#why-the-change" title="Permanent link">#</a></h2>
@@ -9450,7 +9450,7 @@ forms for the patterns that used to live under <code>[system-requirements]</code
 <li>The solver knows up-front which virtual packages apply to which conda subdir,
   so the same workspace can mix CUDA-enabled and CUDA-free builds for the same
   subdir without juggling features.</li>
-<li>Features bind to a rich platform by <em>name</em> rather than by replaying the same
+<li>Features bind to a platform by <em>name</em> rather than by replaying the same
   set of virtual packages. Two features that pick the same platform can never
   declare conflicting versions of <code>__cuda</code>.</li>
 <li>The CLI (<a href="../../reference/cli/pixi/workspace/platform/"><code>pixi workspace platform</code></a>)
@@ -9512,9 +9512,9 @@ forms for the patterns that used to live under <code>[system-requirements]</code
 </div>
 </div>
 </div>
-<p>The recognised friendly keys (<code>cuda</code>, <code>archspec</code>, <code>glibc</code>, <code>linux</code>, <code>macos</code>,
+<p>The recognised friendly keys (<code>cuda</code>, <code>amdgpu</code>, <code>archspec</code>, <code>glibc</code>, <code>linux</code>, <code>macos</code>,
 <code>windows</code>) and the raw <code>__name = "version"</code> escape hatch are documented under
-<a href=".././multi_platform_configuration/#declaring-virtual-packages-per-platform">Declaring virtual packages per platform</a>.</p>
+<a href="../../reference/pixi_manifest/#inline-table-entries-per-platform-virtual-packages">Declaring virtual packages per platform</a>.</p>
 <h2 id="cli-migration">CLI migration<a class="headerlink" href="#cli-migration" title="Permanent link">#</a></h2>
 <table>
 <thead>
@@ -9539,53 +9539,12 @@ forms for the patterns that used to live under <code>[system-requirements]</code
 </tbody>
 </table>
 <p>The <code>pixi workspace platform</code> subcommand keeps <code>pixi.lock</code> in sync when it
-mutates a rich entry.</p>
+edits a platform.</p>
 <h2 id="default-declared-virtual-packages">Default declared virtual packages<a class="headerlink" href="#default-declared-virtual-packages" title="Permanent link">#</a></h2>
-<p>When you write a bare-string entry like <code>"linux-64"</code>, Pixi uses these defaults
-(matching what <code>[system-requirements]</code> used to default to):</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:5"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><input id="__tabbed_2_4" name="__tabbed_2" type="radio" /><input id="__tabbed_2_5" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Linux</label><label for="__tabbed_2_2">Linux (riscv64)</label><label for="__tabbed_2_3">Windows</label><label for="__tabbed_2_4">macOS (x86_64)</label><label for="__tabbed_2_5">macOS (arm64)</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p><code>__linux = "4.18"</code>, <code>__glibc = "2.28"</code></p>
-</div>
-<div class="tabbed-block">
-<p><code>__linux = "4.18"</code>, <code>__glibc = "2.39"</code></p>
-</div>
-<div class="tabbed-block">
-<p>No defaults.</p>
-</div>
-<div class="tabbed-block">
-<p><code>__osx = "13.0"</code></p>
-</div>
-<div class="tabbed-block">
-<p><code>__osx = "13.0"</code></p>
-</div>
-</div>
-</div>
-<p>Override them by switching to an inline-table entry with the relevant keys.</p>
+<p>See <a href=".././multi_platform_configuration/#default-declared-virtual-packages">Default declared virtual packages</a> for the defaults applied to bare subdirs and inline-table entries.</p>
 <h2 id="environment-variable-overrides">Environment-variable overrides<a class="headerlink" href="#environment-variable-overrides" title="Permanent link">#</a></h2>
-<p>These overrides come from conda itself and apply regardless of how the platform
-is declared in <code>pixi.toml</code>. Use them when you need to install in an environment
-that doesn't match the declared virtual packages (for example a CPU-only CI
-runner solving a CUDA-enabled lock file).</p>
-<ul>
-<li><code>CONDA_OVERRIDE_CUDA</code> sets the <code>__cuda</code> version. Example: <code>CONDA_OVERRIDE_CUDA=11</code>.</li>
-<li><code>CONDA_OVERRIDE_CUDA_ARCH</code> sets the <code>__cuda_arch</code> compute capability, formatted as <code>{major}.{minor}</code>. Example: <code>CONDA_OVERRIDE_CUDA_ARCH=8.6</code>.</li>
-<li><code>CONDA_OVERRIDE_AMDGPU</code> declares an AMD GPU (<code>__amdgpu</code>). Its only valid version is <code>0</code>. Example: <code>CONDA_OVERRIDE_AMDGPU=0</code>.</li>
-<li><code>CONDA_OVERRIDE_AMDGPU_ARCH</code> sets the <code>__amdgpu_arch</code> AMDGPU ISA version, formatted as <code>{major}.{minor}.{stepping}</code>. Example: <code>CONDA_OVERRIDE_AMDGPU_ARCH=11.0.0</code>.</li>
-<li><code>CONDA_OVERRIDE_GLIBC</code> sets the <code>__glibc</code> version. Example: <code>CONDA_OVERRIDE_GLIBC=2.28</code>.</li>
-<li><code>CONDA_OVERRIDE_OSX</code> sets the <code>__osx</code> version. Example: <code>CONDA_OVERRIDE_OSX=13.0</code>.</li>
-<li><code>CONDA_OVERRIDE_LINUX</code> sets the <code>__linux</code> version. Example: <code>CONDA_OVERRIDE_LINUX=4.18</code>.</li>
-<li><code>CONDA_OVERRIDE_WIN</code> sets the <code>__win</code> version. Example: <code>CONDA_OVERRIDE_WIN=0</code>.</li>
-<li><code>CONDA_OVERRIDE_ARCHSPEC</code> sets the <code>__archspec</code> CPU microarchitecture name. Example: <code>CONDA_OVERRIDE_ARCHSPEC=skylake</code>. Set it to <code>0</code> to mark the microarchitecture as unknown.</li>
-</ul>
-<p>On a machine without an AMD GPU, set both <code>CONDA_OVERRIDE_AMDGPU=0</code> and
-<code>CONDA_OVERRIDE_AMDGPU_ARCH=&lt;major.minor.stepping&gt;</code> to mock an architecture.
-The architecture override is ignored when <code>__amdgpu</code> is absent. Unsupported
-platform errors include the required assignments in their override hints.</p>
-<p>Setting any of these to an empty string (for example <code>CONDA_OVERRIDE_CUDA=""</code>)
-disables the corresponding virtual package instead of setting a version, which
-is useful for solving a lock file as if the feature were absent.</p>
+<p>See <a href=".././multi_platform_configuration/#environment-variable-overrides">Environment-variable overrides</a> for built-in and detector overrides.
+Overrides change the host view used for compatibility checks, not the solve inputs of a declared workspace target.</p>
 <h2 id="additional-resources">Additional resources<a class="headerlink" href="#additional-resources" title="Permanent link">#</a></h2>
 <p>For background on virtual packages in the conda ecosystem, see the
 <a href="https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">Conda documentation</a>.</p>

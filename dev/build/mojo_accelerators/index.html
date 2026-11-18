@@ -9400,7 +9400,7 @@ We will publish both builds to a local channel and install them in a separate wo
 <p>We will create a <code>mojo-matmul</code> package that multiplies two matrices.
 This example needs Linux x86-64, glibc 2.34 or newer, and an x86-64-v3-capable CPU for both builds.
 The GPU build targets <code>gfx1103</code>, such as the Radeon 780M.
-See <a href="../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">rich platforms</a> for hardware declarations, including other AMD targets.</p>
+See <a href="../../reference/pixi_manifest/#inline-table-entries-per-platform-virtual-packages">platform configuration</a> for hardware declarations, including other AMD targets.</p>
 <p>Create these files in a new directory:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── package/
@@ -9531,12 +9531,16 @@ The producer has no dependency on that channel, so publishing works before it ex
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="k">[tasks]</span>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">matmul</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"matmul"</span>
 </span></code></pre></div>
-<p>The two rich platforms describe separate solves for the same <code>linux-64</code> subdir.
-<code>amd</code> comes first, so Pixi selects it automatically on compatible hardware, otherwise it selects <code>cpu</code>.
+<p>The two platforms describe separate solves for the same <code>linux-64</code> conda subdir.
+<code>amd</code> comes first, so Pixi tries it before <code>cpu</code> when its built-in declarations match the machine.
 Both require <code>archspec = "x86_64_v3"</code> because the prebuilt Modular runtime needs that CPU baseline.
-<code>amdgpu = "gfx1103"</code> requires exactly that <a href="https://gpuopen.com/amd-gpu-architecture-programming-documentation/">ISA</a>; even newer ISAs do not match.
-If the GPU build is suitable, typically the CPU is suitable as well.
-To prioritize the GPU build in that case, <code>pixi-build-mojo</code> makes sure to <a href="https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration">down prioritize</a> the CPU build.</p>
+<code>amdgpu = "gfx1103"</code> solves <code>amd</code> for a GPU with the gfx1103 <a href="https://gpuopen.com/amd-gpu-architecture-programming-documentation/">ISA</a>.
+The backend adds the run dependency <code>__amdgpu_arch ==11.0.3</code> to the AMD build.
+That locked requirement enforces the exact ISA match; a different ISA on the host machine makes Pixi skip <code>amd</code> and try <code>cpu</code>.
+See <a href="../../workspace/multi_platform_configuration/#which-platform-gets-installed">Which platform gets installed?</a> for the details.</p>
+<p>During locking, the solver chooses between package variants within each platform's solve, separately from install-time platform selection.
+If the GPU build is suitable, typically the CPU build is suitable as well.
+To prefer the GPU build in that solve, <code>pixi-build-mojo</code> <a href="https://rattler-build.prefix.dev/latest/reference/recipe_file/#variant-configuration">down-prioritizes</a> the CPU build.</p>
 <p>Run from the consumer directory:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>matmul
 </span></code></pre></div>

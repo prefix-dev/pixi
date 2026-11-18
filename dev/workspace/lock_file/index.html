@@ -9508,8 +9508,8 @@ This make recreating your local development environment in CI very easy.</p>
 <li>Generating and writing of lock file</li>
 <li>Install resulting packages</li>
 </ol>
-<p>Additionally - Pixi ensures that the lock file remains in sync with both your manifest, as well as your installed environment.
-If it detects that they aren't in sync, it will regenerate the lock file. You can read more about this in the <a href="#lock-file-satisfiability">Lock file satisfiability</a> section.</p>
+<p>Pixi checks whether the lock file is up to date with the manifest before installing.
+If it is not, Pixi updates it unless the selected lock-file mode prevents this. See <a href="#lock-file-satisfiability">Lock file satisfiability</a>.</p>
 <p>The following commands will check and automatically update the lock file if needed:</p>
 <ul>
 <li><a href="../../reference/cli/pixi/install/"><code>pixi install</code></a></li>
@@ -9524,10 +9524,13 @@ If it detects that they aren't in sync, it will regenerate the lock file. You ca
 <p>If you want to remove the lock file, you can simply delete it - ready for it to be generated again with the latest package versions when one of the above commands are run.</p>
 <p>You may want to have more control over the interplay between the manifest, the lock file, and the created environment. There are additional command line options to help with this:</p>
 <ul>
-<li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../../reference/pixi_manifest/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
-<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../../reference/pixi_manifest/">manifest file</a>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--frozen</code>: use the lock file without checking whether it is up to date with the <a href="../../reference/pixi_manifest/">manifest file</a>, and do not update it. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--locked</code>: check that <code>pixi.lock</code> is up to date with the <a href="../../reference/pixi_manifest/">manifest file</a>, and fail rather than update it if not. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
 <li><code>--no-install</code>: don't modify the environment, only modify the lock file. It can also be controlled by the <code>PIXI_NO_INSTALL</code> environment variable (example: <code>PIXI_NO_INSTALL=true</code>).</li>
 </ul>
+<p>Neither <code>--locked</code> nor <code>--frozen</code> alone bypass host compatibility validation.
+See <a href="../multi_platform_configuration/#which-platform-gets-installed">Which platform gets installed?</a> for target selection and explicit platform overrides.
+The installed prefix is separate state: a fresh lock file does not mean that its packages are already installed.</p>
 <h2 id="committing-your-lock-file">Committing your lock file<a class="headerlink" href="#committing-your-lock-file" title="Permanent link">#</a></h2>
 <p>Reproducibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis).
 Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.</p>
@@ -9565,63 +9568,53 @@ This includes an environment with the latest available versions of packages.</p>
 <hr />
 <p>If you decide in the end not to commit the lock file, forgoing its benefits, you may want to use an action such as <a href="https://github.com/parcels-code/pixi-lock">Parcels-code/pixi-lock</a> to cache generated lock files and speed up your CI.</p>
 <h3 id="file-structure">File structure<a class="headerlink" href="#file-structure" title="Permanent link">#</a></h3>
-<p>The Pixi lock file is structured into two parts.</p>
-<ul>
-<li>The environments that are used in the workspace - listing the packages contained. e.g.:</li>
-</ul>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">environments</span><span class="p">:</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">        </span><span class="nt">channels</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://conda.anaconda.org/conda-forge/</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">        </span><span class="nt">packages</span><span class="p">:</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">            </span><span class="nt">linux-64</span><span class="p">:</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://conda.anaconda.org/conda-forge/linux-64/python-3.12.2-hab00c5b_0_cpython.conda</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">            </span><span class="nt">osx-64</span><span class="p">:</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+<p>Version 7 lock files contain platform declarations, per-environment package references, and shared package records.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">platforms</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">username-3</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">subdir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux-64</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">virtual-packages</span><span class="p">:</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">__username_length=3</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">username-7</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">subdir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux-64</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">virtual-packages</span><span class="p">:</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">__username_length=7</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="nt">environments</span><span class="p">:</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span><span class="nt">channels</span><span class="p">:</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">file:///example/channel/</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">packages</span><span class="p">:</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span><span class="nt">username-3</span><span class="p">:</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">channel/linux-64/long-username-0.1.0-0.conda</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">      </span><span class="nt">username-7</span><span class="p">:</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">channel/linux-64/long-username-0.1.0-0.conda</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="nt">packages</span><span class="p">:</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">channel/linux-64/long-username-0.1.0-0.conda</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">  </span><span class="nt">subdir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux-64</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">  </span><span class="nt">depends</span><span class="p">:</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">__username_length &gt;=3</span>
 </span></code></pre></div>
 <ul>
-<li>The definition of the packages themselves. e.g.:</li>
+<li><code>platforms</code> records each platform's name, <code>subdir</code>, and declared virtual packages.
+  Names such as <code>username-3</code> are lookup keys, not subdirs. Both platforms here use the <code>linux-64</code> subdir.</li>
+<li><code>environments.default.packages</code> maps those names to references into the shared <code>packages</code> records.</li>
+<li><code>packages</code> describes the real packages, including their dependencies.
+  Here <code>long-username</code> requires <code>__username_length &gt;=3</code>, which both platform declarations satisfy.</li>
 </ul>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conda</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3.12.2</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">build</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">h9f0c242_0_cpython</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">subdir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">osx-64</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">sha256</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7647ac06c3798a182a4bcb1ff58864f1ef81eb3acea6971295304c23e43252fb</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">md5</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0179b8007ba008cf5bec11f3b3853902</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">depends</span><span class="p">:</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bzip2 &gt;=1.0.8,&lt;2.0a0</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libexpat &gt;=2.5.0,&lt;3.0a0</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libffi &gt;=3.4,&lt;4.0a0</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libsqlite &gt;=3.45.1,&lt;4.0a0</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libzlib &gt;=1.2.13,&lt;1.3.0a0</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ncurses &gt;=6.4,&lt;7.0a0</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openssl &gt;=3.2.1,&lt;4.0a0</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">readline &gt;=8.2,&lt;9.0a0</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tk &gt;=8.6.13,&lt;8.7.0a0</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tzdata</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xz &gt;=5.2.6,&lt;6.0a0</span>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">  </span><span class="nt">constrains</span><span class="p">:</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python_abi 3.12.* *_cp312</span>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">  </span><span class="nt">license</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Python-2.0</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">  </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">14596811</span>
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">  </span><span class="nt">timestamp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1708118065292</span>
-</span></code></pre></div>
+<p>The declared virtual package values <code>3</code> and <code>7</code> are solve inputs, not detected host values.
+A host could report <code>__username_length=9</code> without that value replacing either declaration in the lock file.
+Detection alone does not add a virtual package or its detector as an installed package record in the consumer environment.
+See <a href="../multi_platform_configuration/#declared-detected-and-required-virtual-packages">Declared, detected, and required virtual packages</a>.</p>
+<p>The serialized order of platform entries is not installation priority.
+See <a href="../multi_platform_configuration/#which-platform-gets-installed">Which platform gets installed?</a> for how Pixi selects and validates a target.</p>
 <h3 id="the-version-of-the-lock-file">The version of the lock file<a class="headerlink" href="#the-version-of-the-lock-file" title="Permanent link">#</a></h3>
-<p>The lock file also has a version number, this is to ensure that the lock file is compatible with the local version of <code>pixi</code>.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6</span>
-</span></code></pre></div>
+<p>The top-level <code>version</code> identifies the lock-file format, currently <code>7</code>.</p>
 <p>Pixi is backward compatible with the lock file, but not forward compatible.
 This means that you can use an older lock file with a newer version of <code>pixi</code>, but not the other way around.</p>
 <h2 id="lock-file-satisfiability">Lock file satisfiability<a class="headerlink" href="#lock-file-satisfiability" title="Permanent link">#</a></h2>
-<p>The lock file is a description of the environment, and it should always be satisfiable.
-Satisfiable means that the given manifest file and the created environment are in sync with the lock file.
-If the lock file is not satisfiable, Pixi will generate a new lock file automatically.</p>
+<p>Lock file satisfiability checks whether the locked resolution matches the manifest.
+It is separate from validating the selected target against the host and from checking the installed prefix.
+If the lock file is not satisfiable, Pixi updates it automatically unless <code>--locked</code> or <code>--frozen</code> prevents this.</p>
 <p>Steps to check if the lock file is satisfiable:</p>
 <ul>
 <li>All <code>environments</code> in the manifest file are in the lock file</li>
@@ -9634,7 +9627,7 @@ If the lock file is not satisfiable, Pixi will generate a new lock file automati
 <li>All hashes for the <code>pypi</code> editable packages are correct.</li>
 <li>There is only a single entry for every package in the lock file.</li>
 </ul>
-<p>If you want to get more details checkout the <a href="https://github.com/prefix-dev/pixi/blob/main/crates/pixi_core/src/lock_file/satisfiability/mod.rs">actual code</a> as this is a simplification of the actual code.</p>
+<p>If you want to get more details, checkout the <a href="https://github.com/prefix-dev/pixi/blob/main/crates/pixi_core/src/lock_file/satisfiability/mod.rs">actual code</a> as this is a simplification of the actual code.</p>
 
 
 

@@ -9764,15 +9764,16 @@ and target platforms.</p>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="go">pixi workspace platform list --script analysis.py</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="go">pixi workspace platform remove --script analysis.py osx-arm64</span>
 </span></code></pre></div>
-<p>The platform command also supports rich platform definitions and the <code>edit</code>
-and <code>move</code> operations. Platform order determines selection priority. Declared
+<p>The platform command also supports declaring <a href="../../conda_ecosystem/#virtual-packages-describing-the-host-system">virtual packages</a> and the <code>edit</code>
+and <code>move</code> operations. Platform order determines selection priority among
+platforms of the same <a href="../../conda_ecosystem/#subdirs-how-conda-targets-platforms">subdir</a>. Declared
 platforms are also the platforms consumed by <code>pixi lock --script</code>; the lock
 command does not take a separate platform override.</p>
 <h3 id="scripts-without-declared-platforms">Scripts without declared platforms<a class="headerlink" href="#scripts-without-declared-platforms" title="Permanent link">#</a></h3>
 <p>A script does not have to declare <code>platforms</code>.
-When it doesn't, Pixi resolves it for the machine you run it on, using the <a href="../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">virtual packages</a> it detects there: your CUDA driver, your glibc version, your macOS version.
-A script that needs a glibc newer than Pixi's <a href="../../workspace/system_requirements/#default-declared-virtual-packages">default</a> resolves without you writing anything down.</p>
-<p>To resolve for a fixed target instead:</p>
+When it doesn't, Pixi resolves it for the machine you run it on, using the <a href="../../workspace/multi_platform_configuration/#declared-detected-and-required-virtual-packages">virtual packages</a> it detects there: e.g. your CUDA driver, your glibc version, your macOS version.
+A script that needs a glibc newer than Pixi's <a href="../../workspace/multi_platform_configuration/#default-declared-virtual-packages">default</a> resolves without you writing anything down.</p>
+<p>To resolve for a fixed target matching the current host machine instead:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="go">pixi workspace platform add --script analysis.py --auto-detect</span>
 </span></code></pre></div>
 <h2 id="supported-command-surface">Supported command surface<a class="headerlink" href="#supported-command-surface" title="Permanent link">#</a></h2>

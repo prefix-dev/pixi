@@ -3742,6 +3742,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Install the consumer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#run-on-the-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run on the host
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -9378,6 +9395,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Install the consumer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#run-on-the-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Run on the host
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -9471,7 +9505,7 @@ The JSON is built-up like so:</p>
 <ul>
 <li><code>version</code> of the schema (at the time of writing, only <code>1</code> exists)</li>
 <li><code>virtual_packages</code>, reporting the <code>version</code> and optional <code>build_string</code> of the virtual package <code>__username_length</code></li>
-<li><code>cache</code>, optionally describing when the detector result is invalidated. If this is not set, the result is cached for 1 hour</li>
+<li><code>cache</code>, optionally describing when the detector result is invalidated. If that is unset, reports are cached for one hour.</li>
 </ul>
 <p>The Cargo manifest names the binary and declares its <code>serde_json</code> dependency:</p>
 <div class="language-toml highlight"><span class="filename">detector/Cargo.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package]</span>
@@ -9564,7 +9598,7 @@ In most cases, you will upload your detector to a hosted channel like <a href="h
 <h2 id="install-the-consumer">Install the consumer<a class="headerlink" href="#install-the-consumer" title="Permanent link">#</a></h2>
 <p>Now we switch to the role of the author of a consumer workspace which wants to use the <code>long-username</code> package.
 The workspace author declares the supported platforms so Pixi can lock all environments and their dependencies for those platforms, regardless of the machine generating the lock file.
-When a consumer runs the workspace, Pixi checks whether the host satisfies one of those platforms.</p>
+When a consumer runs the workspace, Pixi checks whether the host satisfies its locked package requirements.</p>
 <p>Here, the workspace author supports <code>linux-64</code> machines with <code>__username_length</code> of at least <code>3</code>.</p>
 <div class="language-toml highlight"><span class="filename">consumer/pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"../channel"</span><span class="p">,</span><span class="w"> </span><span class="s2">"https://prefix.dev/conda-forge"</span><span class="p">]</span>
@@ -9576,17 +9610,19 @@ When a consumer runs the workspace, Pixi checks whether the host satisfies one o
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="k">[tasks]</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"long-username"</span>
 </span></code></pre></div>
-<p>In <code>workspace.platforms</code>, <code>__username_length = "3"</code> declares version <code>3</code> for the solver.
-The host check accepts a detected version of <code>3</code> or newer, so this platform supports usernames with at least three characters.
-This is a version declaration, not a dependency constraint like <code>__username_length = "&gt;=3"</code> in <code>package.run-dependencies</code>.
-See <a href="../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">Declaring virtual packages per platform</a> for the platform syntax.</p>
+<p>In <code>workspace.platforms</code>, <code>__username_length = "3"</code> declares version <code>3</code> for the solver, regardless of the username length on the machine creating the lock file.
+The locked <code>long-username</code> package requires <code>__username_length &gt;=3</code>, so the host must report a username length of at least three in order to be able to use the environment for this platform.</p>
+<p>Pixi does not compare custom virtual-package declarations such as <code>__username_length = "3"</code> in <a href="../../reference/pixi_manifest/#inline-table-entries-per-platform-virtual-packages">inline-table platform entries</a> with detected values.
+If platforms differ only in a custom declaration, the first one whose locked requirements fit wins, regardless of the declared values.
+Without a locked package requiring that capability, selection cannot distinguish the platforms.
+See <a href="../../workspace/multi_platform_configuration/#which-platform-gets-installed">Which platform gets installed?</a> for the rules.</p>
 <p>The local channel supplies <code>long-username</code> and the detector, while conda-forge supplies the application's runtime dependencies.</p>
-<p>Let's run the task <code>start</code> which simply runs the executable <code>long-username</code>.</p>
+<h3 id="run-on-the-host">Run on the host<a class="headerlink" href="#run-on-the-host" title="Permanent link">#</a></h3>
+<p>Run the task <code>start</code>, which runs the executable <code>long-username</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>--manifest-path<span class="w"> </span>consumer<span class="w"> </span>start
 </span></code></pre></div>
-<p>First, Pixi checks which platform is suitable for your system.
-We only defined one platform, so Pixi only has to check that one.
-Then it notices that <code>__username_length</code> is provided by a virtual package detector.</p>
+<p>Pixi needs the detected <code>__username_length</code> to check the locked requirement.
+The local channel registers a detector for that name.</p>
 <p>In an interactive terminal, Pixi asks whether to trust detectors from the channel.
 The absolute channel path depends on where the example is saved:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Detectors inspect your system to identify capabilities that packages depend on, and run code on your machine.
@@ -9596,15 +9632,20 @@ The absolute channel path depends on where the example is saved:</p>
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>  Trust
 </span></code></pre></div>
 <p>Virtual package detectors can run arbitrary code, so only choose <strong>Trust</strong> if the channel is trusted.
-Pixi then asks where to save the decision; <strong>Don't save</strong> keeps it limited to the current invocation.
-After consent, the detector <code>username-length-detect</code> runs.
-If it reports that your username has fewer than three characters, the platform isn't selected.
-Since that is the only platform we defined, Pixi will then report that your host isn't supported.</p>
-<p>If the username was long enough, Pixi selects the platform, installs the environment and runs the executable:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>✨ Pixi task (start): long-username
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>long-username
+Pixi then asks where to save the decision; <strong>Don't save</strong> keeps it limited to the current invocation.</p>
+<p>In the lock file, <code>packages</code> will now have an entry like this:</p>
+<div class="language-yaml highlight"><span class="filename">consumer/pixi.lock</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">packages</span><span class="p">:</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/example/channel/linux-64/long-username-0.1.0-h2fb17a6_0.conda</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">subdir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux-64</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">depends</span><span class="p">:</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">__username_length &gt;=3</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libgcc &gt;=16</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">__glibc &gt;=2.28,&lt;3.0.a0</span>
 </span></code></pre></div>
-<p>The same mechanism lets packages require arbitrary host properties reported by a detector, without those properties being built into Pixi.</p>
+<p>If the username was long enough, Pixi selects the platform, installs the environment and runs the executable:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>✨ Pixi task (start): long-username
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>long-username
+</span></code></pre></div>
 
 
 

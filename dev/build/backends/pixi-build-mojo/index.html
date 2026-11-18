@@ -9972,15 +9972,19 @@ AMD builds also pass <code>--target-accelerator &lt;value&gt;</code> to target t
 Keep binary <code>extra-args</code> consistent with the selected target and package requirements.</p>
 <p>The backend supplies C/C++ compilers, <code>patchelf</code>, and a sysroot matching the declared glibc version.
 No manual compiler paths or sysroot pins are needed.
-Pin <code>mojo-compiler &gt;=1.2</code> in <code>[package.build-dependencies]</code> to select the compiler version.
-Host and runtime requirements follow that selection.</p>
+It also adds <code>mojo-compiler &gt;=1.2</code> automatically.
+Optionally constrain <code>mojo-compiler</code> in <code>[package.build-dependencies]</code> to select a compiler version.</p>
 <h3 id="runtime-and-selection">Runtime and selection<a class="headerlink" href="#runtime-and-selection" title="Permanent link">#</a></h3>
-<p>Both builds require glibc 2.34 or newer, x86-64-v3, and matching <code>mojo-compiler</code> and <code>max-core &gt;=26.7</code> runtimes.
+<p>Both builds require glibc 2.34 or newer and x86-64-v3.
+The backend automatically adds <code>max-core &gt;=26.7</code> and exact runtime pins for <code>mojo-compiler</code> and <code>max-core</code>, matching the versions used during the build.
+Consumers do not need to add these runtime dependencies manually.
 AMD builds also require <code>__amdgpu</code> and an exact <code>__amdgpu_arch</code> match for the selected target.
 For example, <code>gfx1103</code> requires <code>__amdgpu_arch ==11.0.3</code>, not that architecture or newer.
 The minimum <code>hip-runtime-amd</code> version is 7.0 for <code>gfx950</code> and 6.3.3 for all other supported AMD targets.</p>
-<p>The AMD build is preferred when its requirements are met, with CPU as the fallback.
-Use <a href="../../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">rich platforms</a> to define AMD and CPU solve targets, with AMD first for automatic selection.</p>
+<p>To enable GPU selection with CPU fallback during installation, declare both AMD and CPU platforms in the consumer workspace's <a href="../../../reference/pixi_manifest/#inline-table-entries-per-platform-virtual-packages"><code>workspace.platforms</code></a>, with AMD first.
+When installing that workspace, Pixi tries the AMD GPU platform first when its built-in declarations match the host.
+If its locked requirements, including the exact ISA dependency, don't fit, Pixi tries the CPU platform.
+See <a href="../../../workspace/multi_platform_configuration/#which-platform-gets-installed">Which platform gets installed?</a> for the selection rules.</p>
 <p>See <a href="../../mojo_accelerators/">Building Mojo CPU and AMD Packages</a> for a complete example.</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">#</a></h2>
 <ul>

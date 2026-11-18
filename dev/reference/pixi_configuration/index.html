@@ -10742,7 +10742,7 @@ debugging:</p>
 <h3 id="virtual-package-detectors"><code>virtual-package-detectors</code><a class="headerlink" href="#virtual-package-detectors" title="Permanent link">#</a></h3>
 <p>Channels can register virtual package detectors: small packages whose executable reports <a href="../../conda_ecosystem/#virtual-packages-describing-the-host-system">virtual packages</a>.
 These identify system capabilities that packages depend on.
-One example for this could be a detector reporting which <a href="https://en.wikipedia.org/wiki/Message_Passing_Interface">MPI</a> implementation and version you have on your system. </p>
+For example, a detector could report which <a href="https://en.wikipedia.org/wiki/Message_Passing_Interface">MPI</a> implementation and version the host provides.</p>
 <p>That also means, you run external and potentially untrusted code shortly before installing an environment.
 This is why Pixi asks whether to trust detectors coming from a certain channel.
 Additionally, it allows you to store your decision in your configuration, so you don't have to answer the question with every Pixi command.

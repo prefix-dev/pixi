@@ -3723,6 +3723,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#solve-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Solve group
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#channels" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -3760,6 +3771,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         Target platforms
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#selected-platform-and-selection-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Selected platform and selection source
       </span>
     </span>
   </a>
@@ -9626,6 +9648,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#solve-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Solve group
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#channels" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9663,6 +9696,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         Target platforms
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#selected-platform-and-selection-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Selected platform and selection source
       </span>
     </span>
   </a>
@@ -9758,11 +9802,7 @@ This information can also be retrieved in <code>json</code> format using the <co
 <p>This defines the platform you're currently on according to pixi.
 If this is incorrect, please file an issue on the <a href="https://github.com/prefix-dev/pixi">Pixi repo</a>.</p>
 <h3 id="virtual-packages">Virtual packages<a class="headerlink" href="#virtual-packages" title="Permanent link">#</a></h3>
-<p>The virtual packages that Pixi can find on your machine.</p>
-<p>In the Conda ecosystem, you can depend on virtual packages.
-These packages aren't real dependencies that are going to be installed, but rather are being used in the solve step to find if a package can be installed on the machine.
-A simple example: When a package depends on Cuda drivers being present on the host machine it can do that by depending on the <code>__cuda</code> virtual package.
-In that case, if Pixi cannot find the <code>__cuda</code> virtual package on your machine the installation will fail.</p>
+<p>The <a href="../../conda_ecosystem/#virtual-packages-describing-the-host-system">virtual packages</a> that Pixi detects on your machine.</p>
 <h3 id="cache-dir">Cache dir<a class="headerlink" href="#cache-dir" title="Permanent link">#</a></h3>
 <p>The directory where Pixi stores its cache.
 Checkout the <a href="../../workspace/environment/#caching-packages">cache documentation</a> for more information.</p>
@@ -9790,6 +9830,9 @@ This info is only available if your path has a <a href="../../reference/pixi_man
 <h3 id="features">Features<a class="headerlink" href="#features" title="Permanent link">#</a></h3>
 <p>This lists which features are enabled in the environment.
 For the default this is only <code>default</code></p>
+<h3 id="solve-group">Solve group<a class="headerlink" href="#solve-group" title="Permanent link">#</a></h3>
+<p>The <a href="../../workspace/multi_environment/">solve group</a> the environment belongs to, shown only when configured.
+Environments in the same solve group use the same versions of shared dependencies.</p>
 <h3 id="channels">Channels<a class="headerlink" href="#channels" title="Permanent link">#</a></h3>
 <p>The list of channels used in this environment.</p>
 <h3 id="dependency-count">Dependency count<a class="headerlink" href="#dependency-count" title="Permanent link">#</a></h3>
@@ -9797,7 +9840,14 @@ For the default this is only <code>default</code></p>
 <h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">#</a></h3>
 <p>The list of dependencies defined for this environment.</p>
 <h3 id="target-platforms">Target platforms<a class="headerlink" href="#target-platforms" title="Permanent link">#</a></h3>
-<p>The platforms the workspace has defined.</p>
+<p>The platforms the workspace has defined (for this environment).</p>
+<h3 id="selected-platform-and-selection-source">Selected platform and selection source<a class="headerlink" href="#selected-platform-and-selection-source" title="Permanent link">#</a></h3>
+<p>The platform used to filter this diagnostic output, separate from the installed platform below.
+<code>Selection source</code> reports whether it came from the installed prefix, a host match, lock fallback, or the host baseline for a dependency-free environment.
+In JSON, <code>selected_platform_source</code> uses <code>installed</code>, <code>host_match</code>, <code>lock_fallback</code>, or <code>host_baseline</code>.</p>
+<p><code>pixi info</code> never solves or verifies lock freshness.
+Unless it reuses an installed platform or selects the host baseline, it reads the existing lock to check requirements, even when a declaration matches the host.
+The next installation can select differently; see <a href="../../workspace/multi_platform_configuration/#diagnostic-selection">diagnostic selection</a>.</p>
 <h3 id="resolved-platform">Resolved platform<a class="headerlink" href="#resolved-platform" title="Permanent link">#</a></h3>
 <p>The platform the environment was resolved for the last time it was installed, shown as the conda subdir plus the virtual packages it was resolved with.
 Only present once the environment has been installed.</p>
