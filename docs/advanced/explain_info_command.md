@@ -108,7 +108,7 @@ The list of dependencies defined for this environment.
 
 ### Target platforms
 
-The platforms the workspace has defined.
+The platforms the workspace has defined (for this environment).
 
 ### Selected platform and selection source
 
