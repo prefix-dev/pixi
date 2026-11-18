@@ -57,7 +57,7 @@ You may want to have more control over the interplay between the manifest, the l
 - `--locked`: check that `pixi.lock` is up to date with the [manifest file](../reference/pixi_manifest.md), and fail rather than update it if not. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: don't modify the environment, only modify the lock file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
 
-Neither `--locked` nor `--frozen` alone bypasses host compatibility validation.
+Neither `--locked` nor `--frozen` alone bypass host compatibility validation.
 See [Which platform gets installed?](multi_platform_configuration.md#which-platform-gets-installed) for target selection and explicit platform overrides.
 The installed prefix is separate state: a fresh lock file does not mean that its packages are already installed.
 
