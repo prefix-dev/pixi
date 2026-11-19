@@ -7,7 +7,8 @@ use pixi_core::Workspace;
 use pixi_manifest::CondaConstraints;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, PackageName, ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
+    ChannelConfig, MatchSpec, PackageName, ParseMatchSpecError, ParseMatchSpecOptions,
+    RepodataRevision,
 };
 use rattler_lock::LockFile;
 
@@ -173,8 +174,7 @@ mod tests {
         ]
         .map(|name| PackageName::from_str(name).unwrap());
 
-        let warnings =
-            unmatched_constraint_warnings(&constraint_names, &conda_names, &pypi_names);
+        let warnings = unmatched_constraint_warnings(&constraint_names, &conda_names, &pypi_names);
         insta::assert_snapshot!(warnings.join("\n"), @r"
         the conda package 'typing_extensions' is absent from the resulting lock file, but the PyPI package 'typing-extensions' is locked: `--with-constraint` only applies to conda packages
         the conda package 'typing-extensions' is absent from the resulting lock file, but the PyPI package 'typing-extensions' is locked: `--with-constraint` only applies to conda packages
