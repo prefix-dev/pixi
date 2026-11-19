@@ -297,6 +297,8 @@ fn resolve_rosdep_to_conda_package_spec(
         }
     }
 
+    let gl_packages = take_gl_markers(&mut conda_packages, host_platform);
+
     // A version specifier applies to the mapping's first package; the others are
     // its companions (e.g. libgl-devel for Qt on Linux).
     if let (Some(spec), Some(first)) = (&spec_str, conda_packages.first_mut()) {
@@ -309,7 +311,40 @@ fn resolve_rosdep_to_conda_package_spec(
         first.push_str(spec);
     }
 
+    for package in gl_packages {
+        if !conda_packages.iter().any(|p| p == package) {
+            conda_packages.push(package.to_string());
+        }
+    }
     Ok(conda_packages)
+}
+
+/// Remove the `REQUIRE_GL` / `REQUIRE_OPENGL` markers of older mappings
+/// (RoboStack's no longer use them, user mappings may) and return the packages
+/// they stand for on `platform`.
+fn take_gl_markers(packages: &mut Vec<String>, platform: Subdir) -> Vec<&'static str> {
+    let os = platform.only_platform();
+    let (linux, osx) = (os == Some("linux"), os == Some("osx"));
+    let mut gl_packages = Vec::new();
+    packages.retain(|package| match package.as_str() {
+        "REQUIRE_GL" => {
+            if linux {
+                gl_packages.push("libgl-devel");
+            }
+            false
+        }
+        "REQUIRE_OPENGL" => {
+            if linux {
+                gl_packages.extend(["libgl-devel", "libopengl-devel"]);
+            }
+            if linux || osx {
+                gl_packages.extend(["xorg-libx11", "xorg-libxext"]);
+            }
+            false
+        }
+        _ => true,
+    });
+    gl_packages
 }
 
 /// Format version constraints from a package.xml dependency to a nameless
@@ -813,7 +848,7 @@ mod tests {
         let osx = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Osx64, &package_map).unwrap();
         let win = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Win64, &package_map).unwrap();
 
-        assert_eq!(linux, vec!["libusb", "libudev"]);
+        assert_eq!(linux, vec!["libudev", "libusb"]);
         assert_eq!(osx, vec!["libusb"]);
         assert_eq!(win, vec!["libusb"]);
 
@@ -994,6 +1029,62 @@ mod tests {
         let result =
             rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
         assert_eq!(result, vec!["qt-main >=5.15", "libgl-devel"]);
+    }
+
+    #[test]
+    fn test_bundled_spec_applies_to_the_named_package() {
+        let package_map = bundled_package_map("jazzy").unwrap();
+        let dep = Dependency {
+            version_gte: Some("1.12".to_string()),
+            ..Dependency::from("python3-pygraphviz")
+        };
+        let result =
+            rosdep_to_conda_package_spec(&dep, &jazzy_distro(), Subdir::Linux64, &package_map)
+                .unwrap();
+        assert_eq!(result, ["pygraphviz >=1.12", "graphviz"]);
+    }
+
+    #[test]
+    fn test_gl_markers_in_user_mappings() {
+        let distro = jazzy_distro();
+        let package_map: HashMap<String, PackageMapEntry> = serde_yaml::from_str(
+            "custom_gl: {conda: [REQUIRE_OPENGL]}\n\
+             custom_glu: {conda: [glu, REQUIRE_GL, REQUIRE_OPENGL]}",
+        )
+        .unwrap();
+        let resolve = |name: &str, platform| {
+            let dep = Dependency {
+                version_gte: Some("9.0".to_string()),
+                ..Dependency::from(name)
+            };
+            rosdep_to_conda_package_spec(&dep, &distro, platform, &package_map).unwrap()
+        };
+
+        assert_eq!(
+            resolve("custom_gl", Subdir::Linux64),
+            [
+                "libgl-devel",
+                "libopengl-devel",
+                "xorg-libx11",
+                "xorg-libxext"
+            ]
+        );
+        assert_eq!(
+            resolve("custom_gl", Subdir::OsxArm64),
+            ["xorg-libx11", "xorg-libxext"]
+        );
+        assert!(resolve("custom_gl", Subdir::Win64).is_empty());
+        // the version applies to the mapped package, not to what a marker adds
+        assert_eq!(
+            resolve("custom_glu", Subdir::LinuxAarch64),
+            [
+                "glu >=9.0",
+                "libgl-devel",
+                "libopengl-devel",
+                "xorg-libx11",
+                "xorg-libxext"
+            ]
+        );
     }
 
     #[test]

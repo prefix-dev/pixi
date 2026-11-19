@@ -138,7 +138,7 @@ This does not work with the `robostack-staging` channel, as it contains packages
 Because the definition of a dependency in a `package.xml` file is not similar to a conda package name, the backend needs to map ROS dependencies to conda packages.
 
 - **Workspace siblings**: Other ROS packages in the same workspace are discovered automatically and resolved as **source** dependencies, built from their sibling directory. See [Workspace Source Discovery](#workspace-source-discovery).
-- **Known dependencies**: Mapped using RoboStack's [shared mappings](https://github.com/RoboStack/robostack/blob/main/shared/robostack.yaml), with distribution-specific overrides bundled in the backend.
+- **Known dependencies**: Mapped using RoboStack's [shared mappings](https://github.com/RoboStack/robostack/blob/main/shared/robostack.yaml), with the distribution-specific overrides of the distributions RoboStack builds (e.g. Qt5 for `humble`, `jazzy`, `kilted` and `noetic`) bundled in the backend. Other distributions get the shared mappings only, which follow the newest distributions (e.g. Qt6); add [`extra-package-mappings`](#extra-package-mappings) to change that.
 - **Custom mappings**: You can provide additional mappings in your `pixi.toml` under [`[package.build.config.extra-package-mappings]`](#extra-package-mappings)
 - **Other packages**: Mapped to RoboStack's names: `ros2-<package-name>` for ROS 2 and `ros-<distro>-<package-name>` for ROS 1.
 
@@ -180,7 +180,7 @@ If set the package name will be prefixed with `ros2-` (`ros-<distro>-` for ROS 1
 
 ```toml
 [package.build.config]
-distro = "jazzy"  # or "humble", "noetic", "iron", etc.
+distro = "jazzy"  # or "humble", "kilted", "noetic", etc.
 ```
 
 ### `env`
@@ -309,7 +309,7 @@ An exact subdir entry takes precedence over the OS entry, including an empty or 
 A missing platform entry, `[]`, or YAML `null` means no dependency for that platform; it does not trigger the ROS-name fallback.
 Package templates such as `cuda-nvcc-dev_${{ target_platform }}` are rendered for the requested target before validating the conda spec.
 For a conda mapping with several packages, a `package.xml` version constraint applies only to the first package. A pre-existing constraint on that package remains an error.
-The old `REQUIRE_GL` and `REQUIRE_OPENGL` markers are not supported; use explicit platform-specific conda packages instead.
+The older `REQUIRE_GL` (`libgl-devel` on Linux) and `REQUIRE_OPENGL` (`libgl-devel` and `libopengl-devel` on Linux, `xorg-libx11` and `xorg-libxext` on Linux and macOS) markers still work in conda mappings; RoboStack's own mappings list these packages explicitly per platform instead.
 
 
 ## Default Variants
