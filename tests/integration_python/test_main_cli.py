@@ -1120,11 +1120,11 @@ package = "*"
     # The constraint is not written to the manifest
     assert manifest_path.read_text() == manifest
 
-    # A constraint that matches no locked conda package has no effect
+    # A constraint whose package is absent from the resulting lock file is reported
     # spellchecker:off
     verify_cli_command(
         [pixi, "lock", "--check", "--with-constraint", "pakage<0.2", *flags],
-        stderr_contains="constraint on 'pakage' has no effect",
+        stderr_contains="the conda package 'pakage' is absent from the resulting lock file",
     )
     # spellchecker:on
 

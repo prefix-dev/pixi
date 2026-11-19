@@ -1,13 +1,13 @@
 //! The `--with-constraint` option of `pixi lock`.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, str::FromStr};
 
 use clap::Parser;
 use pixi_core::Workspace;
 use pixi_manifest::CondaConstraints;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
+    ChannelConfig, MatchSpec, PackageName, ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
 };
 use rattler_lock::LockFile;
 
@@ -54,9 +54,11 @@ impl ConstraintArgs {
     }
 }
 
-/// Warns about temporary constraints that don't match any conda package in
-/// the lock file. Such a constraint has no effect, which usually means that
-/// the package name is misspelled or that the package comes from PyPI.
+/// Warns about temporary constraints whose conda package is absent from the
+/// resulting lock file. The constraint may still have shaped the solve (e.g.
+/// by moving a dependent to a version that no longer needs the package), but
+/// a misspelled name or a package that comes from PyPI is the more common
+/// cause.
 pub fn warn_unmatched_constraints(workspace: &Workspace, lock_file: &LockFile) {
     let constraints = &workspace.workspace.value.extra_constraints;
     if constraints.is_empty() {
@@ -71,27 +73,43 @@ pub fn warn_unmatched_constraints(workspace: &Workspace, lock_file: &LockFile) {
                 if let Some(conda) = package.as_conda() {
                     conda_names.insert(conda.name().as_normalized().to_string());
                 } else if let Some(pypi) = package.as_pypi() {
-                    pypi_names.insert(pypi.name().as_ref().to_string());
+                    pypi_names.insert(pypi.name().clone());
                 }
             }
         }
     }
 
-    for name in constraints.names() {
+    for warning in unmatched_constraint_warnings(constraints.names(), &conda_names, &pypi_names) {
+        tracing::warn!("{warning}");
+    }
+}
+
+/// Builds a warning for every constrained conda package that is absent from
+/// the resulting lock file.
+fn unmatched_constraint_warnings<'a>(
+    constraint_names: impl IntoIterator<Item = &'a PackageName>,
+    conda_names: &HashSet<String>,
+    pypi_names: &HashSet<pep508_rs::PackageName>,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for name in constraint_names {
         let name = name.as_normalized();
         if conda_names.contains(name) {
             continue;
         }
-        if pypi_names.contains(name) {
-            tracing::warn!(
-                "constraint on '{name}' has no effect: '{name}' is only locked as a PyPI package, and `--with-constraint` only applies to conda packages"
-            );
-        } else {
-            tracing::warn!(
-                "constraint on '{name}' has no effect: no environment contains the conda package '{name}'"
-            );
-        }
+        // PyPI names are normalized differently (`_` and `.` become `-`), so
+        // `typing_extensions` must match a locked `typing-extensions`.
+        let pypi_name = pep508_rs::PackageName::from_str(name)
+            .ok()
+            .filter(|pypi_name| pypi_names.contains(pypi_name));
+        warnings.push(match pypi_name {
+            Some(pypi_name) => format!(
+                "the conda package '{name}' is absent from the resulting lock file, but the PyPI package '{pypi_name}' is locked: `--with-constraint` only applies to conda packages"
+            ),
+            None => format!("the conda package '{name}' is absent from the resulting lock file"),
+        });
     }
+    warnings
 }
 
 /// An error that occurs when parsing a `--with-constraint` argument.
@@ -132,4 +150,37 @@ fn parse_constraints(
         );
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unmatched_constraint_warnings_normalize_pypi_names() {
+        let conda_names = HashSet::from(["openssl".to_string()]);
+        let pypi_names = HashSet::from([
+            pep508_rs::PackageName::from_str("typing-extensions").unwrap(),
+            pep508_rs::PackageName::from_str("zope.interface").unwrap(),
+        ]);
+        let constraint_names = [
+            "openssl",
+            "typing_extensions",
+            "typing-extensions",
+            "typing.extensions",
+            "zope_interface",
+            "missing",
+        ]
+        .map(|name| PackageName::from_str(name).unwrap());
+
+        let warnings =
+            unmatched_constraint_warnings(&constraint_names, &conda_names, &pypi_names);
+        insta::assert_snapshot!(warnings.join("\n"), @r"
+        the conda package 'typing_extensions' is absent from the resulting lock file, but the PyPI package 'typing-extensions' is locked: `--with-constraint` only applies to conda packages
+        the conda package 'typing-extensions' is absent from the resulting lock file, but the PyPI package 'typing-extensions' is locked: `--with-constraint` only applies to conda packages
+        the conda package 'typing.extensions' is absent from the resulting lock file, but the PyPI package 'typing-extensions' is locked: `--with-constraint` only applies to conda packages
+        the conda package 'zope_interface' is absent from the resulting lock file, but the PyPI package 'zope-interface' is locked: `--with-constraint` only applies to conda packages
+        the conda package 'missing' is absent from the resulting lock file
+        ");
+    }
 }

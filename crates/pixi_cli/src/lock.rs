@@ -124,8 +124,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?;
     drop(clear_progress);
 
-    // A constraint that matches no locked conda package has no effect, which
-    // usually points to a misspelled name or a PyPI package.
+    // Point out constraints whose package is absent from the resulting lock
+    // file, which usually means a misspelled name or a PyPI package.
     warn_unmatched_constraints(&workspace, &lock_file);
 
     // Determine the diff between the old and new lock file.
