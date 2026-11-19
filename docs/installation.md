@@ -29,6 +29,35 @@ To install `pixi` you can run the following command in your terminal:
         The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `%UserProfile%\.pixi\bin`.
         The command will also add `%UserProfile%\.pixi\bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
 
+=== "Linux clusters with distributed filesystems"
+    For cluster systems with distributed filesystems, it is beneficial (though not mandatory) to keep pixi and its deployments away from the shared filesystem and work on local storage instead.
+    This way, we trade off I/O pressure with slight (but due to pixi's speed rather negligible) network traffic overhead.
+    This can be achieved by providing pixi via an sh function that installs it on-the-fly to a PIXI_HOME that is machine-local by creating/extending `~/.shrc` with the following:
+
+    ```bash
+    # ~/.shrc
+    export PIXI_HOME=... # path to machine-local pixi installation
+    export XDG_CACHE_HOME=... # path to desired (machine-local) cache. Ideally, this should be already defined by your admins and can be skipped in such a case.
+    
+    pixi() {
+        local entrypoint="$PIXI_HOME/bin/pixi"
+
+        if [ ! -f $entrypoint ]
+        then
+            # install pixi on-the-fly to $PIXI_HOME if not yet present
+            curl -fsSL https://pixi.sh/install.sh | sh
+        fi
+
+        # run pixi from local installation
+        command $entrypoint "$@"
+    }
+    ```
+    In addition, source `.shrc` in your preferred shell and ensure that `.shrc` is loaded by plain sh shells, by e.g. appending the following to `~/.bashrc`:
+    ```bash
+    export ENV="$HOME/.shrc"
+    source $ENV
+    ```
+
 Now restart your terminal or shell to make the installation take effect.
 
 ??? question "Don't trust our link? Check the script!"
