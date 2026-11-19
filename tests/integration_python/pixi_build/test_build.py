@@ -454,6 +454,44 @@ def test_incremental_builds(
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("verbose", [False, True], ids=["default", "verbose"])
+@pytest.mark.parametrize(
+    ("backend", "tool_verbose_evidence"),
+    # cargo prints the rustc command lines it runs only in verbose mode.
+    [("pixi-build-rust", "Running `")],
+)
+def test_build_tool_verbosity_follows_pixi(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    build_data: Path,
+    backend: str,
+    tool_verbose_evidence: str,
+    verbose: bool,
+) -> None:
+    """
+    The build tool's verbose output only shows up when pixi's own verbosity asks for it.
+    """
+    test_workspace = build_data / "minimal-backend-workspaces" / backend
+    copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            *(["-vvv"] if verbose else []),
+            "--target-dir",
+            str(tmp_pixi_workspace),
+            "--path",
+            manifest_path,
+        ],
+        stderr_contains=tool_verbose_evidence if verbose else None,
+        stderr_excludes=None if verbose else tool_verbose_evidence,
+        strip_ansi=True,
+    )
+
+
+@pytest.mark.slow
 def test_error_manifest_deps(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     test_data = build_data.joinpath("rattler-build-backend")
     # copy the whole smokey project to the tmp_pixi_workspace
