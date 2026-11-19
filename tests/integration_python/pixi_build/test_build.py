@@ -457,8 +457,17 @@ def test_incremental_builds(
 @pytest.mark.parametrize("verbose", [False, True], ids=["default", "verbose"])
 @pytest.mark.parametrize(
     ("backend", "tool_verbose_evidence"),
-    # cargo prints the rustc command lines it runs only in verbose mode.
-    [("pixi-build-rust", "Running `")],
+    [
+        # cargo prints the rustc command lines it runs only in verbose mode.
+        ("pixi-build-rust", "Running `"),
+        # ninja prints the compiler command lines only in verbose mode.
+        # spellchecker:off
+        (
+            "pixi-build-cmake",
+            "/FoCMakeFiles" if CURRENT_PLATFORM.startswith("win") else "-o CMakeFiles/",
+        ),
+        # spellchecker:on
+    ],
 )
 def test_build_tool_verbosity_follows_pixi(
     pixi: Path,

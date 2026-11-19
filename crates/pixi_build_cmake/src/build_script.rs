@@ -6,6 +6,8 @@ pub struct BuildScriptContext {
     pub build_platform: BuildPlatform,
     pub source_dir: String,
     pub extra_args: Vec<String>,
+    /// Pass `--verbose` to `cmake --build`, which has a single verbose level.
+    pub verbose: bool,
 }
 
 #[derive(Copy, Clone, Serialize)]
@@ -46,6 +48,7 @@ mod test {
             build_platform,
             source_dir: String::from("my-prefix-dir"),
             extra_args: extra_args.clone(),
+            verbose: false,
         };
         let script = context.render();
 
@@ -66,12 +69,40 @@ mod test {
 
     /// Renders the script for a platform.
     fn render(build_platform: BuildPlatform) -> String {
+        render_with_verbose(build_platform, false)
+    }
+
+    fn render_with_verbose(build_platform: BuildPlatform, verbose: bool) -> String {
         BuildScriptContext {
             build_platform,
             source_dir: String::from("/src/demo"),
             extra_args: vec![],
+            verbose,
         }
         .render()
+    }
+
+    #[test]
+    fn test_build_verbosity() {
+        let build_lines = [BuildPlatform::Unix, BuildPlatform::Windows]
+            .into_iter()
+            .flat_map(|platform| {
+                [false, true].map(|verbose| {
+                    render_with_verbose(platform, verbose)
+                        .lines()
+                        .filter(|line| line.contains("cmake --build"))
+                        .map(str::trim)
+                        .collect::<String>()
+                })
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!(build_lines, @r"
+        cmake --build . --target install
+        cmake --build . --target install --verbose
+        cmake --build . --target install
+        cmake --build . --target install --verbose
+        ");
     }
 
     /// An install prefix holding a space must reach cmake as one argument, so
