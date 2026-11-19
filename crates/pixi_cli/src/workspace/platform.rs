@@ -308,9 +308,10 @@ fn parse_add_positional(input: &str) -> miette::Result<(PixiPlatformName, Subdir
 pub struct AddArgs {
     /// Platforms to add, optionally followed by raw virtual-package specs.
     ///
-    /// A bare conda subdir (`linux-64`) or `<name>=<subdir>`
-    /// (`gpu-linux=linux-64`) adds a platform. Entries beginning with `__`
-    /// declare virtual packages as `__name[=version[=build_string]]`.
+    /// A bare `<name>` references a declared platform, falling back to a conda
+    /// subdir (`linux-64`). `<name>=<subdir>` (`gpu-linux=linux-64`) defines or
+    /// replaces a platform. Entries beginning with `__` declare virtual
+    /// packages as `__name[=version[=build_string]]`; these require a definition.
     ///
     /// With `--auto-detect`, give at most a single bare `<name>` to name the
     /// detected platform. Virtual-package specs override detected values.
@@ -584,39 +585,53 @@ async fn execute_add(
         );
     }
 
-    let parsed: Vec<(PixiPlatformName, Subdir)> = platform_entries
+    if virtual_packages_present && !platform_entries[0].contains('=') {
+        miette::bail!(
+            "virtual packages require a custom platform name; use `<name>=<subdir>` to define or replace a platform instead of a bare name or subdir"
+        );
+    }
+
+    let mut virtual_packages = Some(args.virtual_packages);
+    let platforms = platform_entries
         .iter()
-        .map(|raw| parse_add_positional(raw))
-        .collect::<miette::Result<_>>()?;
+        .map(|raw| {
+            if !raw.contains('=')
+                && let Some(platform) = workspace_ctx
+                    .workspace()
+                    .workspace_manifest()
+                    .workspace
+                    .platforms
+                    .iter()
+                    .find(|platform| platform.name().as_str() == raw)
+            {
+                return Ok(platform.clone());
+            }
+            let (name, subdir) = parse_add_positional(raw)?;
+            if virtual_packages_present && name.as_str() == subdir.as_str() {
+                miette::bail!(
+                    "virtual packages require a custom platform name; use `<name>=<subdir>` (e.g. `gpu-{subdir}={subdir}`) instead of the bare subdir"
+                );
+            }
+            let specs = if virtual_packages_present {
+                virtual_packages
+                    .take()
+                    .expect("virtual packages require exactly one platform")
+                    .into_specs(subdir, &custom_specs)?
+            } else {
+                Vec::new()
+            };
+            PixiPlatform::new_with_defaults(name, subdir, specs).into_diagnostic()
+        })
+        .collect::<miette::Result<Vec<_>>>()?;
 
     // Reject duplicate platform positionals so `add linux-64 linux-64` fails
     // loudly instead of silently collapsing, mirroring the virtual-package
     // dedup above.
     let mut seen_platforms = HashSet::new();
-    for (name, _) in &parsed {
-        if !seen_platforms.insert(name.clone()) {
+    for platform in &platforms {
+        let name = platform.name();
+        if !seen_platforms.insert(name) {
             miette::bail!("platform '{name}' was specified more than once on the command line");
-        }
-    }
-
-    let mut platforms: Vec<PixiPlatform> = Vec::with_capacity(parsed.len());
-    if virtual_packages_present {
-        let (name, subdir) = parsed.into_iter().next().expect("len checked above");
-        // Virtual packages cannot be attached to subdir platforms. A string
-        // entry like `linux-64` is locked to mirror the underlying conda
-        // subdir exactly; the model rejects mutations on these, so reject at
-        // parse time before we go through any solve.
-        if name.as_str() == subdir.as_str() {
-            miette::bail!(
-                "virtual packages require a custom platform name; use `<name>=<subdir>` (e.g. `gpu-{subdir}={subdir}`) instead of the bare subdir"
-            );
-        }
-        let specs = args.virtual_packages.into_specs(subdir, &custom_specs)?;
-        platforms.push(PixiPlatform::new_with_defaults(name, subdir, specs).into_diagnostic()?);
-    } else {
-        for (name, subdir) in parsed {
-            platforms
-                .push(PixiPlatform::new_with_defaults(name, subdir, Vec::new()).into_diagnostic()?);
         }
     }
 
