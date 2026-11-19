@@ -23,6 +23,8 @@ for further details on how to use the software.
 ---
 title: Home
 template: home.html
+social:
+  cards_layout: home
 ---
 # Pixi
 
