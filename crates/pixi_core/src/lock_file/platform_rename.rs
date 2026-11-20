@@ -282,9 +282,9 @@ mod tests {
             name = "demo"
             channels = []
             platforms = [
-              { name = "mac", platform = "osx-arm64", macos = "13.5" },
+              { name = "mac", subdir = "osx-arm64", macos = "13.5" },
               "linux-64",
-              { name = "gpu", platform = "linux-64", cuda = "12.0" },
+              { name = "gpu", subdir = "linux-64", cuda = "12.0" },
             ]
             "#,
         );
@@ -331,7 +331,7 @@ mod tests {
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{ name = "gpu-linux", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu-linux", subdir = "linux-64", cuda = "12.0" }]
             "#,
         );
         let lock = lockfile_with(
@@ -393,7 +393,7 @@ mod tests {
             channels = []
             platforms = [
               "linux-64",
-              { name = "gpu-linux", platform = "linux-64", cuda = "12.0" },
+              { name = "gpu-linux", subdir = "linux-64", cuda = "12.0" },
             ]
             "#,
         );
@@ -435,7 +435,7 @@ mod tests {
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{ name = "gpu-linux", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu-linux", subdir = "linux-64", cuda = "12.0" }]
             "#,
         );
         // Older lockfile that materialised the linux-64 defaults alongside
@@ -471,7 +471,7 @@ mod tests {
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu", subdir = "linux-64", cuda = "12.0" }]
             "#,
         );
         // `build-tool` is referenced only from the source record's
@@ -527,7 +527,7 @@ packages:
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu", subdir = "linux-64", cuda = "12.0" }]
             "#,
         );
         // `host-tool` is referenced only from the source record's

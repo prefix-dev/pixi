@@ -98,16 +98,16 @@ An inline table declares additional virtual packages for the solve, for example 
 [workspace]
 platforms = [
   "osx-arm64",
-  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
-  { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
+  { subdir = "linux-64", cuda = "12.0", glibc = "2.28" },
+  { name = "jetson-nano", subdir = "linux-aarch64", cuda = "12.8" },
 ]
 ```
 
 Recognised keys on an inline-table entry:
 
-- `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
+- `subdir`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
 - `name`: identifier used by target selectors, `feature.<name>.platforms`, `pixi.lock`, and the CLI.
-  Defaults to a name synthesized from `platform` and the declared virtual packages, such as `linux-64-cuda-12-0`.
+  Defaults to a name synthesized from `subdir` and the declared virtual packages, such as `linux-64-cuda-12-0`.
 - Built-in virtual-package keys: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
   Each maps onto the matching conda virtual package, for example `macos` onto `__osx`.
   - `cuda` also accepts `{ driver = "12.0", arch = "8.6" }` to declare the compute capability as `__cuda_arch`; `arch` requires `driver`.
@@ -116,6 +116,10 @@ Recognised keys on an inline-table entry:
     A machine covers it if its microarchitecture is the same or a strict superset.
 - Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`.
   The value is a concrete version, not a dependency expression. Without a build string, the virtual package has the default build `0`. A build string may only contain ASCII letters, digits, `_`, `.`, and `+`, as [CEP 26](https://conda.org/learn/ceps/cep-0026/) requires.
+
+`platform` is a deprecated alias for `subdir` and emits a warning.
+Specifying both keys is invalid, even if their values match.
+Pixi writes `subdir` when regenerating an entry; untouched entries keep their existing spelling.
 
 See [declared, detected, and required virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) for how declarations are used, and [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for how they are compared with the machine.
 
@@ -1292,8 +1296,8 @@ A `*` in a selector matches against platform names, which is useful with custom 
 ```toml
 [workspace]
 platforms = [
-  { name = "cuda-win-64", platform = "win-64", cuda = "12" },
-  { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+  { name = "cuda-win-64", subdir = "win-64", cuda = "12" },
+  { name = "cuda-linux-64", subdir = "linux-64", cuda = "12" },
   "win-64",
   "linux-64",
 ]
@@ -1348,7 +1352,7 @@ When those are used we call them the `default` feature. This is a protected name
 # CUDA 12 is declared on the linux-64 build target.
 platforms = [
   "osx-arm64",
-  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+  { name = "linux-64-cuda", subdir = "linux-64", cuda = "12" },
 ]
 
 [feature.cuda]

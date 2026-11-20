@@ -249,7 +249,7 @@ async fn project_allow_with_user_decision(global_decision: Option<&str>, authori
         r#"[workspace]
 name = "repository-consent"
 channels = ["{channel}"]
-platforms = [{{ platform = "{subdir}", __test_good = "1" }}]
+platforms = [{{ subdir = "{subdir}", __test_good = "1" }}]
 "#
     ))
     .unwrap();
@@ -627,7 +627,7 @@ async fn unused_high_priority_feature_cannot_shadow_active_detector() {
         r#"[workspace]
 name = "scoped-detector"
 channels = ["{low_url}"]
-platforms = [{{ name = "custom", platform = "{subdir}", __test_good = "1" }}]
+platforms = [{{ name = "custom", subdir = "{subdir}", __test_good = "1" }}]
 
 [dependencies]
 needs-good = "*"
@@ -689,7 +689,7 @@ async fn environment_channel_order_controls_ownership_and_equal_scopes_share_hos
         r#"[workspace]
 name = "ordered-detectors"
 channels = []
-platforms = [{{ name = "custom", platform = "{subdir}", __test_good = "1" }}]
+platforms = [{{ name = "custom", subdir = "{subdir}", __test_good = "1" }}]
 
 [feature.allowed]
 channels = ["{low_url}"]
@@ -757,7 +757,7 @@ async fn source_only_dependencies_still_detect_declared_custom_capabilities() {
         r#"[workspace]
 name = "source-detector"
 channels = ["{url}"]
-platforms = [{{ platform = "{subdir}", __test_good = "1" }}]
+platforms = [{{ subdir = "{subdir}", __test_good = "1" }}]
 preview = ["pixi-build"]
 
 [dependencies]

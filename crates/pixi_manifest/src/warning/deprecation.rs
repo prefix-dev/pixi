@@ -28,6 +28,17 @@ impl Deprecation {
         }
     }
 
+    pub fn platform_key(span: Span) -> Self {
+        Self {
+            message: "the `platform` field is deprecated; use `subdir` instead".into(),
+            labels: vec![LabeledSpan::new_primary_with_span(
+                Some("replace this with 'subdir'".to_string()),
+                SourceSpan::new(span.start.into(), span.end - span.start),
+            )],
+            help: None,
+        }
+    }
+
     /// Deprecation of the top-level `[exclude-newer]` and
     /// `[pypi-exclude-newer]` tables of per-package cutoffs. Entries with a
     /// zero cutoff are replaced by the `exemptions` of

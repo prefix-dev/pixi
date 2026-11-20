@@ -123,6 +123,86 @@ def _run_platform(
     )
 
 
+@pytest.mark.parametrize("manifest_name", ["pixi.toml", "pyproject.toml"])
+def test_legacy_platform_key_migrates_only_rewritten_entries(
+    pixi: Path, tmp_pixi_workspace: Path, manifest_name: str
+) -> None:
+    manifest = tmp_pixi_workspace / manifest_name
+    table = "tool.pixi.workspace" if manifest_name == "pyproject.toml" else "workspace"
+    original = f"""\
+[{table}]
+name = "platform-test"
+channels = []
+platforms = [
+  {{ name = 'gpu', platform = 'linux-64', cuda = '12.0' }}, # keep gpu
+  {{ name = 'cpu', platform = 'linux-64' }}, # keep cpu
+]
+"""
+    if manifest_name == "pyproject.toml":
+        original += """
+[tool.pixi.environments]
+default = { features = [], no-default-feature = true }
+"""
+    manifest.write_text(original)
+    command = [str(pixi), "workspace", "--manifest-path", str(manifest), "platform"]
+    verify_cli_command([*command, "list"])
+    assert manifest.read_text() == original
+    verify_cli_command([*command, "add", "gpu=linux-64", "--cuda", "12.0", "--no-install"])
+    assert manifest.read_text() == original
+
+    verify_cli_command([*command, "move", "cpu", "--to-top", "--no-install"])
+    moved = tomli.loads(manifest.read_text())
+    if manifest_name == "pyproject.toml":
+        moved = moved["tool"]["pixi"]
+    assert moved["workspace"]["platforms"] == snapshot(
+        [
+            {"name": "cpu", "platform": "linux-64"},
+            {"name": "gpu", "platform": "linux-64", "cuda": "12.0"},
+        ]
+    )
+
+    verify_cli_command([*command, "edit", "gpu", "--cuda", "13.0", "--no-install"])
+    edited = tomli.loads(manifest.read_text())
+    if manifest_name == "pyproject.toml":
+        edited = edited["tool"]["pixi"]
+    assert edited["workspace"]["platforms"] == snapshot(
+        [
+            {"name": "cpu", "platform": "linux-64"},
+            {"name": "gpu", "subdir": "linux-64", "cuda": "13.0"},
+        ]
+    )
+    assert _lockfile_platforms(tmp_pixi_workspace)[1]["subdir"] == "linux-64"
+
+
+@pytest.mark.parametrize("manifest_name", ["pixi.toml", "pyproject.toml"])
+@pytest.mark.parametrize("legacy_subdir", ["linux-64", "osx-arm64"])
+@pytest.mark.parametrize("legacy_first", [False, True])
+def test_platform_subdir_alias_duplicates_rejected(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    manifest_name: str,
+    legacy_subdir: str,
+    legacy_first: bool,
+) -> None:
+    manifest = tmp_pixi_workspace / manifest_name
+    table = "tool.pixi.workspace" if manifest_name == "pyproject.toml" else "workspace"
+    keys = ['subdir = "linux-64"', f'platform = "{legacy_subdir}"']
+    if legacy_first:
+        keys.reverse()
+    original = f"""\
+[{table}]
+name = "platform-test"
+channels = []
+platforms = [{{ name = "gpu", {", ".join(keys)}, cuda = "12.0" }}]
+"""
+    manifest.write_text(original)
+    verify_cli_command(
+        [str(pixi), "workspace", "--manifest-path", str(manifest), "platform", "list"],
+        expected_exit_code=ExitCode.FAILURE,
+    )
+    assert manifest.read_text() == original
+
+
 # ----------------------------------------------------------------------------
 # add
 # ----------------------------------------------------------------------------
@@ -167,7 +247,7 @@ def test_add_custom_name_with_subdir(pixi: Path, tmp_pixi_workspace: Path) -> No
     _run_platform(pixi, tmp_pixi_workspace, "add", "gpu-linux=linux-64", "--no-install")
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     entry = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
-    assert entry["platform"] == "linux-64"
+    assert entry["subdir"] == "linux-64"
     # No virtual-package shortcut keys should leak in when none were requested.
     for vp_key in ("cuda", "archspec", "glibc", "linux", "macos", "windows"):
         assert vp_key not in entry
@@ -186,7 +266,7 @@ def test_add_custom_name_with_cuda(pixi: Path, tmp_pixi_workspace: Path) -> None
     )
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     entry = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
-    assert entry["platform"] == "linux-64"
+    assert entry["subdir"] == "linux-64"
     assert entry["cuda"] == "12.0"
 
 
@@ -362,7 +442,7 @@ def test_add_cuda_table_via_toml_round_trips(pixi: Path, tmp_pixi_workspace: Pat
     manifest.write_text(
         manifest.read_text().replace(
             "platforms = [",
-            'platforms = [\n  { name = "gpu", platform = "'
+            'platforms = [\n  { name = "gpu", subdir = "'
             + CURRENT_PLATFORM
             + '", cuda = { driver = "12.0", arch = "8.6" } },',
         )
@@ -581,7 +661,7 @@ def test_add_platform_with_cuda_to_named_feature(pixi: Path, tmp_pixi_workspace:
         for p in _platforms_from_toml(manifest)
         if isinstance(p, dict) and p.get("name") == "gpu-linux"
     )
-    assert gpu_platform["platform"] == "linux-64"
+    assert gpu_platform["subdir"] == "linux-64"
     assert gpu_platform["cuda"] == "12.0"
 
 
@@ -611,7 +691,7 @@ def test_add_replaces_definition(pixi: Path, tmp_pixi_workspace: Path, feature: 
         "Replaced platform gpu (was: subdir 'linux-64' with virtual packages __cuda=12.0)"
     )
     assert _platforms_from_toml(manifest) == snapshot(
-        ["win-64", {"name": "gpu", "platform": "linux-64", "cuda": "13.0"}]
+        ["win-64", {"name": "gpu", "subdir": "linux-64", "cuda": "13.0"}]
     )
     if feature:
         assert tomli.loads(manifest.read_text())["feature"]["cuda"] == snapshot(
@@ -654,7 +734,7 @@ def test_add_definition_to_feature_drops_omitted_virtual_packages(
         pixi, tmp_pixi_workspace, "add", "gpu=linux-64", "--feature", "cuda", "--no-install"
     )
     assert _platforms_from_toml(manifest) == snapshot(
-        ["win-64", {"name": "gpu", "platform": "linux-64"}]
+        ["win-64", {"name": "gpu", "subdir": "linux-64"}]
     )
     assert tomli.loads(manifest.read_text())["feature"]["cuda"] == snapshot({"platforms": ["gpu"]})
 
@@ -1001,7 +1081,7 @@ def test_edit_set_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
-    assert entry["platform"] == "linux-aarch64"
+    assert entry["subdir"] == "linux-aarch64"
     # VP declaration survives an unrelated subdir change.
     assert entry["cuda"] == "11.0"
 
@@ -1037,7 +1117,7 @@ def test_edit_subdir_platform_adds_cuda(pixi: Path, tmp_pixi_workspace: Path) ->
     # The `linux-64` string entry is now an inline-table entry
     # carrying the requested `__cuda`.
     assert "linux-64" not in platforms
-    entry = next(p for p in platforms if isinstance(p, dict) and p["platform"] == "linux-64")
+    entry = next(p for p in platforms if isinstance(p, dict) and p["subdir"] == "linux-64")
     assert entry["cuda"] == "12.0"
 
 
@@ -1146,7 +1226,7 @@ def test_move_unknown_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) ->
 
 def _subdir(entry: str | dict[str, Any]) -> str:
     """The conda subdir of a `platforms` entry (bare string or inline table)."""
-    return entry if isinstance(entry, str) else entry["platform"]
+    return entry if isinstance(entry, str) else entry["subdir"]
 
 
 def test_add_auto_detected_lands_first_for_this_machine(
@@ -1240,7 +1320,7 @@ def test_add_auto_detected_override_writes_virtual_package(
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p.get("name") == "gpu"
     )
-    assert entry["platform"] == CURRENT_PLATFORM
+    assert entry["subdir"] == CURRENT_PLATFORM
     assert entry["cuda"] == "99.0"
 
 
@@ -1822,7 +1902,7 @@ def test_round_trip_string_and_inline_table_entries(pixi: Path, tmp_pixi_workspa
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     assert "linux-64" in platforms  # bare string survives as bare string
     gpu_platform = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
-    assert gpu_platform["platform"] == "linux-64"
+    assert gpu_platform["subdir"] == "linux-64"
     assert gpu_platform["cuda"] == "12.0"
 
 

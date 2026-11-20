@@ -2363,7 +2363,7 @@ packages: []
             [workspace]
             name = "foo"
             channels = ["conda-forge"]
-            platforms = [{ platform = "linux-64", glibc = "2.34" }]
+            platforms = [{ subdir = "linux-64", glibc = "2.34" }]
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 

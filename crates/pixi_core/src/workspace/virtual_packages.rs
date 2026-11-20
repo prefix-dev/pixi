@@ -545,7 +545,7 @@ mod tests {
                     let mut workspace = crate::Workspace::from_str(
                     &manifest_path,
                     &format!(
-                        "[workspace]\nname = 'installed-minimum'\nchannels = []\nplatforms = [{{ name = 'gpu', platform = 'linux-64', cuda = '99' }}]\n{dependencies}"
+                        "[workspace]\nname = 'installed-minimum'\nchannels = []\nplatforms = [{{ name = 'gpu', subdir = 'linux-64', cuda = '99' }}]\n{dependencies}"
                     ),
                 ).unwrap();
                     workspace.host =
@@ -768,7 +768,7 @@ mod tests {
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            platforms = [{{ name = "gpu", subdir = "{current}", cuda = "99" }}]
 
             [dependencies]
             foo = "*"
@@ -836,7 +836,7 @@ packages:
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            platforms = [{{ name = "gpu", subdir = "{current}", cuda = "99" }}]
             "#
         );
         let workspace =
@@ -896,7 +896,7 @@ packages:
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            platforms = [{{ name = "gpu", subdir = "{current}", cuda = "99" }}]
             "#
         );
         let workspace =
@@ -958,7 +958,7 @@ packages: []
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            platforms = [{{ name = "gpu", subdir = "{current}", cuda = "99" }}]
             "#
         );
         let workspace =
@@ -979,7 +979,7 @@ packages: []
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            platforms = [{{ name = "gpu", subdir = "{current}", cuda = "99" }}]
             preview = ["pixi-build"]
 
             [dev]

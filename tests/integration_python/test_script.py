@@ -1073,7 +1073,7 @@ print("hello")
 # prerelease = "allow"
 #
 # [tool.pixi.workspace]
-# platforms = ["linux-aarch64", { name = "linux-ci", platform = "linux-64" }, { name = "mac-ci", platform = "osx-64" }]
+# platforms = ["linux-aarch64", { name = "linux-ci", subdir = "linux-64" }, { name = "mac-ci", subdir = "osx-64" }]
 # ///
 print("hello")
 """
@@ -1102,7 +1102,7 @@ print("hello")
 # prerelease = "allow"
 #
 # [tool.pixi.workspace]
-# platforms = ["linux-aarch64", { name = "linux-ci", platform = "linux-64", cuda = "12.0" }, { name = "mac-ci", platform = "osx-64" }]
+# platforms = ["linux-aarch64", { name = "linux-ci", subdir = "linux-64", cuda = "12.0" }, { name = "mac-ci", subdir = "osx-64" }]
 # ///
 print("hello")
 """
@@ -1130,7 +1130,7 @@ print("hello")
 # prerelease = "allow"
 #
 # [tool.pixi.workspace]
-# platforms = [{ name = "mac-ci", platform = "osx-64" }, "linux-aarch64", { name = "linux-ci", platform = "linux-64", cuda = "12.0" }]
+# platforms = [{ name = "mac-ci", subdir = "osx-64" }, "linux-aarch64", { name = "linux-ci", subdir = "linux-64", cuda = "12.0" }]
 # ///
 print("hello")
 """
