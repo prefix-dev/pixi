@@ -108,11 +108,29 @@ impl GenerateRecipe for RosGenerator {
         let package_xml = PackageXml::parse(&package_xml_content)
             .map(|package_xml| package_xml.evaluate_conditions(&env_vars))?;
 
-        // Create metadata provider
-        let package_mapping_files: Vec<String> = config
-            .get_package_mapping_file_paths()
+        // Resolve the user's mapping files: a relative path is looked up next to
+        // the package's manifest first, then at the workspace root, so one
+        // workspace-level mapping file can serve packages at any depth.
+        let mut extra_mapping_sources = config.extra_package_mappings.clone();
+        for source in &mut extra_mapping_sources {
+            if let PackageMappingSource::File { path } = source {
+                *path = resolve_mapping_file(path, &manifest_root, workspace_directory.as_deref())?;
+            }
+        }
+
+        // Create metadata provider; the mapping files are inputs too, relative
+        // to the manifest so a workspace-level file is tracked as well.
+        let package_mapping_files: Vec<String> = extra_mapping_sources
             .iter()
-            .map(|p| p.display().to_string())
+            .filter_map(|source| match source {
+                PackageMappingSource::File { path } => Some(
+                    pathdiff::diff_paths(path, &manifest_root)
+                        .unwrap_or_else(|| path.clone())
+                        .display()
+                        .to_string(),
+                ),
+                PackageMappingSource::Mapping(_) => None,
+            })
             .collect();
         let extra_input_globs = config.extra_input_globs.clone().unwrap_or_default();
 
@@ -132,15 +150,13 @@ impl GenerateRecipe for RosGenerator {
         // the flat list: they're carried by `metadata_input_glob_sets`
         // with marker semantics that the flat form can't express.
 
-        // Load package mappings
-        let robostack_yaml: &str = include_str!("../robostack.yaml");
-        let robostack_mapping: HashMap<String, package_map::PackageMapEntry> =
-            serde_yaml::from_str(robostack_yaml).into_diagnostic()?;
+        // Load package mappings: the user's over the bundled RoboStack ones
+        let mut all_mapping_sources = extra_mapping_sources;
+        all_mapping_sources.push(PackageMappingSource::Mapping(
+            package_map::bundled_package_map(&distro.name)?,
+        ));
 
-        let mut all_mapping_sources = config.extra_package_mappings.clone();
-        all_mapping_sources.push(PackageMappingSource::Mapping(robostack_mapping));
-
-        let package_map_data = load_package_map_data(&all_mapping_sources);
+        let package_map_data = load_package_map_data(&all_mapping_sources)?;
 
         // Get requirements from package.xml
         let mut package_requirements = package_xml_to_conda_requirements(
@@ -411,6 +427,34 @@ pub async fn main() {
     }
 }
 
+/// Where a mapping file from `extra-package-mappings` lives: an absolute path
+/// as is, a relative one next to the package's manifest or, failing that, at
+/// the workspace root.
+fn resolve_mapping_file(
+    path: &Path,
+    manifest_root: &Path,
+    workspace_directory: Option<&Path>,
+) -> miette::Result<PathBuf> {
+    if path.is_absolute() {
+        return Ok(path.to_path_buf());
+    }
+    let candidates: Vec<PathBuf> = std::iter::once(manifest_root.join(path))
+        .chain(workspace_directory.map(|workspace| workspace.join(path)))
+        .collect();
+    if let Some(found) = candidates.iter().find(|candidate| candidate.is_file()) {
+        return Ok(found.clone());
+    }
+    Err(miette::miette!(
+        "package mapping file '{}' not found, looked for {}",
+        path.display(),
+        candidates
+            .iter()
+            .map(|candidate| format!("'{}'", candidate.display()))
+            .collect::<Vec<_>>()
+            .join(" and ")
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -434,8 +478,7 @@ mod tests {
     }
 
     fn default_package_map() -> HashMap<String, package_map::PackageMapEntry> {
-        let content = include_str!("../robostack.yaml");
-        serde_yaml::from_str(content).unwrap()
+        package_map::bundled_package_map("jazzy").unwrap()
     }
 
     fn jazzy_distro() -> Distro {
@@ -980,10 +1023,15 @@ mod tests {
         fs::copy(&source, &dest).unwrap();
 
         let test_data = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test_data");
+        fs::copy(
+            test_data.join("other_package_map.yaml"),
+            temp_path.join("mapping.yaml"),
+        )
+        .unwrap();
         let config = RosBackendConfig {
             distro: Some("noetic".to_string()),
             extra_package_mappings: vec![PackageMappingSource::File {
-                path: test_data.join("other_package_map.yaml"),
+                path: PathBuf::from("mapping.yaml"),
             }],
             ..Default::default()
         };
@@ -1235,6 +1283,115 @@ mod tests {
         assert!(
             run_deps.iter().any(|d| d == "multi-package-b"),
             "Expected multi-package-b in run deps: {run_deps:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_relative_package_mapping_falls_back_to_workspace_root() {
+        // A workspace-level mapping file shared by a package nested deeper,
+        // whose own manifest names it as just `mapping.yaml`.
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_root = workspace.path();
+        let package_dir = workspace_root.join("src").join("repo").join("pkg");
+        fs::create_dir_all(&package_dir).unwrap();
+        fs::copy(
+            package_xmls_dir().join("custom_ros.xml"),
+            package_dir.join("package.xml"),
+        )
+        .unwrap();
+        let test_data = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test_data");
+        fs::copy(
+            test_data.join("other_package_map.yaml"),
+            workspace_root.join("mapping.yaml"),
+        )
+        .unwrap();
+
+        let model = project_fixture!({ "targets": { "defaultTarget": {} } });
+        let config = RosBackendConfig {
+            distro: Some("noetic".to_string()),
+            extra_package_mappings: vec![PackageMappingSource::File {
+                path: PathBuf::from("mapping.yaml"),
+            }],
+            ignore_workspace_sources: true,
+            ..Default::default()
+        };
+
+        let generated = RosGenerator::default()
+            .generate_recipe(
+                &model,
+                &config,
+                package_dir.clone(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                Some(workspace_root.to_path_buf()),
+                None,
+            )
+            .await
+            .expect("the workspace-level mapping file should be found");
+
+        let run_deps: Vec<String> = generated
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .filter_map(|item| match item {
+                Item::Value(v) => v.as_concrete().map(|s| s.to_string()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            run_deps.iter().any(|d| d == "multi-package-a"),
+            "Expected multi-package-a from the workspace mapping in run deps: {run_deps:?}"
+        );
+        let mapping_glob = PathBuf::from("..")
+            .join("..")
+            .join("..")
+            .join("mapping.yaml")
+            .display()
+            .to_string();
+        assert!(
+            generated.metadata_input_globs.contains(&mapping_glob),
+            "Expected {mapping_glob} in metadata input globs: {:?}",
+            generated.metadata_input_globs
+        );
+    }
+
+    #[test]
+    fn test_resolve_mapping_file_prefers_manifest_dir() {
+        let workspace = tempfile::tempdir().unwrap();
+        let package_dir = workspace.path().join("pkg");
+        fs::create_dir_all(&package_dir).unwrap();
+        fs::write(workspace.path().join("mapping.yaml"), b"{}").unwrap();
+        fs::write(package_dir.join("mapping.yaml"), b"{}").unwrap();
+
+        let resolved = resolve_mapping_file(
+            Path::new("mapping.yaml"),
+            &package_dir,
+            Some(workspace.path()),
+        )
+        .unwrap();
+        assert_eq!(resolved, package_dir.join("mapping.yaml"));
+    }
+
+    #[test]
+    fn test_resolve_mapping_file_missing_names_both_locations() {
+        let workspace = tempfile::tempdir().unwrap();
+        let package_dir = workspace.path().join("pkg");
+        let err = resolve_mapping_file(
+            Path::new("mapping.yaml"),
+            &package_dir,
+            Some(workspace.path()),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains(&package_dir.join("mapping.yaml").display().to_string())
+                && err.contains(&workspace.path().join("mapping.yaml").display().to_string()),
+            "{err}"
         );
     }
 
