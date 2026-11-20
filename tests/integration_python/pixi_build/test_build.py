@@ -830,3 +830,39 @@ def test_workspace_variants_separate_work_directories(
         f"Expected at least 2 workspace directories for different variants, "
         f"found {len(workspace_dirs)}: {[d.name for d in workspace_dirs]}"
     )
+
+
+@pytest.mark.slow
+def test_publish_resolves_virtual_packages_of_staging_output(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    """The build environment of a `staging` output is solved by the backend
+    rather than by pixi, so it must see the virtual packages of the system."""
+    name = simple_workspace.recipe["package"]["name"]
+    virtual_package = "__win" if CURRENT_PLATFORM.startswith("win") else "__unix"
+    simple_workspace.recipe = {
+        "recipe": {"name": name, "version": "1.0.0"},
+        "outputs": [
+            {
+                "staging": {"name": f"{name}-staging"},
+                "requirements": {"build": [virtual_package]},
+            },
+            {"package": {"name": name}, "inherit": f"{name}-staging"},
+        ],
+    }
+    simple_workspace.package_manifest["package"]["build"]["config"] = {"experimental": True}
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--target-dir",
+            str(simple_workspace.workspace_dir),
+            "--path",
+            simple_workspace.package_dir,
+        ],
+    )
+
+    assert len(list(simple_workspace.workspace_dir.glob("*.conda"))) == 1
