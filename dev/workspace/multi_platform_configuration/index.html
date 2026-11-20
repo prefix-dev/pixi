@@ -9673,8 +9673,10 @@ It is a normal entry in the manifest, so everyone using the workspace solves for
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Override individual virtual packages on top of what was detected.</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--auto-detect<span class="w"> </span>--cuda<span class="w"> </span><span class="m">12</span>.4
 </span></code></pre></div>
-<p>Pixi deduplicates by definition (subdir plus declared virtual packages), not by name: if an entry with the same definition already exists it is reused and moved to the front rather than duplicated.
-Adding a platform whose definition already exists under a <em>different</em> name is rejected: two names for one definition would only produce a redundant duplicate solve.</p>
+<p>Without an explicit name, <code>--auto-detect</code> reuses an existing entry with the same definition (subdir plus declared virtual packages) and moves it to the front.
+With an explicit name, detected values fully replace a differing definition under that name, also moving it to the front.
+A matching name and definition is unchanged apart from its position.
+An explicit name whose definition already exists under a <em>different</em> name is rejected: two names for one definition would only produce a redundant duplicate solve.</p>
 <div class="admonition tip">
 <p class="admonition-title">Trim it for portability</p>
 <p>After installing, <code>pixi info</code> reports each environment's <strong>Minimum platform</strong>, derived from locked conda package requirements.
@@ -9684,11 +9686,14 @@ A future resolution can also select packages with different requirements.</p>
 <h2 id="managing-platforms-from-the-cli">Managing platforms from the CLI<a class="headerlink" href="#managing-platforms-from-the-cli" title="Permanent link">#</a></h2>
 <p><a href="../../reference/cli/pixi/workspace/platform/"><code>pixi workspace platform</code></a> is the CLI surface for these entries:</p>
 <ul>
-<li><code>pixi workspace platform add &lt;PLATFORM&gt;</code> appends a platform with the subdir defaults.
+<li><code>pixi workspace platform add &lt;PLATFORM&gt;</code> appends an undeclared subdir with its defaults.
   <code>pixi workspace platform add &lt;NAME&gt;=&lt;PLATFORM&gt; [--cuda 12.0] [--cuda-arch 8.6] [--amdgpu] [--amdgpu-arch gfx90a] [--glibc 2.28] ...</code>
-  appends a named platform with custom virtual packages (or detects the current machine via
-  <code>--auto-detect</code>, see above). <code>--cuda-arch</code> requires <code>--cuda</code> (or
-  an existing <code>__cuda</code>) and serializes as <code>cuda = { driver, arch }</code>.
+  defines a named platform or fully replaces its existing definition, keeping its position.
+  An identical definition of the same name is a no-op;
+  an otherwise identical definition already declared under another name is rejected.
+  Replacement drops omitted virtual packages rather than merging them; use <code>pixi workspace platform edit</code> to merge changes.
+  Virtual-package arguments require <code>&lt;NAME&gt;=&lt;PLATFORM&gt;</code> or <code>--auto-detect</code>, not a bare reference.
+  <code>--cuda-arch</code> requires <code>--cuda</code> and serializes as <code>cuda = { driver, arch }</code>.
   <code>--amdgpu-arch</code> also declares <code>__amdgpu</code> and serializes as <code>amdgpu = "gfx90a"</code>.
   Other virtual packages use <code>__name[=version[=build_string]]</code> positionals, for example <code>__site_service=2=h1</code>.</li>
 <li><code>pixi workspace platform edit &lt;NAME&gt; [--cuda 12.1] [--remove-virtual-package __cuda_arch]</code> edits a platform's declared virtual packages.</li>
