@@ -201,6 +201,7 @@ test8 = {
   clean-env = true
 }
 test9 = { cmd = "pytest", clean-env = false }
+test10 = { cmd = "pytest", depends-on = [{ task = "test5", background = true }] }
 
 [system-requirements]
 cuda = "10.1"

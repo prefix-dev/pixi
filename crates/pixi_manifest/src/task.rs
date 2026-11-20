@@ -52,6 +52,9 @@ pub struct Dependency {
     pub task_name: TaskName,
     pub args: Option<Vec<DependencyArg>>,
     pub environment: Option<EnvironmentName>,
+    /// Start the task in the background and stop it when the run ends.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub background: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -70,6 +73,7 @@ impl Dependency {
             task_name: TaskName(s.to_string()),
             args,
             environment,
+            background: false,
         }
     }
 
@@ -78,6 +82,7 @@ impl Dependency {
             task_name: TaskName(s.to_string()),
             args,
             environment: None,
+            background: false,
         }
     }
     pub fn render_args(

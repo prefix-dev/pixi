@@ -1764,7 +1764,7 @@ mod test {
         baz = [{ task = "foo", enviroment = "default" }]
         "#,
         ), @r#"
-          × Unexpected keys, expected only 'task', 'args', 'environment'
+          × Unexpected keys, expected only 'task', 'args', 'environment', 'background'
            ╭─[pixi.toml:8:32]
          7 │         foo = "bar"
          8 │         baz = [{ task = "foo", enviroment = "default" }]

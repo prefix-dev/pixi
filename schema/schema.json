@@ -813,6 +813,11 @@
             ]
           }
         },
+        "background": {
+          "title": "Background",
+          "description": "Start the task in the background and stop it when the run ends. Pixi does not wait for the task, so list a task that waits for it right after it.",
+          "type": "boolean"
+        },
         "environment": {
           "title": "Environment",
           "description": "The environment to use for the task",
