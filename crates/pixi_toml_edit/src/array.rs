@@ -103,7 +103,15 @@ pub fn move_array_element(array: &mut Array, from: usize, to: usize) {
     let multiline = detect_array_style(array).is_multiline();
     let mut value = array.remove(from);
     if !multiline {
-        array.insert(to, value);
+        if from == 0
+            && let Some(first) = array.get_mut(0)
+        {
+            first
+                .decor_mut()
+                .set_prefix(decor_prefix(value.decor()).to_string());
+        }
+        value.decor_mut().clear();
+        insert_array_element(array, to, value);
         return;
     }
 
@@ -170,6 +178,29 @@ fn set_array_gap(array: &mut Array, index: usize, gap: String) {
 #[cfg(test)]
 mod move_tests {
     use super::*;
+
+    #[test]
+    fn preserves_single_line_spacing_and_value_spelling() {
+        let entries = [
+            "'linux-aarch64'",
+            "{ name = 'linux-ci', platform = 'linux-64' }",
+            "{ name = 'mac-ci', subdir = 'osx-64' }",
+        ];
+        let input = format!("platforms = [{}]\n", entries.join(", "));
+        for from in 0..entries.len() {
+            for to in 0..entries.len() {
+                let mut document = input.parse::<toml_edit::DocumentMut>().unwrap();
+                move_array_element(document["platforms"].as_array_mut().unwrap(), from, to);
+                let mut reordered = entries.to_vec();
+                let moved = reordered.remove(from);
+                reordered.insert(to, moved);
+                assert_eq!(
+                    document.to_string(),
+                    format!("platforms = [{}]\n", reordered.join(", ")),
+                );
+            }
+        }
+    }
 
     #[test]
     fn preserves_comments_and_value_spelling() {
