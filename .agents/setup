@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Prepares a fresh Amp orb for working on pixi: installs pixi, the locked
+# development environments (Rust toolchain, compilers, linters) and the
+# crates.io dependencies. Safe to rerun; a warm run only verifies.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+step() {
+	local name=$1
+	shift
+	echo "==> $name"
+	local start=$SECONDS
+	"$@"
+	echo "<== $name ($((SECONDS - start))s)"
+}
+
+pixi_home="$HOME/.pixi"
+export PATH="$pixi_home/bin:$PATH"
+
+install_pixi() {
+	if command -v pixi >/dev/null; then
+		pixi --version
+		return
+	fi
+	curl -fsSL https://pixi.sh/install.sh | PIXI_HOME="$pixi_home" PIXI_NO_PATH_UPDATE=1 bash
+}
+
+# Amp and orb services start in non-interactive login shells, which read
+# ~/.bash_profile.
+persist_path() {
+	local marker="# pixi: add pixi to PATH"
+	if ! grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
+		# shellcheck disable=SC2016 # $PATH expands when the profile runs
+		printf '\n%s\nexport PATH="%s/bin:$PATH"\n' "$marker" "$pixi_home" >>"$HOME/.bash_profile"
+	fi
+}
+
+step "install pixi" install_pixi
+step "persist PATH" persist_path
+# `default` has the Rust toolchain, compilers and linters; `lefthook` runs the
+# git hooks.
+step "pixi install (default)" pixi install --locked --environment default
+step "pixi install (lefthook)" pixi install --locked --environment lefthook
+step "cargo fetch" pixi run --locked cargo fetch --locked
+# A cold build takes several minutes; building here puts the compiled
+# dependencies in the snapshot, and a warm rerun only rebuilds what changed.
+step "cargo build" pixi run --locked build-debug
