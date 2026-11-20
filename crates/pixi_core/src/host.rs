@@ -1405,8 +1405,8 @@ mod tests {
 name = "scoped-demand"
 channels = []
 platforms = [
-    {{ name = "plain", platform = "{subdir}" }},
-    {{ name = "custom", platform = "{subdir}", __test_good = "1" }},
+    {{ name = "plain", subdir = "{subdir}" }},
+    {{ name = "custom", subdir = "{subdir}", __test_good = "1" }},
 ]
 
 [dependencies]
@@ -1456,7 +1456,7 @@ default = {{ features = ["plain"], no-default-feature = true }}
             let (platforms, target) = if explicit_platform {
                 (
                     format!(
-                        "# [tool.pixi.workspace]\n# platforms = [{{ name = \"capable\", platform = \"{subdir}\", __test_good = \"1\" }}, {{ name = \"foreign\", platform = \"{foreign}\", __test_foreign = \"1\" }}]\n"
+                        "# [tool.pixi.workspace]\n# platforms = [{{ name = \"capable\", subdir = \"{subdir}\", __test_good = \"1\" }}, {{ name = \"foreign\", subdir = \"{foreign}\", __test_foreign = \"1\" }}]\n"
                     ),
                     "capable".to_owned(),
                 )

@@ -32,8 +32,8 @@ def bounded_platform_workspace(tmp_pixi_workspace: Path) -> Path:
 name = "selection-review"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "linux-64", cuda = "12" }},
-    {{ name = "cpu", platform = "linux-64" }},
+    {{ name = "gpu", subdir = "linux-64", cuda = "12" }},
+    {{ name = "cpu", subdir = "linux-64" }},
 ]
 
 [tasks]
@@ -175,8 +175,8 @@ def test_task_search_can_leave_an_incompatible_default_environment(
 name = "task-search-review"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "linux-64", cuda = "12" }},
-    {{ name = "cpu", platform = "linux-64" }},
+    {{ name = "gpu", subdir = "linux-64", cuda = "12" }},
+    {{ name = "cpu", subdir = "linux-64" }},
 ]
 
 [tasks]

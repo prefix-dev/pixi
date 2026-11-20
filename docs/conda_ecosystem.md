@@ -149,7 +149,7 @@ target has CUDA 12:
 ```toml title="pixi.toml"
 [workspace]
 platforms = [
-  { platform = "linux-64", cuda = "12" },
+  { subdir = "linux-64", cuda = "12" },
 ]
 ```
 

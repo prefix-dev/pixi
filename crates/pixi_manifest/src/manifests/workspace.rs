@@ -1305,8 +1305,6 @@ impl WorkspaceManifestMut<'_> {
             }
         }
 
-        let before: Vec<PixiPlatformName> = platforms.iter().map(|p| p.name().clone()).collect();
-
         // Remove first, then resolve the destination against the reduced set so
         // `Before`/`After` land relative to the anchor's post-removal index.
         let platform = self
@@ -1327,18 +1325,18 @@ impl WorkspaceManifestMut<'_> {
             .platforms
             .shift_insert(to, platform);
 
-        if self
-            .workspace
-            .workspace
-            .platforms
-            .iter()
-            .map(PixiPlatform::name)
-            .eq(before.iter())
-        {
+        if from == to {
             return Ok(());
         }
 
-        Ok(self.rewrite_workspace_platforms_toml()?)
+        if self.workspace.workspace.must_migrate {
+            return Ok(self.rewrite_workspace_platforms_toml()?);
+        }
+        let array = self
+            .document
+            .get_array_mut("platforms", &Default::default())?;
+        pixi_toml_edit::move_array_element(array, from, to);
+        Ok(())
     }
 
     /// Rewrite the `index`th entry of the workspace `platforms` array from
@@ -4157,8 +4155,8 @@ platforms = [
 name = "foo"
 channels = []
 platforms = [
-    { name = "gpu", platform = "linux-64", cuda = "12.0" },
-    { name = "other", platform = "linux-64", cuda = "13.0" },
+    { name = "gpu", subdir = "linux-64", cuda = "12.0" },
+    { name = "other", subdir = "linux-64", cuda = "13.0" },
 ]
 "#;
         let mut workspace = parse_pixi_toml(file_contents);
@@ -4216,7 +4214,7 @@ name = "foo"
 channels = []
 platforms = [
     "win-64",
-    { name = "gpu", platform = "linux-64", cuda = "12.0" },
+    { name = "gpu", subdir = "linux-64", cuda = "12.0" },
 ]
 "#;
         let mut workspace = parse_pixi_toml(file_contents);
@@ -4328,7 +4326,7 @@ system-requirements = { cuda = "12.0" }
 channels = ["https://prefix.dev/conda-forge"]
 platforms = [
   "linux-64",
-  { platform = "linux-64", cuda = "12.9" },
+  { subdir = "linux-64", cuda = "12.9" },
 ]
 
 [feature.cuda-backends]
@@ -7383,7 +7381,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             [workspace]
             name = "foo"
             channels = []
-            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu", subdir = "linux-64", cuda = "12.0" }]
         "#;
 
         let mut workspace = parse_pixi_toml(file_contents);
@@ -7418,7 +7416,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             [workspace]
             name = "foo"
             channels = []
-            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu", subdir = "linux-64", cuda = "12.0" }]
         "#;
 
         let mut workspace = parse_pixi_toml(file_contents);
@@ -7450,7 +7448,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 name = "named-variants"
 channels = ["conda-forge"]
 platforms = [
-    { name = "modern", platform = "linux-64" },
+    { name = "modern", subdir = "linux-64" },
     "linux-64",
 ]
 "#;
@@ -7481,7 +7479,7 @@ platforms = [
 name = "named-variants"
 channels = ["conda-forge"]
 platforms = [
-    { name = "modern", platform = "linux-64", archspec = "x86_64_v3" },
+    { name = "modern", subdir = "linux-64", archspec = "x86_64_v3" },
     "linux-64",
 ]
 "#,
@@ -7564,7 +7562,7 @@ platforms = [
             [workspace]
             name = "foo"
             channels = []
-            platforms = [{ platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ subdir = "linux-64", cuda = "12.0" }]
 
             [feature.gpu]
             platforms = ["linux-64-cuda-12-0"]

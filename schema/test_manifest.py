@@ -141,6 +141,70 @@ def test_pyproject_schema_invalid(
         pyproject_validator.validate(invalid_pyproject)
 
 
+@pytest.mark.parametrize("manifest_name", [PIXI_TOML, PYPROJECT_TOML])
+@pytest.mark.parametrize(
+    ("platform", "valid"),
+    [
+        pytest.param({"subdir": "linux-64"}, True, id="subdir"),
+        pytest.param({"platform": "linux-64"}, True, id="legacy-platform"),
+        pytest.param({"name": "linux-64"}, True, id="name-fallback"),
+        pytest.param(
+            {"name": "cuda", "subdir": "linux-64", "cuda": "12"},
+            True,
+            id="named-subdir",
+        ),
+        pytest.param(
+            {"name": "cuda", "platform": "linux-64", "cuda": "12"},
+            True,
+            id="named-legacy-platform",
+        ),
+        pytest.param({}, False, id="missing-identity"),
+        pytest.param({"subdir": "not-a-subdir"}, False, id="invalid-subdir"),
+        pytest.param({"platform": "not-a-subdir"}, False, id="invalid-legacy-platform"),
+        pytest.param(
+            {"subdir": "linux-64", "platform": "linux-64"},
+            False,
+            id="duplicate-equal",
+        ),
+        pytest.param(
+            {"subdir": "linux-64", "platform": "osx-arm64"},
+            False,
+            id="duplicate-different",
+        ),
+        pytest.param(
+            {"name": "cuda", "subdir": "linux-64", "platform": "linux-64"},
+            False,
+            id="named-duplicate-equal",
+        ),
+        pytest.param(
+            {"name": "cuda", "subdir": "linux-64", "platform": "osx-arm64"},
+            False,
+            id="named-duplicate-different",
+        ),
+    ],
+)
+def test_workspace_platform_subdir(
+    all_validators: TValidators,
+    manifest_name: str,
+    platform: dict[str, str],
+    valid: bool,
+) -> None:
+    manifest = {
+        "workspace": {
+            "name": "rich-platform",
+            "channels": ["conda-forge"],
+            "platforms": [platform],
+        }
+    }
+    for schema_name, validator in all_validators[manifest_name].items():
+        document = {"tool": {"pixi": manifest}} if schema_name == PYPROJECT_SCHEMA else manifest
+        if valid:
+            validator.validate(document)
+        else:
+            with pytest.raises(ValidationError):
+                validator.validate(document)
+
+
 def _skip_no_tool(pyproject: dict[str, Any]) -> None:
     if "pixi" not in pyproject.get("tool", {}):
         pytest.skip("no [tool.pixi]")

@@ -94,6 +94,156 @@ pub fn insert_array_element(array: &mut Array, index: usize, value: Value) {
     }
 }
 
+/// Moves an existing value without regenerating it. Comments before a value
+/// and on its line move with it; comments on the preceding line stay behind.
+pub fn move_array_element(array: &mut Array, from: usize, to: usize) {
+    if from == to {
+        return;
+    }
+    let multiline = detect_array_style(array).is_multiline();
+    let mut value = array.remove(from);
+    if !multiline {
+        if from == 0
+            && let Some(first) = array.get_mut(0)
+        {
+            first
+                .decor_mut()
+                .set_prefix(decor_prefix(value.decor()).to_string());
+        }
+        value.decor_mut().clear();
+        insert_array_element(array, to, value);
+        return;
+    }
+
+    let prefix = decor_prefix(value.decor()).to_string();
+    let (preceding, own_prefix) = split_array_gap(&prefix);
+    let following = array_gap(array, from).to_string();
+    let (own_comment, following_prefix) = split_array_gap(&following);
+    let closing_newline = if from == array.len() && following_prefix.is_empty() {
+        "\n"
+    } else {
+        ""
+    };
+    set_array_gap(
+        array,
+        from,
+        format!("{preceding}{following_prefix}{closing_newline}"),
+    );
+
+    // Without a trailing comma, the last value can own its line comment
+    // in its suffix rather than the following gap.
+    let suffix = detach_suffix(value.decor_mut());
+    let own_comment = merge_comments(
+        (!own_comment.trim().is_empty()).then(|| own_comment.trim().to_string()),
+        suffix.comment,
+    );
+    insert_array_element(array, to, value);
+    if !own_prefix.is_empty() {
+        let (preceding, _) = split_array_gap(decor_prefix(array.get(to).unwrap().decor()));
+        let prefix = format!("{preceding}{own_prefix}");
+        array.get_mut(to).unwrap().decor_mut().set_prefix(prefix);
+    }
+    if own_comment.is_some() || suffix.standalone.is_some() {
+        let comment = own_comment
+            .map(|comment| format!(" {comment}"))
+            .unwrap_or_default();
+        let standalone = suffix.standalone.unwrap_or_default();
+        let following = array_gap(array, to + 1);
+        set_array_gap(array, to + 1, format!("{comment}{standalone}{following}"));
+    }
+}
+
+/// The first line of a gap belongs to the preceding element.
+fn split_array_gap(raw: &str) -> (&str, &str) {
+    match raw.find('\n') {
+        Some(index) => raw.split_at(index - usize::from(raw[..index].ends_with('\r'))),
+        None => (raw, ""),
+    }
+}
+
+fn array_gap(array: &Array, index: usize) -> &str {
+    match array.get(index) {
+        Some(value) => decor_prefix(value.decor()),
+        None => raw_str(array.trailing()),
+    }
+}
+
+fn set_array_gap(array: &mut Array, index: usize, gap: String) {
+    match array.get_mut(index) {
+        Some(value) => value.decor_mut().set_prefix(gap),
+        None => array.set_trailing(gap),
+    }
+}
+
+#[cfg(test)]
+mod move_tests {
+    use super::*;
+
+    #[test]
+    fn preserves_single_line_spacing_and_value_spelling() {
+        let entries = [
+            "'linux-aarch64'",
+            "{ name = 'linux-ci', platform = 'linux-64' }",
+            "{ name = 'mac-ci', subdir = 'osx-64' }",
+        ];
+        let input = format!("platforms = [{}]\n", entries.join(", "));
+        for from in 0..entries.len() {
+            for to in 0..entries.len() {
+                let mut document = input.parse::<toml_edit::DocumentMut>().unwrap();
+                move_array_element(document["platforms"].as_array_mut().unwrap(), from, to);
+                let mut reordered = entries.to_vec();
+                let moved = reordered.remove(from);
+                reordered.insert(to, moved);
+                assert_eq!(
+                    document.to_string(),
+                    format!("platforms = [{}]\n", reordered.join(", ")),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn preserves_comments_and_value_spelling() {
+        let entries = [
+            "  # before a\n  { name = 'a', platform = 'linux-64' }, # after a\n",
+            "  # before b\n  { name = 'b', subdir = 'osx-arm64' }, # after b\n",
+            "  # before c\n  'win-64', # after c\n",
+        ];
+        let input = format!("platforms = [ # header\n{}]\n", entries.concat());
+        for from in 0..entries.len() {
+            for to in 0..entries.len() {
+                let mut document = input.parse::<toml_edit::DocumentMut>().unwrap();
+                move_array_element(document["platforms"].as_array_mut().unwrap(), from, to);
+                let mut reordered = entries.to_vec();
+                let moved = reordered.remove(from);
+                reordered.insert(to, moved);
+                assert_eq!(
+                    document.to_string(),
+                    format!("platforms = [ # header\n{}]\n", reordered.concat()),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn moves_last_value_without_trailing_comma() {
+        let mut document = "platforms = [\n  'linux-64', # linux\n  'win-64' # windows\n]\n"
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        move_array_element(document["platforms"].as_array_mut().unwrap(), 1, 0);
+        insta::assert_snapshot!(document.to_string(), @"
+        platforms = [
+          'win-64', # windows
+          'linux-64' # linux
+        ]
+        ");
+        document
+            .to_string()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+    }
+}
+
 /// Retains only the elements for which the predicate returns `true`, removing
 /// the other elements including the lines they occupy in a multiline array.
 /// The surviving elements keep their formatting.

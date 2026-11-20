@@ -46,13 +46,13 @@ def test_install_all_without_lock_skips_gpu_only_environment(
 ) -> None:
     channel = _channel(tmp_pixi_workspace)
     manifest = tmp_pixi_workspace / "pixi.toml"
-    cpu_platform = '{ name = "cpu", platform = "linux-64" },' if include_cpu else ""
+    cpu_platform = '{ name = "cpu", subdir = "linux-64" },' if include_cpu else ""
     manifest.write_text(f"""
 [workspace]
 name = "fresh-all"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "linux-64", cuda = "12" }},
+    {{ name = "gpu", subdir = "linux-64", cuda = "12" }},
     {cpu_platform}
 ]
 
@@ -108,7 +108,7 @@ def test_install_all_rechecks_requirements_after_manifest_edit(
 [workspace]
 name = "changed-requirement"
 channels = ["{channel.url}"]
-platforms = [{{ name = "gpu", platform = "linux-64", cuda = "12" }}]
+platforms = [{{ name = "gpu", subdir = "linux-64", cuda = "12" }}]
 
 [dependencies]
 gpu-package = "*"
@@ -138,7 +138,7 @@ def test_remove_succeeds_on_host_that_cannot_run_environment(
 [workspace]
 name = "lock-only-remove"
 channels = ["{channel.url}"]
-platforms = [{{ name = "gpu", platform = "linux-64", cuda = "12" }}]
+platforms = [{{ name = "gpu", subdir = "linux-64", cuda = "12" }}]
 
 [dependencies]
 cpu-package = "*"
@@ -173,7 +173,7 @@ def test_platform_add_skips_install_when_locked_requirements_exclude_host(
 [workspace]
 name = "platform-edit"
 channels = ["{channel.url}"]
-platforms = [{{ name = "gpu", platform = "linux-64", cuda = "12" }}]
+platforms = [{{ name = "gpu", subdir = "linux-64", cuda = "12" }}]
 
 [dependencies]
 cpu-package = "*"
@@ -201,8 +201,8 @@ def test_conda_script_activates_the_platform_chosen_from_lock(
 #
 # [tool.pixi.workspace]
 # platforms = [
-#     {{ name = "gpu", platform = "linux-64", cuda = "12" }},
-#     {{ name = "cpu", platform = "linux-64" }},
+#     {{ name = "gpu", subdir = "linux-64", cuda = "12" }},
+#     {{ name = "cpu", subdir = "linux-64" }},
 # ]
 #
 # [tool.pixi.target.gpu.dependencies]
@@ -239,8 +239,8 @@ def test_read_only_consumers_select_locked_fallback_without_prefix(
 name = "read-only-fallback"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "linux-64", cuda = "12" }},
-    {{ name = "cpu", platform = "linux-64" }},
+    {{ name = "gpu", subdir = "linux-64", cuda = "12" }},
+    {{ name = "cpu", subdir = "linux-64" }},
 ]
 
 [target.gpu.dependencies]
@@ -276,8 +276,8 @@ def test_task_dependency_uses_its_own_selected_platform_and_activation(
 name = "task-platforms"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "linux-64", cuda = "12" }},
-    {{ name = "cpu", platform = "linux-64" }},
+    {{ name = "gpu", subdir = "linux-64", cuda = "12" }},
+    {{ name = "cpu", subdir = "linux-64" }},
 ]
 
 [target.gpu.activation.env]
@@ -342,7 +342,7 @@ def test_foreign_platform_override_skips_locked_host_validation(
     manifest.write_text(f"""
 [workspace]
 channels = ["{channel.url}"]
-platforms = [{{ name = "gpu", platform = "win-64", cuda = "12" }}]
+platforms = [{{ name = "gpu", subdir = "win-64", cuda = "12" }}]
 
 [dependencies]
 foreign-gpu = "*"
@@ -365,8 +365,8 @@ def _bounded_gpu_workspace(root: Path) -> None:
 name = "bounded-gpu"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "linux-64", cuda = "12" }},
-    {{ name = "cpu", platform = "linux-64" }},
+    {{ name = "gpu", subdir = "linux-64", cuda = "12" }},
+    {{ name = "cpu", subdir = "linux-64" }},
 ]
 
 [target.gpu.dependencies]
@@ -413,7 +413,7 @@ def test_run_listing_hint_matches_why_no_platform_was_selected(
 [workspace]
 name = "listing-hint"
 channels = ["{channel.url}"]
-platforms = [{{ name = "gpu", platform = "{subdir}", cuda = "12" }}]
+platforms = [{{ name = "gpu", subdir = "{subdir}", cuda = "12" }}]
 
 [dependencies]
 gpu-package = "*"
@@ -527,7 +527,7 @@ def test_environment_without_dependencies_is_not_reported_as_accidental(
 [workspace]
 name = "no-dependencies"
 channels = ["{channel.url}"]
-platforms = [{{ name = "gpu", platform = "linux-64", cuda = "12" }}]
+platforms = [{{ name = "gpu", subdir = "linux-64", cuda = "12" }}]
 
 [feature.lint.tasks]
 lint = "echo linting"
@@ -564,8 +564,8 @@ def test_fallback_environment_does_not_make_task_ambiguous(
 name = "ambiguity"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "linux-64", cuda = "12.8" }},
-    {{ name = "cpu", platform = "linux-64" }},
+    {{ name = "gpu", subdir = "linux-64", cuda = "12.8" }},
+    {{ name = "cpu", subdir = "linux-64" }},
 ]
 
 [tasks]
@@ -605,8 +605,8 @@ def test_unavailable_custom_capability_does_not_make_task_ambiguous(
 name = "custom-ambiguity"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "custom", platform = "linux-64", __test_detector_capability = "3" }},
-    {{ name = "cpu", platform = "linux-64" }},
+    {{ name = "custom", subdir = "linux-64", __test_detector_capability = "3" }},
+    {{ name = "cpu", subdir = "linux-64" }},
 ]
 
 [target.custom.dependencies]
@@ -649,8 +649,8 @@ def test_rerun_keeps_lock_selected_platform_with_identical_declarations(
 name = "identical-declarations"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "bounded", platform = "linux-64", cuda = "12" }},
-    {{ name = "unbounded", platform = "linux-64", cuda = "12" }},
+    {{ name = "bounded", subdir = "linux-64", cuda = "12" }},
+    {{ name = "unbounded", subdir = "linux-64", cuda = "12" }},
 ]
 
 [target.bounded.dependencies]
@@ -692,8 +692,8 @@ def test_platform_switch_with_identical_packages_keeps_selected_activation(
 name = "identical-packages"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "first", platform = "linux-64" }},
-    {{ name = "second", platform = "linux-64" }},
+    {{ name = "first", subdir = "linux-64" }},
+    {{ name = "second", subdir = "linux-64" }},
 ]
 
 [dependencies]
@@ -721,7 +721,7 @@ def _lock_fallback_workspace(root: Path, *, order: tuple[str, str] = ("fancy", "
     """Neither declaration matches; only the plain alias has runnable locked packages."""
     channel = _channel(root)
     platforms = ",\n".join(
-        f'    {{ name = "{name}", platform = "linux-64", cuda = "99" }}' for name in order
+        f'    {{ name = "{name}", subdir = "linux-64", cuda = "99" }}' for name in order
     )
     (root / "pixi.toml").write_text(f"""
 [workspace]
@@ -1076,8 +1076,8 @@ def test_explicit_platform_is_checked_for_task_dependency_environment(
 name = "per-environment-explicit"
 channels = []
 platforms = [
-    { name = "first", platform = "linux-64" },
-    { name = "second", platform = "linux-64" },
+    { name = "first", subdir = "linux-64" },
+    { name = "second", subdir = "linux-64" },
 ]
 
 [tasks]

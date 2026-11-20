@@ -193,7 +193,7 @@ class DetectorSandbox:
         platform = json.dumps(CURRENT_PLATFORM)
         if capability is not None:
             platform = (
-                f'{{ name = "capable", platform = "{CURRENT_PLATFORM}", '
+                f'{{ name = "capable", subdir = "{CURRENT_PLATFORM}", '
                 f'{"cuda" if capability == "__cuda" else capability} = "{required}" }}'
             )
         manifest = (
@@ -337,8 +337,8 @@ def test_custom_declarations_leave_selection_to_locked_requirements(
 name = "custom-selection"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "first", platform = "{CURRENT_PLATFORM}", __username_length = "{declared}" }},
-    {{ name = "second", platform = "{CURRENT_PLATFORM}", __username_length = "3.0" }},
+    {{ name = "first", subdir = "{CURRENT_PLATFORM}", __username_length = "{declared}" }},
+    {{ name = "second", subdir = "{CURRENT_PLATFORM}", __username_length = "3.0" }},
 ]
 
 [dependencies]
@@ -682,8 +682,8 @@ def test_locked_run_keeps_the_installed_alias_until_it_is_reinstalled(
         '[workspace]\nname = "installed-alias-bounds"\n'
         f"channels = {json.dumps([channel.url])}\n"
         "platforms = [\n"
-        f'  {{ name = "high", platform = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }},\n'
-        f'  {{ name = "low", platform = "{CURRENT_PLATFORM}", {CAPABILITY} = "1.0" }},\n'
+        f'  {{ name = "high", subdir = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }},\n'
+        f'  {{ name = "low", subdir = "{CURRENT_PLATFORM}", {CAPABILITY} = "1.0" }},\n'
         "]\n"
         '\n[target.high.dependencies]\nhigh-consumer = "*"\n'
         '\n[target.low.dependencies]\nbounded-consumer = "*"\n',
@@ -729,7 +729,7 @@ def test_explicit_platform_install_records_detected_capabilities(
     (workspace / "pixi.toml").write_text(
         '[workspace]\nname = "explicit-records"\n'
         f"channels = {json.dumps([channel.url])}\n"
-        f'platforms = [{{ name = "low", platform = "{CURRENT_PLATFORM}", {CAPABILITY} = "1.0" }}]\n'
+        f'platforms = [{{ name = "low", subdir = "{CURRENT_PLATFORM}", {CAPABILITY} = "1.0" }}]\n'
         '\n[dependencies]\nbounded-consumer = "*"\n',
         encoding="utf-8",
     )
@@ -783,7 +783,7 @@ def test_conda_script_target_dependencies_demand_registered_capabilities(
     if explicit_platform:
         metadata += (
             "\n[tool.pixi.workspace]\n"
-            f'platforms = [{{ name = "capable", platform = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }}]\n'
+            f'platforms = [{{ name = "capable", subdir = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }}]\n'
         )
     target = "capable" if explicit_platform else CURRENT_PLATFORM
     metadata += f'\n[tool.pixi.target.{target}.dependencies]\nscript-consumer = "*"\n'
@@ -928,7 +928,7 @@ def installed_default_with_http_sibling(
             f"channels = {json.dumps([base.url])}\n"
             "platforms = [\n"
             f'  "{CURRENT_PLATFORM}",\n'
-            f'  {{ name = "capable", platform = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }},\n'
+            f'  {{ name = "capable", subdir = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }},\n'
             "]\n"
             '\n[dependencies]\nbase-package = "*"\n'
             '\n[tasks]\ncheck = "echo default-ready"\n'
@@ -1064,7 +1064,7 @@ def test_frozen_revalidated_prefix_in_a_solve_group_detects_what_it_requires(
     (workspace / "pixi.toml").write_text(
         '[workspace]\nname = "solve-group-capability"\n'
         f"channels = {json.dumps([base.url])}\n"
-        f'platforms = [{{ name = "capable", platform = "{CURRENT_PLATFORM}", '
+        f'platforms = [{{ name = "capable", subdir = "{CURRENT_PLATFORM}", '
         f'{CAPABILITY} = "3.0" }}]\n'
         '\n[dependencies]\nbase-consumer = "*"\n'
         "\n[feature.sibling]\n"
@@ -1150,8 +1150,8 @@ def test_frozen_cross_environment_task_uses_detector_selected_builtin_platform(
         f"channels = {json.dumps([base.url])}\n"
         "platforms = [\n"
         f'  "{CURRENT_PLATFORM}",\n'
-        f'  {{ name = "preferred", platform = "{CURRENT_PLATFORM}", glibc = "2.30" }},\n'
-        f'  {{ name = "fallback", platform = "{CURRENT_PLATFORM}" }},\n'
+        f'  {{ name = "preferred", subdir = "{CURRENT_PLATFORM}", glibc = "2.30" }},\n'
+        f'  {{ name = "fallback", subdir = "{CURRENT_PLATFORM}" }},\n'
         "]\n"
         '\n[dependencies]\nbase-package = "*"\n'
         "\n[tasks]\n"
@@ -1209,8 +1209,8 @@ def info_workspace(sandbox: DetectorSandbox, channel: DetectorChannel, scope: st
         '[workspace]\nname = "info-scope"\n'
         f"channels = {json.dumps([channel.url] if scope == 'default' else [])}\n"
         "platforms = [\n"
-        f'  {{ name = "capable", platform = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }},\n'
-        f'  {{ name = "fallback", platform = "{CURRENT_PLATFORM}" }},\n'
+        f'  {{ name = "capable", subdir = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }},\n'
+        f'  {{ name = "fallback", subdir = "{CURRENT_PLATFORM}" }},\n'
         "]\n"
         '\n[target.capable.tasks]\ncapable-task = "echo capable"\n'
         '\n[target.fallback.tasks]\nfallback-task = "echo fallback"\n'

@@ -7,11 +7,11 @@ platforms = [
   "linux-64",
   {
     name = "linux-64-cuda",
-    platform = "linux-64",
+    subdir = "linux-64",
     cuda = "12.0",
     glibc = "2.28",
     __site_service = "2=h1",
   },
-  { platform = "linux-aarch64", archspec = "armv8.2a" },
+  { subdir = "linux-aarch64", archspec = "armv8.2a" },
   { name = "osx-arm64" },
 ]
