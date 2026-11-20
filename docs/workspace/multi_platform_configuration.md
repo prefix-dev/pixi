@@ -169,8 +169,9 @@ An explicit name whose definition already exists under a *different* name is rej
   Use `pixi workspace platform add <NAME> --feature cuda` to add that reference to a feature.
   `pixi workspace platform add <NAME>=<PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--amdgpu] [--amdgpu-arch gfx90a] [--glibc 2.28] ...`
   defines a named platform or fully replaces its existing definition, keeping its position.
-  An identical definition is a no-op; a definition already declared under another name is rejected.
-  Replacement drops omitted virtual packages rather than merging them; use `edit` to merge changes.
+  An identical definition of the same name is a no-op;
+  an otherwise identical definition already declared under another name is rejected.
+  Replacement drops omitted virtual packages rather than merging them; use `pixi workspace platform edit` to merge changes.
   Virtual-package arguments require `<NAME>=<PLATFORM>` or `--auto-detect`, not a bare reference.
   `--cuda-arch` requires `--cuda` and serializes as `cuda = { driver, arch }`.
   `--amdgpu-arch` also declares `__amdgpu` and serializes as `amdgpu = "gfx90a"`.
