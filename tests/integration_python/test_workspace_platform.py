@@ -171,7 +171,12 @@ default = { features = [], no-default-feature = true }
             {"name": "gpu", "subdir": "linux-64", "cuda": "13.0"},
         ]
     )
-    assert _lockfile_platforms(tmp_pixi_workspace)[1]["subdir"] == "linux-64"
+    locked_gpu = next(
+        platform
+        for platform in _lockfile_platforms(tmp_pixi_workspace)
+        if isinstance(platform, dict) and platform["name"] == "gpu"
+    )
+    assert locked_gpu["subdir"] == "linux-64"
 
 
 @pytest.mark.parametrize("manifest_name", ["pixi.toml", "pyproject.toml"])
