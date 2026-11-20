@@ -260,7 +260,7 @@ ignore-workspace-sources = true
 Additional dependency mappings to apply to the dependency mapping process.
 These mappings are used to extend the usage of the dependencies in the `package.xml` file.
 The first source containing a dependency key wins, ahead of the bundled distribution-specific and shared mappings.
-File paths are relative to the package directory. Unreadable or malformed files are errors.
+A relative file path is looked up in the package directory first and then at the workspace root, so one workspace-level mapping file can serve packages at any depth. Missing, unreadable or malformed files are errors.
 
 ```toml title="pixi.toml"
 [package.build.config]
