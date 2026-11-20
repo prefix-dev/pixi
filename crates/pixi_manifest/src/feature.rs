@@ -1,7 +1,7 @@
 use crate::{
-    CondaConstraints, EnvironmentName, SpecType, WorkspaceTarget, channel::PrioritizedChannel,
-    consts, pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
-    workspace::SolveStrategy,
+    CondaConstraints, EnvironmentName, PyPiConstraints, SpecType, WorkspaceTarget,
+    channel::PrioritizedChannel, consts, pypi::pypi_options::PypiOptions, target::Targets,
+    workspace::ChannelPriority, workspace::SolveStrategy,
 };
 use crate::{InlinePackageManifest, PixiPlatform, PixiPlatformName};
 use indexmap::{IndexMap, IndexSet};
@@ -541,6 +541,34 @@ impl Feature {
                     // More specific targets (processed later) overwrite less specific ones
                     Some(Cow::Owned(acc.as_ref().overwrite(constraints)))
                 }
+            })
+    }
+
+    /// Returns the PyPI version constraints of the feature for a given
+    /// `platform`.
+    ///
+    /// PyPI constraints limit the versions of PyPI packages that can be
+    /// installed without explicitly requiring them to be installed.
+    ///
+    /// Returns `None` if this feature does not define any target that has any
+    /// PyPI constraints.
+    ///
+    /// If the `platform` is `None` no platform specific constraints are taken
+    /// into consideration.
+    pub fn pypi_constraints<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, PyPiConstraints>> {
+        self.targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            // This is required because we want more specific targets to overwrite their specs.
+            .rev()
+            .filter_map(|t| t.pypi_constraints.as_ref())
+            .filter(|constraints| !constraints.is_empty())
+            .fold(None, |acc, constraints| match acc {
+                None => Some(Cow::Borrowed(constraints)),
+                Some(acc) => Some(Cow::Owned(acc.as_ref().overwrite(constraints))),
             })
     }
 }

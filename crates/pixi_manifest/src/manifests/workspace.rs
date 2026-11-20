@@ -19,11 +19,11 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerConfig,
-    ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform,
-    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
-    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
-    consts,
+    Activation, AddDependencyOutcome, CondaConstraints, DependencyOverwriteBehavior,
+    ExcludeNewerConfig, ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError,
+    KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
+    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
+    Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, GenericError, UnknownFeature},
@@ -61,6 +61,14 @@ pub struct WorkspaceManifest {
     /// The time relative `exclude-newer` cutoffs are resolved against, fixed
     /// at load so that every environment resolves them to the same time.
     pub loaded_at: DateTime<Utc>,
+
+    /// Additional conda constraints that are not part of the manifest on
+    /// disk but were injected for a single invocation, e.g. through
+    /// `pixi lock --with-constraint`. They behave like entries in the workspace
+    /// `[constraints]` table but apply to every environment (including
+    /// environments that opt out of the default feature) and are never
+    /// written back to the manifest.
+    pub extra_constraints: CondaConstraints,
 }
 
 impl Default for WorkspaceManifest {
@@ -71,6 +79,7 @@ impl Default for WorkspaceManifest {
             environments: Environments::default(),
             solve_groups: SolveGroups::default(),
             loaded_at: Utc::now(),
+            extra_constraints: CondaConstraints::default(),
         }
     }
 }
@@ -6459,6 +6468,72 @@ openssl = "<2"
             .unwrap()
             .to_string();
         assert_eq!(linux_spec, "<2");
+    }
+
+    #[test]
+    fn test_pypi_constraints() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[pypi-constraints]
+urllib3 = ">=2.2.2"
+requests = { version = "<3", env-markers = "python_version >= '3.10'" }
+
+[target.linux-64.pypi-constraints]
+urllib3 = ">=2.5"
+
+[feature.extra.pypi-constraints]
+urllib3 = "<3"
+
+[environments]
+full = ["extra"]
+"#;
+        use pixi_pypi_spec::PypiPackageName;
+        use rattler_conda_types::Subdir;
+        use std::str::FromStr;
+
+        let workspace =
+            crate::WorkspaceManifest::from_toml_str_with_base_dir(contents, Path::new("")).unwrap();
+        let urllib3 = PypiPackageName::from_str("urllib3").unwrap();
+        let specs = |constraints: &crate::PyPiConstraints| {
+            constraints
+                .get(&urllib3)
+                .unwrap()
+                .iter()
+                .map(|spec| spec.to_string())
+                .collect_vec()
+        };
+
+        let default_feature = workspace.default_feature();
+        assert_eq!(
+            specs(&default_feature.pypi_constraints(None).unwrap()),
+            [r#"">=2.2.2""#]
+        );
+        assert_eq!(
+            default_feature
+                .pypi_constraints(None)
+                .unwrap()
+                .names()
+                .map(|name| name.as_source())
+                .collect_vec(),
+            ["urllib3", "requests"]
+        );
+
+        // A platform specific constraint overrides the generic one.
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
+        assert_eq!(
+            specs(&default_feature.pypi_constraints(Some(&linux64)).unwrap()),
+            [r#"">=2.5""#]
+        );
+
+        let extra = workspace
+            .features
+            .get(&FeatureName::from("extra"))
+            .expect("should have the extra feature");
+        assert_eq!(specs(&extra.pypi_constraints(None).unwrap()), [r#""<3""#]);
     }
 
     /// The default feature of a manifest, to call [`FeaturesExt`] methods on.
