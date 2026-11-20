@@ -150,8 +150,10 @@ pixi workspace platform add my-laptop --auto-detect
 pixi workspace platform add --auto-detect --cuda 12.4
 ```
 
-Pixi deduplicates by definition (subdir plus declared virtual packages), not by name: if an entry with the same definition already exists it is reused and moved to the front rather than duplicated.
-Adding a platform whose definition already exists under a *different* name is rejected: two names for one definition would only produce a redundant duplicate solve.
+Without an explicit name, `--auto-detect` reuses an existing entry with the same definition (subdir plus declared virtual packages) and moves it to the front.
+With an explicit name, detected values fully replace a differing definition under that name, also moving it to the front.
+A matching name and definition is unchanged apart from its position.
+An explicit name whose definition already exists under a *different* name is rejected: two names for one definition would only produce a redundant duplicate solve.
 
 !!! tip "Trim it for portability"
     After installing, `pixi info` reports each environment's **Minimum platform**, derived from locked conda package requirements.
@@ -162,11 +164,14 @@ Adding a platform whose definition already exists under a *different* name is re
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
 
-- `pixi workspace platform add <PLATFORM>` appends a platform with the subdir defaults.
+- `pixi workspace platform add <PLATFORM>` appends an undeclared subdir with its defaults.
   `pixi workspace platform add <NAME>=<PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--amdgpu] [--amdgpu-arch gfx90a] [--glibc 2.28] ...`
-  appends a named platform with custom virtual packages (or detects the current machine via
-  `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
-  an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
+  defines a named platform or fully replaces its existing definition, keeping its position.
+  An identical definition of the same name is a no-op;
+  an otherwise identical definition already declared under another name is rejected.
+  Replacement drops omitted virtual packages rather than merging them; use `pixi workspace platform edit` to merge changes.
+  Virtual-package arguments require `<NAME>=<PLATFORM>` or `--auto-detect`, not a bare reference.
+  `--cuda-arch` requires `--cuda` and serializes as `cuda = { driver, arch }`.
   `--amdgpu-arch` also declares `__amdgpu` and serializes as `amdgpu = "gfx90a"`.
   Other virtual packages use `__name[=version[=build_string]]` positionals, for example `__site_service=2=h1`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __cuda_arch]` edits a platform's declared virtual packages.
