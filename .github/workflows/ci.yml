@@ -1050,7 +1050,7 @@ jobs:
       - determine_changes
     # sudo on ubuntu-26.04 rejects -E, which jirutka/setup-alpine relies on
     # https://github.com/jirutka/setup-alpine/pull/35
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -1073,7 +1073,7 @@ jobs:
       - determine_changes
     # sudo on ubuntu-26.04 rejects -E, which jirutka/setup-alpine relies on
     # https://github.com/jirutka/setup-alpine/pull/35
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
