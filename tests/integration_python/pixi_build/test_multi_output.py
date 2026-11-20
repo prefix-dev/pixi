@@ -4,7 +4,13 @@ import pytest
 import tomli
 import tomli_w
 
-from .common import CURRENT_PLATFORM, ExitCode, copytree_with_local_backend, verify_cli_command
+from .common import (
+    CURRENT_PLATFORM,
+    ExitCode,
+    Workspace,
+    copytree_with_local_backend,
+    verify_cli_command,
+)
 
 
 @pytest.mark.slow
@@ -86,3 +92,41 @@ def test_install_output_pinning_variant_sibling(
     prefix = tmp_pixi_workspace.joinpath(".pixi", "envs", "default")
     assert prefix.joinpath("libfoo.txt").is_file()
     assert prefix.joinpath("foo-meta.txt").is_file()
+
+
+@pytest.mark.slow
+def test_publish_staging_output_with_pin_subpackage(
+    pixi: Path,
+    simple_workspace: Workspace,
+) -> None:
+    """An output that inherits from a staging output can pin itself in its
+    run exports."""
+    name = simple_workspace.recipe["package"]["name"]
+    simple_workspace.recipe = {
+        "recipe": {"name": name, "version": "1.0.0"},
+        "outputs": [
+            {"staging": {"name": f"{name}-staging"}},
+            {
+                "package": {"name": name},
+                "inherit": f"{name}-staging",
+                "requirements": {
+                    "run_exports": [f"${{{{ pin_subpackage('{name}', upper_bound='x.x') }}}}"]
+                },
+            },
+        ],
+    }
+    simple_workspace.package_manifest["package"]["build"]["config"] = {"experimental": True}
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--target-dir",
+            str(simple_workspace.workspace_dir),
+            "--path",
+            simple_workspace.package_dir,
+        ],
+    )
+
+    assert len(list(simple_workspace.workspace_dir.glob("*.conda"))) == 1

@@ -322,3 +322,10 @@ version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd776
 # `http-cache-reqwest`) and consumers that depend on the renamed
 # `astral-reqwest-middleware` (rattler, rattler-build, uv).
 reqwest-middleware = { path = "patches/reqwest_middleware_shim" }
+
+# TODO: remove once a release includes prefix-dev/rattler-build#2955.
+rattler_build_core = { git = "https://github.com/EzraBrooks/rattler-build", rev = "104f6dfac4af791a124663b0169f8e71b4d1a36b" }
+rattler_build_jinja = { git = "https://github.com/EzraBrooks/rattler-build", rev = "104f6dfac4af791a124663b0169f8e71b4d1a36b" }
+rattler_build_recipe = { git = "https://github.com/EzraBrooks/rattler-build", rev = "104f6dfac4af791a124663b0169f8e71b4d1a36b" }
+rattler_build_types = { git = "https://github.com/EzraBrooks/rattler-build", rev = "104f6dfac4af791a124663b0169f8e71b4d1a36b" }
+rattler_build_variant_config = { git = "https://github.com/EzraBrooks/rattler-build", rev = "104f6dfac4af791a124663b0169f8e71b4d1a36b" }
