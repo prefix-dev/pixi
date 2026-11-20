@@ -426,20 +426,21 @@ impl TaskAliasBuilder {
 
 pub struct ProjectChannelAddBuilder {
     pub workspace_config: ScriptWorkspaceConfig,
-    pub args: workspace::channel::AddRemoveArgs,
+    pub args: workspace::channel::AddArgs,
 }
 
 impl ProjectChannelAddBuilder {
     /// Adds the specified channel
     pub fn with_channel(mut self, name: impl Into<String>) -> Self {
         self.args
+            .args
             .channel
             .push(NamedChannelOrUrl::from_str(&name.into()).unwrap());
         self
     }
 
     pub fn with_priority(mut self, priority: Option<i32>) -> Self {
-        self.args.priority = priority;
+        self.args.args.priority = priority;
         self
     }
 
@@ -468,7 +469,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
 pub struct ProjectChannelRemoveBuilder {
     pub workspace_config: ScriptWorkspaceConfig,
-    pub args: workspace::channel::AddRemoveArgs,
+    pub args: workspace::channel::ChannelArgs,
 }
 
 impl ProjectChannelRemoveBuilder {

@@ -16,8 +16,9 @@ pixi workspace channel [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](add.md) | Adds a channel to the manifest and updates the lock file |
+| [`add`](add.md) | Adds channels to the manifest and updates the lock file |
 | [`list`](list.md) | List the channels in the manifest |
+| [`prepend`](prepend.md) | Moves or adds channels to the front of the manifest's channel list and updates the lock file |
 | [`remove`](remove.md) | Remove channel(s) from the manifest and updates the lock file |
 
 

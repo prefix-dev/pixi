@@ -10,6 +10,7 @@
 //! - inserting into a single-line inline table or array stays on one line
 //! - removing an entry removes its whole line while the surviving entries
 //!   keep their formatting
+//! - moving an array element takes its comments along
 //!
 //! Containers are never converted between single-line and multiline style.
 
@@ -17,7 +18,9 @@ mod array;
 mod entry;
 mod style;
 
-pub use array::{insert_array_element, push_array_element, retain_array_elements};
+pub use array::{
+    insert_array_element, move_array_element, push_array_element, retain_array_elements,
+};
 pub use entry::{
     find_table_key, remove_entry, remove_inline_table_entry, remove_table_entry, upsert_entry,
     upsert_inline_table_entry, upsert_table_entry,

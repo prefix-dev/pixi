@@ -906,7 +906,10 @@ def test_pixi_remove_script_requires_inline_metadata(pixi: Path, tmp_pixi_worksp
 
 
 def test_pixi_workspace_channel_edits_script(
-    pixi: Path, tmp_pixi_workspace: Path, monkeypatch: pytest.MonkeyPatch
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    dummy_channel_1: str,
 ) -> None:
     exec_cache = tmp_pixi_workspace / "script-exec-cache"
     monkeypatch.setenv("PIXI_CACHE_EXEC_ENVIRONMENTS_DIR", str(exec_cache))
@@ -973,8 +976,23 @@ print("hello")
     assert not script.with_name("example.py.pixi.lock").exists()
 
     verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "prepend",
+            "--script",
+            script,
+            "--no-install",
+            dummy_channel_1,
+        ],
+        stderr_contains=f"Added {dummy_channel_1}",
+    )
+    assert f'# channels = ["{dummy_channel_1}", "conda-forge"]' in script.read_text()
+
+    verify_cli_command(
         [pixi, "workspace", "channel", "list", "--script", script],
-        stdout_contains=["Environment: default", "- conda-forge"],
+        stdout_contains=["Environment: default", f"- {dummy_channel_1}", "- conda-forge"],
     )
 
     verify_cli_command(
@@ -986,9 +1004,10 @@ print("hello")
             "--script",
             script,
             "--no-install",
+            dummy_channel_1,
             "conda-forge",
         ],
-        stderr_contains="Removed conda-forge",
+        stderr_contains=[f"Removed {dummy_channel_1}", "Removed conda-forge"],
     )
     assert script.read_text() == snapshot(
         """# /// script

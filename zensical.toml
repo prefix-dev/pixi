@@ -307,6 +307,7 @@ nav = [
                   "reference/cli/pixi/workspace/channel/index.md",
                   { "add" = "reference/cli/pixi/workspace/channel/add.md" },
                   { "list" = "reference/cli/pixi/workspace/channel/list.md" },
+                  { "prepend" = "reference/cli/pixi/workspace/channel/prepend.md" },
                   { "remove" = "reference/cli/pixi/workspace/channel/remove.md" },
                 ]
               },
