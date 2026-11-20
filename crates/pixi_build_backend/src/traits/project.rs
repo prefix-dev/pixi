@@ -5,7 +5,7 @@
 //! * [`ProjectModel`] - Core trait for project model interface
 
 use pixi_build_types::{self as pbt};
-use rattler_conda_types::Version;
+use rattler_conda_types::VersionWithSource;
 
 use super::targets::Targets;
 
@@ -21,7 +21,7 @@ pub trait ProjectModel {
     fn name(&self) -> Option<&String>;
 
     /// Return the version of the project model
-    fn version(&self) -> &Option<Version>;
+    fn version(&self) -> &Option<VersionWithSource>;
 }
 
 impl ProjectModel for pbt::ProjectModel {
@@ -35,7 +35,7 @@ impl ProjectModel for pbt::ProjectModel {
         self.name.as_ref()
     }
 
-    fn version(&self) -> &Option<Version> {
+    fn version(&self) -> &Option<VersionWithSource> {
         &self.version
     }
 }

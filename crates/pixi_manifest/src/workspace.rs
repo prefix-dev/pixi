@@ -8,7 +8,8 @@ use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::{ExcludeNewer, TomlSpec};
 use pixi_toml::TomlEnum;
 use rattler_conda_types::{
-    Arch, GenericVirtualPackage, NamedChannelOrUrl, PackageName, Subdir, Version, VersionSpec,
+    Arch, GenericVirtualPackage, NamedChannelOrUrl, PackageName, Subdir, VersionSpec,
+    VersionWithSource,
 };
 use serde::Deserialize;
 use toml_span::{DeserError, Value};
@@ -16,8 +17,11 @@ use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
-    PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    platform::{candidate_subdirs, capability_satisfied_by, is_subdir_default},
+    ExcludeNewerConfig, PixiPlatform, PixiPlatformName, PrioritizedChannel, PypiExcludeNewerConfig,
+    S3Options, TargetSelector, Targets,
+    platform::{
+        candidate_subdirs, capability_satisfied_by, is_builtin_virtual_package, is_subdir_default,
+    },
     preview::Preview,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
@@ -42,7 +46,7 @@ pub struct Workspace {
     pub name: Option<String>,
 
     /// The version of the project
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
 
     /// An optional project description
     pub description: Option<String>,
@@ -101,13 +105,21 @@ pub struct Workspace {
     /// Version requirement for pixi itself
     pub requires_pixi: Option<VersionSpec>,
 
-    /// Exclude package candidates that are newer than this date.
-    pub exclude_newer: Option<ExcludeNewer>,
+    /// Exclude conda package candidates that are newer than a cutoff, with
+    /// exemptions for vetted releases.
+    pub exclude_newer: ExcludeNewerConfig,
 
-    /// Workspace-wide conda package exclude-newer overrides.
+    /// Exclude PyPI package candidates that are newer than a cutoff, with
+    /// exemptions for vetted packages. Falls back to the cutoff of
+    /// [`Self::exclude_newer`].
+    pub pypi_exclude_newer: PypiExcludeNewerConfig,
+
+    /// Workspace-wide conda package exclude-newer overrides from the
+    /// deprecated top-level `[exclude-newer]` table.
     pub exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
 
-    /// Workspace-wide PyPI package exclude-newer overrides.
+    /// Workspace-wide PyPI package exclude-newer overrides from the
+    /// deprecated top-level `[pypi-exclude-newer]` table.
     pub pypi_exclude_newer_package_overrides: IndexMap<PypiPackageName, ExcludeNewer>,
 
     /// `[workspace.dependencies]` pool. Path specs remain relative to
@@ -125,10 +137,10 @@ pub struct Workspace {
     pub must_migrate: bool,
 
     /// Set during parsing when the declared platforms were all plain subdirs,
-    /// so environments combine the per-feature rich platforms that share a
+    /// so environments combine the per-feature platforms that share a
     /// subdir into one platform carrying the union of their virtual packages.
-    /// Cleared for workspaces that declare custom rich platforms, which are
-    /// matched by name instead.
+    /// Cleared for workspaces that declare inline-table platform entries, which
+    /// are matched by name instead.
     pub use_platform_composition: bool,
 }
 
@@ -140,7 +152,7 @@ impl Workspace {
 
     /// Returns the [`TargetSelector`] used to key the target table for a
     /// platform name, matching how the platform is declared in the workspace
-    /// (`Subdir` for bare subdir platforms, `Subdir` for richer ones).
+    /// (`Subdir` for subdir platforms, `Platform` for other platforms).
     pub fn target_selector_for_platform(&self, name: &PixiPlatformName) -> TargetSelector {
         self.platform_by_name(name)
             .map(PixiPlatform::as_target_selector)
@@ -154,9 +166,9 @@ impl Workspace {
     /// workspace declaration order (so a custom-named variant declared after
     /// the bare subdir-bound platform comes second).
     ///
-    /// Platforms whose declared virtual packages are not satisfied by
-    /// `system_virtual_packages` are filtered out -- e.g. a `__cuda`-requiring
-    /// platform is dropped on a system that does not provide CUDA.
+    /// Platforms whose built-in virtual package declarations are not satisfied
+    /// by `system_virtual_packages` are filtered out. Custom names are checked
+    /// only through locked requirements.
     pub fn possible_pixi_platforms(
         &self,
         current: Subdir,
@@ -168,12 +180,13 @@ impl Workspace {
         // the target subdir, not a host requirement -- a `win-64` entry's
         // materialised `__win` would otherwise rule out matching when this
         // process happens to run on linux (cross-platform `pixi info`,
-        // CI on a different host, etc.). Only the user-customised VPs
+        // CI on a different host, etc.). Only user-customised built-in VPs
         // need to be satisfied by the host.
         let satisfies_system = |p: &&PixiPlatform| {
-            p.declared_virtual_packages()
+            p.manifest_virtual_package_records()
                 .iter()
                 .filter(|declared| !is_subdir_default(declared, p.subdir()))
+                .filter(|declared| is_builtin_virtual_package(declared.name.as_normalized()))
                 .all(|declared| capability_satisfied_by(declared, system_virtual_packages))
         };
 
@@ -201,7 +214,7 @@ impl Workspace {
         result
     }
 
-    /// Declared virtual packages from `env_platforms` whose host subdir
+    /// Built-in virtual package declarations from `env_platforms` whose host subdir
     /// matches `current` but whose requirement is not provided by
     /// `system_virtual_packages`. Powers the
     /// [`Self::possible_pixi_platforms`]-returns-nothing diagnostic, so the
@@ -232,9 +245,9 @@ impl Workspace {
 
     /// Explain, for each platform an environment declares, why it does or
     /// does not run on the current host: whether its subdir is runnable here
-    /// and which declared virtual packages the host fails to provide. Subdir
-    /// defaults never count as unsatisfied (they're pixi's baseline, not a
-    /// host requirement, see [`Self::possible_pixi_platforms`]).
+    /// and which built-in virtual package declarations the host fails to provide.
+    /// Subdir defaults never count as unsatisfied (they're pixi's baseline,
+    /// not a host requirement, see [`Self::possible_pixi_platforms`]).
     ///
     /// Platforms are returned in workspace declaration order.
     pub fn platform_match_diagnostics(
@@ -250,9 +263,10 @@ impl Workspace {
             .map(|p| {
                 let subdir = p.subdir();
                 let unsatisfied_virtual_packages = p
-                    .declared_virtual_packages()
+                    .manifest_virtual_package_records()
                     .iter()
                     .filter(|declared| !is_subdir_default(declared, subdir))
+                    .filter(|declared| is_builtin_virtual_package(declared.name.as_normalized()))
                     .filter(|declared| !capability_satisfied_by(declared, system_virtual_packages))
                     .cloned()
                     .collect();
@@ -335,16 +349,6 @@ impl From<ChannelPriority> for rattler_solve::ChannelPriority {
             ChannelPriority::Strict => rattler_solve::ChannelPriority::Strict,
             ChannelPriority::Flexible => rattler_solve::ChannelPriority::Flexible,
             ChannelPriority::Disabled => rattler_solve::ChannelPriority::Disabled,
-        }
-    }
-}
-
-impl From<rattler_solve::ChannelPriority> for ChannelPriority {
-    fn from(value: rattler_solve::ChannelPriority) -> Self {
-        match value {
-            rattler_solve::ChannelPriority::Strict => ChannelPriority::Strict,
-            rattler_solve::ChannelPriority::Flexible => ChannelPriority::Flexible,
-            rattler_solve::ChannelPriority::Disabled => ChannelPriority::Disabled,
         }
     }
 }

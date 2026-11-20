@@ -1124,12 +1124,7 @@ mod tests {
     }
 
     fn set_modified(path: &Path, modified: SystemTime) {
-        OpenOptions::new()
-            .write(true)
-            .open(path)
-            .unwrap()
-            .set_modified(modified)
-            .unwrap();
+        filetime::set_file_mtime(path, filetime::FileTime::from(modified)).unwrap();
     }
 
     fn mtime(path: &Path) -> SystemTime {
@@ -1187,7 +1182,7 @@ mod tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pr.subdir = "linux-64".into();
         RepoDataRecord {
@@ -2407,7 +2402,10 @@ mod tests {
         f.store(Vec::new(), vec![abs(input.clone()), abs(dir.clone())])
             .await;
         assert!(f.sidecar().input_files.contains_key(&abs(dir.clone())));
+        let recorded_mtime = mtime(&dir);
         fs_err::write(dir.join("control.txt"), b"x").unwrap();
+        // Windows can defer directory mtime updates after adding a file.
+        set_modified(&dir, recorded_mtime + std::time::Duration::from_secs(10));
         assert!(
             f.lookup().await.is_none(),
             "control: a recorded directory whose contents changed invalidates",
@@ -2425,7 +2423,9 @@ mod tests {
              later change to it can ever invalidate the entry",
         );
 
+        let recorded_mtime = mtime(&dir);
         fs_err::write(dir.join("added.txt"), b"x").unwrap();
+        set_modified(&dir, recorded_mtime + std::time::Duration::from_secs(10));
         assert!(
             f.lookup().await.is_none(),
             "changing a recorded input directory must invalidate the entry",
@@ -2817,7 +2817,7 @@ mod cache_key_tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pr.subdir = "linux-64".into();
         UnresolvedSourceRecord {
@@ -2842,7 +2842,7 @@ mod cache_key_tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pr.subdir = "linux-64".into();
         pr.sha256 = parse_digest_from_hex::<rattler_digest::Sha256>(sha);

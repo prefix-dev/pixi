@@ -3,8 +3,6 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexSet;
 use itertools::Itertools;
-use miette::Context;
-use miette::IntoDiagnostic;
 use pixi_config::pixi_home;
 use rattler_shell::shell::{Bash, Fish, Shell as _, Zsh};
 
@@ -12,19 +10,38 @@ use super::Mapping;
 use super::StateChange;
 use fs_err::tokio as tokio_fs;
 
+/// An error from managing the global shell completions.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum CompletionsError {
+    #[error("couldn't determine the global completions directory")]
+    MissingPixiHome,
+
+    #[error("failed to create the global completions directory")]
+    CreateDir(#[source] std::io::Error),
+
+    #[error("failed to prune old completions")]
+    Prune(#[source] std::io::Error),
+
+    #[error("failed to install the completion")]
+    Install(#[source] std::io::Error),
+
+    #[error("failed to remove the completion")]
+    Remove(#[source] std::io::Error),
+}
+
 /// Global completions directory, default to `$HOME/.pixi/completions`
 #[derive(Debug, Clone)]
 pub struct CompletionsDir(PathBuf);
 
 impl CompletionsDir {
     /// Create the global complations directory from environment variables
-    pub async fn from_env() -> miette::Result<Self> {
+    pub async fn from_env() -> Result<Self, CompletionsError> {
         let bin_dir = pixi_home()
             .map(|path| path.join("completions"))
-            .ok_or(miette::miette!(
-                "Couldn't determine global completions directory"
-            ))?;
-        tokio_fs::create_dir_all(&bin_dir).await.into_diagnostic()?;
+            .ok_or(CompletionsError::MissingPixiHome)?;
+        tokio_fs::create_dir_all(&bin_dir)
+            .await
+            .map_err(CompletionsError::CreateDir)?;
         Ok(Self(bin_dir))
     }
 
@@ -34,20 +51,20 @@ impl CompletionsDir {
     }
 
     /// Prune old completions
-    pub fn prune_old_completions(&self) -> miette::Result<()> {
+    pub fn prune_old_completions(&self) -> Result<(), CompletionsError> {
         for directory in [self.bash_path(), self.zsh_path(), self.fish_path()] {
             if !directory.is_dir() {
                 continue;
             }
 
-            for entry in fs_err::read_dir(&directory).into_diagnostic()? {
-                let path = entry.into_diagnostic()?.path();
+            for entry in fs_err::read_dir(&directory).map_err(CompletionsError::Prune)? {
+                let path = entry.map_err(CompletionsError::Prune)?.path();
 
                 if (path.is_symlink() && fs_err::read_link(&path).is_err())
                     || (!path.is_symlink() && path.is_file())
                 {
                     // Remove broken symlink
-                    fs_err::remove_file(&path).into_diagnostic()?;
+                    fs_err::remove_file(&path).map_err(CompletionsError::Prune)?;
                 }
             }
         }
@@ -85,27 +102,29 @@ impl Completion {
     }
 
     /// Install the shell completion
-    pub async fn install(&self) -> miette::Result<Option<StateChange>> {
+    pub async fn install(&self) -> Result<Option<StateChange>, CompletionsError> {
         tracing::debug!("Requested to install completion {}.", self.source.display());
 
         // Ensure the parent directory of the destination exists
         if let Some(parent) = self.destination.parent() {
-            tokio_fs::create_dir_all(parent).await.into_diagnostic()?;
+            tokio_fs::create_dir_all(parent)
+                .await
+                .map_err(CompletionsError::Install)?;
         }
 
         // Attempt to create the symlink
         tokio_fs::symlink(&self.source, &self.destination)
             .await
-            .into_diagnostic()?;
+            .map_err(CompletionsError::Install)?;
 
         Ok(Some(StateChange::AddedCompletion(self.name.clone())))
     }
 
     /// Remove the shell completion
-    pub async fn remove(&self) -> miette::Result<StateChange> {
+    pub async fn remove(&self) -> Result<StateChange, CompletionsError> {
         tokio_fs::remove_file(&self.destination)
             .await
-            .into_diagnostic()?;
+            .map_err(CompletionsError::Remove)?;
 
         Ok(StateChange::RemovedCompletion(self.name.clone()))
     }
@@ -120,7 +139,7 @@ pub fn contained_completions(
     prefix_root: &Path,
     name: &str,
     completions_dir: &CompletionsDir,
-) -> miette::Result<Vec<Completion>> {
+) -> Vec<Completion> {
     let mut completion_scripts = Vec::new();
 
     let zsh_name = format!("_{name}");
@@ -130,54 +149,37 @@ pub fn contained_completions(
         .join(
             Bash::default()
                 .completion_script_location()
-                .wrap_err_with(|| {
-                    miette::miette!("Bash needs to have a completion script location")
-                })?,
+                .expect("bash has a completion script location"),
         )
         .join(name);
-    let zsh_path =
-        prefix_root
-            .join(Zsh.completion_script_location().wrap_err_with(|| {
-                miette::miette!("Zsh needs to have a completion script location")
-            })?)
-            .join(zsh_name);
-    let fish_path =
-        prefix_root
-            .join(Fish.completion_script_location().wrap_err_with(|| {
-                miette::miette!("Fish needs to have a completion script location")
-            })?)
-            .join(fish_name);
+    let zsh_path = prefix_root
+        .join(
+            Zsh.completion_script_location()
+                .expect("zsh has a completion script location"),
+        )
+        .join(&zsh_name);
+    let fish_path = prefix_root
+        .join(
+            Fish.completion_script_location()
+                .expect("fish has a completion script location"),
+        )
+        .join(&fish_name);
 
     if bash_path.exists() {
-        let destination =
-            completions_dir
-                .bash_path()
-                .join(bash_path.file_name().wrap_err_with(|| {
-                    miette::miette!("Bash completion path needs to have a file name")
-                })?);
+        let destination = completions_dir.bash_path().join(name);
         completion_scripts.push(Completion::new(name.to_string(), bash_path, destination));
     }
 
     if zsh_path.exists() {
-        let destination =
-            completions_dir
-                .zsh_path()
-                .join(zsh_path.file_name().wrap_err_with(|| {
-                    miette::miette!("Zsh completion path needs to have a file name")
-                })?);
+        let destination = completions_dir.zsh_path().join(zsh_name);
         completion_scripts.push(Completion::new(name.to_string(), zsh_path, destination));
     }
 
     if fish_path.exists() {
-        let destination =
-            completions_dir
-                .fish_path()
-                .join(fish_path.file_name().wrap_err_with(|| {
-                    miette::miette!("Fish completion path needs to have a file name")
-                })?);
+        let destination = completions_dir.fish_path().join(fish_name);
         completion_scripts.push(Completion::new(name.to_string(), fish_path, destination));
     }
-    Ok(completion_scripts)
+    completion_scripts
 }
 
 /// Synchronizes the shell completion scripts for the given executable names.
@@ -191,7 +193,7 @@ pub(crate) async fn completions_sync_status(
     executable_names: Vec<String>,
     prefix_root: &Path,
     completions_dir: &CompletionsDir,
-) -> miette::Result<(Vec<Completion>, Vec<Completion>)> {
+) -> (Vec<Completion>, Vec<Completion>) {
     let mut completions_to_add = Vec::new();
     let mut completions_to_remove = Vec::new();
 
@@ -202,7 +204,7 @@ pub(crate) async fn completions_sync_status(
         .collect_vec();
 
     for name in executable_names.into_iter().unique() {
-        let completions = contained_completions(prefix_root, &name, completions_dir)?;
+        let completions = contained_completions(prefix_root, &name, completions_dir);
 
         if completions.is_empty() {
             continue;
@@ -226,5 +228,5 @@ pub(crate) async fn completions_sync_status(
         }
     }
 
-    Ok((completions_to_remove, completions_to_add))
+    (completions_to_remove, completions_to_add)
 }

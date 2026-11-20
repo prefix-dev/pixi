@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.81.0"
+version = "0.84.2"
 authors.workspace = true
 edition.workspace = true
 description = "A package management and workflow tool"
@@ -8,6 +8,20 @@ readme.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
+
+[features]
+default = ["rustls"]
+native-tls = ["pixi_cli/native-tls"]
+# run tests connecting to remote Internet services
+online_tests = ["pixi_cli/online_tests"]
+rustls = ["pixi_cli/rustls"]
+self_update = ["pixi_cli/self_update"]
+slow_integration_tests = ["pixi_cli/slow_integration_tests"]
+tokio-console = ["pixi_cli/tokio-console", "tokio/tracing"]
+
+# This feature enables performance optimizations but at the cost of increased
+# compile times. By default, it is only used when building the release binary.
+performance = ["pixi_allocator"]
 
 [dependencies]
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
@@ -71,20 +85,6 @@ url = { workspace = true }
 uv-cache = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
-uv-python = { workspace = true }
+uv-python-interpreter = { workspace = true }
 uv-threads = { workspace = true }
 zip = { workspace = true }
-
-[features]
-default = ["rustls"]
-native-tls = ["pixi_cli/native-tls"]
-# run tests connecting to remote Internet services
-online_tests = ["pixi_cli/online_tests"]
-rustls = ["pixi_cli/rustls"]
-self_update = ["pixi_cli/self_update"]
-slow_integration_tests = ["pixi_cli/slow_integration_tests"]
-tokio-console = ["pixi_cli/tokio-console", "tokio/tracing"]
-
-# This feature enables performance optimizations but at the cost of increased
-# compile times. By default, it is only used when building the release binary.
-performance = ["pixi_allocator"]

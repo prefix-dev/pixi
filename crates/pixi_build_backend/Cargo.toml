@@ -4,6 +4,13 @@ version = "0.1.7"
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["rustls"]
+# Use native-tls/OpenSSL for TLS
+native-tls = ["rattler_build_core/native-tls"]
+# Use rustls for TLS (pure Rust implementation)
+rustls = ["rattler_build_core/rustls"]
+
 [dependencies]
 async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
@@ -44,10 +51,3 @@ jsonrpc-stdio-server = { workspace = true }
 [dev-dependencies]
 insta = { version = "1.42.1", features = ["filters", "redactions", "yaml"] }
 toml = { version = "1.0.0" }
-
-[features]
-default = ["rustls"]
-# Use native-tls/OpenSSL for TLS
-native-tls = ["rattler_build_core/native-tls"]
-# Use rustls for TLS (pure Rust implementation)
-rustls = ["rattler_build_core/rustls"]

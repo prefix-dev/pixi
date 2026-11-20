@@ -3,6 +3,7 @@ use std::{collections::HashMap, default::Default, path::PathBuf};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
+use pixi_manifest::PixiPlatform;
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -12,7 +13,7 @@ use serde::Serialize;
 use serde_json;
 
 use pixi_core::{
-    UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    UpdateLockFileOptions, Workspace,
     activation::{CurrentEnvVarBehavior, get_activator},
     environment::get_update_lock_file_and_prefix,
     lock_file::{ReinstallPackages, UpdateMode},
@@ -22,7 +23,7 @@ use pixi_core::{
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
-/// Print the pixi environment activation script.
+/// Print a pixi environment activation script.
 ///
 /// You can source the script to activate the environment without needing pixi
 /// itself.
@@ -71,6 +72,7 @@ async fn generate_activation_script(
     shell: Option<ShellEnum>,
     environment: &Environment<'_>,
     project: &Workspace,
+    platform: &PixiPlatform,
 ) -> miette::Result<String> {
     // Get shell from the arguments or from the current process or use default if
     // all fails
@@ -79,11 +81,7 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    let activator = get_activator(
-        environment,
-        shell.clone(),
-        &environment.activation_platform(),
-    )?;
+    let activator = get_activator(environment, shell.clone(), platform)?;
 
     let path = std::env::var("PATH")
         .ok()
@@ -128,16 +126,15 @@ async fn generate_activation_script(
 /// activating the provided pixi environment.
 async fn generate_environment_json(
     environment: &Environment<'_>,
+    platform: &PixiPlatform,
     lock_file: &LockFile,
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<String> {
-    // Resolve the platform once so the env vars and the reported scripts agree.
-    let platform = environment.activation_platform();
     let environment_variables = get_activated_environment_variables(
         environment.workspace().env_vars(),
         environment,
-        &platform,
+        platform,
         CurrentEnvVarBehavior::Exclude,
         Some(lock_file),
         force_activate,
@@ -146,7 +143,7 @@ async fn generate_environment_json(
     .await?;
 
     let activation_scripts: Vec<PathBuf> = environment
-        .activation_scripts(Some(&platform))
+        .activation_scripts(Some(platform))
         .into_iter()
         .map(|s| environment.workspace().root().join(s))
         .filter(|p| p.is_file())
@@ -166,15 +163,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(config);
+        .with_cli_config(config)
+        .locate()
+        .await?;
 
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
-    let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
+    let (lock_file_data, _prefix, selection) = get_update_lock_file_and_prefix(
         &environment,
         Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::QuickValidate,
@@ -188,12 +186,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &pixi_core::environment::InstallFilter::default(),
     )
     .await?;
+    pixi_core::workspace::virtual_packages::verify_resolved_platform(&environment, &selection)?;
+    environment.emit_emulation_warning(selection.platform());
 
     let output = match args.json {
         true => {
             generate_environment_json(
                 &environment,
-                &lock_file_data.into_lock_file(),
+                selection.platform(),
+                lock_file_data.as_lock_file(),
                 workspace.config().force_activate(),
                 workspace.config().experimental_activation_cache_usage(),
             )
@@ -201,7 +202,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         // Skipping the activated environment caching for the script.
         // As it can still run scripts.
-        false => generate_activation_script(args.shell, &environment, &workspace).await?,
+        false => {
+            generate_activation_script(args.shell, &environment, &workspace, selection.platform())
+                .await?
+        }
     };
 
     // Print the output - either a JSON object or a shell script
@@ -212,6 +216,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use pixi_core::WorkspaceLocator;
     use rattler_conda_types::Subdir;
     #[cfg(target_family = "windows")]
     use rattler_shell::shell::CmdExe;
@@ -226,36 +231,51 @@ mod tests {
     async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
-        let project = WorkspaceLocator::default().locate().unwrap();
+        let project = WorkspaceLocator::default().locate().await.unwrap();
         let environment = project.default_environment();
+        let platform = pixi_manifest::platform::host::host_baseline();
 
         let script = generate_activation_script(
             Some(ShellEnum::Bash(Bash::default())),
             &environment,
             &project,
+            &platform,
         )
         .await
         .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 
-        let script = generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment, &project)
-            .await
-            .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::Zsh(Zsh)),
+            &environment,
+            &project,
+            &platform,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 
-        let script =
-            generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::Fish(Fish)),
+            &environment,
+            &project,
+            &platform,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("set -gx {path_var_name} ")));
         assert!(script.contains("set -gx CONDA_PREFIX "));
 
-        let script =
-            generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::Xonsh(Xonsh)),
+            &environment,
+            &project,
+            &platform,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("${path_var_name} = ")));
         assert!(script.contains("$CONDA_PREFIX = "));
 
@@ -264,16 +284,21 @@ mod tests {
             Some(ShellEnum::PowerShell(PowerShell::default())),
             &environment,
             &project,
+            &platform,
         )
         .await
         .unwrap();
         assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
         assert!(script.contains("${Env:CONDA_PREFIX}"));
 
-        let script =
-            generate_activation_script(Some(ShellEnum::NuShell(NuShell)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::NuShell(NuShell)),
+            &environment,
+            &project,
+            &platform,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("$env.{path_var_name} = ")));
         assert!(script.contains("$env.CONDA_PREFIX = "));
     }
@@ -283,30 +308,40 @@ mod tests {
     async fn test_shell_hook_windows() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
-        let project = WorkspaceLocator::default().locate().unwrap();
+        let project = WorkspaceLocator::default().locate().await.unwrap();
         let environment = project.default_environment();
+        let platform = pixi_manifest::platform::host::host_baseline();
 
         let script = generate_activation_script(
             Some(ShellEnum::PowerShell(PowerShell::default())),
             &environment,
             &project,
+            &platform,
         )
         .await
         .unwrap();
         assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
         assert!(script.contains("${Env:CONDA_PREFIX}"));
 
-        let script =
-            generate_activation_script(Some(ShellEnum::CmdExe(CmdExe)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::CmdExe(CmdExe)),
+            &environment,
+            &project,
+            &platform,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("@SET \"{path_var_name}=")));
         assert!(script.contains("@SET \"CONDA_PREFIX="));
 
-        let script =
-            generate_activation_script(Some(ShellEnum::NuShell(NuShell)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::NuShell(NuShell)),
+            &environment,
+            &project,
+            &platform,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("$env.{path_var_name} = ")));
         assert!(script.contains("$env.CONDA_PREFIX = "));
     }

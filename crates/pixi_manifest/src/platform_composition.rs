@@ -1,9 +1,9 @@
 //! Per-environment platform composition.
 //!
 //! On the subdir-only `[system-requirements]` path each feature references the
-//! rich platforms its system requirements synthesised (e.g. `linux-64-cuda-13-0`),
+//! platforms its system requirements synthesised (e.g. `linux-64-cuda-13-0`),
 //! all registered on the workspace. An environment that combines such features
-//! must solve for a single platform per subdir: when its features pin one rich
+//! must solve for a single platform per subdir: when its features pin one
 //! platform for a subdir that platform is reused, and when they pin several the
 //! environment combines them into one carrying the union of their virtual
 //! packages. Shared by the parse-time registration pass and
@@ -87,21 +87,21 @@ fn referenced_platforms<'a>(
 /// that does not customise a virtual package does not constrain it.
 fn union_virtual_packages(platforms: &[&PixiPlatform]) -> Vec<GenericVirtualPackage> {
     let mut union: BTreeMap<String, GenericVirtualPackage> = BTreeMap::new();
-    for package in platforms.iter().flat_map(|platform| {
-        let subdir = platform.subdir();
-        platform
-            .declared_virtual_packages()
+    for platform in platforms {
+        for package in platform
+            .manifest_virtual_package_records()
             .iter()
-            .filter(move |gvp| !crate::platform::is_subdir_default(gvp, subdir))
-    }) {
-        union
-            .entry(package.name.as_normalized().to_string())
-            .and_modify(|existing| {
-                if package.version > existing.version {
-                    *existing = package.clone();
-                }
-            })
-            .or_insert_with(|| package.clone());
+            .filter(|gvp| !crate::platform::is_subdir_default(gvp, platform.subdir()))
+        {
+            union
+                .entry(package.name.as_normalized().to_string())
+                .and_modify(|existing| {
+                    if package.version > existing.version {
+                        *existing = package.clone();
+                    }
+                })
+                .or_insert_with(|| package.clone());
+        }
     }
     union.into_values().collect()
 }

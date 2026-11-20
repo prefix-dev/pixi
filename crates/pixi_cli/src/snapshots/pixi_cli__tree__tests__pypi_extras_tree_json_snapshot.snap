@@ -1,0 +1,76 @@
+---
+source: crates/pixi_cli/src/tree.rs
+expression: "render_pypi_tree_json(&manifest, Subdir::Linux64)"
+---
+[
+  {
+    "name": "package_with_extras",
+    "version": null,
+    "kind": "pypi",
+    "is_explicit": true,
+    "via_extras": [],
+    "is_deduplicated": false,
+    "dependencies": [
+      {
+        "name": "boltons",
+        "version": "24.0.0",
+        "kind": "pypi",
+        "is_explicit": false,
+        "via_extras": [],
+        "is_deduplicated": false,
+        "dependencies": []
+      },
+      {
+        "name": "rich",
+        "version": "13.7.1",
+        "kind": "pypi",
+        "is_explicit": false,
+        "via_extras": [
+          "color"
+        ],
+        "is_deduplicated": false,
+        "dependencies": [
+          {
+            "name": "markdown_it_py",
+            "version": "3.0.0",
+            "kind": "pypi",
+            "is_explicit": false,
+            "via_extras": [],
+            "is_deduplicated": false,
+            "dependencies": [
+              {
+                "name": "mdurl",
+                "version": "0.1.2",
+                "kind": "pypi",
+                "is_explicit": false,
+                "via_extras": [],
+                "is_deduplicated": false,
+                "dependencies": []
+              }
+            ]
+          },
+          {
+            "name": "pygments",
+            "version": "2.18.0",
+            "kind": "pypi",
+            "is_explicit": false,
+            "via_extras": [],
+            "is_deduplicated": false,
+            "dependencies": []
+          }
+        ]
+      },
+      {
+        "name": "click",
+        "version": "8.1.7",
+        "kind": "pypi",
+        "is_explicit": false,
+        "via_extras": [
+          "cli"
+        ],
+        "is_deduplicated": false,
+        "dependencies": []
+      }
+    ]
+  }
+]

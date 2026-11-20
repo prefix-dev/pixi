@@ -4,7 +4,6 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_core::WorkspaceLocator;
 use pixi_manifest::HasWorkspaceManifest;
 use pixi_spec::{GitReference, GitSpec, PathSourceSpec, PixiSpec, Subdirectory};
 use rattler_conda_types::PackageName;
@@ -111,10 +110,11 @@ impl HasSpecs for AddArgs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut workspace = WorkspaceLocator::for_cli()
+    let mut workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
     match args.command {
         Command::Add(add_args) => {
@@ -126,13 +126,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
 
             if add_args.has_source_dependency() {
-                workspace = ensure_pixi_build_preview_enabled(
-                    workspace,
-                    &args.config_source,
-                    args.workspace_config.workspace_locator_start(),
-                    pixi_config::ConfigCli::default(),
-                )
-                .await?;
+                workspace = ensure_pixi_build_preview_enabled(workspace).await?;
                 if let Some(backend_override) = args.workspace_config.backend_override.clone() {
                     workspace = workspace.with_backend_override(backend_override);
                 }

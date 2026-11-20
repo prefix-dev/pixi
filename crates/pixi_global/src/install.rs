@@ -1,14 +1,13 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     BinDir, StateChange,
-    trampoline::{Configuration, Trampoline},
+    trampoline::{Configuration, ConfigurationParseError, Trampoline, TrampolineError},
 };
 use indexmap::IndexSet;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
 use pixi_utils::{
     executable_from_path, is_binary_folder,
-    prefix::{Executable, Prefix},
+    prefix::{Executable, Prefix, PrefixError},
 };
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, PackageRecord, ParseMatchSpecOptions, RepodataRevision, Subdir,
@@ -26,8 +25,8 @@ use fs_err::tokio as tokio_fs;
 /// the original executable.
 /// # Returns
 ///
-/// A `miette::Result` containing the `ScriptExecMapping` if the entry point is
-/// found, or an error if it is not.
+/// The `ScriptExecMapping` if the entry point is found, or an error if it is
+/// not.
 ///
 /// # Errors
 ///
@@ -38,7 +37,7 @@ pub(crate) fn script_exec_mapping<'a>(
     executables: impl Iterator<Item = &'a Executable>,
     bin_dir: &BinDir,
     env_dir: &EnvDir,
-) -> miette::Result<ScriptExecMapping> {
+) -> Result<ScriptExecMapping, ExecutableNotFoundError> {
     let all_executables = executables.collect_vec();
     let matching_executables = all_executables
         .iter()
@@ -64,15 +63,46 @@ pub(crate) fn script_exec_mapping<'a>(
             global_script_path: bin_dir.executable_trampoline_path(exposed_name),
             original_executable: target_executable.path.clone(),
         }),
-        _ => Err(miette::miette!(
-            "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
-            env_dir.path().display(),
-            all_executables
+        _ => Err(ExecutableNotFoundError {
+            entry_point: entry_point.to_string(),
+            environment: env_dir.path().to_path_buf(),
+            executables: all_executables
                 .iter()
                 .map(|exec| exec.name.clone())
-                .collect_vec()
-        )),
+                .collect_vec(),
+        }),
     }
+}
+
+/// The entry point of an exposed name isn't an executable of the environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("couldn't find executable '{entry_point}' in '{}'", environment.display())]
+#[diagnostic(help(
+    "found these executables: {}",
+    if executables.is_empty() { "none".to_string() } else { executables.join(", ") }
+))]
+pub struct ExecutableNotFoundError {
+    entry_point: String,
+    environment: PathBuf,
+    executables: Vec<String>,
+}
+
+/// An error from creating the trampolines of exposed executables.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum CreateTrampolinesError {
+    #[error("failed to read the PATH environment variable")]
+    ReadPath(#[source] env::VarError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Activation(PrefixError),
+
+    #[error("failed to compute the PATH entries of the environment")]
+    PathDiff(#[source] env::JoinPathsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trampoline(#[from] TrampolineError),
 }
 
 /// Mapping from the global script location to an executable in a package
@@ -90,7 +120,7 @@ pub(crate) async fn create_executable_trampolines(
     mapped_executables: &[ScriptExecMapping],
     prefix: &Prefix,
     env_name: &EnvironmentName,
-) -> miette::Result<StateChanges> {
+) -> Result<StateChanges, CreateTrampolinesError> {
     const IGNORE_CONDA_PREFIX_MARKER: &str = "global-ignore-conda-prefix";
 
     #[derive(Debug)]
@@ -106,14 +136,18 @@ pub(crate) async fn create_executable_trampolines(
     let pixi_config_dir = prefix.root().join("etc").join("pixi");
 
     // Get PATH environment variables
-    let path_current = std::env::var("PATH").into_diagnostic()?;
-    let mut activation_variables = prefix.run_activation().await?;
+    let path_current = std::env::var("PATH").map_err(CreateTrampolinesError::ReadPath)?;
+    let mut activation_variables = prefix
+        .run_activation()
+        .await
+        .map_err(CreateTrampolinesError::Activation)?;
     let path_after_activation = activation_variables
         .remove("PATH")
         .or_else(|| activation_variables.remove("Path"))
         .unwrap_or_else(|| path_current.clone());
 
-    let path_diff = path_diff(&path_current, &path_after_activation, prefix)?;
+    let path_diff = path_diff(&path_current, &path_after_activation, prefix)
+        .map_err(CreateTrampolinesError::PathDiff)?;
 
     for ScriptExecMapping {
         global_script_path,
@@ -123,12 +157,9 @@ pub(crate) async fn create_executable_trampolines(
         tracing::debug!("Create trampoline {}", global_script_path.display());
         let exe = prefix.root().join(original_executable);
 
-        let parent_dir = global_script_path.parent().ok_or_else(|| {
-            miette::miette!(
-                "{} needs to have a parent directory",
-                global_script_path.display()
-            )
-        })?;
+        let parent_dir = global_script_path
+            .parent()
+            .ok_or_else(|| TrampolineError::MissingParent(global_script_path.clone()))?;
         let executable_name = executable_from_path(original_executable);
 
         let mut env_for_trampoline = activation_variables.clone();
@@ -150,7 +181,7 @@ pub(crate) async fn create_executable_trampolines(
         {
             tokio_fs::remove_file(global_script_path)
                 .await
-                .into_diagnostic()?;
+                .map_err(TrampolineError::Remove)?;
             AddedOrChanged::Migrated
         } else if !global_script_path.exists() {
             AddedOrChanged::Added
@@ -163,7 +194,8 @@ pub(crate) async fn create_executable_trampolines(
             if json_path.exists() {
                 let previous_configuration_data_bytes = tokio_fs::read_to_string(&json_path)
                     .await
-                    .into_diagnostic()?;
+                    .map_err(|e| ConfigurationParseError::ReadError(json_path.clone(), e))
+                    .map_err(TrampolineError::from)?;
 
                 if let Ok(previous_manifest_metadata) =
                     serde_json::from_str::<Configuration>(&previous_configuration_data_bytes)
@@ -212,7 +244,11 @@ fn remove_incomplete_conda_activation_stack(env: &mut HashMap<String, String>) {
 }
 
 /// Compute the difference between two PATH variables (the entries split by `;` or `:`)
-fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Result<String> {
+fn path_diff(
+    path_before: &str,
+    path_after: &str,
+    prefix: &Prefix,
+) -> Result<String, env::JoinPathsError> {
     // Split paths into vectors using platform-specific delimiter
     let paths_before: Vec<PathBuf> = std::env::split_paths(&path_before).collect();
     let paths_after: Vec<PathBuf> = std::env::split_paths(path_after).collect();
@@ -226,9 +262,7 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
         .filter(|p| !paths_before.contains(p) || prefix_path_entries.contains(p))
         .unique();
 
-    env::join_paths(path_diff)
-        .map(|p| p.to_string_lossy().to_string())
-        .into_diagnostic()
+    env::join_paths(path_diff).map(|p| p.to_string_lossy().to_string())
 }
 
 /// Checks if the local environment matches the given specifications.
@@ -353,7 +387,7 @@ pub(crate) fn local_environment_matches_spec(
 pub async fn find_binary_by_name(
     prefix: &Prefix,
     package_name: &PackageName,
-) -> miette::Result<Option<Executable>> {
+) -> Result<Option<Executable>, PrefixError> {
     let installed_packages = prefix.find_installed_packages()?;
     for package in &installed_packages {
         let executables = prefix.find_executables(std::slice::from_ref(package));
@@ -371,6 +405,7 @@ pub async fn find_binary_by_name(
 
 #[cfg(test)]
 mod tests {
+    use miette::Diagnostic;
     use rattler_conda_types::{MatchSpec, ParseStrictness, Subdir};
     use rattler_lock::LockFile;
     use rstest::{fixture, rstest};
@@ -539,6 +574,20 @@ mod tests {
             &env_dir,
         )
         .unwrap();
+
+        let err = script_exec_mapping(
+            &exposed_name,
+            "ruby",
+            exposed_executables.iter(),
+            &bin_dir,
+            &env_dir,
+        )
+        .unwrap_err();
+        assert_eq!(err.entry_point, "ruby");
+        assert_eq!(
+            err.help().unwrap().to_string(),
+            "found these executables: python, python"
+        );
         let expected = if cfg!(windows) {
             ScriptExecMapping {
                 global_script_path: tmp_home_dir_path.join("bin\\python.exe"),

@@ -143,7 +143,7 @@ pub use reporter::{
 };
 pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;
-pub use solve_conda::SolveCondaEnvironmentSpec;
+pub use solve_conda::{SolveCondaEnvironmentError, SolveCondaEnvironmentSpec};
 pub use util::executor;
 pub use util::{Executor, Limit, Limits, PtrArc};
 

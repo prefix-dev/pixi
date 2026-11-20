@@ -343,34 +343,46 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
     None
 }
 
+/// An error that occurs when a TOML dependency spec has an invalid
+/// combination of fields or cannot be converted into the requested spec.
 #[derive(Error, Debug)]
 pub enum SpecError {
+    /// Git reference fields were given without a `git` location.
     #[error("`branch`, `rev`, `tag`, and `lfs` are only valid when `git` is specified")]
     NotAGitSpec,
 
+    /// More than one of `branch`, `rev` and `tag` was given.
     #[error("only one of `branch`, `rev`, or `tag` can be specified")]
     MultipleGitRefs,
 
+    /// A detailed spec without any field that identifies a package.
     #[error(
         "one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified"
     )]
     MissingDetailedIdentifier,
 
+    /// More than one of `url`, `path` and `git` was given.
     #[error("only one of `url`, `path`, or `git` can be specified")]
     MultipleIdentifiers,
 
+    /// Two fields that cannot be combined were given.
     #[error("{0} cannot be used with {1}")]
     InvalidCombination(Cow<'static, str>, Cow<'static, str>),
 
+    /// The `when` condition is invalid.
     #[error("{message}")]
     InvalidWhen {
+        /// What is wrong with the condition.
         message: String,
+        /// A suggestion to fix the condition.
         help: Option<String>,
     },
 
+    /// The spec does not describe a binary package.
     #[error(transparent)]
     NotABinary(NotBinary),
 
+    /// The `subdirectory` field is invalid.
     #[error(transparent)]
     InvalidSubdirectory(#[from] SubdirectoryError),
 }
@@ -659,7 +671,9 @@ impl TomlSpec {
 
         // Matchspec fields are rejected when the location resolves to a
         // binary archive: a `.conda` archive is already a fully-specified
-        // package, so `version` etc. would be meaningless.
+        // package, so `version` etc. would be meaningless. Empty `flags` and
+        // `track-features` select nothing and are accepted, like
+        // `rattler_config` does for an exemption.
         let binary_location_key = match location_kind {
             LocationKind::UrlBinary => Some("`url`"),
             LocationKind::PathBinary => Some("`path`"),
@@ -671,11 +685,19 @@ impl TomlSpec {
                 ("`build`", self.build.is_some()),
                 ("`build-number`", self.build_number.is_some()),
                 ("`extras`", self.extras.is_some()),
-                ("`flags`", self.flags.is_some()),
+                (
+                    "`flags`",
+                    self.flags.as_ref().is_some_and(|flags| !flags.is_empty()),
+                ),
                 ("`subdir`", self.subdir.is_some()),
                 ("`license`", self.license.is_some()),
                 ("`when`", self.when.is_some()),
-                ("`track-features`", self.track_features.is_some()),
+                (
+                    "`track-features`",
+                    self.track_features
+                        .as_ref()
+                        .is_some_and(|features| !features.is_empty()),
+                ),
             ] {
                 if is_some {
                     return Err(SpecError::InvalidCombination(field_name.into(), key.into()));

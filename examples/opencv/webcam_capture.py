@@ -34,8 +34,8 @@ def capture_and_grayscale():
             break
 
     # Check if the webcam is opened correctly
-    if not working_cam.isOpened():
-        raise OSError("Cannot open webcam")
+    if working_cam is None or not working_cam.isOpened():
+        raise OSError("cannot open webcam")
 
     while True:
         # Read the current frame from the webcam

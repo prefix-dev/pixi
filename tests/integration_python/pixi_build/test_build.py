@@ -79,6 +79,77 @@ def test_build_honors_cuda_override(
 
 
 @pytest.mark.slow
+def test_publish_honors_exclude_newer(
+    pixi: Path,
+    simple_workspace: Workspace,
+    dummy_channel_1: str,
+) -> None:
+    """`pixi publish` builds with the `exclude-newer` of the workspace, like
+    the build of a source dependency does."""
+    simple_workspace.recipe["requirements"] = {"host": ["dummy-b"]}
+    command = [
+        pixi,
+        "publish",
+        "--target-dir",
+        str(simple_workspace.workspace_dir),
+        "--path",
+        simple_workspace.package_dir,
+    ]
+
+    # Every package in dummy_channel_1 was uploaded in 2025. The cutoff is set
+    # on that channel only, so it doesn't affect the build backend.
+    channels = simple_workspace.workspace_manifest["workspace"]["channels"]
+    channels.insert(0, {"channel": dummy_channel_1, "exclude-newer": "2020-01-01"})
+    simple_workspace.write_files()
+    verify_cli_command(
+        command,
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+    channels[0] = dummy_channel_1
+    simple_workspace.write_files()
+    verify_cli_command(command)
+
+
+@pytest.mark.slow
+def test_publish_resolves_staging_output_from_workspace_channels(
+    pixi: Path,
+    simple_workspace: Workspace,
+    dummy_channel_1: str,
+) -> None:
+    """The build environment of a `staging` output is solved by the backend
+    rather than by pixi, so it must get the workspace channels too."""
+    name = simple_workspace.recipe["package"]["name"]
+    simple_workspace.recipe = {
+        "recipe": {"name": name, "version": "1.0.0"},
+        "outputs": [
+            {
+                "staging": {"name": f"{name}-staging"},
+                "requirements": {"build": ["dummy-b"]},
+            },
+            {"package": {"name": name}, "inherit": f"{name}-staging"},
+        ],
+    }
+    simple_workspace.package_manifest["package"]["build"]["config"] = {"experimental": True}
+    simple_workspace.workspace_manifest["workspace"]["channels"].insert(0, dummy_channel_1)
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--target-dir",
+            str(simple_workspace.workspace_dir),
+            "--path",
+            simple_workspace.package_dir,
+        ],
+    )
+
+    assert len(list(simple_workspace.workspace_dir.glob("*.conda"))) == 1
+
+
+@pytest.mark.slow
 def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     verify_cli_command(
@@ -243,6 +314,37 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
             "check-editable",
         ],
         stdout_contains="The package is installed as editable.",
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("verbosity_args", "installer_debug_shown"),
+    [([], False), (["-vvv"], True)],
+    ids=["default", "verbose"],
+)
+def test_python_installer_verbosity_follows_pixi(
+    pixi: Path,
+    build_data: Path,
+    tmp_pixi_workspace: Path,
+    verbosity_args: list[str],
+    installer_debug_shown: bool,
+) -> None:
+    """
+    The installer's debug output only shows up when pixi's own verbosity asks for it.
+    """
+    project = "editable-pyproject"
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    copytree_with_local_backend(build_data.joinpath(project), target_dir)
+
+    uv_debug_line = "DEBUG uv "
+    verify_cli_command(
+        [pixi, "install", *verbosity_args, "--manifest-path", target_dir / "pyproject.toml"],
+        stderr_contains=[BUILD_RUNNING_STRING, uv_debug_line]
+        if installer_debug_shown
+        else BUILD_RUNNING_STRING,
+        stderr_excludes=None if installer_debug_shown else uv_debug_line,
+        strip_ansi=True,
     )
 
 

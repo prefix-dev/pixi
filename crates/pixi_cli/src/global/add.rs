@@ -35,7 +35,7 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -109,12 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
-            if let Err(revert_err) =
-                revert_environment_after_error(&args.environment, &project_original).await
-            {
-                tracing::warn!("Reverting of the operation failed");
-                tracing::info!("Reversion error: {:?}", revert_err);
-            }
+            revert_environment_after_error(&args.environment, &project_original).await;
             Err(err.wrap_err(format!(
                 "Couldn't add packages to environment {}",
                 args.environment

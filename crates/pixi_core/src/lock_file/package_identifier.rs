@@ -73,7 +73,9 @@ impl PypiPackageIdentifier {
     }
 
     fn uses_legacy_purl_fallback(record: &RepoDataRecord) -> bool {
-        record.package_record.purls.is_none() && pypi_mapping::is_conda_forge_record(record)
+        record.package_record.purls.is_none()
+            && (pypi_mapping::is_conda_forge_record(record)
+                || pypi_mapping::is_conda_pypi_record(record))
     }
 
     /// Helper function to write the result of extract the python packages that
@@ -91,7 +93,7 @@ impl PypiPackageIdentifier {
 
         // Backwards compatibility:
         // If lock file don't have a purl
-        // but the package is a conda-forge package, we just assume that
+        // but the package is a conda-forge or conda-pypi package, we just assume that
         // the name of the package is equivalent to the name of the python package.
         // In newer versions of the lock file, we should always have a purl
         // where empty purls means that the package is not a pypi-one.

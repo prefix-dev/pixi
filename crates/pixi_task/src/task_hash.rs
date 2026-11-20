@@ -74,7 +74,7 @@ pub struct TaskHash {
 impl TaskHash {
     /// Constructs an instance from an executable task.
     pub async fn from_task(
-        task: &ExecutableTask<'_>,
+        task: &ExecutableTask<'_, '_>,
         lock_file: &LockFile,
     ) -> Result<Option<Self>, InputHashesError> {
         let input_hashes = InputHashes::from_task(task).await?;
@@ -93,14 +93,14 @@ impl TaskHash {
                 &task.run_environment,
                 &HashMap::new(),
                 lock_file,
-                &task.platform,
+                task.platform,
             ),
         }))
     }
 
     pub async fn update_output(
         &mut self,
-        task: &ExecutableTask<'_>,
+        task: &ExecutableTask<'_, '_>,
     ) -> Result<(), InputHashesError> {
         self.outputs = OutputHashes::from_task(task).await?;
         Ok(())
@@ -108,7 +108,7 @@ impl TaskHash {
 
     pub async fn update_input(
         &mut self,
-        task: &ExecutableTask<'_>,
+        task: &ExecutableTask<'_, '_>,
     ) -> Result<(), InputHashesError> {
         self.inputs = InputHashes::from_task(task).await?;
         Ok(())
@@ -126,7 +126,9 @@ impl TaskHash {
 
     /// Return the hash that should be used as the name of the task cache file.
     /// It takes the rendered inputs and rendered outputs of the task into account.
-    pub fn task_args_hash(task: &ExecutableTask<'_>) -> Result<Option<NameHash>, InputHashesError> {
+    pub fn task_args_hash(
+        task: &ExecutableTask<'_, '_>,
+    ) -> Result<Option<NameHash>, InputHashesError> {
         let mut hasher = Xxh3::new();
 
         let Some(execute) = task.task().as_execute() else {
@@ -163,7 +165,9 @@ pub struct InputHashes {
 
 impl InputHashes {
     /// Compute the input hashes from a task. Returns `None` if no files match.
-    pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
+    pub async fn from_task(
+        task: &ExecutableTask<'_, '_>,
+    ) -> Result<Option<Self>, InputHashesError> {
         let Some(execute) = task.task().as_execute() else {
             return Ok(None);
         };
@@ -201,7 +205,9 @@ pub struct OutputHashes {
 
 impl OutputHashes {
     /// Compute the output hashes from a task. Returns `None` if no files match.
-    pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
+    pub async fn from_task(
+        task: &ExecutableTask<'_, '_>,
+    ) -> Result<Option<Self>, InputHashesError> {
         let outputs: Vec<String> = match task.task().as_execute() {
             Some(execute) => {
                 if let Some(outputs) = execute.outputs.clone() {

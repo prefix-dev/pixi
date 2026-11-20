@@ -1,18 +1,52 @@
 use std::collections::HashMap;
 
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_core::{
-    InstallFilter, UpdateLockFileOptions, Workspace,
-    environment::{LockFileUsage, get_update_lock_file_and_prefix},
-    lock_file::{ReinstallPackages, UpdateMode},
+    UpdateLockFileOptions, Workspace,
+    environment::{LockFileAndPrefixesError, LockFileUsage, update_lock_file_after_edit},
     workspace::WorkspaceMut,
 };
 use pixi_manifest::FeaturesExt;
-use pixi_manifest::{EnvironmentName, FeatureName, PrioritizedChannel};
-use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl};
+use pixi_manifest::{
+    EnvironmentName, FeatureName, LoadManifestsError, PrioritizedChannel, RemoveChannelsError,
+    TomlError,
+};
+use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl, ParseChannelError};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::Interface;
+use crate::workspace::workspace::{SaveManifestError, save};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum ChannelError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadWorkspace(#[from] LoadManifestsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RemoveChannels(#[from] RemoveChannelsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LockFileAndPrefixes(#[from] LockFileAndPrefixesError),
+
+    #[error("failed to resolve channel '{channel}'")]
+    ResolveChannel {
+        channel: String,
+        #[source]
+        source: ParseChannelError,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
+}
 
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct ChannelOptions {
@@ -41,7 +75,7 @@ pub async fn add<I: Interface>(
     options: ChannelOptions,
     priority: Option<i32>,
     prepend: bool,
-) -> miette::Result<()> {
+) -> Result<(), ChannelError> {
     // Add the channels to the manifest
     workspace.manifest().add_channels(
         prioritized_channels(&options.channels, priority),
@@ -50,22 +84,20 @@ pub async fn add<I: Interface>(
     )?;
 
     // TODO: Update all environments touched by the features defined.
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    let update_options = UpdateLockFileOptions {
+        lock_file_usage: options.lock_file_usage,
+        no_install: options.no_install,
+        max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    update_lock_file_after_edit(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: options.lock_file_usage,
-            no_install: options.no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        update_options,
     )
     .await?;
 
-    let workspace = workspace.save().await.into_diagnostic()?;
+    let workspace = save(workspace).await?;
 
     // Report back to the user
     report(
@@ -85,7 +117,7 @@ pub async fn remove<I: Interface>(
     mut workspace: WorkspaceMut,
     options: ChannelOptions,
     priority: Option<i32>,
-) -> miette::Result<()> {
+) -> Result<(), ChannelError> {
     // Remove the channels from the manifest
     workspace.manifest().remove_channels(
         prioritized_channels(&options.channels, priority),
@@ -93,21 +125,19 @@ pub async fn remove<I: Interface>(
     )?;
 
     // Try to update the lock file without the removed channels
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    let update_options = UpdateLockFileOptions {
+        lock_file_usage: options.lock_file_usage,
+        no_install: options.no_install,
+        max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    update_lock_file_after_edit(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: options.lock_file_usage,
-            no_install: options.no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        update_options,
     )
     .await?;
-    let workspace = workspace.save().await.into_diagnostic()?;
+    let workspace = save(workspace).await?;
 
     // Report back to the user
     report(
@@ -126,7 +156,7 @@ pub async fn set<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
     options: ChannelOptions,
-) -> miette::Result<()> {
+) -> Result<(), ChannelError> {
     // Set the channels in the manifest (this replaces all existing channels)
     workspace.manifest().set_channels(
         prioritized_channels(&options.channels, None),
@@ -134,22 +164,20 @@ pub async fn set<I: Interface>(
     )?;
 
     // Update the lock file with the new channel configuration
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    let update_options = UpdateLockFileOptions {
+        lock_file_usage: options.lock_file_usage,
+        no_install: options.no_install,
+        max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    update_lock_file_after_edit(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: options.lock_file_usage,
-            no_install: options.no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        update_options,
     )
     .await?;
 
-    let workspace = workspace.save().await.into_diagnostic()?;
+    let workspace = save(workspace).await?;
 
     // Report back to the user
     report(
@@ -180,7 +208,7 @@ async fn report<I: Interface>(
     priority: Option<i32>,
     operation: &str,
     channel_config: &ChannelConfig,
-) -> miette::Result<()> {
+) -> Result<(), ChannelError> {
     for channel in channels {
         let message = format_channel_message(channel, priority, operation, channel_config)?;
         interface.success(&message).await;
@@ -193,7 +221,7 @@ fn format_channel_message(
     priority: Option<i32>,
     operation: &str,
     channel_config: &ChannelConfig,
-) -> miette::Result<String> {
+) -> Result<String, ChannelError> {
     let priority_suffix = priority.map_or_else(String::new, |p| format!(" at priority {p}"));
 
     let message = match channel {
@@ -201,7 +229,10 @@ fn format_channel_message(
             let base_url = channel
                 .clone()
                 .into_base_url(channel_config)
-                .into_diagnostic()?;
+                .map_err(|source| ChannelError::ResolveChannel {
+                    channel: name.clone(),
+                    source,
+                })?;
             format!("{operation} {name} ({base_url}){priority_suffix}")
         }
         NamedChannelOrUrl::Url(url) => {

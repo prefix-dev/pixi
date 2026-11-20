@@ -1,0 +1,9 @@
+[workspace]
+channels = ["../channel", "https://prefix.dev/conda-forge"]
+platforms = [{ platform = "linux-64", __username_length = "3" }]
+
+[dependencies]
+long-username = "0.1.*"
+
+[tasks]
+start = "long-username"

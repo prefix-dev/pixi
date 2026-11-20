@@ -11,7 +11,9 @@
 //! 2. [`PurlDerivationSource::PrefixHashMapping`] — prefix.dev hash mapping by package SHA256.
 //! 3. [`PurlDerivationSource::PrefixCompressedMapping`] — prefix.dev compressed name mapping.
 //! 4. Same-name heuristic — fallback that assumes the conda package name is
-//!    the PyPI package name.
+//!    the PyPI package name. Without project configuration it applies to
+//!    conda-forge records and to records from the conda-pypi channel, which
+//!    serves PyPI wheels and therefore never needs the prefix.dev lookups.
 //!
 //! A project-defined mapping carries a per-channel [`MappingMode`] that
 //! determines how it interacts with Pixi's default mapping data: `Overlay`
@@ -44,7 +46,9 @@ mod pypi_names;
 mod reporter;
 pub mod resolvers;
 
-pub use channel::{is_conda_forge_record, is_conda_forge_url};
+pub use channel::{
+    is_conda_forge_record, is_conda_forge_url, is_conda_pypi_record, is_conda_pypi_url,
+};
 pub use derivation_mode::{
     ChannelName, MappingByChannel, MappingMap, MappingMode, ProjectDefinedChannelMapping,
     ProjectDefinedMappingLocation, PurlDerivationMode, ResolvedChannelMapping,
@@ -53,7 +57,7 @@ pub use metrics::CacheMetrics;
 pub use purl::PurlDerivationSource;
 pub use pypi_names::PypiNames;
 pub use reporter::Reporter;
-pub use resolvers::ProjectDefinedMapping;
+pub use resolvers::{ProjectDefinedMapping, ProjectDefinedMappingError};
 
 use crate::{
     derivation::DerivationOutcome,
@@ -81,9 +85,12 @@ pub(crate) const MAPPING_OFFLINE_HELP: &str = "If this host cannot be reached (e
 ///   [`MappingMode`]: `Overlay` falls through to prefix.dev on a miss, `Replace` skips
 ///   prefix.dev mapping data, and `Disabled` skips all derivation. The same-name
 ///   heuristic is controlled separately per channel. Records from unmapped channels
-///   use the prefix.dev chain and the same-name heuristic only for conda-forge.
+///   use the prefix.dev chain and the same-name heuristic only for conda-forge, while
+///   records from the conda-pypi channel skip the prefix.dev chain and always use the
+///   same-name heuristic.
 /// - [`PurlDerivationMode::Prefix`]: prefix hash mapping, then prefix compressed mapping,
-///   then the same-name heuristic for conda-forge.
+///   then the same-name heuristic for conda-forge. Records from the conda-pypi channel
+///   use only the same-name heuristic.
 /// - [`PurlDerivationMode::Disabled`]: no project-defined, prefix, or same-name mapping.
 ///
 /// Concrete purl provenance is represented by [`PurlDerivationSource`].
@@ -150,6 +157,9 @@ pub enum MappingError {
     #[error("failed to fetch conda-pypi mapping from remote source")]
     #[diagnostic(help("{}", MAPPING_OFFLINE_HELP))]
     Reqwest(#[source] reqwest_middleware::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ProjectDefined(#[from] ProjectDefinedMappingError),
 }
 
 impl From<reqwest_middleware::Error> for MappingError {
@@ -217,7 +227,7 @@ impl PurlDerivationClient {
 
         let wrapped_client = LazyClient::new(move || {
             let client = client.client().clone();
-            ClientBuilder::new(reqwest::Client::new())
+            ClientBuilder::new(unused_mapping_http_client())
                 .with(retry_strategy)
                 .with(cache_strategy)
                 .with(DelegateToClient(client))
@@ -238,7 +248,7 @@ impl PurlDerivationClient {
         derivation_mode: &PurlDerivationMode,
         conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
         reporter: Option<Arc<dyn Reporter>>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), MappingError> {
         let start = Instant::now();
 
         // Collect the records into a vec so we can iterate multiple times.
@@ -309,9 +319,7 @@ impl PurlDerivationClient {
         let mut amended_records = 0;
         let mut total_records = 0;
         while let Some(next) = amend_futures.next().await {
-            // Use `Report::new` instead of `into_diagnostic` to preserve the
-            // diagnostic help text on `MappingError`.
-            let (record, derived_purls) = next.map_err(miette::Report::new)?;
+            let (record, derived_purls) = next?;
 
             if let Some(derived_purls) = derived_purls.into_purls() {
                 replace_pypi_purls(record, derived_purls);
@@ -404,11 +412,15 @@ impl PurlDerivationClient {
             };
             (project_outcome, secondary)
         } else {
+            // The conda-pypi channel serves PyPI wheels as conda packages: the
+            // conda name is the PyPI name by construction and the prefix.dev
+            // mappings only cover conda-forge, so the lookups are skipped.
+            let conda_pypi = is_conda_pypi_record(record);
             (
                 DerivationOutcome::NotApplicable,
                 SecondaryLookups {
-                    prefix: true,
-                    same_name: is_conda_forge_record(record),
+                    prefix: !conda_pypi,
+                    same_name: conda_pypi || is_conda_forge_record(record),
                 },
             )
         };
@@ -478,4 +490,15 @@ fn replace_pypi_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item
         .get_or_insert_with(BTreeSet::new);
     record_purls.retain(|purl| purl.package_type() != "pypi");
     record_purls.extend(purls);
+}
+
+/// Inner client for the mapping middleware stack.
+///
+/// Requests go through [`DelegateToClient`]. This client must not load the
+/// system CA store: `reqwest::Client::new()` panics when none are present.
+fn unused_mapping_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .tls_certs_only(std::iter::empty::<reqwest::Certificate>())
+        .build()
+        .expect("reqwest client without system CA store")
 }

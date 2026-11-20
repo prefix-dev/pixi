@@ -10,7 +10,7 @@ use miette::{IntoDiagnostic, Report};
 use pixi_api::DefaultContext;
 use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_config::default_channel_config;
-use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
+use pixi_core::workspace::WorkspaceLocatorError;
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{
@@ -21,10 +21,10 @@ use url::Url;
 
 use crate::{
     cli_config::{ChannelsConfig, WorkspaceConfig},
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
-/// Search a conda package
+/// Search for conda packages
 ///
 /// Its output will list the latest version of package.
 #[derive(Debug, Parser)]
@@ -87,12 +87,14 @@ pub async fn execute_impl<W: Write>(
     args: Args,
     out: &mut W,
 ) -> miette::Result<Vec<RepoDataRecord>> {
-    let workspace = match WorkspaceLocator::for_cli()
+    let workspace = match crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
+        .with_cli_config(args.config.clone())
         .locate()
+        .await
     {
-        Ok(project) => Some(project.with_cli_config(args.config.clone())),
+        Ok(project) => Some(project),
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             debug!("No project file found, continuing without project configuration.",);
             None
@@ -167,13 +169,13 @@ pub async fn execute_impl<W: Write>(
 
     let result = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
-            cli_context(workspace)
+            cli_workspace_context(workspace)
                 .search(matchspec, channels, platforms, fuzzy_limit)
                 .await
         })
         .await?
     } else {
-        let config = pixi_config::Config::load_global_with(&args.config_source.source())
+        let config = pixi_config::Config::try_load_global_with(&args.config_source.source())?
             .merge_config(args.config.clone().into());
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})

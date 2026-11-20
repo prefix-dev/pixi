@@ -6,7 +6,7 @@ pub mod dependencies;
 pub mod pin_compatible;
 mod work_dir_key;
 
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_environment::BuildEnvironment;
@@ -231,7 +231,7 @@ fn pretty_url_name(url: &Url) -> String {
         host.to_string()
     } else {
         // Final fallback: use a hash of the URL to avoid invalid path characters
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Xxh3::new();
         url.as_str().hash(&mut hasher);
         URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
     }

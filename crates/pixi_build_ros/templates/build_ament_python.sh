@@ -7,8 +7,8 @@ pushd $SRC_DIR
 
 # If there is a setup.cfg that contains install-scripts then we should not set it here
 if [ -f setup.cfg ] && grep -q "install[-_]scripts" setup.cfg; then
-    # Remove e.g. ros-humble- from PKG_NAME
-    PKG_NAME_SHORT=${PKG_NAME#*ros-@DISTRO@-}
+    # Strip the conda prefix to recover the ROS package name.
+    PKG_NAME_SHORT=${PKG_NAME#@PACKAGE_PREFIX@-}
     # Substitute "-" with "_"
     PKG_NAME_SHORT=${PKG_NAME_SHORT//-/_}
     INSTALL_SCRIPTS_ARG="--install-scripts=$PREFIX/lib/$PKG_NAME_SHORT"

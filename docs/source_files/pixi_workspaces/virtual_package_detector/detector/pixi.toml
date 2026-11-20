@@ -1,0 +1,17 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[package.build.backend]
+name = "pixi-build-rust"
+channels = ["https://prefix.dev/conda-forge"]
+
+[package.build.config]
+compilers = ["rust"]
+
+[package.build.target.linux.config]
+env = { RUSTFLAGS = "-C target-feature=+crt-static -C relocation-model=static" }
+
+[package.build.target.win.config]
+env = { RUSTFLAGS = "-C target-feature=+crt-static" }

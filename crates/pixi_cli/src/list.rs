@@ -7,16 +7,14 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_api::workspace::{Package, PackageKind};
 use pixi_consts::consts;
-use pixi_core::WorkspaceLocator;
 use pixi_manifest::PixiPlatformName;
-use rattler_conda_types::Subdir;
 use serde::Serialize;
 
 use crate::{
     cli_config::{
         LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
     },
-    cli_interface::cli_context,
+    cli_interface::cli_workspace_context,
 };
 
 // an enum to sort by size or name
@@ -150,7 +148,7 @@ pub const DEFAULT_FIELDS: [Field; 6] = [
     Field::Source,
 ];
 
-/// List the packages of the current workspace
+/// List the packages of an environment
 ///
 /// Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]
@@ -208,10 +206,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
     let lock_file_usage = script_lock_file_usage(
         args.lock_file_update_config.lock_file_usage()?,
@@ -219,19 +218,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace.lock_file_path().is_file(),
     )?;
     let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
-    let platform_display: String = match &args.platform {
-        Some(p) => p.to_string(),
-        None => environment
-            .best_declared_platform()
-            .map(|p| p.name().to_string())
-            .unwrap_or_else(|| Subdir::current().unwrap_or(Subdir::NoArch).to_string()),
-    };
 
-    let workspace_ctx = cli_context(workspace.clone());
-    let mut packages_to_output = workspace_ctx
+    let workspace_ctx = cli_workspace_context(workspace.clone());
+    let (mut packages_to_output, selected_platform) = workspace_ctx
         .list_packages(
             args.regex,
-            args.platform,
+            args.platform.clone(),
             args.environment,
             args.explicit,
             args.no_install_config.no_install,
@@ -254,9 +246,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if packages_to_output.is_empty() && !args.json {
         miette::bail!(
-            "No packages found in '{}' environment for '{}' platform.",
+            "no packages found in '{}' environment for '{}' platform",
             environment.name().fancy_display(),
-            consts::ENVIRONMENT_STYLE.apply_to(&platform_display),
+            consts::ENVIRONMENT_STYLE.apply_to(&selected_platform),
         );
     }
 

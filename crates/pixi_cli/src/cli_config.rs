@@ -153,7 +153,7 @@ impl ChannelsConfig {
                     .collect_vec();
                 self.resolve(&project.channel_config(), channels)
             }
-            None => self.resolve_from_config(&Config::load_global()),
+            None => self.resolve_from_config(&Config::try_load_global()?),
         }
     }
 

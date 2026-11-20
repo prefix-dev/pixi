@@ -1,22 +1,18 @@
-use std::{ops::Not, str::FromStr};
+use std::str::FromStr;
 
 use indexmap::IndexMap;
 
 use clap::Parser;
-use itertools::Itertools;
 use miette::Report;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Subdir};
 
+use crate::cli_interface::cli_global_context;
 use crate::global::{
     EnvironmentAction, eventual_environment_channels, global_specs::GlobalSpecs,
-    report_failed_environment, report_failed_environments, revert_environment_after_error,
+    report_failed_environment, report_failed_environments,
 };
+use pixi_api::global::{EnvironmentName, GlobalSpec, InstallOptions, Mapping, Project};
 use pixi_config::{self, Config, ConfigCli};
-use pixi_global::{
-    self, EnvironmentName, Mapping, Project, StateChange, StateChanges,
-    common::contains_menuinst_document,
-    project::{ExposedType, GlobalSpec},
-};
 
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
 ///
@@ -82,11 +78,11 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
 
     // Load the global config and ensure
     // that the root_dir is relative to the manifest directory
-    let mut project_original = pixi_global::Project::discover_or_create()
+    let mut project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
@@ -133,172 +129,32 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("Can't add packages with `--with` for more than one environment");
     }
 
-    let mut last_updated_project = project_original;
+    let options = InstallOptions {
+        channels: args.channels,
+        platform: args.platform,
+        expose: args.expose,
+        with: args.with,
+        force_reinstall: args.force_reinstall,
+        no_shortcuts: args.no_shortcuts,
+    };
+
+    let mut context = cli_global_context(project_original);
     let mut errors: Vec<(EnvironmentName, Report)> = Vec::new();
     // Convert the packages into named global specs
 
     for (env_name, specs) in &env_to_specs {
-        let mut project = last_updated_project.clone();
-        match setup_environment(env_name, &args, specs, &mut project).await {
+        match context.install_environment(env_name, specs, &options).await {
             Ok(state_changes) => {
                 // The user named these environments, so they get a block even
                 // when nothing changed.
-                state_changes.report(&project).await;
-                // Only advance project on success
-                last_updated_project = project;
+                state_changes.report(context.project()).await;
             }
             Err(err) => {
-                if let Err(revert_err) =
-                    revert_environment_after_error(env_name, &last_updated_project).await
-                {
-                    tracing::warn!("Reverting of the operation failed");
-                    tracing::info!("Reversion error: {:?}", revert_err);
-                }
                 report_failed_environment(env_name);
-                errors.push((env_name.clone(), err));
+                errors.push((env_name.clone(), err.into()));
             }
         }
     }
 
     report_failed_environments(EnvironmentAction::Install, errors)
-}
-
-async fn setup_environment(
-    env_name: &EnvironmentName,
-    args: &Args,
-    specs: &[GlobalSpec],
-    project: &mut Project,
-) -> miette::Result<StateChanges> {
-    let mut state_changes = StateChanges::new_with_env(env_name.clone());
-
-    // The manifest as it was before this environment was touched, so the
-    // shortcut below can tell whether it still owes the file a write.
-    let manifest_before = project.manifest.document.to_string();
-
-    if args.force_reinstall && project.environment(env_name).is_some() {
-        state_changes |= project.remove_environment(env_name).await?;
-    }
-
-    let channels = eventual_environment_channels(
-        project,
-        Some(env_name),
-        &args.channels,
-        args.force_reinstall,
-    );
-
-    // Modify the project to include the new environment
-    if !project.manifest.parsed.envs.contains_key(env_name) {
-        let channels = channels
-            .into_iter()
-            .map(|channel| channel.channel)
-            .collect();
-        project.manifest.add_environment(env_name, Some(channels))?;
-        state_changes.insert_change(env_name, StateChange::AddedEnvironment);
-    }
-
-    if let Some(platform) = args.platform {
-        project.manifest.set_platform(env_name, platform)?;
-    }
-
-    let converted_with_inclusions = args
-        .with
-        .iter()
-        .map(|spec| {
-            GlobalSpec::try_from_matchspec_with_name(
-                spec.clone(),
-                project.config().global_channel_config(),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    // Add the dependencies to the environment
-    let packages_to_add = specs
-        .iter()
-        .chain(converted_with_inclusions.iter())
-        .collect_vec();
-
-    for spec in &packages_to_add {
-        project.manifest.add_dependency(env_name, spec)?;
-    }
-
-    if !args.expose.is_empty() {
-        project.manifest.remove_all_exposed_mappings(env_name)?;
-        // Only add the exposed mappings that were requested
-        for mapping in &args.expose {
-            project.manifest.add_exposed_mapping(env_name, mapping)?;
-        }
-    }
-
-    // The prefix already satisfies the manifest, so there is nothing to solve,
-    // install or expose. The manifest itself can still have changed: it may
-    // have just gained the environment that the prefix was left over from, and
-    // that change still has to be written out.
-    if project.environment_in_sync_internal(env_name, true).await? {
-        if project.manifest.document.to_string() != manifest_before {
-            project.manifest.save().await?;
-        }
-        return Ok(state_changes);
-    }
-
-    // Installing the environment to be able to find the bin paths later
-    let environment_update = project
-        .install_environment_with_options(env_name, args.force_reinstall)
-        .await?;
-    project.clear_progress();
-
-    // Sync exposed name
-    sync_exposed_names(env_name, project, args).await?;
-
-    // Add shortcuts
-    if !args.no_shortcuts {
-        let prefix = project.environment_prefix(env_name).await?;
-        for spec in specs.iter() {
-            let prefix_record = prefix.find_designated_package(spec.name()).await?;
-            if contains_menuinst_document(&prefix_record, prefix.root()) {
-                project.manifest.add_shortcut(env_name, spec.name())?;
-            }
-        }
-        state_changes |= project.sync_shortcuts(env_name).await?;
-    }
-
-    state_changes.insert_change(
-        env_name,
-        StateChange::UpdatedEnvironment(environment_update),
-    );
-
-    // Expose executables of the new environment
-    state_changes |= project
-        .expose_executables_from_environment(env_name)
-        .await?;
-
-    // Sync completions
-    state_changes |= project.sync_completions(env_name).await?;
-
-    project.manifest.save().await?;
-    Ok(state_changes)
-}
-
-async fn sync_exposed_names(
-    env_name: &EnvironmentName,
-    project: &mut Project,
-    args: &Args,
-) -> Result<(), miette::Error> {
-    let with_package_names = args
-        .with
-        .iter()
-        .map(|spec| {
-            spec.name.as_exact().cloned().ok_or_else(|| {
-                miette::miette!("could not find exact package name in MatchSpec {}", spec)
-            })
-        })
-        .collect::<miette::Result<Vec<_>>>()?;
-    let expose_type = if args.expose.is_empty().not() {
-        ExposedType::Mappings(args.expose.clone())
-    } else if with_package_names.is_empty() {
-        ExposedType::All
-    } else {
-        ExposedType::Ignore(with_package_names)
-    };
-    project.sync_exposed_names(env_name, expose_type).await?;
-    Ok(())
 }

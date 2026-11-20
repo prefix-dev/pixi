@@ -241,8 +241,7 @@ The cli looks as follows:
 
 ```bash
 ➜ pixi
-Pixi [version 0.59.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic
-Workspaces.
+Pixi [version 0.82.0] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your workspace's dependencies,
 tasks, and environments.
@@ -268,34 +267,32 @@ For more information, see the documentation at: https://pixi.sh
 Usage: pixi [OPTIONS] [COMMAND]
 
 Commands:
-  add         Adds dependencies to the workspace [aliases: a]
+  add         Add dependencies to the workspace [alias: a]
   auth        Login to prefix.dev or anaconda.org servers to access private channels
-  build       Workspace configuration
-  clean       Cleanup the environments
-  completion  Generates a completion script for a shell
-  config      Configuration management
-  exec        Run a command and install it in a temporary environment [aliases: x]
-  global      Subcommand for global package management actions [aliases: g]
-  info        Information about the system, workspace and environments for the current machine
-  init        Creates a new workspace
-  import      Imports a file into an environment in an existing workspace.
-  install     Install an environment, both updating the lock file and installing the environment [aliases: i]
-  list        List the packages of the current workspace [aliases: ls]
-  lock        Solve environment and update the lock file without installing the environments
-  reinstall   Re-install an environment, both updating the lock file and re-installing the environment
-  remove      Removes dependencies from the workspace [aliases: rm]
-  run         Runs task in the pixi environment [aliases: r]
-  search      Search a conda package
-  shell       Start a shell in a pixi environment, run `exit` to leave the shell [aliases: s]
-  shell-hook  Print the pixi environment activation script
-  task        Interact with tasks in the workspace
-  tree        Show a tree of workspace dependencies [aliases: t]
-  update      The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock`
-              file and environments accordingly
-  upgrade     Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest
-              file
-  upload      Upload a conda package
-  workspace   Modify the workspace configuration file through the command line
+  clean       Clean up workspaces/environments/caches
+  completion  Generate a shell completion script
+  config      Manage configuration
+  exec        Run a command in a temporary environment [alias: x]
+  global      Manage globally-installed packages [alias: g]
+  info        Get information about the pixi installation and current workspace
+  init        Create a new workspace or script
+  import      Import a file into an environment in an existing workspace
+  install     Install an environment [alias: i]
+  list        List the packages of an environment [alias: ls]
+  lock        Solve environments and update the lock file without installing the environments
+  reinstall   Re-install an environment
+  publish     Build the conda packages of a workspace and publish them
+  remove      Remove dependencies from a workspace [alias: rm]
+  run         Run a task in an environment [alias: r]
+  search      Search for conda packages
+  shell       Start a shell in a pixi environment [alias: s]
+  shell-hook  Print a pixi environment activation script
+  task        Interact with tasks in a workspace
+  tree        Show a tree of workspace dependencies [alias: t]
+  update      Update dependencies to newer compatible versions
+  upgrade     Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file
+  upload      Upload conda packages to various channels
+  workspace   Modify the workspace configuration file
   help        Print this message or the help of the given subcommand(s)
 
 Options:
@@ -305,8 +302,8 @@ Global Options:
   -h, --help           Display help information
   -v, --verbose...     Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
   -q, --quiet...       Decrease logging verbosity (quiet mode)
-      --color <COLOR>  Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values:
-                       always, never, auto]
+      --color <COLOR>  Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always,
+                       never, auto]
       --no-progress    Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
       --list           List all installed commands (built-in and extensions)
 ```

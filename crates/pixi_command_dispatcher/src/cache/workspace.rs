@@ -262,7 +262,7 @@ mod tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pkg.subdir = "linux-64".into();
         UnresolvedSourceRecord {
@@ -295,7 +295,7 @@ mod tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pkg.subdir = "linux-64".into();
         let record = rattler_conda_types::RepoDataRecord {

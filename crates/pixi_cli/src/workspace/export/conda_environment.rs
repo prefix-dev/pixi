@@ -4,7 +4,7 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::{ExtraName, PackageName};
-use pixi_core::{WorkspaceLocator, workspace::Environment};
+use pixi_core::workspace::Environment;
 use pixi_manifest::{
     FeaturesExt, HasWorkspaceManifest, PixiPlatform, pypi::pypi_options::FindLinksUrlOrPath,
 };
@@ -207,7 +207,7 @@ fn build_env_yaml(
         }
         if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
             for extra_index_url in extra_index_urls {
-                pip_dependencies.insert(0, format!("--extra-index-url {extra_index_url}"));
+                pip_dependencies.insert(0, format!("--extra-index-url {}", extra_index_url.url));
             }
         }
         if let Some(ref index_url) = pypi_options.index_url {
@@ -378,7 +378,7 @@ fn build_env_yaml_from_lock_file(
         }
         if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
             for extra_index_url in extra_index_urls {
-                pip_dependencies.insert(0, format!("--extra-index-url {extra_index_url}"));
+                pip_dependencies.insert(0, format!("--extra-index-url {}", extra_index_url.url));
             }
         }
         if let Some(ref index_url) = pypi_options.index_url {
@@ -429,27 +429,70 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
-    let workspace_platforms = (&workspace)
-        .workspace_manifest()
-        .workspace
-        .platforms
-        .clone();
+    let lock_file = if args.from_lock_file {
+        let lock_file_path = workspace.lock_file_path();
+        if !lock_file_path.is_file() {
+            miette::bail!(
+                help = "Run `pixi lock` (or another command that updates the lock file) first.",
+                "no lock file found at '{}'",
+                lock_file_path.display(),
+            );
+        }
+        Some(
+            LockFile::from_path(&lock_file_path)
+                .into_diagnostic()
+                .with_context(|| {
+                    format!("failed to read lock file at '{}'", lock_file_path.display())
+                })?,
+        )
+    } else {
+        None
+    };
+    let selection_lock_file =
+        if lock_file.is_none() && args.platform.is_none() && workspace.lock_file_path().is_file() {
+            workspace
+                .load_lock_file()
+                .await
+                .ok()
+                .and_then(|lock| lock.into_lock_file().ok())
+        } else {
+            None
+        };
+    let selection_lock = lock_file.as_ref().or(selection_lock_file.as_ref());
+    let selection = if args.platform.is_some() {
+        None
+    } else if let Some(lock) = selection_lock {
+        if environment.installed_resolved_platform().is_none() {
+            workspace
+                .refresh_locked_environment_host(&environment, lock)
+                .await?;
+        }
+        pixi_core::workspace::platform_selection::resolve_diagnostic_platform(
+            &environment,
+            Some(lock),
+        )
+    } else {
+        pixi_core::workspace::platform_selection::resolve_diagnostic_platform(&environment, None)
+    };
     let platform = match args.platform {
-        Some(subdir) => workspace_platforms
+        Some(subdir) => (&workspace)
+            .workspace_manifest()
+            .workspace
+            .platforms
             .iter()
             .find(|p| p.subdir() == subdir)
-            .cloned()
             .ok_or_else(|| {
                 miette::miette!("workspace does not define a platform with subdir '{subdir}'")
             })?,
-        None => environment
-            .best_declared_platform()
-            .cloned()
+        None => selection
+            .as_ref()
+            .map(|selection| selection.platform())
             .ok_or_else(|| {
                 miette::miette!(
                     "no platform supported by environment '{}' matches the current system",
@@ -462,24 +505,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .name
         .unwrap_or_else(|| environment.name().as_str().to_string());
 
-    let env_yaml = if args.from_lock_file {
-        let lock_file_path = workspace.lock_file_path();
-        if !lock_file_path.is_file() {
-            miette::bail!(
-                help = "Run `pixi lock` (or another command that updates the lock file) first.",
-                "no lock file found at '{}'",
-                lock_file_path.display(),
-            );
-        }
-        let lock_file = LockFile::from_path(&lock_file_path)
-            .into_diagnostic()
-            .with_context(|| {
-                format!("failed to read lock file at '{}'", lock_file_path.display())
-            })?;
-        build_env_yaml_from_lock_file(&platform, &environment, &lock_file, name, !args.no_pypi)?
+    let env_yaml = if let Some(lock_file) = lock_file {
+        build_env_yaml_from_lock_file(platform, &environment, &lock_file, name, !args.no_pypi)?
     } else {
         build_env_yaml(
-            &platform,
+            platform,
             &environment,
             config.global_channel_config(),
             name,
@@ -517,10 +547,13 @@ mod tests {
                 .find(|p| p.subdir() == s)
                 .cloned()
                 .expect("test workspace must declare the requested platform"),
-            None => environment
-                .best_declared_platform()
-                .cloned()
-                .expect("environment must support the current system"),
+            None => pixi_core::workspace::platform_selection::resolve_diagnostic_platform(
+                environment,
+                None,
+            )
+            .expect("environment must support the current system")
+            .platform()
+            .clone(),
         }
     }
     use std::path::Path;

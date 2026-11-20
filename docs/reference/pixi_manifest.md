@@ -85,11 +85,14 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available (save `noarch`) platforms are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/subdir/enum.Subdir.html).
+A conda subdir identifies an operating system and architecture, such as `linux-64` or `osx-arm64`.
+A Pixi platform entry has a name, a subdir, and declared virtual packages; multiple entries can share a subdir.
+The available subdirs (except `noarch`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/subdir/enum.Subdir.html).
 
 #### Inline-table entries (per-platform virtual packages)
 
-Each entry can also be an inline table that pins which virtual packages the solver should treat as available on that subdir. This is the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. It replaces the legacy `[system-requirements]` table.
+A bare-string entry such as `"linux-64"` solves for that subdir with Pixi's [default declared virtual packages](../workspace/multi_platform_configuration.md#default-declared-virtual-packages).
+An inline table declares additional virtual packages for the solve, for example a CUDA driver capability or a glibc version:
 
 ```toml
 [workspace]
@@ -103,13 +106,18 @@ platforms = [
 Recognised keys on an inline-table entry:
 
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
-- `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
-- Friendly virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `glibc` to `__glibc`, `macos` to `__osx`, etc.).
-- Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
+- `name`: identifier used by target selectors, `feature.<name>.platforms`, `pixi.lock`, and the CLI.
+  Defaults to a name synthesized from `platform` and the declared virtual packages, such as `linux-64-cuda-12-0`.
+- Built-in virtual-package keys: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+  Each maps onto the matching conda virtual package, for example `macos` onto `__osx`.
+  - `cuda` also accepts `{ driver = "12.0", arch = "8.6" }` to declare the compute capability as `__cuda_arch`; `arch` requires `driver`.
+  - `amdgpu = true` declares an AMD GPU; a target name such as `amdgpu = "gfx90a"` also declares its ISA version as `__amdgpu_arch` (`9.0.10`).
+  - `archspec` takes a CPU microarchitecture name known to the bundled [archspec](https://github.com/archspec/archspec) database, spelled with underscores (`x86_64_v3`), or `"0"` for unknown.
+    A machine covers it if its microarchitecture is the same or a strict superset.
+- Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`.
+  The value is a concrete version, not a dependency expression. Without a build string, the virtual package has the default build `0`. A build string may only contain ASCII letters, digits, `_`, `.`, and `+`, as [CEP 26](https://conda.org/learn/ceps/cep-0026/) requires.
 
-Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir against Pixi's [default declared virtual packages](../workspace/system_requirements.md#default-declared-virtual-packages).
-
-See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for binding features to specific rich entries.
+See [declared, detected, and required virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) for how declarations are used, and [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for how they are compared with the machine.
 
 !!! tip "Special macOS and Windows ARM behavior"
     To support both architectures on macOS or Windows, include both platforms in your list.
@@ -253,7 +261,7 @@ The table form accepts:
 - `location`: URL or path of a mapping JSON file. Relative paths are resolved against the workspace root.
 - `mapping`: inline `conda_name = "pypi_name"` entries. A list of names maps one conda package to several PyPI packages; `false` marks the package as not available on PyPI. Inline entries override entries from `location`.
 - `mapping-mode`: `"overlay"` (default) or `"replace"`. With `overlay`, Pixi consults your entries first and falls back to the default [prefix.dev mapping](https://conda-mapping.prefix.dev/) for anything not listed. With `replace`, Pixi uses your mapping instead of the default mapping data for that channel. If no `location` or `mapping` is provided, the project mapping is empty.
-- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and `false` for other channels.
+- `same-name-heuristic`: whether Pixi may assume the conda package name is also the PyPI package name when mapping data has no answer. Defaults to `true` for conda-forge and the conda-pypi channel and `false` for other channels.
 
 A mapping fetched from a `location` URL is cached using standard HTTP cache semantics (honoring the server's `Cache-Control`/`ETag` headers). If a refresh fails (e.g. offline), the previously fetched copy is reused with a warning; if no copy has been fetched yet, the failure is an error.
 
@@ -274,9 +282,9 @@ Lookup behavior depends on where the configuration applies:
 
 | Configuration | Project-defined mapping | prefix.dev fallback | same-name heuristic |
 | --- | --- | --- | --- |
-| unset | no | yes | yes, for conda-forge |
+| unset | no | yes, except for the conda-pypi channel | yes, for conda-forge and the conda-pypi channel |
 | `conda-pypi-map = false` | no | no | no |
-| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge |
+| `conda-pypi-map = {}` | empty conda-forge mapping | no | yes, for conda-forge and the conda-pypi channel |
 | `<channel> = false` | no | no | no |
 | `mapping-mode = "overlay"`, package missing | miss | yes | yes, if enabled |
 | `mapping-mode = "replace"`, package missing | miss, or empty mapping | no | yes, if enabled |
@@ -391,7 +399,7 @@ When specified on the workspace this will exclude any package from consideration
 This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
 installing recently published (and potentially compromised) packages.
 
-The value may be specified in the following formats:
+The cutoff may be specified in the following formats:
 
 * As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
 * As a date in `YYYY-MM-DD` format (e.g. `2026-03-30`). This is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
@@ -399,48 +407,116 @@ The value may be specified in the following formats:
 
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
-Both PyPi and conda packages are considered.
+Both PyPI and conda packages are considered.
+The cutoff also applies to the build and host dependencies when packages of the workspace are built, both as source dependencies and with `pixi publish`.
 
-For conda packages, the workspace-level cutoff can be overridden per package in the
-[`[exclude-newer]`](#exclude-newer-optional) table.
+```toml
+[workspace]
+exclude-newer = "7d"
+```
 
-For PyPI packages, the workspace-level cutoff can be overridden per package in the
-[`[pypi-exclude-newer]`](#exclude-newer-optional) table.
+Use [`pixi workspace exclude-newer set`](cli/pixi/workspace/exclude-newer/set.md) to set the cutoff from the command line, and [`pixi workspace exclude-newer unset`](cli/pixi/workspace/exclude-newer/unset.md) to remove it.
 
-This is especially useful when a package is pinned to a separate `channel` or `index` and needs a
-different cutoff than the rest of the workspace.
+#### Exemptions
+
+Some releases need to get through the cutoff immediately, for example an urgent security fix that you have reviewed, or a package you publish yourself.
+Instead of lowering the cutoff for every future release of such a package, exempt the releases you vetted.
+Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
+An exempted release is never excluded, regardless of its upload time.
+
+The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`, or the `url` of a package archive, optionally with its `md5` or `sha256` but no other field.
+`polars = "==1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
+
+```toml
+[workspace]
+channels = [
+  # get the most recent versions of packages you control
+  { channel = "https://my.internal/channel", exclude-newer = "0d" },
+  "conda-forge",
+  "pytorch",
+]
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+# CVE-XXXX-YYYY: this release contains the fix
+polars = "==1.43.1"
+# only ever built by us
+py-rattler = "*"
+# a release of a specific build string from a specific channel
+pytorch-cpu = { version = "==2.10.0", build = "cpu_*", channel = "pytorch" }
+# only the builds of this release that were published when it was reviewed
+openssl = { version = "==3.2.1", cutoff = "2026-10-12T08:00:00Z" }
+```
+
+A channel can override the cutoff with its own `exclude-newer` value, as shown above.
+Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.
+
+An exemption without a `cutoff` also lets through matching releases that are published later, e.g. a new build of `polars ==1.43.1`.
+Give an exemption a `cutoff` to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
+The cutoff of an exemption takes the same values as the workspace cutoff, so it can also be a duration such as `"1d"`, which exempts matching releases once they are a day old.
+Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.
+
+Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.
+[`pixi workspace exclude-newer prune`](cli/pixi/workspace/exclude-newer/prune.md) removes these stale exemptions.
+
+[`pixi workspace exclude-newer exempt`](cli/pixi/workspace/exclude-newer/exempt.md) adds exemptions without editing the manifest by hand.
+It takes the same specs as `pixi add`, so a bare package name exempts every release.
+An exemption with a version gets the current time as its `cutoff`, use `--cutoff` to pick a different one or `--no-cutoff` to exempt future releases as well.
+Exempting a package again replaces its exemption, and [`pixi workspace exclude-newer unexempt`](cli/pixi/workspace/exclude-newer/unexempt.md) removes it.
+
+```shell
+# exempts the releases of polars 1.43.1 published until now, and every release of py-rattler
+pixi workspace exclude-newer exempt polars==1.43.1 py-rattler
+pixi workspace exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12
+pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]' --no-cutoff
+pixi workspace exclude-newer unexempt py-rattler
+# remove the exemptions whose cutoff all channels have passed
+pixi workspace exclude-newer prune
+```
+
+#### PyPI packages
+
+The cutoff of `exclude-newer` applies to PyPI packages as well.
+Use `pypi-exclude-newer` to give PyPI packages their own `cutoff`, or to exempt PyPI packages from the cutoff.
+Without a `cutoff` of its own, `pypi-exclude-newer` falls back to the cutoff of `exclude-newer`.
+
+PyPI exemptions only support `"*"` for now, which exempts every release of the package.
+This is especially useful when a package is pinned to a separate `index` that you trust, or that does not provide upload times (see the note below).
+Pass `--pypi` to the `pixi workspace exclude-newer` commands to edit `pypi-exclude-newer`, e.g. `pixi workspace exclude-newer exempt --pypi torch`.
+
+```toml
+[workspace]
+exclude-newer = "7d"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+
+[pypi-dependencies]
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+```
+
+!!! warning "Deprecated: top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables"
+    The top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables of per-package cutoffs are deprecated and will be removed.
+    Replace a per-package cutoff of `"0d"` with a `"*"` exemption, or narrow it down to the releases you vetted.
+    Other per-package cutoffs have no direct replacement: to allow newer releases of a package, exempt the versions you vetted, and to keep a package on older releases, constrain its version in the dependencies.
 
 !!! note "Satisfiability checks with `exclude-newer`"
     For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during
     lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
-    when a locked conda package is newer than the configured cutoff.
+    when a locked conda package is newer than the configured cutoff and not exempt.
 
     For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a
-    result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same
+    result, changes to `exclude-newer` or `pypi-exclude-newer` do not trigger the same
     lock file satisfiability check for already locked PyPI packages. Run `pixi update` to
     re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
 
-```toml
-[workspace]
-exclude-newer = "2025-01-01"
-
-[dependencies]
-pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
-
-[exclude-newer]
-pytorch-cpu = "0d"
-openssl = "0d"
-
-[pypi-dependencies]
-torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
-
-[pypi-exclude-newer]
-torch = "0d"
-```
-
 !!! note
-    Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
-    If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+    Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+    If the field is not present for a given distribution, the distribution will be treated as unavailable, unless its package is exempted. PyPI provides `upload-time` for all packages.
+
+    If an extra index does not expose `upload-time`, such as a private mirror, you can lift the cutoff for that index with a
+    per-index override on [`extra-index-urls`](#alternative-registries):
+    `{ url = "https://internal/simple", exclude-newer = "0d" }`.
 
 ### `build-variants` (optional)
 
@@ -472,7 +548,7 @@ When build variants are specified, Pixi will:
 3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
 4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
 
-On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [system requirements](../workspace/system_requirements.md). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
+On top of the variants you declare, Pixi fills in some automatically, find out more at [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
 
 #### Platform-Specific Variants
 
@@ -620,6 +696,13 @@ Often you might want to use an alternative or extra index for your workspace. Th
    **Only one** `index-url` can be defined per environment.
 - `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And
    are preferred over the `index-url`. These are merged across features into an environment.
+   Each entry may be a plain URL string, or an inline table `{ url = "...", exclude-newer = ... }`
+   that overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) for packages served
+   from that index only. Use `exclude-newer = "0d"` to lift the cutoff for an index, for example
+   a private mirror that does not expose `upload-time` metadata. Unlike other cutoffs, this also keeps
+   releases without an upload time. Exemptions in
+   [`pypi-exclude-newer`](#exclude-newer-optional) take precedence over the cutoff of an index.
+   Listing the same index with different cutoffs in one environment is an error.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
    This is similar to the `--find-links` option in `pip`. These are merged across features into an
    environment.
@@ -629,9 +712,20 @@ An example:
 ```toml
 [pypi-options]
 index-url = "https://pypi.org/simple"
-extra-index-urls = ["https://example.com/simple"]
+extra-index-urls = [
+    "https://example.com/simple",
+    # No exclude-newer cutoff for this index (it does not expose `upload-time`):
+    { url = "https://internal.example.com/simple", exclude-newer = "0d" },
+    # A custom cutoff for this index only:
+    { url = "https://other.example.com/simple", exclude-newer = "2025-01-01" },
+]
 find-links = [{path = './links'}]
 ```
+
+!!! note
+    Changing a per-index `exclude-newer` does not invalidate already locked PyPI packages (see the
+    satisfiability note under [`exclude-newer`](#exclude-newer-optional)). Run `pixi update` to
+    re-resolve PyPI packages after changing it.
 
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
 
@@ -958,7 +1052,7 @@ PyPI packages are not indexed on [prefix.dev](https://prefix.dev/channels) but c
 
 #### Version specification:
 
-These dependencies don't follow the [conda MatchSpec](https://rattler.prefix.dev/py-rattler/match_spec#matchspec)  specification.
+These dependencies don't follow the [conda MatchSpec](https://rattler.prefix.dev/py-rattler/latest/match_spec/#matchspec)  specification.
 The `version` is a string specification of the version according to [PEP404/PyPA](https://packaging.python.org/en/latest/specifications/version-specifiers/).
 Additionally, a list of extra's can be included, which are essentially optional dependencies.
 Note that this `version` is distinct from the conda MatchSpec type.
@@ -1160,30 +1254,23 @@ ENV_VAR = "%OTHER_ENV_VAR%\\windows-value"
 
 ## The `target` table
 
-The target table is a table that allows for platform specific configuration.
-Allowing you to make different sets of tasks or dependencies per platform.
-
-The target table is currently implemented for the following sub-tables:
+Target tables configure subtables based on selectors, for example `[target.linux-64.dependencies]`.
+They are available for the following sub-tables:
 
 - [`activation`](#the-activation-table)
 - [`dependencies`](#dependencies)
 - [`constraints`](#constraints)
 - [`tasks`](#the-tasks-table)
 
-The target table is defined using `[target.PLATFORM.SUB-TABLE]`.
-E.g `[target.linux-64.dependencies]`
+The selector can be:
 
-The platform can be any of:
+- a platform name from [`workspace.platforms`](#platforms), which matches exactly that platform,
+- a subdir such as `linux-64`, which matches every platform with that subdir,
+- one of `win`, `osx` (alias `macos`), `linux`, or `unix` (`linux` and `osx`),
+- a [wildcard pattern](#wildcard-platform-selectors) over platform names.
 
-- `win`, `osx`, `linux` or `unix` (`unix` matches `linux` and `osx`)
-- or any of the (more) specific [target platforms](#platforms), e.g. `linux-64`, `osx-arm64`
-
-The sub-table can be any of the specified above.
-
-To make it a bit more clear, let's look at an example below.
-Currently, Pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
-Which, in the case of dependencies, can both add or overwrite dependencies.
-In the example below, we have `cmake` being used for all targets but on `osx-64` or `osx-arm64` a different version of python will be selected.
+Target tables are merged with the top-level tables.
+In the example below, `cmake` is used on all platforms, while `osx-64` and `osx-arm64` get a different `python`:
 
 ```toml
 [dependencies]
@@ -1194,24 +1281,31 @@ python = "3.10"
 python = "3.11"
 ```
 
-Here are some more examples:
+When several selectors match a platform, the one defined later in the manifest wins.
+Target activation scripts replace the top-level scripts instead of adding to them.
+A selector that doesn't match any platform produces a warning.
+
+### Wildcard platform selectors
+
+A `*` in a selector matches against platform names, which is useful with custom names:
 
 ```toml
-[target.win-64.activation]
-scripts = ["setup.bat"]
+[workspace]
+platforms = [
+  { name = "cuda-win-64", platform = "win-64", cuda = "12" },
+  { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+  "win-64",
+  "linux-64",
+]
 
-[target.win-64.dependencies]
-msmpi = "~=10.1.1"
-
-[target.win-64.build-dependencies]
-vs2022_win-64 = "19.36.32532"
-
-[target.win-64.tasks]
-tmp = "echo $TEMP"
-
-[target.osx-64.dependencies]
-clang = ">=16.0.6"
+[target."cuda-*".tasks]
+test = "python test.py --cuda"
 ```
+
+`cuda-win-64` and `cuda-linux-64` get the `test` task; `win-64` and `linux-64` don't.
+Patterns match the whole name and are case-sensitive, and `*` is the only metacharacter.
+Put specific overrides such as `[target.cuda-win-64]` after `[target."cuda-*"]`.
+Wildcards are rejected in `[package.target]` and `[package.build.target]`, which resolve by subdir.
 
 ## The `feature` and `environments` tables
 
@@ -1239,7 +1333,7 @@ The `feature` table allows you to define the following fields per feature.
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
 - `system-requirements`: Deprecated; see [the migration page](../workspace/system_requirements.md). Declare per-platform virtual packages on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) and bind the feature to the relevant entries via `platforms` below.
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: A list of names referencing entries in [`workspace.platforms`](#platforms) (bare conda subdirs are accepted as aliases). Unless overridden, the `platforms` of the feature are those defined at workspace level. Use this to bind a feature to a [rich-platform entry](#inline-table-entries-per-platform-virtual-packages) such as `"linux-64-cuda"`.
+- `platforms`: A list of names referencing entries in [`workspace.platforms`](#platforms). A bare subdir such as `"linux-64"` selects only the platform with that name, not every platform with that subdir. Unless overridden, the `platforms` of the feature are those defined at workspace level. Use this to bind a feature to a [platform entry](#inline-table-entries-per-platform-virtual-packages) such as `"linux-64-cuda"`.
 - `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at workspace level.
 - `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
 - `solve-strategy`: Same as the [solve-strategy](#solve-strategy-optional).
@@ -1264,7 +1358,7 @@ channels = ["nvidia"]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 constraints = {cuda = ">=12.0"}
 pypi-dependencies = {torch = "==1.9.0"}
-# Reference the rich workspace platform by name; bare subdirs are accepted as aliases.
+# Reference the workspace platform by name.
 platforms = ["linux-64-cuda", "osx-arm64"]
 tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}

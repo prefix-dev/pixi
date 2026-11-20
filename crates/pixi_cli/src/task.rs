@@ -13,20 +13,23 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_manifest::{
-    EnvironmentName, FeatureName, PixiPlatformName,
+    EnvironmentName, FeatureName, PixiPlatform, PixiPlatformName,
     task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, TemplateString, quote},
 };
 use serde::Serialize;
 use serde_with::serde_as;
 
 use pixi_core::{
-    Workspace, WorkspaceLocator,
-    workspace::{Environment, virtual_packages::EnvironmentRunnability},
+    Workspace,
+    workspace::{
+        Environment, EnvironmentFromNameError, platform_selection::DiagnosticSelector,
+        virtual_packages::EnvironmentRunnability,
+    },
 };
 
 use crate::{
     cli_config::WorkspaceConfig,
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 #[derive(Parser, Debug)]
@@ -261,7 +264,7 @@ impl From<AliasArgs> for Task {
     }
 }
 
-/// Interact with tasks in the workspace
+/// Interact with tasks in a workspace
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
@@ -394,12 +397,13 @@ fn print_tasks(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     match args.operation {
         Operation::Add(args) => add_task(workspace_ctx, args).await,
@@ -413,16 +417,17 @@ async fn list_tasks(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: ListArgs,
 ) -> miette::Result<()> {
+    let environment = args
+        .environment
+        .as_deref()
+        .map(EnvironmentName::from_str)
+        .transpose()?;
+
     if args.json {
-        return print_tasks_json(workspace_ctx.workspace());
+        return print_tasks_json(workspace_ctx.workspace(), environment).await;
     }
 
-    let tasks_per_env = workspace_ctx
-        .list_tasks(
-            args.environment
-                .and_then(|e| EnvironmentName::from_str(&e.to_string()).ok()),
-        )
-        .await?;
+    let tasks_per_env = workspace_ctx.list_tasks(environment).await?;
 
     if tasks_per_env.is_empty() {
         eprintln!("No tasks found",);
@@ -493,11 +498,37 @@ async fn remove_tasks(
 
     workspace_ctx
         .remove_task(args.names, args.platform, feature)
-        .await
+        .await?;
+
+    Ok(())
 }
 
-fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
-    let env_feature_task_map: Vec<EnvTasks> = build_env_feature_task_map(project);
+async fn print_tasks_json(
+    project: &Workspace,
+    environment: Option<EnvironmentName>,
+) -> miette::Result<()> {
+    let environments = match environment {
+        Some(name) => vec![
+            project
+                .environment(&name)
+                .ok_or(EnvironmentFromNameError::Unknown(name))?,
+        ],
+        None => project
+            .environments()
+            .into_iter()
+            .sorted_by_key(|env| env.name().to_string())
+            .collect(),
+    };
+    let mut selector = DiagnosticSelector::new(project);
+    let selections = selector.select_all(&environments).await;
+    if let Some(error) = selector.lock_error() {
+        tracing::warn!("{}", error.warning());
+    }
+    let env_feature_task_map: Vec<_> = environments
+        .iter()
+        .zip(&selections)
+        .map(|(env, selection)| EnvTasks::new(env, selection.as_ref().map(|s| s.platform())))
+        .collect();
 
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");
@@ -505,15 +536,6 @@ fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
         .into_diagnostic()?;
 
     Ok(())
-}
-
-fn build_env_feature_task_map(project: &Workspace) -> Vec<EnvTasks> {
-    project
-        .environments()
-        .iter()
-        .sorted_by_key(|env| env.name().to_string())
-        .map(EnvTasks::from)
-        .collect()
 }
 
 #[derive(Serialize, Debug)]
@@ -524,11 +546,12 @@ struct EnvTasks {
     features: Vec<SerializableFeature>,
 }
 
-impl From<&Environment<'_>> for EnvTasks {
-    fn from(env: &Environment) -> Self {
+impl EnvTasks {
+    fn new(env: &Environment, platform: Option<&PixiPlatform>) -> Self {
         let mut tasks = Vec::new();
         let mut features = Vec::new();
-        for (feature_name, task_map) in env.feature_tasks().iter() {
+        let feature_tasks = env.feature_tasks(platform);
+        for (feature_name, task_map) in &feature_tasks {
             if feature_name.is_environment() {
                 tasks.extend(serializable_tasks(task_map));
             } else {

@@ -1,0 +1,10 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+assertion_line: 596
+expression: "render_error(input, err)"
+---
+  × exclude-newer exemption 'polars *[extras=[foo]]' must not have extras, a condition, or a namespace
+   ╭─[pixi.toml:1:58]
+ 1 │ exclude-newer = { cutoff = "7d", exemptions = { polars = { version = "*", extras = ["foo"] } } }
+   ·                                                          ───────────────────────────────────
+   ╰────

@@ -11,6 +11,16 @@ use itertools::Itertools;
 use pixi_config::TlsRootCerts;
 use rustls_native_certs::{CertificateResult, load_certs_from_paths};
 use rustls_pki_types::CertificateDer;
+use serde::Serialize;
+
+/// An `SSL_CERT_FILE` or `SSL_CERT_DIR` variable that provided certificates.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CertEnvSource {
+    /// The name of the environment variable.
+    pub variable: &'static str,
+    /// The value of the environment variable.
+    pub value: String,
+}
 
 /// A collection of TLS certificates in DER form.
 #[derive(Debug, Clone, Default)]
@@ -63,24 +73,48 @@ impl Certificates {
     /// missing or inaccessible, or no valid certificates are found (with a
     /// warning emitted in each case).
     pub fn from_env() -> Option<Self> {
+        Self::load_env().map(|(certs, _)| certs)
+    }
+
+    /// The variables among `SSL_CERT_FILE` and `SSL_CERT_DIR` whose
+    /// certificates [`Self::from_env`] uses.
+    ///
+    /// Unlike [`Self::from_env`] this doesn't warn about invalid values, so
+    /// reporting the sources doesn't repeat the warnings emitted when the HTTP
+    /// client is built.
+    pub fn env_sources() -> Vec<CertEnvSource> {
+        tracing::subscriber::with_default(tracing::subscriber::NoSubscriber::default(), || {
+            Self::load_env()
+                .map(|(_, sources)| sources)
+                .unwrap_or_default()
+        })
+    }
+
+    fn load_env() -> Option<(Self, Vec<CertEnvSource>)> {
         let mut certs = Self::default();
-        let mut has_source = false;
+        let mut sources = Vec::new();
 
         if let Some(ssl_cert_file) = env::var_os("SSL_CERT_FILE")
             && let Some(file_certs) = Self::from_ssl_cert_file(&ssl_cert_file)
         {
-            has_source = true;
+            sources.push(CertEnvSource {
+                variable: "SSL_CERT_FILE",
+                value: ssl_cert_file.to_string_lossy().into_owned(),
+            });
             certs.merge(file_certs);
         }
 
         if let Some(ssl_cert_dir) = env::var_os("SSL_CERT_DIR")
             && let Some(dir_certs) = Self::from_ssl_cert_dir(&ssl_cert_dir)
         {
-            has_source = true;
+            sources.push(CertEnvSource {
+                variable: "SSL_CERT_DIR",
+                value: ssl_cert_dir.to_string_lossy().into_owned(),
+            });
             certs.merge(dir_certs);
         }
 
-        if has_source { Some(certs) } else { None }
+        (!sources.is_empty()).then_some((certs, sources))
     }
 
     fn from_ssl_cert_file(value: &std::ffi::OsStr) -> Option<Self> {

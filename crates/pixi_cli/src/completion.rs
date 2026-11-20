@@ -43,7 +43,7 @@ fn compile_regex(pattern: &str) -> Regex {
     Regex::new(pattern).expect("should be able to compile the regex")
 }
 
-/// Generates a completion script for a shell.
+/// Generate a shell completion script.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The shell to generate a completion script for
@@ -135,7 +135,7 @@ struct Cli {
 
 impl Cli {
     fn new() -> Self {
-        Self::with_bin_name(pixi_utils::executable_name())
+        Self::with_bin_name("pixi")
     }
 
     /// The CLI as it looks when `pixi` is invoked as `bin_name`, which decides

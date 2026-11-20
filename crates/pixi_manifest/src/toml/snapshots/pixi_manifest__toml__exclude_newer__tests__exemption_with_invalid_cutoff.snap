@@ -1,0 +1,9 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × invalid cutoff `now`, expected an RFC 3339 timestamp, a date, or a duration (for example, 7d)
+   ╭─[pixi.toml:1:92]
+ 1 │ exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "now" } } }
+   ·                                                                                            ───
+   ╰────

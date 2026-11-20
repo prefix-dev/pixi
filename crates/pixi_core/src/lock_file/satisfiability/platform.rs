@@ -19,6 +19,7 @@ use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
+    platform::VirtualPackageRecords,
 };
 use pixi_pypi_spec::PypiPackageName;
 use pixi_record::{
@@ -38,7 +39,7 @@ use rattler_lock::{LockedPackage, UrlOrPath};
 use url::Url;
 use uv_distribution_types::{RequirementSource, RequiresPython};
 
-use super::errors::{LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat};
+use super::errors::{DuplicateEntry, LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat};
 use super::legacy;
 use super::pypi::{lock_pypi_packages, pypi_satisfies_editable, pypi_satisfies_requirement};
 use super::pypi_metadata;
@@ -81,7 +82,7 @@ pub type PlatformSatisfiabilityResult = Result<
 >;
 
 /// Look up the lock entry for `platform`, falling back to the bare conda subdir
-/// when the lock keys the row by subdir (`osx-arm64`) rather than the rich
+/// when the lock keys the row by subdir (`osx-arm64`) rather than the
 /// workspace name (`osx-arm64-macos-12-0`) -- as every pre-v7 lock does, since
 /// they never tracked per-platform virtual packages. A subdir row with no
 /// recorded VPs is trusted; one that records them must cover `platform`'s
@@ -99,13 +100,20 @@ pub fn resolve_lock_platform_for<'lock>(
         return Some(found);
     }
     let candidate = lock_file.platform(platform.subdir().as_str())?;
-    let declared: Vec<String> = platform
-        .declared_virtual_packages()
+    let records = match platform.records() {
+        VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+            records
+        }
+    };
+    // Compare parsed records: `__unix=0` and `__unix=0=0` both spell the
+    // default build.
+    let locked: Vec<_> = candidate
+        .virtual_packages()
         .iter()
-        .map(|gvp| gvp.to_string())
+        .filter_map(|raw| pixi_manifest::platform::parse_locked_virtual_package(raw))
         .collect();
-    let locked: &[String] = candidate.virtual_packages();
-    let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
+    let matches =
+        candidate.virtual_packages().is_empty() || records.iter().all(|d| locked.contains(d));
     matches.then_some(candidate)
 }
 
@@ -357,18 +365,18 @@ pub async fn verify_platform_satisfiability(
 
         let pixi_records_by_name = PixiRecordsByName::from_unique_iter(resolved_records.clone())
             .map_err(|duplicate| {
-                CommandDispatcherError::Failed(Box::new(PlatformUnsat::DuplicateEntry(
-                    duplicate.package_record().name.as_source().to_string(),
-                )))
+                CommandDispatcherError::Failed(Box::new(
+                    DuplicateEntry(duplicate.package_record().name.as_source().to_string()).into(),
+                ))
             })?;
 
         // Create a lookup table from package name to package record. Returns an error
         // if we find a duplicate entry for a record
         let pypi_records_by_name =
             PypiRecordsByName::from_unique_iter(pypi_packages).map_err(|duplicate| {
-                CommandDispatcherError::Failed(Box::new(PlatformUnsat::DuplicateEntry(
-                    duplicate.name().to_string(),
-                )))
+                CommandDispatcherError::Failed(Box::new(
+                    DuplicateEntry(duplicate.name().to_string()).into(),
+                ))
             })?;
 
         // Get host platform records for building (we can only run Python on the host platform)
@@ -401,9 +409,7 @@ pub async fn verify_platform_satisfiability(
                 }
             }
             PixiRecordsByName::from_unique_iter(host_pixi_records).map_err(|duplicate| {
-                PlatformUnsat::DuplicateEntry(
-                    duplicate.package_record().name.as_source().to_string(),
-                )
+                DuplicateEntry(duplicate.package_record().name.as_source().to_string())
             })
         };
 
@@ -626,7 +632,7 @@ async fn verify_package_platform_satisfiability(
     platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
-    building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+    building_pixi_records: Result<PixiRecordsByName, DuplicateEntry>,
     locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
 ) -> Result<
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
@@ -1546,7 +1552,7 @@ impl MatchesMatchspec for GenericVirtualPackage {
         }
 
         if let Some(build) = &spec.build
-            && !build.matches(&self.build_string)
+            && !build.matches(self.build_string.as_str())
         {
             return false;
         }
@@ -1632,7 +1638,7 @@ mod tests {
             .platforms
             .iter()
             .find(|p| p.name().as_str() == "osx-arm64-macos-12-0")
-            .expect("macos system-requirement migrates osx-arm64 into a rich platform")
+            .expect("macos system-requirement adds custom virtual packages to osx-arm64")
             .clone()
     }
 
@@ -1683,6 +1689,28 @@ mod tests {
             resolve_lock_platform_for(&lock, &platform).is_none(),
             "a row whose recorded VPs miss the declared requirement must not resolve",
         );
+    }
+
+    /// A subdir row that spells the default build explicitly (`__unix=0=0`)
+    /// or omits it (`__osx=12.0`) records the same virtual packages, so both
+    /// resolve for the platform.
+    #[test]
+    fn resolves_subdir_row_regardless_of_default_build_spelling() {
+        use pixi_manifest::platform::VirtualPackageRecords;
+
+        let platform = migrated_osx_arm64();
+        let (VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records)) =
+            platform.records();
+        let explicit = records.iter().map(ToString::to_string).collect();
+        let omitted = records
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
+
+        for vps in [explicit, omitted] {
+            let lock = lockfile_with("osx-arm64", Subdir::OsxArm64, vps);
+            assert!(resolve_lock_platform_for(&lock, &platform).is_some());
+        }
     }
 
     /// Pre-v7 lock files don't record indexes; the set is empty.

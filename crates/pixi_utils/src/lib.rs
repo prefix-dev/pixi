@@ -1,6 +1,7 @@
 pub mod atomic_write;
 pub mod cache;
 pub mod conda_environment_file;
+pub mod diagnostic;
 mod environment_fingerprint;
 mod environment_lock;
 pub mod indicatif;
@@ -14,9 +15,7 @@ pub mod tls;
 pub mod variants;
 
 mod executable_utils;
-pub use executable_utils::{
-    executable_from_path, executable_name, is_binary_folder, strip_executable_extension,
-};
+pub use executable_utils::{executable_from_path, is_binary_folder, strip_executable_extension};
 
 pub use cache::EnvironmentHash;
 pub use environment_fingerprint::EnvironmentFingerprint;

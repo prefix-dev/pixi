@@ -371,7 +371,13 @@ impl CommandDispatcherBuilder {
         // Snapshot env vars once. Reused for the sync resolves below
         // and injected via `EnvVarsKey` so compute bodies see the same
         // map.
-        let env_snapshot: Arc<HashMap<String, String>> = Arc::new(std::env::vars().collect());
+        let env_snapshot: Arc<HashMap<String, String>> = Arc::new(
+            std::env::vars_os()
+                .filter_map(|(key, value)| {
+                    Some((key.into_string().ok()?, value.into_string().ok()?))
+                })
+                .collect(),
+        );
 
         let download_client = self.download_client.unwrap_or_default();
         let package_cache =

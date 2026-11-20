@@ -11,6 +11,21 @@ pub struct BuildScriptContext {
     pub editable: bool,
     pub extra_args: Vec<String>,
     pub manifest_root: PathBuf,
+    /// Verbosity flag to pass to the installer, if any.
+    pub verbosity_flag: Option<&'static str>,
+}
+
+/// Installer verbosity flag matching the backend's build log level. The
+/// backend applies its CLI log level to the `rattler_build` target, which also
+/// logs the build script output.
+pub fn installer_verbosity_flag() -> Option<&'static str> {
+    if tracing::enabled!(target: "rattler_build", tracing::Level::TRACE) {
+        Some("-vv")
+    } else if tracing::enabled!(target: "rattler_build", tracing::Level::DEBUG) {
+        Some("-v")
+    } else {
+        None
+    }
 }
 
 /// The tool used to install the built wheel into the prefix.
@@ -44,6 +59,68 @@ impl BuildScriptContext {
         let template = env
             .template_from_str(include_str!("build_script.j2"))
             .unwrap();
-        template.render(self).unwrap().trim().to_string()
+        template
+            .render(minijinja::value::Serde(self))
+            .unwrap()
+            .trim()
+            .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render(installer: Installer, verbosity_flag: Option<&'static str>) -> String {
+        BuildScriptContext {
+            installer,
+            build_platform: BuildPlatform::Unix,
+            editable: false,
+            extra_args: vec![],
+            manifest_root: "/src".into(),
+            verbosity_flag,
+        }
+        .render()
+    }
+
+    #[test]
+    fn installer_verbosity_flags() {
+        let scripts = [Installer::Uv, Installer::Pip]
+            .into_iter()
+            .flat_map(|installer| {
+                [None, Some("-v"), Some("-vv")]
+                    .map(|verbosity_flag| render(installer.clone(), verbosity_flag))
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        insta::assert_snapshot!(scripts, @r#"
+        uv pip install --python "$PYTHON" --reinstall --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        uv pip install --python "$PYTHON" --reinstall -v \
+                --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        uv pip install --python "$PYTHON" --reinstall -vv \
+                --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        "$PYTHON" -m pip install --force-reinstall --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        "$PYTHON" -m pip install --force-reinstall -v \
+                --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        "$PYTHON" -m pip install --force-reinstall -vv \
+                --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+        "#);
     }
 }

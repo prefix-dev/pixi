@@ -13,6 +13,7 @@ use ordermap::OrderMap;
 use pixi_stable_hash::{IsDefault, StableHashBuilder};
 use rattler_conda_types::{
     BuildNumber, BuildNumberSpec, Flag, MatchSpecCondition, StringMatcher, Version, VersionSpec,
+    VersionWithSource,
 };
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
@@ -39,7 +40,7 @@ pub struct ProjectModel {
 
     /// The version of the project
     #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
 
     /// An optional project description
     pub description: Option<String>,

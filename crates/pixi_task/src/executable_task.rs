@@ -11,11 +11,11 @@ use deno_task_shell::{
 };
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
-use miette::{Context, Diagnostic};
+use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_core::{
     Workspace,
-    activation::CurrentEnvVarBehavior,
+    activation::{ActivationError, CurrentEnvVarBehavior},
     workspace::get_activated_environment_variables,
     workspace::{Environment, HasWorkspaceRef},
 };
@@ -91,30 +91,26 @@ pub enum CanSkip {
 /// lifetime `'p` refers to the lifetime of the project that contains the
 /// tasks.
 #[derive(Clone, Debug)]
-pub struct ExecutableTask<'p> {
+pub struct ExecutableTask<'p, 's> {
     pub workspace: &'p Workspace,
     pub name: Option<TaskName>,
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
     pub init_cwd: Option<PathBuf>,
-    /// The platform this task is rendered, hashed and activated for: the
-    /// `pixi run --platform` pin, or the environment's own default.
-    pub platform: PixiPlatform,
+    /// The platform selected for this task's environment.
+    pub platform: &'s PixiPlatform,
 }
 
-impl<'p> ExecutableTask<'p> {
+impl<'p, 's> ExecutableTask<'p, 's> {
     /// Constructs a new executable task from a task graph node.
     pub fn from_task_graph(
         task_graph: &TaskGraph<'p>,
         task_id: TaskId,
         init_cwd: Option<PathBuf>,
+        platform: &'s PixiPlatform,
     ) -> Self {
         let node = &task_graph[task_id];
-        let platform = node
-            .platform
-            .cloned()
-            .unwrap_or_else(|| node.run_environment.activation_platform());
 
         Self {
             workspace: task_graph.project(),
@@ -151,7 +147,7 @@ impl<'p> ExecutableTask<'p> {
     /// This includes the platform, environment name, manifest path, and arguments.
     pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
-            platform: Some(&self.platform),
+            platform: Some(self.platform),
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
@@ -331,7 +327,7 @@ impl<'p> ExecutableTask<'p> {
                     &self.run_environment,
                     &std::collections::HashMap::new(),
                     lock_file,
-                    &self.platform,
+                    self.platform,
                 ),
             }
         };
@@ -486,11 +482,11 @@ impl<'p> ExecutableTask<'p> {
 
 /// A helper object that implements [`Display`] to display (with ascii color)
 /// the command of the task.
-struct ExecutableTaskConsoleDisplay<'p, 't> {
-    task: &'t ExecutableTask<'p>,
+struct ExecutableTaskConsoleDisplay<'p, 's, 't> {
+    task: &'t ExecutableTask<'p, 's>,
 }
 
-impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
+impl Display for ExecutableTaskConsoleDisplay<'_, '_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let context = self.task.render_context();
         match self.task.task.as_single_command(&context) {
@@ -565,7 +561,7 @@ pub async fn get_task_env(
     lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental_cache: bool,
-) -> miette::Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, ActivationError> {
     // Get environment variables from the activation
     let env_var_behavior = if clean_env {
         CurrentEnvVarBehavior::Clean
@@ -583,8 +579,7 @@ pub async fn get_task_env(
             experimental_cache,
         )
     })
-    .await
-    .wrap_err("failed to activate environment")?
+    .await?
     .clone();
 
     // Add the current working directory to the environment
@@ -840,7 +835,10 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
-            platform: workspace.default_environment().activation_platform(),
+            platform: workspace
+                .default_environment()
+                .best_declared_platform()
+                .unwrap(),
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
@@ -848,7 +846,7 @@ mod tests {
     }
 
     /// Builds an [`ExecutableTask`] from a `[tasks]` snippet for use in tests.
-    fn task_from_snippet<'w>(workspace: &'w Workspace, name: &str) -> ExecutableTask<'w> {
+    fn task_from_snippet<'w>(workspace: &'w Workspace, name: &str) -> ExecutableTask<'w, 'w> {
         let task = workspace
             .default_environment()
             .task(&TaskName::from(name), None)
@@ -860,7 +858,10 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
-            platform: workspace.default_environment().activation_platform(),
+            platform: workspace
+                .default_environment()
+                .best_declared_platform()
+                .unwrap(),
         }
     }
 
@@ -1060,7 +1061,7 @@ exit 0
         let environment = workspace.default_environment();
         let env = get_task_env(
             &environment,
-            &environment.activation_platform(),
+            environment.best_declared_platform().unwrap(),
             false,
             None,
             false,

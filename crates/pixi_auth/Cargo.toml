@@ -9,12 +9,12 @@ homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 
-[dependencies]
-pixi_config = { workspace = true }
-rattler_networking = { workspace = true, features = ["system-integration"] }
-tracing = { workspace = true }
-
 [features]
 default = ["rustls"]
 native-tls = ["rattler_networking/native-tls"]
 rustls = ["rattler_networking/rustls"]
+
+[dependencies]
+pixi_config = { workspace = true }
+rattler_networking = { workspace = true, features = ["system-integration"] }
+tracing = { workspace = true }

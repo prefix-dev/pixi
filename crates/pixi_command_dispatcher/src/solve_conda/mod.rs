@@ -9,7 +9,7 @@ use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, RepoDataRecord, Subdir, Version,
-    package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
+    package::{ArchiveIdentifier, BuildString, CondaArchiveType, DistArchiveIdentifier},
 };
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
@@ -372,7 +372,7 @@ fn unique_url(source: &SourceRecord) -> Url {
     url.query_pairs_mut()
         .append_pair("name", source.package_record().name.as_source())
         .append_pair("version", &source.package_record().version.as_str())
-        .append_pair("build", &source.package_record().build)
+        .append_pair("build", source.package_record().build.as_str())
         .append_pair("subdir", &source.package_record().subdir);
 
     url
@@ -397,7 +397,7 @@ fn unique_dev_source_url(dev_source: &pixi_record::DevSourceRecord) -> Url {
 
 /// Generates a unique build string for a dev source record based on its variants.
 /// Uses a hash of the variants to ensure uniqueness when multiple variants exist.
-fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> String {
+fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> BuildString {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
@@ -406,6 +406,8 @@ fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> String 
     dev_source.variants.hash(&mut hasher);
     let hash = hasher.finish();
     format!("{hash:x}")
+        .parse()
+        .expect("a hex hash is a valid build string")
 }
 
 #[derive(Debug, thiserror::Error)]

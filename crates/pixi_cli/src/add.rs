@@ -7,13 +7,16 @@ use std::{
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::Requirement;
-use pixi_api::workspace::{DependencyOptions, GitOptions};
+use pixi_api::{
+    Interface,
+    workspace::{DependencyOptions, GitOptions},
+};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_core::{
-    DependencyType, Workspace, WorkspaceLocator,
+    DependencyType, Workspace,
     environment::LockFileUsage,
-    workspace::{DiscoveryStart, PypiDeps, SkippedPackage},
+    workspace::{PypiDeps, SkippedPackage},
 };
 use pixi_manifest::{
     HasFeaturesIter, HasWorkspaceManifest, KnownPreviewFlag, PypiDependencyLocation,
@@ -23,11 +26,11 @@ use url::Url;
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
     has_specs::HasSpecs,
 };
 
-/// Adds dependencies to the workspace
+/// Add dependencies to the workspace
 ///
 /// The dependencies should be defined as MatchSpec for conda package, a PyPI
 /// requirement for the `--pypi` dependencies, or an absolute path to a local
@@ -345,9 +348,6 @@ pub(crate) fn manifest_path_string(path: &Path) -> String {
 
 pub(crate) async fn ensure_pixi_build_preview_enabled(
     workspace: Workspace,
-    config_source: &pixi_config::ConfigSourceCli,
-    search_start: DiscoveryStart,
-    config: ConfigCli,
 ) -> miette::Result<Workspace> {
     if (&workspace)
         .workspace_manifest()
@@ -372,18 +372,16 @@ pub(crate) async fn ensure_pixi_build_preview_enabled(
         ));
     }
 
-    pixi_api::WorkspaceContext::add_preview_flags(
-        CliInterface {},
-        workspace.workspace.provenance.path.clone(),
-        vec![KnownPreviewFlag::PixiBuild],
-    )
-    .await?;
+    let mut workspace = workspace.modify()?;
+    workspace
+        .manifest()
+        .add_preview_flag(KnownPreviewFlag::PixiBuild)?;
+    let workspace = workspace.save().await.into_diagnostic()?;
 
-    Ok(WorkspaceLocator::for_cli()
-        .with_global_config_source(config_source.source())
-        .with_search_start(search_start)
-        .with_cli_config(config)
-        .locate()?)
+    CliInterface {}
+        .success("Added 'pixi-build' to the preview flags.")
+        .await;
+    Ok(workspace)
 }
 
 fn pypi_path_deps(package: &str, path: &Path, workspace: &Workspace) -> miette::Result<PypiDeps> {
@@ -409,11 +407,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
     args.dependency_config.warn_deprecated_subdir();
 
-    let mut workspace = WorkspaceLocator::for_cli()
+    let mut workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())
-        .locate()?;
+        .locate()
+        .await?;
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args
@@ -439,21 +438,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     if resolved_path.is_some() && !args.dependency_config.pypi {
-        workspace = ensure_pixi_build_preview_enabled(
-            workspace,
-            &args.config_source,
-            args.workspace_config.workspace_locator_start(),
-            args.config.clone(),
-        )
-        .await?;
-        if let Some(backend_override) = args
-            .workspace_config
-            .workspace_config
-            .backend_override
-            .clone()
-        {
-            workspace = workspace.with_backend_override(backend_override);
-        }
+        workspace = ensure_pixi_build_preview_enabled(workspace).await?;
     }
 
     if workspace.is_conda_script() && !args.dependency_config.platforms.is_empty() {
@@ -470,7 +455,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
         match args.dependency_config.dependency_type() {

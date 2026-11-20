@@ -23,7 +23,7 @@ jobs:
           ref: main
           persist-credentials: false
       - name: Set up Pixi
-        uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
         with:
           run-install: false
       - name: Upgrade Pixi dependencies
@@ -39,14 +39,14 @@ jobs:
         run: pixi exec pixi-diff-to-markdown < pixi-diff.json > pixi-diff.md
       - name: Create GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
         with:
           client-id: ${{ vars.PIXI_UPGRADE_APP_CLIENT_ID }}
           private-key: ${{ secrets.PIXI_UPGRADE_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
       - name: Create pull request
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8
         with:
           token: ${{ steps.app-token.outputs.token }}
           commit-message: "chore(ci): Upgrade Pixi dependencies"

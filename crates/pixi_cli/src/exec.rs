@@ -10,24 +10,30 @@ use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
+use pixi_core::host::{HostDetector, WantedNames, cli_detector_consent};
 use pixi_manifest::PixiPlatformName;
-use pixi_manifest::platform::host::{detect_host, host_subdir};
-use pixi_manifest::platform::solver_generic_virtual_packages;
+use pixi_manifest::platform::host::host_subdir;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
-use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
+use pixi_utils::{
+    EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Subdir};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, PackageRecord, Subdir,
+    referenced_virtual_packages,
+};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_threads::initialize_rayon_once;
 
 use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
-/// Run a command and install it in a temporary environment.
+/// Run a command in a temporary environment.
 ///
 /// Remove the temporary environments with `pixi clean cache --exec`.
 #[derive(Parser, Debug)]
@@ -77,7 +83,7 @@ pub struct Args {
 
 /// CLI entry point for `pixi exec`
 pub async fn execute(args: Args) -> miette::Result<ExitCode> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
     // `pixi exec` runs without a workspace, so the resolver only has the
@@ -183,6 +189,11 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
     Ok(process_exit::exit_code_from_status(status))
 }
 
+/// The `exclude-newer` of the configuration can't be applied.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("invalid `exclude-newer` in the pixi configuration")]
+struct InvalidConfiguredExcludeNewer(#[source] pixi_config::InvalidExcludeNewerError);
+
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
@@ -202,8 +213,26 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
+    // The `exclude-newer` of the configuration applies to `pixi exec`, which
+    // has no manifest of its own.
+    let exclude_newer = config
+        .exclude_newer
+        .as_ref()
+        .map(rattler_solve::ExcludeNewer::try_from)
+        .transpose()
+        .map_err(InvalidConfiguredExcludeNewer)?;
+
+    // Hash the configuration as configured, like the backend metadata cache
+    // does, so a relative cutoff such as `7d` keeps reusing the same
+    // environment. The exemptions are hashed as parsed by `rattler_config`.
+    let exclude_newer_toml = config
+        .exclude_newer
+        .as_ref()
+        .map(pixi_config::exclude_newer_to_toml);
+
     let environment_hash =
-        EnvironmentHash::new(specs.clone(), channels, platform, config.offline());
+        EnvironmentHash::new(specs.clone(), channels, platform, config.offline())
+            .with_exclude_newer(exclude_newer_toml);
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -226,15 +255,24 @@ pub async fn create_exec_prefix(
     .into_diagnostic()
     .context("failed to acquire write lock on prefix")?;
 
-    // Reuse the cached prefix when it is already installed. `--list`
-    // still needs the solved records to print the table, so it falls
-    // through to the (cheap, no-op) install path below rather than
-    // returning here.
-    if !args.force_reinstall && args.list.is_none() && env_lock.current().is_some() {
+    // Reuse the cached prefix when it is already installed. `--list` lists
+    // the installed packages rather than solving again, as a new solve could
+    // pick newer packages, e.g. with a relative `exclude-newer` cutoff.
+    if !args.force_reinstall && env_lock.current().is_some() {
         tracing::info!(
             "reusing existing environment in {}",
             prefix.root().display()
         );
+        if let Some(regex) = &args.list {
+            let records = prefix.find_installed_packages()?;
+            list_exec_environment(
+                &specs,
+                records
+                    .iter()
+                    .map(|record| &record.repodata_record.package_record),
+                regex,
+            )?;
+        }
         return Ok(prefix);
     }
 
@@ -245,6 +283,10 @@ pub async fn create_exec_prefix(
     let gateway = config.gateway().with_client(client.clone()).finish();
 
     let channels = args.channels.resolve_from_config(config)?;
+    let channel_urls: Vec<ChannelUrl> = channels
+        .iter()
+        .map(|channel| channel.base_url.clone())
+        .collect();
 
     // Get the repodata for the specs
     let query_output = await_in_progress("fetching repodata for environment", |_| async {
@@ -263,12 +305,35 @@ pub async fn create_exec_prefix(
     }
     let repodata = query_output.repodata;
 
-    // Determine virtual packages of the platform we are targeting
-    let virtual_packages: Vec<GenericVirtualPackage> = solver_generic_virtual_packages(
-        &detect_host(platform)
-            .into_diagnostic()
-            .context("failed to determine virtual packages")?,
+    // Discover registrations for the target, honoring overrides without
+    // executing detectors on a foreign platform.
+    let mut wanted = referenced_virtual_packages(
+        repodata
+            .iter()
+            .flat_map(|subdir| subdir.iter())
+            .map(|record| &record.package_record),
     );
+    wanted.extend(
+        specs
+            .iter()
+            .filter_map(|spec| spec.name.as_exact())
+            .filter(|name| name.as_normalized().starts_with("__"))
+            .cloned(),
+    );
+    let host = HostDetector::with_gateway(
+        config.clone(),
+        cli_detector_consent(None),
+        client.clone().into(),
+        gateway.clone(),
+    )
+    .detect_for_target(&channel_urls, platform, WantedNames::Only(wanted))
+    .await?;
+    let virtual_packages: Vec<GenericVirtualPackage> = host
+        .platform()
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .solver_virtual_package_records()
+        .into_owned();
 
     // `pixi exec` solves outside the command dispatcher, so it has to build
     // the offline exclusions itself rather than inheriting them.
@@ -294,6 +359,7 @@ pub async fn create_exec_prefix(
             specs: specs.clone(),
             virtual_packages: virtual_packages.clone(),
             excluded_candidates: excluded_candidates.clone(),
+            exclude_newer: exclude_newer.clone(),
             ..SolverTask::from_iter(&repodata.clone())
         })
     });
@@ -318,6 +384,7 @@ pub async fn create_exec_prefix(
                     specs: specs[..specs.len() - 1].to_vec(),
                     virtual_packages: virtual_packages.clone(),
                     excluded_candidates: excluded_candidates.clone(),
+                    exclude_newer: exclude_newer.clone(),
                     ..SolverTask::from_iter(&repodata.clone())
                 })
             })
@@ -335,6 +402,9 @@ pub async fn create_exec_prefix(
     // Force the initialization of the rayon thread pool to avoid implicit creation
     // by the Installer.
     initialize_rayon_once();
+
+    // Try to increase the rlimit to a sensible value for installation.
+    try_increase_rlimit_to_sensible();
 
     // Mark the prefix dirty for the duration of the install so a crash
     // is detected next time.
@@ -382,38 +452,42 @@ pub async fn create_exec_prefix(
         .context("failed to record prefix install fingerprint")?;
 
     if let Some(ref regex) = args.list {
-        list_exec_environment(final_specs, solved_records, regex.clone())?;
+        list_exec_environment(
+            &final_specs,
+            solved_records
+                .records
+                .iter()
+                .map(|record| &record.package_record),
+            regex,
+        )?;
     }
 
     Ok(prefix)
 }
 
-fn list_exec_environment(
-    specs: Vec<MatchSpec>,
-    solved_records: rattler_conda_types::SolverResult,
-    regex: String,
+fn list_exec_environment<'a>(
+    specs: &[MatchSpec],
+    records: impl IntoIterator<Item = &'a PackageRecord>,
+    regex: &str,
 ) -> Result<(), miette::Error> {
-    let regex = { if regex.is_empty() { None } else { Some(regex) } };
-    let mut packages_to_output = solved_records
-        .records
-        .iter()
+    let regex = (!regex.is_empty()).then_some(regex);
+    let mut packages_to_output = records
+        .into_iter()
         .map(|record| {
             PackageToOutput::new(
-                &record.package_record,
+                record,
                 specs
-                    .clone()
-                    .into_iter()
-                    .filter_map(|spec| spec.name.as_exact().cloned()) // Extract exact name if it exists
-                    .collect_vec()
-                    .contains(&record.package_record.name),
+                    .iter()
+                    .filter_map(|spec| spec.name.as_exact()) // Extract exact name if it exists
+                    .contains(&record.name),
             )
         })
         .collect_vec();
-    if let Some(ref regex) = regex {
+    if let Some(regex) = regex {
         let regex = regex::Regex::new(regex).into_diagnostic()?;
         packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
     }
-    let output_message = if let Some(ref regex) = regex {
+    let output_message = if let Some(regex) = regex {
         format!(
             "The environment has {} packages filtered by regex `{}`:",
             console::style(packages_to_output.len()).bold(),
@@ -478,7 +552,7 @@ fn guess_package_spec(command: &str) -> MatchSpec {
 async fn run_activation(
     prefix: &Prefix,
 ) -> miette::Result<std::collections::HashMap<String, String>> {
-    wrap_in_progress("running activation", move || prefix.run_activation()).await
+    Ok(wrap_in_progress("running activation", move || prefix.run_activation()).await?)
 }
 
 fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpec>> {

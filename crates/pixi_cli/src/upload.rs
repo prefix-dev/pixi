@@ -35,7 +35,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Get authentication storage using pixi's auth system which respects
     // the authentication_override_file configuration
-    let config = Config::load_global_with(&args.config_source.source());
+    let config = Config::try_load_global_with(&args.config_source.source())?;
 
     // Uploading a package always requires network access, so bail out early
     // with a clear error in offline mode. The `--offline` flag (with its

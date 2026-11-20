@@ -19,7 +19,7 @@ Pixi can also be configured via environment variables.
     </tr>
     <tr>
       <td><code>PIXI_CACHE_DIR</code></td>
-      <td>Defines the directory where pixi puts its cache.</td>
+      <td>Defines the directory where pixi puts its cache. This must be an absolute path. Setting <code>PIXI_CACHE_DIR</code> to a relative path will result in an error.</td>
       <td>
         <ul>
           <li>If <code>PIXI_CACHE_DIR</code> is not set, the <code>RATTLER_CACHE_DIR</code> environment variable is used.</li>
@@ -58,7 +58,7 @@ Pixi can also be configured via environment variables.
     </tr>
     <tr>
       <td><code>RATTLER_AUTH_FILE</code></td>
-      <td>Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See <a href="../../deployment/authentication/#override-the-authentication-storage">authentication docs</a> for the file format.</td>
+      <td>Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See <a href="../deployment/authentication.md#override-the-authentication-storage">authentication docs</a> for the file format.</td>
       <td>
         <ul>
           <li>If <code>RATTLER_AUTH_FILE</code> is not set, the system keyring is used.</li>

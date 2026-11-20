@@ -6,5 +6,5 @@ pub mod error;
 pub mod tool;
 
 pub use backend::{Backend, BackendOutputStream, in_memory, json_rpc};
-pub use backend_override::{BackendOverride, InMemoryOverriddenBackends};
+pub use backend_override::{BackendOverride, InMemoryOverriddenBackends, ParseError};
 pub use pixi_build_types as types;

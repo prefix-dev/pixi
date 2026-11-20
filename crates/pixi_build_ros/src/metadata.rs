@@ -6,8 +6,9 @@
 use miette::IntoDiagnostic;
 use pixi_build_backend::generated_recipe::{GeneratedRecipe, MetadataProvider};
 use pixi_build_types::ProjectModel;
-use rattler_conda_types::Version;
+use rattler_conda_types::VersionWithSource;
 
+use crate::distro::Distro;
 use crate::package_xml::PackageXml;
 
 /// Parse a [`PackageXml`] and render a [`GeneratedRecipe`] from the given
@@ -15,14 +16,14 @@ use crate::package_xml::PackageXml;
 /// and collecting input globs.
 pub fn parse_and_render(
     package_xml: PackageXml,
-    distro_name: &str,
+    distro: &Distro,
     model: ProjectModel,
     extra_input_globs: Vec<String>,
     package_mapping_files: Vec<String>,
 ) -> miette::Result<GeneratedRecipe> {
     let mut provider = RosPackageXmlMetadataProvider {
         package_data: package_xml,
-        distro_name: distro_name.to_string(),
+        distro: distro.clone(),
         extra_input_globs,
         package_mapping_files,
     };
@@ -34,12 +35,11 @@ pub fn parse_and_render(
 
 /// Metadata provider for ROS package.xml files.
 ///
-/// Formats package names as `ros-<distro>-<name>` with underscore-to-hyphen
-/// conversion.
+/// Names packages as RoboStack does (see [`Distro::conda_name`]).
 #[derive(Debug)]
 struct RosPackageXmlMetadataProvider {
     package_data: PackageXml,
-    distro_name: String,
+    distro: Distro,
     extra_input_globs: Vec<String>,
     package_mapping_files: Vec<String>,
 }
@@ -62,12 +62,11 @@ impl MetadataProvider for RosPackageXmlMetadataProvider {
     type Error = std::convert::Infallible;
 
     fn name(&mut self) -> Result<Option<String>, Self::Error> {
-        let formatted = self.package_data.name.replace('_', "-");
-        Ok(Some(format!("ros-{}-{}", self.distro_name, formatted)))
+        Ok(Some(self.distro.conda_name(&self.package_data.name)))
     }
 
-    fn version(&mut self) -> Result<Option<Version>, Self::Error> {
-        Ok(self.package_data.version.parse::<Version>().ok())
+    fn version(&mut self) -> Result<Option<VersionWithSource>, Self::Error> {
+        Ok(self.package_data.version.parse::<VersionWithSource>().ok())
     }
 
     fn homepage(&mut self) -> Result<Option<String>, Self::Error> {
@@ -84,15 +83,10 @@ impl MetadataProvider for RosPackageXmlMetadataProvider {
     }
 
     fn license(&mut self) -> Result<Option<String>, Self::Error> {
-        if self.package_data.licenses.len() == 1 && !self.package_data.licenses[0].contains("TODO")
-        {
-            Ok(Some(format!(
-                "LicenseRef-{}",
-                self.package_data.licenses[0]
-            )))
-        } else {
-            Ok(None)
-        }
+        Ok(crate::license::to_spdx(
+            &self.package_data.licenses,
+            &self.package_data.name,
+        ))
     }
 
     fn license_files(&mut self) -> Result<Option<Vec<String>>, Self::Error> {
@@ -147,7 +141,7 @@ mod tests {
         let package_xml = load_package_xml("custom_ros.xml");
         let mut provider = RosPackageXmlMetadataProvider {
             package_data: package_xml,
-            distro_name: "noetic".to_string(),
+            distro: Distro::new("noetic"),
             extra_input_globs: Vec::new(),
             package_mapping_files: Vec::new(),
         };
@@ -161,10 +155,7 @@ mod tests {
             provider.version().unwrap().map(|v| v.to_string()),
             Some("0.0.1".to_string())
         );
-        assert_eq!(
-            provider.license().unwrap().as_deref(),
-            Some("LicenseRef-Apache License 2.0")
-        );
+        assert_eq!(provider.license().unwrap().as_deref(), Some("Apache-2.0"));
         assert_eq!(provider.description().unwrap().as_deref(), Some("Demo"));
         assert_eq!(
             provider.homepage().unwrap().as_deref(),
@@ -182,7 +173,7 @@ mod tests {
         let package_xml = load_package_xml("custom_ros.xml");
         let provider = RosPackageXmlMetadataProvider {
             package_data: package_xml,
-            distro_name: "noetic".to_string(),
+            distro: Distro::new("noetic"),
             extra_input_globs: Vec::new(),
             package_mapping_files: vec!["/tmp/custom_mapping.yaml".to_string()],
         };

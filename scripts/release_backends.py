@@ -644,7 +644,7 @@ def bump() -> None:
     run(["pixi", "run", "--environment", "lefthook", "lint-fast"])
 
     console.print("\n[bold]Commit and open PR[/bold]\n")
-    run(["git", "commit", "--all", "--message", "chore: bump backend versions"])
+    run(["git", "commit", "--all", "--message", "chore(release): bump backend versions"])
 
     # Force-push the disposable bump branch to the fork ourselves so a stale
     # remote branch from an earlier release attempt can never block the push
@@ -663,7 +663,7 @@ def bump() -> None:
             "--head",
             f"{login}:{BUMP_BRANCH}",
             "--title",
-            "chore: bump backend versions",
+            "chore(release): bump backend versions",
             "--body",
             "Automated backend version bump.",
         ]

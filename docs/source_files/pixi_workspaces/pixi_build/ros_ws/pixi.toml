@@ -19,8 +19,8 @@ preview = ["pixi-build"]
 ros-jazzy-ros2run = ">=0.32.4,<0.33"
 # --8<-- [end:base]
 # --8<-- [start:python-pkg]
-ros-jazzy-my-python-ros-pkg = { path = "src/my_python_ros_pkg" }
+ros2-my-python-ros-pkg = { path = "src/my_python_ros_pkg" }
 # --8<-- [end:python-pkg]
 # --8<-- [start:cmake-pkg]
-ros-jazzy-my-cmake-ros-pkg = { path = "src/my_cmake_ros_pkg" }
+ros2-my-cmake-ros-pkg = { path = "src/my_cmake_ros_pkg" }
 # --8<-- [end:cmake-pkg]

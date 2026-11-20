@@ -2,7 +2,7 @@ import json
 import shutil
 import textwrap
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -18,7 +18,7 @@ def assert_no_workspace_state_created(workspace: Path) -> None:
 
 
 @contextmanager
-def remote_script_server(source: str) -> Iterator[tuple[str, list[str]]]:
+def remote_script_server(source: str) -> Generator[tuple[str, list[str]]]:
     requests: list[str] = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -905,7 +905,11 @@ def test_pixi_remove_script_requires_inline_metadata(pixi: Path, tmp_pixi_worksp
     assert script.read_text() == "print('hello')\n"
 
 
-def test_pixi_workspace_channel_edits_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_pixi_workspace_channel_edits_script(
+    pixi: Path, tmp_pixi_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exec_cache = tmp_pixi_workspace / "script-exec-cache"
+    monkeypatch.setenv("PIXI_CACHE_EXEC_ENVIRONMENTS_DIR", str(exec_cache))
     script = tmp_pixi_workspace / "example.py"
     script.write_text(
         """# /// script
@@ -1002,9 +1006,14 @@ print("hello")
     assert not script.with_name("example.py.pixi.lock").exists()
     assert not (tmp_pixi_workspace / "pixi.lock").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
+    assert not list(exec_cache.glob("*/envs"))
 
 
-def test_pixi_workspace_platform_edits_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_pixi_workspace_platform_edits_script(
+    pixi: Path, tmp_pixi_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exec_cache = tmp_pixi_workspace / "script-exec-cache"
+    monkeypatch.setenv("PIXI_CACHE_EXEC_ENVIRONMENTS_DIR", str(exec_cache))
     script = tmp_pixi_workspace / "example.py"
     script.write_text(
         """# /// script
@@ -1171,6 +1180,7 @@ print("hello")
     assert not script.with_name("example.py.pixi.lock").exists()
     assert not (tmp_pixi_workspace / "pixi.lock").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
+    assert not list(exec_cache.glob("*/envs"))
 
 
 def test_pixi_tree_reads_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -1601,12 +1611,17 @@ def test_script_lock_file_round_trips_without_resolving_again(
 
 @pytest.mark.slow
 def test_script_frozen_refuses_a_lock_file_without_an_entry_for_this_machine(
-    pixi: Path, tmp_pixi_workspace: Path
+    pixi: Path, tmp_pixi_workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`--frozen` consumes the lock without checking it, so a lock file with no
-    row for the platform we run on has to be refused here rather than yielding
-    an empty environment that runs against whatever `python` is on `PATH`."""
+    """A frozen foreign lock must fail before installing a prefix or falling
+    back to the system Python to execute the script."""
+    exec_cache = tmp_pixi_workspace / "script-exec-cache"
+    monkeypatch.setenv("PIXI_CACHE_EXEC_ENVIRONMENTS_DIR", str(exec_cache))
     script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, 'python = "3.12.*"')
+    script.write_text(
+        script.read_text()
+        + '\nfrom pathlib import Path\nPath(__file__).with_suffix(".ran").touch()\n'
+    )
     other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
 
     verify_cli_command(
@@ -1614,11 +1629,17 @@ def test_script_frozen_refuses_a_lock_file_without_an_entry_for_this_machine(
         ExitCode.SUCCESS,
         env={"PIXI_OVERRIDE_PLATFORM": other},
     )
+    lock = script.with_name("plain.py.pixi.lock")
+    before = lock.read_bytes()
     verify_cli_command(
         [pixi, "run", "--script", script, "--frozen"],
         ExitCode.FAILURE,
-        stderr_contains="has no entry for platform",
+        stdout_excludes="SCRIPT-RAN",
     )
+    assert not script.with_suffix(".ran").exists()
+    assert not list(exec_cache.glob("*/envs"))
+    assert lock.read_bytes() == before
+    assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
 @pytest.mark.slow

@@ -1,0 +1,24 @@
+[workspace]
+channels = ["https://conda.modular.com/max", "https://prefix.dev/conda-forge"]
+platforms = [{ platform = "linux-64", glibc = "2.34", archspec = "x86_64_v3" }]
+preview = ["pixi-build"]
+
+[workspace.build-variants]
+mojo_accelerator = ["cpu", "gfx1103"]
+
+[package]
+name = "mojo-matmul"
+version = "0.1.0"
+
+[package.build.backend]
+name = "pixi-build-mojo"
+version = "*"
+
+[[package.build.config.bins]]
+name = "matmul"
+
+[package.build-dependencies]
+mojo-compiler = "==1.2.0"
+
+[package.host-dependencies]
+max-core = "==26.7.0"
