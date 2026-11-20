@@ -57,6 +57,10 @@ pub struct TomlManifest {
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
     pub constraints: Option<PixiSpanned<InheritablePackageMap>>,
+
+    /// PyPI version constraints - limit versions of PyPI packages that can be
+    /// installed without explicitly requiring them.
+    pub pypi_constraints: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
     pub exclude_newer: Option<PixiSpanned<IndexMap<PackageName, ExcludeNewer>>>,
 
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
@@ -213,6 +217,7 @@ impl TomlManifest {
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
             constraints: self.constraints,
+            pypi_constraints: self.pypi_constraints,
             pypi_dependencies: self.pypi_dependencies.map(PixiSpanned::into_inner),
             dev_dependencies: self.dev_dependencies.map(PixiSpanned::into_inner),
             activation: self.activation.map(PixiSpanned::into_inner),
@@ -648,6 +653,8 @@ impl TomlManifest {
             environments,
             solve_groups,
             loaded_at: chrono::Utc::now(),
+            extra_constraints: Default::default(),
+            extra_pypi_constraints: Default::default(),
         };
         workspace_manifest.register_composed_platforms()?;
 
@@ -1033,6 +1040,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let build_dependencies = build_dependencies.map(From::from);
 
         let constraints = th.optional("constraints");
+        let pypi_constraints = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-constraints")
+            .map(TomlWith::into_inner);
         let exclude_newer = th
             .optional::<PixiSpanned<TomlIndexMap<PackageName, TomlFromStr<ExcludeNewer>>>>(
                 "exclude-newer",
@@ -1133,6 +1143,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             host_dependencies,
             build_dependencies,
             constraints,
+            pypi_constraints,
             exclude_newer,
             pypi_dependencies,
             pypi_exclude_newer,
@@ -1598,6 +1609,72 @@ mod test {
         extra-index-urls = [{ url = "https://internal/simple", exclude-newer = "0d" }]
         "#,
         ));
+    }
+
+    #[test]
+    fn test_invalid_pypi_constraints() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [pypi-constraints]
+        my-package = { path = "../my-package" }
+        "#,
+        ), @r#"
+         × `[pypi-constraints]` only supports version requirements, but the constraint for 'my-package' specifies a path source
+          ╭─[pixi.toml:6:9]
+        5 │
+        6 │ ╭─▶         [pypi-constraints]
+        7 │ ├─▶         my-package = { path = "../my-package" }
+          · ╰──── pypi constraint specified here
+        8 │
+          ╰────
+         help: constraints only restrict the allowed versions, use `[pypi-dependencies]` to choose where a package comes from
+        "#);
+
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.gpu.pypi-constraints]
+        torch = { version = "<3", index = "https://download.pytorch.org/whl/cu128" }
+        "#,
+        ), @r#"
+         × `[pypi-constraints]` only supports version requirements, but the constraint for 'torch' specifies an index
+          ╭─[pixi.toml:6:9]
+        5 │
+        6 │ ╭─▶         [feature.gpu.pypi-constraints]
+        7 │ ├─▶         torch = { version = "<3", index = "https://download.pytorch.org/whl/cu128" }
+          · ╰──── pypi constraint specified here
+        8 │
+          ╰────
+         help: constraints only restrict the allowed versions, use `[pypi-dependencies]` to choose where a package comes from
+        "#);
+
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [target.linux-64.pypi-constraints]
+        requests = { version = "<3", extras = ["socks"] }
+        "#,
+        ), @r#"
+         × `[pypi-constraints]` only supports version requirements, but the constraint for 'requests' specifies extras
+          ╭─[pixi.toml:6:9]
+        5 │
+        6 │ ╭─▶         [target.linux-64.pypi-constraints]
+        7 │ ├─▶         requests = { version = "<3", extras = ["socks"] }
+          · ╰──── pypi constraint specified here
+        8 │
+          ╰────
+         help: constraints only restrict the allowed versions, use `[pypi-dependencies]` to choose where a package comes from
+        "#);
     }
 
     #[test]
@@ -3535,18 +3612,18 @@ mod test {
         [environments.dev.host-dependencies]
         git = "*"
         "#,
-        ), @r###"
-          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
-          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
-           ╭─[pixi.toml:7:27]
-         6 │
-         7 │         [environments.dev.host-dependencies]
-           ·                           ────────┬────────
-           ·                                   ╰── 'host-dependencies' was not expected here
-         8 │         git = "*"
-           ╰────
-          help: Did you mean 'dependencies'?
-        "###);
+        ), @r#"
+         × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
+         │ 'dev', 'constraints', 'pypi-constraints', 'activation', 'tasks', 'pypi-options'
+          ╭─[pixi.toml:7:27]
+        6 │
+        7 │         [environments.dev.host-dependencies]
+          ·                           ────────┬────────
+          ·                                   ╰── 'host-dependencies' was not expected here
+        8 │         git = "*"
+          ╰────
+         help: Did you mean 'dependencies'?
+        "#);
     }
 
     #[test]
@@ -3594,18 +3671,18 @@ mod test {
         [environments.dev.system-requirements]
         cuda = "12"
         "#,
-        ), @r###"
-          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
-          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
-            ╭─[pixi.toml:10:27]
-          9 │
-         10 │         [environments.dev.system-requirements]
-            ·                           ─────────┬─────────
-            ·                                    ╰── 'system-requirements' was not expected here
-         11 │         cuda = "12"
-            ╰────
-          help: Did you mean 'features'?
-        "###);
+        ), @r#"
+         × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
+         │ 'dev', 'constraints', 'pypi-constraints', 'activation', 'tasks', 'pypi-options'
+           ╭─[pixi.toml:10:27]
+         9 │
+        10 │         [environments.dev.system-requirements]
+           ·                           ─────────┬─────────
+           ·                                    ╰── 'system-requirements' was not expected here
+        11 │         cuda = "12"
+           ╰────
+         help: Did you mean 'features'?
+        "#);
     }
 
     #[test]

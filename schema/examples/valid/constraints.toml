@@ -13,14 +13,25 @@ python = ">=3.9"
 openssl = "<3"
 zlib = ">=1.2"
 
+# PyPI constraints limit PyPI package versions without installing them
+[pypi-constraints]
+urllib3 = ">=2.2.2"
+requests = { version = "<3", env-markers = "python_version >= '3.10'" }
+
 [feature.extra.dependencies]
 requests = "*"
 
 [feature.extra.constraints]
 urllib3 = "<2"
 
+[feature.extra.pypi-constraints]
+idna = ">=3.7"
+
 [environments]
 full = ["extra"]
 
 [target.linux-64.constraints]
 libgcc = ">=12"
+
+[target.linux-64.pypi-constraints]
+cryptography = ">=43"

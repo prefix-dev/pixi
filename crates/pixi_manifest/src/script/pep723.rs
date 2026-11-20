@@ -1088,9 +1088,9 @@ print("hello")
           ·              ───────
         8 │ # pytest = "*"
           ╰────
-         help: a script represents one implicit default environment; `tool.pixi.target.linux-64` accepts `activation`, `constraints`, `dependencies`, `pypi-dependencies`
-               a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-dependencies`, `pypi-exclude-newer`, `target`,
-               `workspace`
+         help: a script represents one implicit default environment; `tool.pixi.target.linux-64` accepts `activation`, `constraints`, `dependencies`, `pypi-constraints`, `pypi-dependencies`
+               a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-constraints`, `pypi-dependencies`, `pypi-
+               exclude-newer`, `target`, `workspace`
         "#);
     }
 

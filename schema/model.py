@@ -699,6 +699,19 @@ PyPIRequirement = (
 )
 PyPIPackageName = NonEmptyStr
 
+
+class PyPIConstraintTable(StrictBaseModel):
+    version: NonEmptyStr = Field(
+        description="The allowed versions of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
+    )
+    env_markers: NonEmptyStr | None = Field(
+        None,
+        description="The [PEP 508 environment markers](https://peps.python.org/pep-0508/#environment-markers) that decide whether the constraint applies",
+    )
+
+
+PyPIConstraint = NonEmptyStr | PyPIConstraintTable
+
 DependenciesField = Field(
     None,
     description="The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
@@ -706,6 +719,10 @@ DependenciesField = Field(
 ConstraintsField = Field(
     None,
     description="The `conda` version constraints. These constrain the versions of packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+)
+PyPIConstraintsField = Field(
+    None,
+    description="The PyPI version constraints. These constrain the versions of PyPI packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
 )
 HostDependenciesField = Field(
     None,
@@ -1009,6 +1026,7 @@ class Environment(StrictBaseModel):
     )
     dependencies: Dependencies = DependenciesField
     constraints: Dependencies = ConstraintsField
+    pypi_constraints: dict[PyPIPackageName, PyPIConstraint] | None = PyPIConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this environment"
     )
@@ -1071,6 +1089,7 @@ class Target(StrictBaseModel):
     host_dependencies: InheritableDependencies = HostDependenciesField
     build_dependencies: InheritableDependencies = BuildDependenciesField
     constraints: InheritableDependencies = ConstraintsField
+    pypi_constraints: dict[PyPIPackageName, PyPIConstraint] | None = PyPIConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
@@ -1120,6 +1139,7 @@ class Feature(StrictBaseModel):
     host_dependencies: InheritableDependencies = HostDependenciesField
     build_dependencies: InheritableDependencies = BuildDependenciesField
     constraints: InheritableDependencies = ConstraintsField
+    pypi_constraints: dict[PyPIPackageName, PyPIConstraint] | None = PyPIConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
@@ -1476,6 +1496,7 @@ class BaseManifest(BaseModel):
     host_dependencies: InheritableDependencies = HostDependenciesField
     build_dependencies: InheritableDependencies = BuildDependenciesField
     constraints: InheritableDependencies = ConstraintsField
+    pypi_constraints: dict[PyPIPackageName, PyPIConstraint] | None = PyPIConstraintsField
     exclude_newer: dict[CondaPackageName, ExcludeNewer] | None = Field(
         None,
         deprecated=True,
