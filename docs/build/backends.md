@@ -46,6 +46,11 @@ For custom backend channels, you can add the channel to the `channels` field of 
 --8<-- "docs/source_files/pixi_tomls/pixi-build-backend-channel.toml:build"
 ```
 
+Pixi runs the build backend while it solves the workspace, so `pixi lock` on a workspace with source dependencies runs code chosen by that workspace.
+If you [disable untrusted code execution](../advanced/untrusted_repositories.md), Pixi only runs a backend whose environment consists entirely of [trusted packages](../reference/pixi_configuration.md#security).
+This includes backends that Pixi picks itself, such as `pixi-build-ros` for a ROS package.
+Only [hardened backends](hardened_backends.md) should be trusted for that.
+
 
 ### Overriding the Build Backend
 
@@ -56,6 +61,8 @@ For example: `pixi-build-cmake=/path/to/bin,pixi-build-python` will:
    1. override the `pixi-build-cmake` backend with the executable located at `/path/to/bin`
    2. and will use the `pixi-build-python` backend from the `PATH`.
 2. `PIXI_BUILD_BACKEND_OVERRIDE_ALL`: If this environment variable is set to *some* value e.g `1` or `true`, it will not install any backends in isolation and will assume that all backends are overridden and available in the `PATH`. This is useful for development purposes. e.g `PIXI_BUILD_BACKEND_OVERRIDE_ALL=1 pixi install`
+
+Overridden backends are not checked against `security.trusted-packages`, also when untrusted code execution is disabled: you chose them yourself.
 
 ## Troubleshooting
 

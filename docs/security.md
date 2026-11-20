@@ -134,7 +134,7 @@ This is a different class of supply-chain risk from "is this version vulnerable?
 This also affects `direnv` integrations, which run `pixi shell-hook` automatically when you enter a directory. Without an approval step, a `git pull` or a branch switch that introduces a package with a malicious activation script, or a malicious `[activation]` section in the manifest, can trigger arbitrary code execution as soon as you `cd` into the workspace.
 
 !!! warning "Resolution itself can execute code"
-    Code execution is not limited to installation and activation. Commands that only resolve dependencies, such as `pixi lock`, `pixi install`, and `pixi update` (even with `--no-install`), can also lead to arbitrary code execution. To resolve a workspace that contains source dependencies, Pixi has to invoke the package's build backend, which is itself arbitrary code that can be malicious. Only run these commands on projects you trust, or inside a sandbox.
+    Code execution is not limited to installation and activation. Commands that only resolve dependencies, such as `pixi lock`, `pixi install`, and `pixi update` (even with `--no-install`), can also lead to arbitrary code execution. To resolve a workspace that contains source dependencies, Pixi has to invoke the package's build backend, which is itself arbitrary code that can be malicious. Only run these commands on projects you trust, or inside a sandbox, or [disable untrusted code execution](advanced/untrusted_repositories.md).
 
 Keep `post-link` scripts disabled unless you have a concrete package that requires them and you have reviewed that behavior.
 

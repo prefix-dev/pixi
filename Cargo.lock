@@ -6662,6 +6662,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "console",
+ "derive_more",
  "dirs 7.0.0",
  "fs-err",
  "indexmap 2.14.2",
@@ -6687,6 +6688,7 @@ dependencies = [
  "toml 1.2.1+spec-1.1.0",
  "toml_edit",
  "tracing",
+ "tracing-test",
  "url",
 ]
 

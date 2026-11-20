@@ -59,6 +59,10 @@ pixi [OPTIONS] [COMMAND]
 :  Hide all progress bars, always turned on if stderr is not a terminal
 <br>**env**: `PIXI_NO_PROGRESS`
 <br>**default**: `false`
+- <a id="arg---no-untrusted-code-exec" href="#arg---no-untrusted-code-exec">`--no-untrusted-code-exec=<NO_UNTRUSTED_CODE_EXEC>`</a>
+:  Disable untrusted code execution: pixi only runs code from packages listed in `security.trusted-packages` and refuses to install environments, build source packages, or run tasks and activation scripts. Pass `--no-untrusted-code-exec=false` to override `untrusted-code-exec = false` from the configuration
+<br>**env**: `PIXI_NO_UNTRUSTED_CODE_EXEC`
+<br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
 - <a id="arg---list" href="#arg---list">`--list`</a>
 :  List all installed commands (built-in and extensions)
 

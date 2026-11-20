@@ -12,6 +12,7 @@ license.workspace = true
 [dependencies]
 clap = { workspace = true, features = ["derive", "env", "std"] }
 console = { workspace = true }
+derive_more = { workspace = true, features = ["display"] }
 dirs = { workspace = true }
 fs-err = { workspace = true }
 indexmap = { workspace = true }
@@ -39,6 +40,7 @@ insta = { workspace = true, features = ["yaml"] }
 rstest = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
+tracing-test = { workspace = true }
 
 [target."cfg(unix)".dependencies]
 nix = { workspace = true, features = ["fs"] }
