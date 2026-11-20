@@ -1,6 +1,17 @@
 use fs_err as fs;
-use pixi_build_backend_passthrough::PassthroughBackend;
-use pixi_build_frontend::BackendOverride;
+use pixi_build_backend_passthrough::{PassthroughBackend, PassthroughBackendInstantiator};
+use pixi_build_frontend::{
+    BackendOutputStream, BackendOverride,
+    in_memory::{InMemoryBackend, InMemoryBackendInstantiator},
+    json_rpc::CommunicationError,
+    types::{
+        BackendCapabilities, NamedSpec, PackageSpec, PathSpec,
+        procedures::{
+            conda_outputs::{CondaOutputDependencies, CondaOutputsParams, CondaOutputsResult},
+            initialize::InitializeParams,
+        },
+    },
+};
 use pixi_consts::consts;
 use rattler_conda_types::Subdir;
 
@@ -885,4 +896,128 @@ dev = {{ features = ["dev-feature"], solve-group = "main" }}
         ),
         "dev-tools should NOT be in the lock file (it's a dev dependency)"
     );
+}
+
+/// Wraps the [`PassthroughBackend`] so that every package also produces a
+/// `foo-python` output that depends on the package from the same source, like
+/// a multi-output recipe using `pin_subpackage`.
+struct SiblingOutputBackend(PassthroughBackend);
+
+impl InMemoryBackend for SiblingOutputBackend {
+    fn capabilities(&self) -> BackendCapabilities {
+        self.0.capabilities()
+    }
+
+    fn identifier(&self) -> &str {
+        self.0.identifier()
+    }
+
+    fn conda_outputs(
+        &self,
+        params: CondaOutputsParams,
+        output_stream: &(dyn BackendOutputStream + Send + 'static),
+    ) -> Result<CondaOutputsResult, Box<CommunicationError>> {
+        let mut result = self.0.conda_outputs(params, output_stream)?;
+        let siblings: Vec<_> = result
+            .outputs
+            .iter()
+            .map(|output| {
+                let mut sibling = output.clone();
+                sibling.metadata.name = "foo-python".parse().unwrap();
+                sibling.build_dependencies = None;
+                sibling.host_dependencies = None;
+                sibling.run_dependencies = CondaOutputDependencies {
+                    depends: vec![NamedSpec {
+                        name: output.metadata.name.clone().into(),
+                        spec: PackageSpec::Source(
+                            PathSpec {
+                                path: ".".to_string(),
+                            }
+                            .into(),
+                        ),
+                    }],
+                    constraints: Vec::new(),
+                };
+                sibling
+            })
+            .collect();
+        result.outputs.extend(siblings);
+        Ok(result)
+    }
+}
+
+struct SiblingOutputBackendInstantiator(PassthroughBackendInstantiator);
+
+impl InMemoryBackendInstantiator for SiblingOutputBackendInstantiator {
+    type Backend = SiblingOutputBackend;
+
+    fn initialize(
+        &self,
+        params: InitializeParams,
+    ) -> Result<Self::Backend, Box<CommunicationError>> {
+        Ok(SiblingOutputBackend(self.0.initialize(params)?))
+    }
+
+    fn identifier(&self) -> &str {
+        self.0.identifier()
+    }
+}
+
+/// Test that outputs of a dev source that the requested output depends on are
+/// developed as well, instead of being built from that same source.
+#[tokio::test]
+async fn test_dev_dependency_on_sibling_output() {
+    setup_tracing();
+
+    let package_database = create_test_package_database();
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(SiblingOutputBackendInstantiator(
+        PassthroughBackend::instantiator(),
+    ));
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Produces `libfoo` and `foo-python`, which depends on `libfoo`.
+    create_source_package(
+        pixi.workspace_path(),
+        "libfoo",
+        "1.0.0",
+        r#"
+[package.run-dependencies]
+zlib = ">=1.0"
+"#,
+    );
+
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dev]
+foo-python = {{ path = "./libfoo" }}
+"#,
+        channel.url(),
+        Subdir::current().unwrap_or(Subdir::NoArch)
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    assert!(
+        lock_file.contains_conda_package(consts::DEFAULT_ENVIRONMENT_NAME, platform, "zlib"),
+        "zlib should be in the lock file (run dependency of the sibling output)"
+    );
+    for name in ["libfoo", "foo-python"] {
+        assert!(
+            !lock_file.contains_conda_package(consts::DEFAULT_ENVIRONMENT_NAME, platform, name),
+            "{name} should NOT be in the lock file (it's part of the dev source)"
+        );
+    }
+
+    pixi.lock().with_check(true).await.unwrap();
 }
