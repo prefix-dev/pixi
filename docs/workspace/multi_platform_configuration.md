@@ -165,8 +165,6 @@ An explicit name whose definition already exists under a *different* name is rej
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
 
 - `pixi workspace platform add <PLATFORM>` appends an undeclared subdir with its defaults.
-  A bare declared `<NAME>` references the existing platform without changing its definition.
-  Use `pixi workspace platform add <NAME> --feature cuda` to add that reference to a feature.
   `pixi workspace platform add <NAME>=<PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--amdgpu] [--amdgpu-arch gfx90a] [--glibc 2.28] ...`
   defines a named platform or fully replaces its existing definition, keeping its position.
   An identical definition of the same name is a no-op;
