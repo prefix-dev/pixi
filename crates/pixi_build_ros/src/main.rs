@@ -17,7 +17,10 @@ use rattler_build_recipe::stage0::{
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 
-use pixi_build_ros::build_script::render_build_script;
+use pixi_build_ros::build_script::{
+    BuildMode, BuildType, ScriptVars, escape_quoted, is_batch, render_build_script,
+    script_interpreter,
+};
 use pixi_build_ros::config::{PackageMappingSource, extract_distro_from_channels_list};
 use pixi_build_ros::distro::Distro;
 use pixi_build_ros::metadata::parse_and_render;
@@ -246,6 +249,14 @@ impl GenerateRecipe for RosGenerator {
         if host_platform.is_osx() {
             build_deps.push("tapi");
         }
+        // The build script runs on the build machine, whose operating system is
+        // the host platform's: `pixi build` does not cross-compile between
+        // operating systems.
+        let windows = host_platform.is_windows();
+        let build_type = BuildType::of(&package_xml, &distro)?;
+        if let Some(interpreter) = script_interpreter(build_type, windows) {
+            build_deps.push(interpreter);
+        }
 
         let mut build_items = package_requirements.build.clone();
         let mut host_items = package_requirements.host.clone();
@@ -301,8 +312,22 @@ impl GenerateRecipe for RosGenerator {
         requirements.run = merge_conditional_lists(&requirements.run, &run_items)?;
 
         // Generate build script
-        let build_type = package_xml.build_type();
-        let build_script_content = render_build_script(&build_type, &distro, &manifest_root)?;
+        let source_dir = escape_quoted(
+            &manifest_root.display().to_string(),
+            is_batch(build_type, windows),
+        );
+        let build_script_content = render_build_script(
+            build_type,
+            windows,
+            BuildMode::Incremental,
+            &ScriptVars {
+                generator: "pixi-build-ros",
+                source_dir: &source_dir,
+                package_prefix: &distro.package_prefix(),
+                distro: &distro.name,
+                cmake_args: "",
+            },
+        );
 
         let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
         script_env.insert(
@@ -324,10 +349,13 @@ impl GenerateRecipe for RosGenerator {
             .build
             .plan
             .script_mut()
-            .expect("generated recipes use script mode") =
-            Script::from_content(build_script_content)
+            .expect("generated recipes use script mode") = Script {
+            interpreter: script_interpreter(build_type, windows)
+                .map(|i| Value::new_concrete(i.to_string(), None)),
+            ..Script::from_content(build_script_content)
                 .with_env(script_env)
-                .with_secrets(model.secrets.iter().cloned().collect());
+                .with_secrets(model.secrets.iter().cloned().collect())
+        };
 
         Ok(generated_recipe)
     }
