@@ -1374,21 +1374,29 @@ fn condition_is_met(
     locked_pixi_records: &PixiRecordsByName,
     virtual_packages: &HashMap<PackageName, GenericVirtualPackage>,
 ) -> bool {
+    evaluate_condition(condition, &|spec| {
+        locked_pixi_records
+            .records
+            .iter()
+            .any(|record| spec.matches(record))
+            || virtual_packages.values().any(|vpkg| vpkg.matches(spec))
+    })
+}
+
+/// Evaluates a matchspec `when=` condition, using `is_satisfied` to decide
+/// whether a single matchspec leaf is satisfied by the environment. `And` /
+/// `Or` recurse over their operands.
+pub(super) fn evaluate_condition(
+    condition: &MatchSpecCondition,
+    is_satisfied: &impl Fn(&MatchSpec) -> bool,
+) -> bool {
     match condition {
-        MatchSpecCondition::MatchSpec(spec) => {
-            locked_pixi_records
-                .records
-                .iter()
-                .any(|record| spec.matches(record))
-                || virtual_packages.values().any(|vpkg| vpkg.matches(spec))
-        }
+        MatchSpecCondition::MatchSpec(spec) => is_satisfied(spec),
         MatchSpecCondition::And(lhs, rhs) => {
-            condition_is_met(lhs, locked_pixi_records, virtual_packages)
-                && condition_is_met(rhs, locked_pixi_records, virtual_packages)
+            evaluate_condition(lhs, is_satisfied) && evaluate_condition(rhs, is_satisfied)
         }
         MatchSpecCondition::Or(lhs, rhs) => {
-            condition_is_met(lhs, locked_pixi_records, virtual_packages)
-                || condition_is_met(rhs, locked_pixi_records, virtual_packages)
+            evaluate_condition(lhs, is_satisfied) || evaluate_condition(rhs, is_satisfied)
         }
     }
 }
