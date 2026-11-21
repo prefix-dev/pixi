@@ -342,6 +342,8 @@ For Python packages using ament build system:
 </export>
 ```
 
+Packages whose `setup.cfg` does not set `install_scripts` are installed with pip. Its verbosity follows the build log level: no flag by default, `-v` with `pixi -vv`, and `-vv` with `pixi -vvv` or more.
+
 ### catkin (ROS1)
 For ROS1 packages using catkin build system:
 ```xml

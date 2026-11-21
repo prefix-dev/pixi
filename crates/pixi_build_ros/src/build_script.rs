@@ -24,6 +24,7 @@ pub fn render_build_script(
     build_type: &str,
     distro: &Distro,
     source_dir: &Path,
+    pip_verbosity_flag: Option<&str>,
 ) -> Result<String, BuildScriptError> {
     // Use the current (build) platform, not the host/target platform.
     // The build script runs on the build machine.
@@ -36,7 +37,8 @@ pub fn render_build_script(
         .replace("@DISTRO@", &distro.name)
         .replace("@PACKAGE_PREFIX@", &distro.package_prefix())
         .replace("@BUILD_DIR@", "build")
-        .replace("@BUILD_TYPE@", "Release");
+        .replace("@BUILD_TYPE@", "Release")
+        .replace("@PIP_VERBOSITY@", pip_verbosity_flag.unwrap_or_default());
 
     Ok(rendered)
 }
@@ -66,10 +68,39 @@ mod tests {
             "unknown_type",
             &Distro::new("jazzy"),
             &PathBuf::from("/src"),
+            None,
         );
         assert!(matches!(
             result,
             Err(BuildScriptError::UnsupportedBuildType { .. })
         ));
+    }
+
+    /// The Windows `ament_python` script installs with `setup.py` only.
+    #[cfg(not(windows))]
+    #[test]
+    fn test_pip_verbosity_flag() {
+        let pip_lines = [None, Some("-v"), Some("-vv")]
+            .map(|flag| {
+                let script = render_build_script(
+                    "ament_python",
+                    &Distro::new("jazzy"),
+                    Path::new("/src"),
+                    flag,
+                )
+                .unwrap();
+                script
+                    .lines()
+                    .filter(|line| line.contains("pip install"))
+                    .map(|line| line.trim())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .join("\n");
+        insta::assert_snapshot!(pip_lines, @r"
+        $PYTHON -m pip install . --no-deps --force-reinstall
+        $PYTHON -m pip install . --no-deps --force-reinstall -v
+        $PYTHON -m pip install . --no-deps --force-reinstall -vv
+        ");
     }
 }

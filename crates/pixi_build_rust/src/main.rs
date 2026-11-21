@@ -163,6 +163,7 @@ impl GenerateRecipe for RustGenerator {
             extra_args: cargo_args,
             has_sccache,
             is_bash: !Subdir::current().unwrap_or(Subdir::NoArch).is_windows(),
+            verbosity_flag: pixi_build_backend::cli::build_tool_verbosity_flag(),
         }
         .render();
 

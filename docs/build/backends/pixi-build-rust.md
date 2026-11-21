@@ -275,6 +275,7 @@ The Rust backend follows this build process:
    - `--no-track`: Don't track installation metadata
    - `--force`: Force installation even if already installed
    - `--bin <name>` (optional, repeated): Added for each entry in [`[package.build.config.binaries]`](#binaries)
+   - Verbosity follows the build log level: no flag by default, `-v` with `pixi -vv`, and `-vv` with `pixi -vvv` or more
 4. **Cache Statistics**: Displays `sccache` statistics if available
 
 ## Default Variants
