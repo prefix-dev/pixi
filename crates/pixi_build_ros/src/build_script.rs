@@ -240,6 +240,10 @@ mod tests {
                 for mode in [BuildMode::Clean, BuildMode::Incremental] {
                     let script = render_build_script(build_type, windows, mode, &VARS);
                     assert!(script.contains("/my/source"), "{build_type:?}");
+                    // every CMake build gets the package's extra CMake arguments
+                    if build_type != BuildType::AmentPython {
+                        assert!(script.contains("-DFOO=ON"), "{build_type:?} {windows}");
+                    }
                     assert!(!script.contains("@("), "{build_type:?} {windows}");
                     assert!(!script.contains("@["), "{build_type:?} {windows}");
                     // bash and brush reject CRLF (see .gitattributes)
