@@ -758,10 +758,13 @@ impl Workspace {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
-        Ok(Self::from_manifests(
+        let root = Self::root_of(&manifests);
+        let config = Config::load_with(&root, source);
+        let cache_dir = config.cache_root().ok();
+        Ok(Self::from_manifests_with_config(
             manifests,
-            source,
-            HostDetection::builtin(),
+            config,
+            HostDetection::builtin_with_cache_dir(cache_dir.as_deref()),
         ))
     }
 

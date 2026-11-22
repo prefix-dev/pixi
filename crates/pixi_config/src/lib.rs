@@ -3069,6 +3069,15 @@ impl Config {
         resolve_cache_kind_dir(&self.cache, kind)
     }
 
+    /// Resolve the cache root for this config, consulting (in order):
+    /// `PIXI_CACHE_DIR`, `RATTLER_CACHE_DIR`, `[cache.root]` in this config,
+    /// XDG cache dir, rattler default cache dir.
+    pub fn cache_root(&self) -> Result<PathBuf, CacheDirError> {
+        resolve_cache_root(&self.cache)
+            .map(|(path, _)| path)
+            .ok_or(CacheDirError)
+    }
+
     /// Constructs a [`GatewayBuilder`] with preconfigured settings.
     pub fn gateway(&self) -> GatewayBuilder {
         let repodata_cache = self.cache_dir_for(CacheKind::Repodata).unwrap_or_else(|e| {
@@ -5257,6 +5266,31 @@ UNUSED = "unused"
 
         let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
         assert_eq!(got, PathBuf::from("/from/env/mapping"));
+    }
+
+    #[test]
+    fn test_config_cache_root() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+
+        let _env_pixi = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _env_rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let config = Config {
+            cache: CacheConfig {
+                root: Some(PathBuf::from("/configured/cache/root")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+        assert_eq!(
+            config.cache_root().unwrap(),
+            PathBuf::from("/configured/cache/root")
+        );
+
+        let _env_pixi = ScopedEnv::set("PIXI_CACHE_DIR", "/env/pixi/cache");
+        assert_eq!(
+            config.cache_root().unwrap(),
+            PathBuf::from("/env/pixi/cache")
+        );
     }
 
     #[test]

@@ -29,8 +29,15 @@ impl BuildEnvironment {
 
 impl Default for BuildEnvironment {
     fn default() -> Self {
+        Self::from_cache_dir(None)
+    }
+}
+
+impl BuildEnvironment {
+    /// Constructs a new build environment from the current platform, using an optional cache directory for virtual package detection.
+    pub fn from_cache_dir(cache_dir: Option<&std::path::Path>) -> Self {
         let virtual_packages: Vec<_> =
-            VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
+            VirtualPackages::detect(&VirtualPackageOverrides::default(), cache_dir)
                 .unwrap_or_default()
                 .into_generic_virtual_packages()
                 .collect();
@@ -42,9 +49,7 @@ impl Default for BuildEnvironment {
             build_virtual_packages: virtual_packages,
         }
     }
-}
 
-impl BuildEnvironment {
     /// Constructs a build environment that targets a specific `target_platform`
     /// from the current platform.
     pub fn simple_cross(target_platform: Subdir) -> Result<Self, DetectVirtualPackageError> {

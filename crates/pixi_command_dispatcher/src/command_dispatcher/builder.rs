@@ -417,9 +417,11 @@ impl CommandDispatcherBuilder {
 
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
             let platform = Subdir::current().unwrap_or(Subdir::NoArch);
-            let virtual_packages =
-                VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
-                    .unwrap_or_default();
+            let virtual_packages = VirtualPackages::detect(
+                &VirtualPackageOverrides::default(),
+                Some(cache_dirs.root().as_std_path()),
+            )
+            .unwrap_or_default();
             (
                 platform,
                 virtual_packages.into_generic_virtual_packages().collect(),

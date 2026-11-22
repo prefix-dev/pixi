@@ -14,7 +14,8 @@ use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove, PrioritizedChannel,
     platform::{
-        candidate_subdirs, capability_satisfied_by, host::machine_virtual_packages,
+        candidate_subdirs, capability_satisfied_by,
+        host::machine_virtual_packages_with_cache_dir,
         is_builtin_virtual_package, subdir_default_virtual_packages,
     },
 };
@@ -842,13 +843,14 @@ async fn execute_list(
         platforms.push(autodetected_to_json(&machine));
         // Reuse the complete host detection, and probe each other subdir once.
         let mut probed: HashMap<Subdir, Vec<GenericVirtualPackage>> = HashMap::new();
+        let cache_dir = workspace.config().cache_root().ok();
         for p in &workspace_platforms {
             let detected: &[GenericVirtualPackage] = if p.subdir() == machine.subdir {
                 &machine.detected
             } else {
-                probed
-                    .entry(p.subdir())
-                    .or_insert_with(|| machine_virtual_packages(p.subdir()))
+                probed.entry(p.subdir()).or_insert_with(|| {
+                    machine_virtual_packages_with_cache_dir(p.subdir(), cache_dir.as_deref())
+                })
             };
             let users = environments_and_features_using(workspace, p);
             platforms.push(show_to_json(p, &users, detected));

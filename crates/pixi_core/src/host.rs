@@ -28,7 +28,7 @@ use miette::Diagnostic;
 use pixi_config::{CacheKind, Config, DetectorDecision, consent_origin};
 use pixi_manifest::platform::{
     PixiPlatform, PixiPlatformError, candidate_subdirs,
-    host::{detect_host, host_subdir, platform_from_detected},
+    host::{detect_host_with_cache_dir, host_subdir, platform_from_detected},
     is_builtin_virtual_package,
 };
 use pixi_manifest::{
@@ -175,16 +175,33 @@ pub struct HostDetection {
 impl HostDetection {
     /// Detects the host with pixi's built-in detection, honoring
     /// `PIXI_OVERRIDE_PLATFORM` and `CONDA_OVERRIDE_*`.
+    ///
+    /// Uses the global cache root if available.
     pub fn builtin() -> Self {
-        Self::builtin_for(host_subdir())
+        Self::builtin_with_cache_dir(pixi_config::get_cache_dir().ok().as_deref())
+    }
+
+    /// Detects the host with pixi's built-in detection using `cache_dir`, honoring
+    /// `PIXI_OVERRIDE_PLATFORM` and `CONDA_OVERRIDE_*`.
+    pub fn builtin_with_cache_dir(cache_dir: Option<&Path>) -> Self {
+        Self::builtin_for_with_cache_dir(host_subdir(), cache_dir)
     }
 
     /// Detects what this machine provides for `subdir` with the built-in
     /// detection. For a subdir the machine cannot run, that is the subdir's
     /// baseline.
+    ///
+    /// Uses the global cache root if available.
     pub fn builtin_for(subdir: Subdir) -> Self {
+        Self::builtin_for_with_cache_dir(subdir, pixi_config::get_cache_dir().ok().as_deref())
+    }
+
+    /// Detects what this machine provides for `subdir` with the built-in
+    /// detection using `cache_dir`. For a subdir the machine cannot run, that is
+    /// the subdir's baseline.
+    pub fn builtin_for_with_cache_dir(subdir: Subdir, cache_dir: Option<&Path>) -> Self {
         static WARNED: std::sync::Once = std::sync::Once::new();
-        let platform = detect_host(subdir).map_err(|error| {
+        let platform = detect_host_with_cache_dir(subdir, cache_dir).map_err(|error| {
             WARNED.call_once(|| {
                 tracing::warn!("Could not detect the virtual packages of this machine: {error}");
             });
@@ -201,8 +218,20 @@ impl HostDetection {
     }
 
     /// Runs built-in detection for `subdir` off the async executor.
+    ///
+    /// Uses the global cache root if available.
     pub async fn detect_for(subdir: Subdir) -> Self {
-        match tokio::task::spawn_blocking(move || Self::builtin_for(subdir)).await {
+        Self::detect_for_with_cache_dir(subdir, pixi_config::get_cache_dir().ok().as_deref()).await
+    }
+
+    /// Runs built-in detection for `subdir` with `cache_dir` off the async executor.
+    pub async fn detect_for_with_cache_dir(subdir: Subdir, cache_dir: Option<&Path>) -> Self {
+        let cache_dir = cache_dir.map(Path::to_path_buf);
+        match tokio::task::spawn_blocking(move || {
+            Self::builtin_for_with_cache_dir(subdir, cache_dir.as_deref())
+        })
+        .await
+        {
             Ok(detection) => detection,
             Err(error) => Self::from_result(
                 subdir,
@@ -568,7 +597,9 @@ impl HostDetector {
         target: Subdir,
         wanted: WantedNames,
     ) -> Result<HostDetection, HostDetectError> {
-        let builtin = HostDetection::detect_for(target).await;
+        let cache_dir = self.config.cache_root().ok();
+        let builtin =
+            HostDetection::detect_for_with_cache_dir(target, cache_dir.as_deref()).await;
         if builtin.platform().is_err() {
             return Ok(builtin);
         }
@@ -876,11 +907,14 @@ impl HostDetector {
         specs: &[MatchSpec],
         wanted: WantedNames,
     ) -> Result<HostDetection, HostDetectError> {
+        let cache_dir = self.config.cache_root().ok();
         if specs.is_empty() {
             return self.detect_for_target(channels, platform, wanted).await;
         }
         if channels.is_empty() {
-            return Ok(HostDetection::detect_for(platform).await);
+            return Ok(
+                HostDetection::detect_for_with_cache_dir(platform, cache_dir.as_deref()).await,
+            );
         }
         let repodata = match self
             .gateway
@@ -924,7 +958,7 @@ impl HostDetector {
             }
         };
         self.detect_registrations(
-            HostDetection::detect_for(platform).await,
+            HostDetection::detect_for_with_cache_dir(platform, cache_dir.as_deref()).await,
             &discovery.registrations,
             wanted,
         )

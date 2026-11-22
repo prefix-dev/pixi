@@ -786,7 +786,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (host, mut virtual_package_detection_error) =
         match detect_host(workspace.as_ref(), &config).await {
             Ok(host) => (host, None),
-            Err(error) => (HostDetection::builtin(), Some(format!("{error:?}"))),
+            Err(error) => (
+                HostDetection::builtin_with_cache_dir(config.cache_root().ok().as_deref()),
+                Some(format!("{error:?}")),
+            ),
         };
     let virtual_packages = match host.platform() {
         Ok(platform) => merge_results(

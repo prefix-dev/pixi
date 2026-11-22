@@ -2327,7 +2327,9 @@ impl Project {
                 pinned_source_spec.to_string(),
                 EnvironmentSpec {
                     channels,
-                    build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
+                    build_environment: pixi_command_dispatcher::BuildEnvironment::from_cache_dir(
+                        self.config.cache_root().ok().as_deref(),
+                    ),
                     variants: VariantConfig::default(),
                     exclude_newer,
                     channel_priority: Default::default(),

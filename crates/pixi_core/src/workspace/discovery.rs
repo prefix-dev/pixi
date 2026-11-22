@@ -481,10 +481,13 @@ impl WorkspaceLocator {
         let config = self.load_config(&root)?.merge_config(self.cli_config);
         let injected_host = self.host.take();
         let retain_consent = injected_host.is_none();
+        let cache_dir = config.cache_root().ok();
         let mut workspace = Workspace::from_manifests_with_config(
             discovered_manifests,
             config,
-            injected_host.unwrap_or_else(HostDetection::builtin),
+            injected_host.unwrap_or_else(|| {
+                HostDetection::builtin_with_cache_dir(cache_dir.as_deref())
+            }),
         );
         if retain_consent {
             workspace.retain_detector_consent(detector_consent);

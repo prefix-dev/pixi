@@ -13,7 +13,7 @@
 //! describes it the way pixi assumes it, [`detect_host`] describes the machine
 //! the way it is. Both apply `CONDA_OVERRIDE_*`.
 
-use std::fmt::Write;
+use std::{fmt::Write, path::Path};
 
 use rattler_conda_types::{GenericVirtualPackage, Subdir, Version, package::BuildString};
 use rattler_virtual_packages::{
@@ -336,10 +336,18 @@ fn subdir_baseline(subdir: Subdir) -> PixiPlatform {
 /// detection returns instead would leave every declared platform unsatisfied
 /// and make `PIXI_OVERRIDE_PLATFORM` useless for anything but a bare subdir.
 pub fn detect_host(subdir: Subdir) -> Result<PixiPlatform, HostDetectionError> {
+    detect_host_with_cache_dir(subdir, None)
+}
+
+/// Like [`detect_host`], but uses `cache_dir` for caching virtual package detection.
+pub fn detect_host_with_cache_dir(
+    subdir: Subdir,
+    cache_dir: Option<&Path>,
+) -> Result<PixiPlatform, HostDetectionError> {
     if !machine_runs(subdir) {
         return Ok(subdir_baseline(subdir));
     }
-    Ok(platform_from_detected(subdir, probe_machine(subdir)?)?)
+    Ok(platform_from_detected(subdir, probe_machine(subdir, cache_dir)?)?)
 }
 
 /// Whether this machine can run packages from `subdir`.
@@ -358,9 +366,12 @@ fn machine_runs(subdir: Subdir) -> bool {
 /// `CONDA_OVERRIDE_*` applied. Sparse for a subdir this machine cannot run,
 /// which is why [`detect_host`] falls back to the baseline there and
 /// [`machine_virtual_packages`] answers with nothing at all.
-fn probe_machine(subdir: Subdir) -> Result<Vec<GenericVirtualPackage>, HostDetectionError> {
+fn probe_machine(
+    subdir: Subdir,
+    cache_dir: Option<&Path>,
+) -> Result<Vec<GenericVirtualPackage>, HostDetectionError> {
     let mut detected =
-        VirtualPackages::detect_for_platform(subdir, &detection_overrides(subdir), None)?
+        VirtualPackages::detect_for_platform(subdir, &detection_overrides(subdir), cache_dir)?
             .into_generic_virtual_packages()
             .collect::<Vec<_>>();
     apply_conda_overrides(&mut detected, subdir);
@@ -455,6 +466,14 @@ fn same_set(left: &[GenericVirtualPackage], right: &[GenericVirtualPackage]) -> 
 /// because a field that says "detected" must not show numbers nothing
 /// detected. Detection failures warn once and also produce an empty list.
 pub fn machine_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPackage> {
+    machine_virtual_packages_with_cache_dir(subdir, None)
+}
+
+/// Like [`machine_virtual_packages`], but passes `cache_dir` for caching virtual package detection.
+pub fn machine_virtual_packages_with_cache_dir(
+    subdir: Subdir,
+    cache_dir: Option<&Path>,
+) -> Vec<GenericVirtualPackage> {
     static DISPLAY_WARNING: std::sync::Once = std::sync::Once::new();
 
     // Detection for a foreign subdir does not fail, it *invents*: rattler
@@ -463,7 +482,7 @@ pub fn machine_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPackage> {
     if !machine_runs(subdir) {
         return Vec::new();
     }
-    probe_machine(subdir).unwrap_or_else(|error| {
+    probe_machine(subdir, cache_dir).unwrap_or_else(|error| {
         DISPLAY_WARNING.call_once(|| {
             tracing::warn!("Could not detect the virtual packages of this machine: {error}");
         });
@@ -870,5 +889,14 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn test_detect_host_with_cache_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cache_path = temp_dir.path();
+        let subdir = Subdir::current().unwrap();
+        let result = detect_host_with_cache_dir(subdir, Some(cache_path));
+        assert!(result.is_ok());
     }
 }
