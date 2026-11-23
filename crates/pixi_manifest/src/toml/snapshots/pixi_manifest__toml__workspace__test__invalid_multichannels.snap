@@ -2,7 +2,7 @@
 source: crates/pixi_manifest/src/toml/workspace.rs
 expression: "errors.join(\"\\n\")"
 ---
-  × 'a/b' is not a valid multichannel name, it must be non-empty and must not contain '/', '/', ':', ',', '=' or whitespace
+  × invalid multichannel name 'a/b', it must be non-empty and must not contain '/', '/', ':', ',', '=' or whitespace
    ╭─[pixi.toml:8:10]
  7 │         [workspace.multichannels]
  8 │         "a/b" = ["conda-forge"]

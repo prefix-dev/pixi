@@ -18,7 +18,7 @@ pixi workspace preview remove [OPTIONS] <PREVIEW_FLAG>...
 :  The preview flag(s) to add or remove, e.g. `pixi-build`
 <br>May be provided more than once.
 <br>**required**: `true`
-<br>**options**: `pixi-build`
+<br>**options**: `pixi-build`, `multichannels`
 
 ## Options
 - <a id="arg---force" href="#arg---force">`--force`</a>

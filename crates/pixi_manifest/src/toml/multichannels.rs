@@ -63,7 +63,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlMultiChannels {
             if !is_valid_multichannel_name(&name) {
                 errors.errors.push(custom_error(
                     format!(
-                        "'{name}' is not a valid multichannel name, it must be non-empty and must not contain '/', '\\', ':', ',', '=' or whitespace"
+                        "invalid multichannel name '{name}', it must be non-empty and must not contain '/', '\\', ':', ',', '=' or whitespace"
                     ),
                     key.span,
                 ));
