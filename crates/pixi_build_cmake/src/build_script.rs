@@ -68,11 +68,7 @@ mod test {
     }
 
     /// Renders the script for a platform.
-    fn render(build_platform: BuildPlatform) -> String {
-        render_with_verbose(build_platform, false)
-    }
-
-    fn render_with_verbose(build_platform: BuildPlatform, verbose: bool) -> String {
+    fn render(build_platform: BuildPlatform, verbose: bool) -> String {
         BuildScriptContext {
             build_platform,
             source_dir: String::from("/src/demo"),
@@ -88,7 +84,7 @@ mod test {
             .into_iter()
             .flat_map(|platform| {
                 [false, true].map(|verbose| {
-                    render_with_verbose(platform, verbose)
+                    render(platform, verbose)
                         .lines()
                         .filter(|line| line.contains("cmake --build"))
                         .map(str::trim)
@@ -110,11 +106,12 @@ mod test {
     #[test]
     fn test_the_install_prefix_is_quoted() {
         assert!(
-            render(BuildPlatform::Unix).contains(r#"-DCMAKE_INSTALL_PREFIX="$PREFIX""#),
+            render(BuildPlatform::Unix, false).contains(r#"-DCMAKE_INSTALL_PREFIX="$PREFIX""#),
             "the unix install prefix is unquoted"
         );
         assert!(
-            render(BuildPlatform::Windows).contains(r#"-DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%""#),
+            render(BuildPlatform::Windows, false)
+                .contains(r#"-DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%""#),
             "the windows install prefix is unquoted"
         );
     }
@@ -145,7 +142,8 @@ mod test {
         write_stub("ninja", "#!/bin/sh\nexit 0\n");
 
         let script = dir.path().join("build.sh");
-        fs_err::write(&script, render(BuildPlatform::Unix)).expect("failed to write the script");
+        fs_err::write(&script, render(BuildPlatform::Unix, false))
+            .expect("failed to write the script");
 
         let output = std::process::Command::new("bash")
             .arg(&script)
@@ -204,7 +202,7 @@ mod test {
     #[test]
     fn test_the_python_flag_bypasses_cmake_args() {
         for platform in [BuildPlatform::Unix, BuildPlatform::Windows] {
-            let script = render(platform);
+            let script = render(platform, false);
             assert!(
                 !script.contains("CMAKE_ARGS% -DPython_EXECUTABLE")
                     && !script.contains("CMAKE_ARGS -DPython_EXECUTABLE"),

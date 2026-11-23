@@ -35,11 +35,7 @@ impl BuildScriptContext {
 
 #[cfg(test)]
 mod test {
-    fn render(is_bash: bool, has_sccache: bool) -> String {
-        render_with_verbosity(is_bash, has_sccache, None)
-    }
-
-    fn render_with_verbosity(
+    fn render(
         is_bash: bool,
         has_sccache: bool,
         verbosity_flag: Option<&'static str>,
@@ -60,7 +56,7 @@ mod test {
             .into_iter()
             .flat_map(|is_bash| {
                 [None, Some("-v"), Some("-vv")].map(|flag| {
-                    render_with_verbosity(is_bash, false, flag)
+                    render(is_bash, false, flag)
                         .lines()
                         .filter(|line| line.contains(" install "))
                         .collect::<String>()
@@ -80,7 +76,7 @@ mod test {
 
     #[test]
     fn test_build_script_bash() {
-        insta::assert_snapshot!(render(true, false), @r###"
+        insta::assert_snapshot!(render(true, false, None), @r###"
         if [ -d "$PREFIX/include/openssl" ]; then
             export OPENSSL_DIR="$PREFIX"
         fi
@@ -97,7 +93,7 @@ mod test {
 
     #[test]
     fn test_build_script_cmdexe() {
-        insta::assert_snapshot!(render(false, false), @r###"
+        insta::assert_snapshot!(render(false, false, None), @r###"
         if exist "%PREFIX%\Library\include\openssl" SET "OPENSSL_DIR=%PREFIX%"
 
 
@@ -113,7 +109,7 @@ mod test {
 
     #[test]
     fn test_sccache_bash() {
-        insta::assert_snapshot!(render(true, true), @r###"
+        insta::assert_snapshot!(render(true, true, None), @r###"
         if [ -d "$PREFIX/include/openssl" ]; then
             export OPENSSL_DIR="$PREFIX"
         fi
@@ -132,7 +128,7 @@ mod test {
 
     #[test]
     fn test_sccache_cmdexe() {
-        insta::assert_snapshot!(render(false, true), @r###"
+        insta::assert_snapshot!(render(false, true, None), @r###"
         if exist "%PREFIX%\Library\include\openssl" SET "OPENSSL_DIR=%PREFIX%"
 
         SET "RUSTC_WRAPPER=sccache"
