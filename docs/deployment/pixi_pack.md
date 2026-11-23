@@ -83,7 +83,7 @@ pixi-pack --platform win-64
 If your `pixi.toml` defines named platforms (requires a lockfile in version 7 or later), you can pack them by name.
 
 ```toml
-platforms = [{ name = "jetson", platform = "linux-aarch64", cuda = "13" }]
+platforms = [{ name = "jetson", subdir = "linux-aarch64", cuda = "13" }]
 ```
 
 ```bash

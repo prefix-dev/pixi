@@ -4274,7 +4274,7 @@
         },
         "name": {
           "title": "Name",
-          "description": "The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
+          "description": "The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `subdir` plus the declared virtual packages when omitted.",
           "type": "string",
           "not": {
             "enum": [
@@ -4295,6 +4295,11 @@
           "minLength": 1
         },
         "platform": {
+          "$ref": "#/$defs/Platform",
+          "deprecated": true,
+          "description": "Deprecated alias for `subdir`. Cannot be combined with `subdir`."
+        },
+        "subdir": {
           "$ref": "#/$defs/Platform",
           "description": "The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted."
         },
@@ -4318,10 +4323,21 @@
         },
         {
           "required": [
+            "subdir"
+          ]
+        },
+        {
+          "required": [
             "platform"
           ]
         }
       ],
+      "not": {
+        "required": [
+          "subdir",
+          "platform"
+        ]
+      },
       "propertyNames": {
         "maxLength": 64
       }

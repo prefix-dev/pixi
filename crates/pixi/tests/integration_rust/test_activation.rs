@@ -139,8 +139,8 @@ mod custom_platform_scoping {
             name = "custom-platform-activation"
             channels = []
             platforms = [
-                {{ name = "generic", platform = "{current}" }},
-                {{ name = "local", platform = "{current}", cuda = "12" }},
+                {{ name = "generic", subdir = "{current}" }},
+                {{ name = "local", subdir = "{current}", cuda = "12" }},
             ]
 
             {targets}

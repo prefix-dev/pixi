@@ -1,6 +1,6 @@
 [workspace]
 channels = ["https://conda.modular.com/max", "https://prefix.dev/conda-forge"]
-platforms = [{ platform = "linux-64", glibc = "2.34", archspec = "x86_64_v3" }]
+platforms = [{ subdir = "linux-64", glibc = "2.34", archspec = "x86_64_v3" }]
 preview = ["pixi-build"]
 
 [workspace.build-variants]

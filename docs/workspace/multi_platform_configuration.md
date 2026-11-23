@@ -93,8 +93,8 @@ To support both CPU-only and CUDA machines on `linux-64`, declare two named plat
 [workspace]
 channels = ["conda-forge"]
 platforms = [
-  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
-  { name = "linux-64-cpu", platform = "linux-64" },
+  { name = "linux-64-cuda", subdir = "linux-64", cuda = "12.0" },
+  { name = "linux-64-cpu", subdir = "linux-64" },
   "osx-arm64",
 ]
 
