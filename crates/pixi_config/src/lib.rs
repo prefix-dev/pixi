@@ -13,7 +13,7 @@ use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, Subdir, Version, VersionBumpType, VersionSpec,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
-use rattler_config::config::{CommonConfig, ConfigBase};
+use rattler_config::config::{CommonConfig, ConfigBase, exclude_newer::ExcludeNewerCutoff};
 pub use rattler_config::locations::{
     ConfigLayer, ConfigLocation, shared_system_config_path, shared_user_config_paths,
 };
@@ -950,7 +950,7 @@ pub struct PyPIConfig {
     /// A list of extra index URLs for PyPI packages
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub extra_index_urls: Vec<Url>,
+    pub extra_index_urls: Vec<ExtraIndexUrl>,
     /// Whether to use the `keyring` executable to look up credentials.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -959,6 +959,103 @@ pub struct PyPIConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub allow_insecure_host: Vec<String>,
+}
+
+/// An entry of `pypi-config.extra-index-urls`.
+///
+/// Supports a bare URL string or a table with a URL and an `exclude-newer`
+/// cutoff that applies only to that index, e.g.:
+///
+/// ```toml
+/// extra-index-urls = ["https://pypi.org/simple2", { url = "https://example.com/simple", exclude-newer = "7d" }]
+/// ```
+///
+/// Serializes as a bare URL string when no cutoff is set, or as an inline
+/// table otherwise, the same way the manifest's `PypiExtraIndex` does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExtraIndexUrl {
+    /// The extra index URL.
+    pub url: Url,
+    /// The `exclude-newer` cutoff for packages served from this index only.
+    pub exclude_newer: Option<ExcludeNewerCutoff>,
+}
+
+impl ExtraIndexUrl {
+    /// Creates an extra index URL without an `exclude-newer` cutoff.
+    pub fn from_url(url: Url) -> Self {
+        Self {
+            url,
+            exclude_newer: None,
+        }
+    }
+}
+
+impl Serialize for ExtraIndexUrl {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match &self.exclude_newer {
+            None => self.url.serialize(serializer),
+            Some(exclude_newer) => {
+                use serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("url", &self.url)?;
+                map.serialize_entry("exclude-newer", exclude_newer)?;
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ExtraIndexUrl {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Table {
+            url: Url,
+            #[serde(default)]
+            exclude_newer: Option<ExcludeNewerCutoff>,
+        }
+
+        struct ExtraIndexUrlVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ExtraIndexUrlVisitor {
+            type Value = ExtraIndexUrl;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a URL or a table with a `url` and an optional `exclude-newer`")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                Url::parse(value)
+                    .map(ExtraIndexUrl::from_url)
+                    .map_err(|err| E::custom(format!("invalid URL `{value}`: {err}")))
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let Table { url, exclude_newer } =
+                    Table::deserialize(serde::de::value::MapAccessDeserializer::new(map))?;
+                Ok(ExtraIndexUrl { url, exclude_newer })
+            }
+        }
+
+        deserializer.deserialize_any(ExtraIndexUrlVisitor)
+    }
+}
+
+/// Returns the `extra-index-urls` of the configuration as TOML, as it would
+/// be written in a manifest, e.g. `["https://pypi.org/simple2", { url = "...", exclude-newer = "7d" }]`,
+/// or `None` if there are none.
+pub fn extra_index_urls_to_toml(extra_index_urls: &[ExtraIndexUrl]) -> Option<String> {
+    if extra_index_urls.is_empty() {
+        return None;
+    }
+    Some(
+        toml::Value::try_from(extra_index_urls)
+            .expect("extra-index-urls are always valid TOML")
+            .to_string(),
+    )
 }
 
 // `S3Options` and the `S3OptionsMap` newtype now live in `rattler_config`.
@@ -1094,12 +1191,20 @@ pub use rattler_config::config::concurrency::{
 
 impl PyPIConfig {
     /// Merge the given PyPIConfig into the current one.
+    ///
+    /// Extra index URLs are merged by URL: an entry in `other` replaces the
+    /// entry with the same URL in `self` and keeps its position.
     pub fn merge(self, other: Self) -> Self {
-        let extra_index_urls = self
-            .extra_index_urls
-            .into_iter()
-            .chain(other.extra_index_urls)
-            .collect();
+        let mut extra_index_urls = self.extra_index_urls;
+        for extra_index_url in other.extra_index_urls {
+            match extra_index_urls
+                .iter_mut()
+                .find(|existing| existing.url == extra_index_url.url)
+            {
+                Some(existing) => *existing = extra_index_url,
+                None => extra_index_urls.push(extra_index_url),
+            }
+        }
 
         Self {
             index_url: other.index_url.or(self.index_url),
@@ -3307,6 +3412,43 @@ UNUSED = "unused"
     }
 
     #[test]
+    fn test_extra_index_urls_to_toml() {
+        assert_eq!(extra_index_urls_to_toml(&[]), None);
+
+        let extra_index_urls = vec![
+            ExtraIndexUrl::from_url(Url::parse("https://pypi.org/simple2").unwrap()),
+            ExtraIndexUrl {
+                url: Url::parse("https://example.com/simple").unwrap(),
+                exclude_newer: Some("7d".parse().unwrap()),
+            },
+        ];
+        let toml_str = extra_index_urls_to_toml(&extra_index_urls).unwrap();
+        // Key order inside the inline table is not meaningful in TOML, and
+        // depends on whether `toml`'s `preserve_order` feature happens to be
+        // enabled elsewhere in the dependency graph, so compare the parsed
+        // value rather than the literal string.
+        let expected: toml::Table = r#"v = ["https://pypi.org/simple2", { url = "https://example.com/simple", exclude-newer = "7d" }]"#
+            .parse()
+            .unwrap();
+        let actual: toml::Table = format!("v = {toml_str}").parse().unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_extra_index_url_unknown_key_is_reported() {
+        let toml = r#"
+            [pypi-config]
+            extra-index-urls = [{ url = "https://example.com/simple", exclude_newer = "7d" }]
+        "#;
+        let (config, unused) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.pypi_config().extra_index_urls[0].exclude_newer, None);
+        assert!(
+            unused.contains("pypi-config.extra-index-urls.0.exclude_newer"),
+            "{unused:?}"
+        );
+    }
+
+    #[test]
     fn test_set_exclude_newer() {
         let mut config = Config::default();
         config.set("exclude-newer", Some("7d".to_string())).unwrap();
@@ -3620,7 +3762,7 @@ UNUSED = "unused"
         let toml = r#"
             [pypi-config]
             index-url = "https://pypi.org/simple"
-            extra-index-urls = ["https://pypi.org/simple2"]
+            extra-index-urls = ["https://pypi.org/simple2", { url = "https://pypi.org/simple3", exclude-newer = "7d" }, { url = "https://pypi.org/simple4" }]
             keyring-provider = "subprocess"
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
@@ -3628,7 +3770,17 @@ UNUSED = "unused"
             config.pypi_config().index_url,
             Some(Url::parse("https://pypi.org/simple").unwrap())
         );
-        assert_eq!(config.pypi_config().extra_index_urls.len(), 1);
+        assert_eq!(
+            config.pypi_config().extra_index_urls,
+            vec![
+                ExtraIndexUrl::from_url(Url::parse("https://pypi.org/simple2").unwrap()),
+                ExtraIndexUrl {
+                    url: Url::parse("https://pypi.org/simple3").unwrap(),
+                    exclude_newer: Some("7d".parse().unwrap()),
+                },
+                ExtraIndexUrl::from_url(Url::parse("https://pypi.org/simple4").unwrap()),
+            ]
+        );
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
@@ -3918,9 +4070,9 @@ UNUSED = "unused"
             },
             pypi_config: PyPIConfig {
                 allow_insecure_host: Vec::from(["test".to_string()]),
-                extra_index_urls: Vec::from([
-                    Url::parse("https://conda.anaconda.org/conda-forge").unwrap()
-                ]),
+                extra_index_urls: Vec::from([ExtraIndexUrl::from_url(
+                    Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+                )]),
                 index_url: Some(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
                 keyring_provider: Some(KeyringProvider::Subprocess),
             },
@@ -4066,6 +4218,38 @@ UNUSED = "unused"
         // where it does not.
         assert_eq!(merged.write_shards, Some(true));
         assert_eq!(merged.write_zst, Some(false));
+    }
+
+    #[test]
+    fn test_extra_index_urls_merge_by_url() {
+        let (system, _) = Config::from_toml(
+            r#"
+            [pypi-config]
+            extra-index-urls = ["https://a.com/simple", "https://b.com/simple"]
+            "#,
+            None,
+        )
+        .unwrap();
+        let (user, _) = Config::from_toml(
+            r#"
+            [pypi-config]
+            extra-index-urls = [{ url = "https://a.com/simple", exclude-newer = "7d" }, "https://c.com/simple"]
+            "#,
+            None,
+        )
+        .unwrap();
+
+        let merged = system.merge_config(user);
+        let actual: toml::Table = format!(
+            "v = {}",
+            extra_index_urls_to_toml(&merged.pypi_config().extra_index_urls).unwrap()
+        )
+        .parse()
+        .unwrap();
+        let expected: toml::Table = r#"v = [{ url = "https://a.com/simple", exclude-newer = "7d" }, "https://b.com/simple", "https://c.com/simple"]"#
+            .parse()
+            .unwrap();
+        assert_eq!(actual, expected);
     }
 
     #[test]

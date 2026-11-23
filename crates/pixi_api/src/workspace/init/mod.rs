@@ -144,7 +144,7 @@ pub struct RenderContext {
     pub platforms: Vec<String>,
     pub channels: Vec<NamedChannelOrUrl>,
     pub index_url: Option<Url>,
-    pub extra_index_urls: Vec<Url>,
+    pub extra_index_urls: Vec<pixi_config::ExtraIndexUrl>,
     pub s3_options: S3OptionsMap,
     pub conda_pypi_mapping: Option<CondaPypiMap>,
 }
@@ -473,6 +473,8 @@ async fn extend_pyproject<I: Interface>(
         .as_ref()
         .map(render_conda_pypi_mapping)
         .unwrap_or_default();
+    let extra_index_urls =
+        pixi_config::extra_index_urls_to_toml(&render_ctx.extra_index_urls).unwrap_or_default();
     let rv = env
         .render_named_str(
             consts::PYPROJECT_MANIFEST,
@@ -485,7 +487,7 @@ async fn extend_pyproject<I: Interface>(
                 environments => Serde(&environments),
                 pypi_mapping,
                 index_url => Serde(render_ctx.index_url.as_ref()),
-                extra_index_urls => Serde(render_ctx.extra_index_urls),
+                extra_index_urls,
                 s3 => Serde(relevant_s3_options(render_ctx.s3_options, render_ctx.channels)),
             },
         )
@@ -550,6 +552,8 @@ async fn create_new_pyproject<I: Interface>(
         .as_ref()
         .map(render_conda_pypi_mapping)
         .unwrap_or_default();
+    let extra_index_urls =
+        pixi_config::extra_index_urls_to_toml(&render_ctx.extra_index_urls).unwrap_or_default();
     let rv = env
         .render_named_str(
             consts::PYPROJECT_MANIFEST,
@@ -563,7 +567,7 @@ async fn create_new_pyproject<I: Interface>(
                 platforms=> render_ctx.platforms,
                 pypi_mapping,
                 index_url => Serde(render_ctx.index_url.as_ref()),
-                extra_index_urls => Serde(&render_ctx.extra_index_urls),
+                extra_index_urls,
                 s3 => Serde(relevant_s3_options(render_ctx.s3_options, render_ctx.channels)),
             },
         )
@@ -634,7 +638,7 @@ fn render_workspace(
     channels: Vec<NamedChannelOrUrl>,
     platforms: &Vec<String>,
     index_url: Option<&Url>,
-    extra_index_urls: &Vec<Url>,
+    extra_index_urls: &[pixi_config::ExtraIndexUrl],
     s3_options: S3OptionsMap,
     env_vars: Option<&HashMap<String, String>>,
     pypi_mapping: Option<&CondaPypiMap>,
@@ -646,7 +650,7 @@ fn render_workspace(
         channels => Serde(&channels),
         platforms,
         index_url => Serde(index_url),
-        extra_index_urls => Serde(extra_index_urls),
+        extra_index_urls => pixi_config::extra_index_urls_to_toml(extra_index_urls).unwrap_or_default(),
         s3 => Serde(relevant_s3_options(s3_options, channels)),
         env_vars => {if let Some(env_vars) = env_vars {
             env_vars.iter().map(|(k, v)| format!("{k} = \"{v}\"")).collect::<Vec<String>>().join(", ")
@@ -955,6 +959,37 @@ mod tests {
         );
 
         assert_conda_pypi_map_render_roundtrips(CondaPypiMap::Map(map));
+    }
+
+    #[test]
+    fn test_render_extra_index_urls_roundtrips() {
+        let extra_index_urls = vec![
+            pixi_config::ExtraIndexUrl::from_url(Url::parse("https://pypi.org/simple2").unwrap()),
+            pixi_config::ExtraIndexUrl {
+                url: Url::parse("https://example.com/simple").unwrap(),
+                exclude_newer: Some("7d".parse().unwrap()),
+            },
+        ];
+
+        let rendered = pixi_config::extra_index_urls_to_toml(&extra_index_urls).unwrap();
+        let input = format!("extra-index-urls = {rendered}");
+        let parsed = pixi_manifest::pypi::pypi_options::PypiOptions::from_toml_str(&input)
+            .unwrap()
+            .extra_index_urls
+            .unwrap();
+
+        assert_eq!(
+            parsed,
+            vec![
+                pixi_manifest::pypi::pypi_options::PypiExtraIndex::from_url(
+                    Url::parse("https://pypi.org/simple2").unwrap()
+                ),
+                pixi_manifest::pypi::pypi_options::PypiExtraIndex {
+                    url: Url::parse("https://example.com/simple").unwrap(),
+                    exclude_newer: Some(pixi_spec::ExcludeNewer::from_str("7d").unwrap()),
+                },
+            ]
+        );
     }
 
     struct MockInterface {
