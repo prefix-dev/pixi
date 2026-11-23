@@ -3,8 +3,8 @@ use toml_edit::{Array, Value};
 use crate::style::{
     ContainerStyle, DetachedSuffix, decor_prefix, decor_suffix, detach_suffix, detect_array_style,
     drop_first_line_comment, indent_after_newline, merge_comments, merge_standalone_lines,
-    raw_contains_newline, raw_str, split_first_line_comment, standalone_comment_lines,
-    starts_on_fresh_line,
+    raw_contains_newline, raw_str, split_first_line, split_first_line_comment,
+    standalone_comment_lines, starts_on_fresh_line,
 };
 
 /// Appends `value` to the array, mimicking its layout: in a multiline array
@@ -66,9 +66,9 @@ pub fn insert_array_element(array: &mut Array, index: usize, value: Value) {
             .get(index)
             .map(|displaced| decor_prefix(displaced.decor()).to_string())
             .unwrap_or_default();
-        let (first_line, displaced_rest) = match displaced_prefix.split_once('\n') {
-            Some((first_line, rest)) => (first_line, Some(format!("\n{rest}"))),
-            None => ("", None),
+        let (first_line, displaced_rest) = match split_first_line(&displaced_prefix) {
+            (_, "") => ("", None),
+            (first_line, rest) => (first_line, Some(rest.to_string())),
         };
         let prefix = format!("{first_line}\n{indent}");
         array.insert_formatted(index, value.decorated(prefix, ""));
@@ -116,9 +116,9 @@ pub fn move_array_element(array: &mut Array, from: usize, to: usize) {
     }
 
     let prefix = decor_prefix(value.decor()).to_string();
-    let (preceding, own_prefix) = split_array_gap(&prefix);
+    let (preceding, own_prefix) = split_first_line(&prefix);
     let following = array_gap(array, from).to_string();
-    let (own_comment, following_prefix) = split_array_gap(&following);
+    let (own_comment, following_prefix) = split_first_line(&following);
     let closing_newline = if from == array.len() && following_prefix.is_empty() {
         "\n"
     } else {
@@ -139,7 +139,7 @@ pub fn move_array_element(array: &mut Array, from: usize, to: usize) {
     );
     insert_array_element(array, to, value);
     if !own_prefix.is_empty() {
-        let (preceding, _) = split_array_gap(decor_prefix(array.get(to).unwrap().decor()));
+        let (preceding, _) = split_first_line(decor_prefix(array.get(to).unwrap().decor()));
         let prefix = format!("{preceding}{own_prefix}");
         array.get_mut(to).unwrap().decor_mut().set_prefix(prefix);
     }
@@ -153,14 +153,9 @@ pub fn move_array_element(array: &mut Array, from: usize, to: usize) {
     }
 }
 
-/// The first line of a gap belongs to the preceding element.
-fn split_array_gap(raw: &str) -> (&str, &str) {
-    match raw.find('\n') {
-        Some(index) => raw.split_at(index - usize::from(raw[..index].ends_with('\r'))),
-        None => (raw, ""),
-    }
-}
-
+/// The decor in front of the element at `index`: its prefix, or the array's
+/// trailing decor in front of the closing bracket past the last element. The
+/// first line of a gap belongs to the line above it.
 fn array_gap(array: &Array, index: usize) -> &str {
     match array.get(index) {
         Some(value) => decor_prefix(value.decor()),
@@ -281,34 +276,22 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
             standalone_comment_lines(&removed_prefix).map(str::to_string),
             standalone_comment_lines(&removed_suffix_rest).map(str::to_string),
         );
-        let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
-        if index + 1 < keep.len() {
-            if let Some(next) = array.get_mut(index + 1) {
-                let prefix = decor_prefix(next.decor()).to_string();
-                let mut new_prefix = drop_first_line_comment(&prefix);
-                if let Some(standalone) = &standalone {
-                    // Whatever follows the standalone lines must start on a
-                    // fresh line, or it would be swallowed by the comment.
-                    if !starts_on_fresh_line(&new_prefix) {
-                        new_prefix = format!("\n{indent}");
-                    }
-                    new_prefix = format!("{standalone}{new_prefix}");
-                }
-                next.decor_mut().set_prefix(new_prefix);
+        let mut gap = drop_first_line_comment(array_gap(array, index + 1));
+        if let Some(standalone) = &standalone {
+            // Whatever follows the standalone lines, the next element or the
+            // closing bracket, must start on a fresh line, or it would be
+            // swallowed by the comment.
+            if !starts_on_fresh_line(&gap) {
+                gap = if index + 1 < keep.len() {
+                    let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
+                    format!("\n{indent}")
+                } else {
+                    String::from("\n")
+                };
             }
-        } else {
-            let trailing = raw_str(array.trailing()).to_string();
-            let mut new_trailing = drop_first_line_comment(&trailing);
-            if let Some(standalone) = &standalone {
-                // The closing bracket must start on a fresh line, or it would
-                // be swallowed by the comment.
-                if !starts_on_fresh_line(&new_trailing) {
-                    new_trailing = String::from("\n");
-                }
-                new_trailing = format!("{standalone}{new_trailing}");
-            }
-            array.set_trailing(new_trailing);
+            gap = format!("{standalone}{gap}");
         }
+        set_array_gap(array, index + 1, gap);
     }
 
     let removed_last = keep.last().is_some_and(|keep| !keep);

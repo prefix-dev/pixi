@@ -123,19 +123,19 @@ pub(crate) fn detach_suffix(decor: &mut Decor) -> DetachedSuffix {
 /// stored in the decor of whatever comes next. Splitting it off allows moving
 /// a comment along with the line it was written on.
 pub(crate) fn split_first_line_comment(raw: &str) -> Option<(String, String)> {
-    let (first_line, rest) = match raw.split_once('\n') {
-        Some((first_line, rest)) => (first_line, Some(rest)),
-        None => (raw, None),
-    };
+    let (first_line, rest) = split_first_line(raw);
     let comment = first_line.trim();
-    if comment.is_empty() {
-        return None;
+    (!comment.is_empty()).then(|| (comment.to_string(), rest.to_string()))
+}
+
+/// Splits a raw decor string at its first line break, which starts the
+/// remainder together with a carriage return in front of it. Without a line
+/// break, the whole string is the first line.
+pub(crate) fn split_first_line(raw: &str) -> (&str, &str) {
+    match raw.find('\n') {
+        Some(index) => raw.split_at(index - usize::from(raw[..index].ends_with('\r'))),
+        None => (raw, ""),
     }
-    let rest = match rest {
-        Some(rest) => format!("\n{rest}"),
-        None => String::new(),
-    };
-    Some((comment.to_string(), rest))
 }
 
 /// Returns the raw decor string without the comment on its first line,
