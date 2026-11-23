@@ -119,7 +119,6 @@ Recognised keys on an inline-table entry:
 
 `platform` is a deprecated alias for `subdir` and emits a warning.
 Specifying both keys is invalid, even if their values match.
-Pixi writes `subdir` when regenerating an entry; untouched entries keep their existing spelling.
 
 See [declared, detected, and required virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) for how declarations are used, and [Which platform gets installed?](../workspace/multi_platform_configuration.md#which-platform-gets-installed) for how they are compared with the machine.
 
