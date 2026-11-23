@@ -57,35 +57,31 @@ pub fn insert_array_element(array: &mut Array, index: usize, value: Value) {
     }
 
     let style = detect_array_style(array);
-    if let ContainerStyle::Multiline { indent } = &style {
+    let displaced_prefix = array
+        .get(index)
+        .map(|displaced| decor_prefix(displaced.decor()).to_string())
+        .unwrap_or_default();
+    let (first_line, displaced_rest) = split_first_line(&displaced_prefix);
+    if let ContainerStyle::Multiline { indent } = &style
+        && !displaced_rest.is_empty()
+    {
         // The first line of the displaced element's prefix belongs to the
         // line above (the opening bracket or the previous element): it stays
         // there by moving into the new element's prefix. The standalone
         // comment lines below it keep documenting the displaced element.
-        let displaced_prefix = array
-            .get(index)
-            .map(|displaced| decor_prefix(displaced.decor()).to_string())
-            .unwrap_or_default();
-        let (first_line, displaced_rest) = match split_first_line(&displaced_prefix) {
-            (_, "") => ("", None),
-            (first_line, rest) => (first_line, Some(rest.to_string())),
-        };
         let prefix = format!("{first_line}\n{indent}");
+        let displaced_rest = displaced_rest.to_string();
         array.insert_formatted(index, value.decorated(prefix, ""));
-        if let Some(displaced_rest) = displaced_rest
-            && let Some(displaced) = array.get_mut(index + 1)
-        {
+        if let Some(displaced) = array.get_mut(index + 1) {
             displaced.decor_mut().set_prefix(displaced_rest);
         }
         return;
     }
 
-    // Give the new element the spacing of the element it displaces, and make
-    // sure the displaced element is separated from the comma by a space.
-    let displaced_prefix = array
-        .get(index)
-        .map(|displaced| decor_prefix(displaced.decor()).to_string())
-        .unwrap_or_default();
+    // The displaced element shares its line with the bracket or the previous
+    // element. Give the new element the spacing of the element it displaces,
+    // and make sure the displaced element is separated from the comma by a
+    // space.
     array.insert_formatted(index, value.decorated(displaced_prefix, ""));
     if let Some(displaced) = array.get_mut(index + 1)
         && decor_prefix(displaced.decor()).is_empty()
@@ -138,8 +134,13 @@ pub fn move_array_element(array: &mut Array, from: usize, to: usize) {
         suffix.comment,
     );
     insert_array_element(array, to, value);
-    if !own_prefix.is_empty() {
-        let (preceding, _) = split_first_line(decor_prefix(array.get(to).unwrap().decor()));
+    // The value keeps its own line, unless it took the place of a value that
+    // shares its line with the one above, and no comment lines need a line.
+    let placed = decor_prefix(array.get(to).unwrap().decor());
+    if !own_prefix.is_empty()
+        && (placed.contains('\n') || standalone_comment_lines(own_prefix).is_some())
+    {
+        let (preceding, _) = split_first_line(placed);
         let prefix = format!("{preceding}{own_prefix}");
         array.get_mut(to).unwrap().decor_mut().set_prefix(prefix);
     }
@@ -236,6 +237,19 @@ mod move_tests {
             .to_string()
             .parse::<toml_edit::DocumentMut>()
             .unwrap();
+    }
+
+    #[test]
+    fn moves_to_front_of_array_starting_on_bracket_line() {
+        let mut document = "channels = [\"a\", # A\n    \"b\", # B\n    \"c\",\n]\n"
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        move_array_element(document["channels"].as_array_mut().unwrap(), 2, 0);
+        insta::assert_snapshot!(document.to_string(), @r#"
+        channels = ["c", "a", # A
+            "b", # B
+        ]
+        "#);
     }
 }
 
@@ -527,6 +541,18 @@ mod tests {
             "prio",
             "conda-forge",
             "bioconda",
+        ]
+        "#);
+    }
+
+    #[test]
+    fn insert_at_front_of_multiline_array_starting_on_bracket_line() {
+        let mut doc: DocumentMut = "channels = [\"a\", # A\n    \"b\",\n]\n".parse().unwrap();
+        let array = doc["channels"].as_array_mut().unwrap();
+        insert_array_element(array, 0, r#""prio""#.parse().unwrap());
+        assert_snapshot!(doc.to_string(), @r#"
+        channels = ["prio", "a", # A
+            "b",
         ]
         "#);
     }
