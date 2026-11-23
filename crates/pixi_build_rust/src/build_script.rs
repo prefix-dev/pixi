@@ -35,11 +35,7 @@ impl BuildScriptContext {
 
 #[cfg(test)]
 mod test {
-    fn render(
-        is_bash: bool,
-        has_sccache: bool,
-        verbosity_flag: Option<&'static str>,
-    ) -> String {
+    fn render(is_bash: bool, has_sccache: bool, verbosity_flag: Option<&'static str>) -> String {
         super::BuildScriptContext {
             source_dir: String::from("my-prefix-dir"),
             extra_args: vec![],
