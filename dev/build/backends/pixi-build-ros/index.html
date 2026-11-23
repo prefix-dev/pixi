@@ -10062,6 +10062,7 @@ The <code>vs2022</code> compiler is more widely supported on modern GitHub runne
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">&lt;build_type&gt;</span>ament_python<span class="nt">&lt;/build_type&gt;</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="nt">&lt;/export&gt;</span>
 </span></code></pre></div></p>
+<p>Packages whose <code>setup.cfg</code> does not set <code>install_scripts</code> are installed with pip. Its verbosity follows the build log level: no flag by default, <code>-v</code> with <code>pixi -vv</code>, and <code>-vv</code> with <code>pixi -vvv</code> or more.</p>
 <h3 id="catkin-ros1">catkin (ROS1)<a class="headerlink" href="#catkin-ros1" title="Permanent link">#</a></h3>
 <p>For ROS1 packages using catkin build system:
 <div class="language-xml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">&lt;export&gt;</span>
