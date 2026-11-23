@@ -33,6 +33,19 @@ pub enum Commands {
     Capabilities,
 }
 
+/// `-v` style flag for tools that a build script runs, matching the backend's
+/// build log level. [`main_ext`] applies the CLI log level to the
+/// `rattler_build` target, which also logs the build script output.
+pub fn build_tool_verbosity_flag() -> Option<&'static str> {
+    if tracing::enabled!(target: "rattler_build", tracing::Level::TRACE) {
+        Some("-vv")
+    } else if tracing::enabled!(target: "rattler_build", tracing::Level::DEBUG) {
+        Some("-v")
+    } else {
+        None
+    }
+}
+
 /// Run the sever on the specified port or over stdin/stdout.
 async fn run_server<T: ProtocolInstantiator>(port: Option<u16>, protocol: T) -> miette::Result<()> {
     let server = Server::new(protocol);

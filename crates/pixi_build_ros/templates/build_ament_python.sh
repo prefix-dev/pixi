@@ -23,5 +23,5 @@ if [ -f setup.cfg ] && grep -q "install[-_]scripts" setup.cfg; then
 else
     # pip uninstalls the previous install before reinstalling, so nothing is left
     # behind and rattler-build can keep deriving the contents from the prefix.
-    $PYTHON -m pip install . --no-deps --force-reinstall -vvv
+    $PYTHON -m pip install . --no-deps --force-reinstall @PIP_VERBOSITY@
 fi

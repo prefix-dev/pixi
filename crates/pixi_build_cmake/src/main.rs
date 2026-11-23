@@ -120,6 +120,7 @@ impl GenerateRecipe for CMakeGenerator {
             },
             source_dir: manifest_root.display().to_string(),
             extra_args: config.extra_args.clone(),
+            verbose: pixi_build_backend::cli::build_tool_verbosity_flag().is_some(),
         }
         .render();
 

@@ -17,6 +17,7 @@ use rattler_build_recipe::stage0::{
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 
+use pixi_build_backend::cli::build_tool_verbosity_flag;
 use pixi_build_ros::build_script::render_build_script;
 use pixi_build_ros::config::{PackageMappingSource, extract_distro_from_channels_list};
 use pixi_build_ros::distro::Distro;
@@ -302,7 +303,12 @@ impl GenerateRecipe for RosGenerator {
 
         // Generate build script
         let build_type = package_xml.build_type();
-        let build_script_content = render_build_script(&build_type, &distro, &manifest_root)?;
+        let build_script_content = render_build_script(
+            &build_type,
+            &distro,
+            &manifest_root,
+            build_tool_verbosity_flag(),
+        )?;
 
         let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
         script_env.insert(
