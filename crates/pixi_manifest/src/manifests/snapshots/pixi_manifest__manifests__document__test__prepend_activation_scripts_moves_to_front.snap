@@ -8,4 +8,9 @@ name = "test"
 platforms = []
 
 [activation]
-scripts = ["b.sh", "new.sh", "a.sh"]
+scripts = [
+    # b needs a shell
+    'b.sh', # sets up b
+    "new.sh",
+    "a.sh", # sets up a
+]
