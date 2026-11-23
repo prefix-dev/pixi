@@ -1,0 +1,46 @@
+---
+source: crates/pixi_manifest/src/toml/workspace.rs
+expression: "errors.join(\"\\n\")"
+---
+  × 'a/b' is not a valid multichannel name, it must be non-empty and must not contain '/', '/', ':', ',', '=' or whitespace
+   ╭─[pixi.toml:8:10]
+ 7 │         [workspace.multichannels]
+ 8 │         "a/b" = ["conda-forge"]
+   ·          ───
+ 9 │         defaults = ["https://repo.anaconda.com/pkgs/main"]
+   ╰────
+  × multichannel 'empty' does not contain any channels
+   ╭─[pixi.toml:8:17]
+ 7 │         [workspace.multichannels]
+ 8 │         empty = []
+   ·                 ──
+ 9 │         defaults = ["https://repo.anaconda.com/pkgs/main"]
+   ╰────
+  × multichannel 'nested' cannot contain another multichannel ('defaults')
+   ╭─[pixi.toml:8:35]
+ 7 │         [workspace.multichannels]
+ 8 │         nested = ["conda-forge", "defaults"]
+   ·                                   ────────
+ 9 │         defaults = ["https://repo.anaconda.com/pkgs/main"]
+   ╰────
+  × multichannel 'recursive' cannot contain another multichannel ('recursive')
+   ╭─[pixi.toml:8:38]
+ 7 │         [workspace.multichannels]
+ 8 │         recursive = ["conda-forge", "recursive"]
+   ·                                      ─────────
+ 9 │         defaults = ["https://repo.anaconda.com/pkgs/main"]
+   ╰────
+  × multichannel 'duplicate' contains 'conda-forge' more than once
+   ╭─[pixi.toml:8:38]
+ 7 │         [workspace.multichannels]
+ 8 │         duplicate = ["conda-forge", "conda-forge"]
+   ·                                      ───────────
+ 9 │         defaults = ["https://repo.anaconda.com/pkgs/main"]
+   ╰────
+  × expected an array of channels, found string
+   ╭─[pixi.toml:8:23]
+ 7 │         [workspace.multichannels]
+ 8 │         not-a-list = "conda-forge"
+   ·                       ───────────
+ 9 │         defaults = ["https://repo.anaconda.com/pkgs/main"]
+   ╰────

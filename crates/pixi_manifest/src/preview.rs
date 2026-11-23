@@ -85,4 +85,6 @@ impl Preview {
 pub enum KnownPreviewFlag {
     /// Build flag, to enable conda source builds
     PixiBuild,
+    /// Enables the `[workspace.multichannels]` table
+    Multichannels,
 }

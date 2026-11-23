@@ -1,0 +1,10 @@
+"$schema" = "./../../schema.json"
+
+[workspace]
+channels = ["conda-forge"]
+name = "badname"
+platforms = ["linux-64"]
+preview = ["multichannels"]
+
+[workspace.multichannels]
+"pkgs/main" = ["https://repo.anaconda.com/pkgs/main"]

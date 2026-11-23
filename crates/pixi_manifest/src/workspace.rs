@@ -23,6 +23,7 @@ use crate::{
         candidate_subdirs, capability_satisfied_by, is_builtin_virtual_package, is_subdir_default,
     },
     preview::Preview,
+    toml::MultiChannels,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
@@ -56,6 +57,11 @@ pub struct Workspace {
 
     /// The channels used by the project
     pub channels: IndexSet<PrioritizedChannel>,
+
+    /// Named groups of channels that are requested as a whole, like the
+    /// `defaults` channel of conda. A channel name that matches one of these
+    /// refers to all of its channels.
+    pub multichannels: MultiChannels,
 
     /// Channel priority for the whole project
     pub channel_priority: Option<ChannelPriority>,

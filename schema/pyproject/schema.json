@@ -4099,6 +4099,42 @@
           "type": "string",
           "pattern": "^[^\\\\]+$"
         },
+        "multichannels": {
+          "title": "Multichannels",
+          "description": "Named groups of channels that are requested as a whole, like the `defaults` channel of conda. A channel name that matches one of these refers to all of its channels, in order of preference. Requires the `multichannels` preview feature.",
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[^/\\\\:,=\\s]+$": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "minItems": 1
+            }
+          },
+          "propertyNames": {
+            "description": "The name of a multichannel. It must not contain '/', '\\', ':', ',', '=' or whitespace"
+          },
+          "examples": [
+            {
+              "defaults": [
+                "https://repo.anaconda.com/pkgs/main",
+                "https://repo.anaconda.com/pkgs/r"
+              ]
+            }
+          ]
+        },
         "name": {
           "title": "Name",
           "description": "The name of the project; we advise use of the name of the repository",
@@ -4137,6 +4173,11 @@
                     "description": "Enables building of source records",
                     "type": "string",
                     "const": "pixi-build"
+                  },
+                  {
+                    "description": "Enables the `multichannels` table of the workspace",
+                    "type": "string",
+                    "const": "multichannels"
                   },
                   {
                     "type": "string"

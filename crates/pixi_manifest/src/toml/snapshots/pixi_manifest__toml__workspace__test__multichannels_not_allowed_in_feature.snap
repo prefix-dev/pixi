@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/toml/workspace.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n        preview = [\"multichannels\"]\n\n        [feature.foo.multichannels]\n        defaults = [\"https://repo.anaconda.com/pkgs/main\"]\n        \"#,)"
+---
+  × Unexpected keys, expected only 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'host-dependencies', 'build-dependencies', 'constraints', 'pypi-
+  │ dependencies', 'dev', 'activation', 'tasks', 'pypi-options', 'system-requirements'
+   ╭─[pixi.toml:7:22]
+ 6 │
+ 7 │         [feature.foo.multichannels]
+   ·                      ──────┬──────
+   ·                            ╰── 'multichannels' was not expected here
+ 8 │         defaults = ["https://repo.anaconda.com/pkgs/main"]
+   ╰────
+  help: Did you mean 'channels'?

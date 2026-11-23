@@ -18,8 +18,8 @@ use crate::{
     error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{
-        TomlExcludeNewer, TomlPypiExcludeNewer, manifest::ExternalWorkspaceProperties,
-        platform::TomlPixiPlatform, preview::TomlPreview,
+        TomlExcludeNewer, TomlMultiChannels, TomlPypiExcludeNewer,
+        manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
     },
     utils::PixiSpanned,
     workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
@@ -103,6 +103,7 @@ pub struct TomlWorkspace {
     pub description: Option<String>,
     pub authors: Option<Vec<String>>,
     pub channels: IndexSet<PrioritizedChannel>,
+    pub multichannels: Option<TomlMultiChannels>,
     pub channel_priority: Option<ChannelPriority>,
     pub solve_strategy: Option<SolveStrategy>,
     pub platforms: Spanned<IndexSet<PixiPlatform>>,
@@ -232,6 +233,23 @@ impl TomlWorkspace {
             IndexMap::new()
         };
 
+        // TODO: remove the preview flag once the multichannels are used when
+        // resolving the channels of the workspace.
+        let multichannels = match self.multichannels {
+            Some(multichannels) if !preview.is_enabled(KnownPreviewFlag::Multichannels) => {
+                return Err(GenericError::new(
+                    "the `multichannels` table requires the 'multichannels' preview flag",
+                )
+                .with_help(
+                    "Run `pixi workspace preview add multichannels` to enable the preview flag",
+                )
+                .with_span(multichannels.span.into())
+                .into());
+            }
+            Some(multichannels) => multichannels.multichannels,
+            None => IndexMap::new(),
+        };
+
         Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name),
             version: self.version.or(external.version),
@@ -247,6 +265,7 @@ impl TomlWorkspace {
             repository: self.repository.or(external.repository),
             documentation: self.documentation.or(external.documentation),
             channels: self.channels,
+            multichannels,
             channel_priority: self.channel_priority,
             solve_strategy: self.solve_strategy,
             platforms: self.platforms.value,
@@ -334,6 +353,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let channels = th
             .required::<TomlIndexSet<_>>("channels")
             .map(TomlIndexSet::into_inner)?;
+        let multichannels = th.optional("multichannels");
         let channel_priority = th.optional("channel-priority");
         let solve_strategy = th
             .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
@@ -418,6 +438,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             description,
             authors,
             channels,
+            multichannels,
             channel_priority,
             solve_strategy,
             platforms: platforms.unwrap_or_default(),
@@ -545,6 +566,115 @@ mod test {
         5 │
           ╰────
         "#);
+    }
+
+    #[test]
+    fn test_multichannels() {
+        let workspace = crate::WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            channels = ["conda-forge", "defaults"]
+            platforms = []
+            preview = ["multichannels"]
+
+            [workspace.multichannels]
+            defaults = ["https://repo.anaconda.com/pkgs/main", "https://repo.anaconda.com/pkgs/r"]
+            "#,
+            Path::new(""),
+        )
+        .unwrap()
+        .workspace;
+        let defaults: Vec<String> = workspace.multichannels["defaults"]
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            defaults,
+            [
+                "https://repo.anaconda.com/pkgs/main",
+                "https://repo.anaconda.com/pkgs/r"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_multichannels_in_pyproject() {
+        let (manifest, _, _) = crate::pyproject::PyProjectManifest::from_toml_str(
+            r#"
+            [project]
+            name = "project"
+
+            [tool.pixi.workspace]
+            channels = ["defaults"]
+            platforms = []
+            preview = ["multichannels"]
+
+            [tool.pixi.workspace.multichannels]
+            defaults = ["https://repo.anaconda.com/pkgs/main"]
+            "#,
+        )
+        .unwrap()
+        .into_workspace_manifest(Path::new(""))
+        .unwrap();
+        assert_eq!(manifest.workspace.multichannels["defaults"].len(), 1);
+    }
+
+    #[test]
+    fn test_multichannels_require_preview() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [workspace.multichannels]
+        defaults = ["https://repo.anaconda.com/pkgs/main"]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_invalid_multichannels() {
+        let errors: Vec<String> = [
+            r#""a/b" = ["conda-forge"]"#,
+            r#"empty = []"#,
+            r#"nested = ["conda-forge", "defaults"]"#,
+            r#"recursive = ["conda-forge", "recursive"]"#,
+            r#"duplicate = ["conda-forge", "conda-forge"]"#,
+            r#"not-a-list = "conda-forge""#,
+        ]
+        .into_iter()
+        .map(|definition| {
+            expect_parse_failure(&format!(
+                r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["multichannels"]
+
+        [workspace.multichannels]
+        {definition}
+        defaults = ["https://repo.anaconda.com/pkgs/main"]
+        "#
+            ))
+        })
+        .collect();
+        assert_snapshot!(errors.join("\n"));
+    }
+
+    #[test]
+    fn test_multichannels_not_allowed_in_feature() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["multichannels"]
+
+        [feature.foo.multichannels]
+        defaults = ["https://repo.anaconda.com/pkgs/main"]
+        "#,
+        ));
     }
 
     #[test]

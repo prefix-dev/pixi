@@ -1,0 +1,14 @@
+#:schema ./../../schema.json
+
+[workspace]
+channels = ["conda-forge", { channel = "defaults", priority = -1 }]
+name = "multichannels"
+platforms = ["linux-64", "win-64"]
+preview = ["multichannels"]
+
+[workspace.multichannels]
+defaults = [
+  "https://repo.anaconda.com/pkgs/main",
+  "https://repo.anaconda.com/pkgs/r",
+  "https://repo.anaconda.com/pkgs/msys2",
+]

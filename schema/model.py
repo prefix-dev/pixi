@@ -231,6 +231,14 @@ class ChannelInlineTable(StrictBaseModel):
 
 Channel = ChannelName | ChannelInlineTable
 
+MultiChannelName = Annotated[
+    str,
+    StringConstraints(pattern=r"^[^/\\:,=\s]+$"),
+    Field(
+        description="The name of a multichannel. It must not contain '/', '\\', ':', ',', '=' or whitespace"
+    ),
+]
+
 
 class CondaPypiMapTable(StrictBaseModel):
     """The mapping configuration for one channel in `conda-pypi-map`."""
@@ -275,7 +283,11 @@ class SolveStrategy(str, Enum):
 PixiBuildFeature = Annotated[
     Literal["pixi-build"], Field(description="Enables building of source records")
 ]
-KnownPreviewFeature = PixiBuildFeature
+MultichannelsFeature = Annotated[
+    Literal["multichannels"],
+    Field(description="Enables the `multichannels` table of the workspace"),
+]
+KnownPreviewFeature = PixiBuildFeature | MultichannelsFeature
 
 
 # class KnownPreviewFeature(Enum):
@@ -330,6 +342,22 @@ class Workspace(StrictBaseModel):
     )
     channels: list[Channel] = Field(
         description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
+    )
+    multichannels: (
+        dict[MultiChannelName, Annotated[list[ChannelName], Field(min_length=1)]] | None
+    ) = Field(
+        None,
+        examples=[
+            {
+                "defaults": [
+                    "https://repo.anaconda.com/pkgs/main",
+                    "https://repo.anaconda.com/pkgs/r",
+                ]
+            }
+        ],
+        description="Named groups of channels that are requested as a whole, like the `defaults` channel of conda. A channel name that matches one of these refers to all of its channels, in order of preference. Requires the `multichannels` preview feature.",
+        # Reject names that do not match the pattern of `MultiChannelName`.
+        json_schema_extra={"additionalProperties": False},
     )
     channel_priority: ChannelPriority | None = Field(
         None,
