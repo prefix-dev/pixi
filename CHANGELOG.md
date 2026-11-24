@@ -5,6 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.85.0] - 2026-11-24
+#### ✨ Highlights
+
+Pixi now selects platforms using locked package requirements, not just declared capabilities.
+It prefers platforms whose declarations match the machine, then tries other compatible candidates.
+This improves fallback between GPU and CPU platforms.
+
+Workspace platform definitions now use `subdir` instead of `platform`, distinguishing the conda operating system and architecture from a named Pixi platform with virtual packages.
+The old `platform` key remains accepted but emits a deprecation warning.
+
+```toml
+[workspace]
+platforms = [
+  { name = "linux-cuda", subdir = "linux-64", cuda = "12.0" },
+  { name = "linux-cpu", subdir = "linux-64" },
+]
+```
+
+`pixi workspace platform add` also supports replacing an existing named platform's definition.
+
+#### Features
+
+- tree: Json representation by @abkfenris in [#4261](https://github.com/prefix-dev/pixi/pull/4261)
+- pixi-build-ros: Library target, group dependencies and conditional build types by @Tobias-Fischer in [#7526](https://github.com/prefix-dev/pixi/pull/7526)
+- pixi-build-ros: Map package.xml licenses to SPDX expressions by @Tobias-Fischer in [#7529](https://github.com/prefix-dev/pixi/pull/7529)
+- pixi_api: Add resolved channel URLs to GlobalEnvironment by @haecker-felix in [#7550](https://github.com/prefix-dev/pixi/pull/7550)
+- pixi-build-ros: Name packages as RoboStack does by @Tobias-Fischer in [#7539](https://github.com/prefix-dev/pixi/pull/7539)
+- Nanoflann same as rosdistro by @Timple in [#7567](https://github.com/prefix-dev/pixi/pull/7567)
+- build: `verbosity` config across pixi-build-{ros,python,rust,cmake} by @lucascolley in [#7573](https://github.com/prefix-dev/pixi/pull/7573)
+- Use `subdir` in workspace platform definitions by @Hofer-Julian in [#7579](https://github.com/prefix-dev/pixi/pull/7579)
+
+
+#### Fixes
+
+- Stop deriving pixi's executable name from argv[0] by @haecker-felix in [#7505](https://github.com/prefix-dev/pixi/pull/7505)
+- build: Build outputs with the variants of the siblings they pin by @EzraBrooks in [#7466](https://github.com/prefix-dev/pixi/pull/7466)
+- ci: Allow vouching from existing PRs by @baszalmstra in [#7516](https://github.com/prefix-dev/pixi/pull/7516)
+- build: Keep package versions as written by @lucascolley in [#7522](https://github.com/prefix-dev/pixi/pull/7522)
+- pixi-build-ros: Build SPDX expressions from the parsed spans by @Tobias-Fischer in [#7534](https://github.com/prefix-dev/pixi/pull/7534)
+- examples: Simplify conda-pypi channel name by @danyeaw in [#7542](https://github.com/prefix-dev/pixi/pull/7542)
+- pixi-build-mojo: Pin compiler runtime dependencies by @Hofer-Julian in [#7537](https://github.com/prefix-dev/pixi/pull/7537)
+- build: Forward verbosity to build backends by @lucascolley in [#7552](https://github.com/prefix-dev/pixi/pull/7552)
+- pixi-build-rattler-build: Pass workspace channels for staging outputs by @lucascolley in [#7554](https://github.com/prefix-dev/pixi/pull/7554)
+- Select platforms using locked requirements by @Hofer-Julian in [#7530](https://github.com/prefix-dev/pixi/pull/7530)
+- Fix wrong DO_NOT_TRACK hyperlink by @raphaelbetschart in [#7582](https://github.com/prefix-dev/pixi/pull/7582)
+- workspace platform add: Replace changed platform definitions by @Hofer-Julian in [#7578](https://github.com/prefix-dev/pixi/pull/7578)
+- windows: Embed long-path-aware manifest in pixi by @enlivn in [#7131](https://github.com/prefix-dev/pixi/pull/7131)
+
+
+#### Documentation
+
+- Fix broken MatchSpec documentation links by @claudiushaag in [#7517](https://github.com/prefix-dev/pixi/pull/7517)
+- Fix broken authentication docs link by @Hofer-Julian in [#7536](https://github.com/prefix-dev/pixi/pull/7536)
+- Explain locked platform selection by @Hofer-Julian in [#7531](https://github.com/prefix-dev/pixi/pull/7531)
+- Generate social cards with zensical by @Hofer-Julian in [#7570](https://github.com/prefix-dev/pixi/pull/7570)
+- Document that `PIXI_CACHE_DIR` must be absolute by @NMertsch in [#7581](https://github.com/prefix-dev/pixi/pull/7581)
+- Fix typo in turtlesim example README by @Dani-Google in [#7598](https://github.com/prefix-dev/pixi/pull/7598)
+- Regenerate CLI docs for `pixi upload anaconda --skip-existing` by @Hofer-Julian in [#7602](https://github.com/prefix-dev/pixi/pull/7602)
+
+
+#### Maintenance
+
+- Ask AI agents to request the PR summary from the user by @baszalmstra in [#7521](https://github.com/prefix-dev/pixi/pull/7521)
+- Bump cmov to 0.5.4 by @wolfv in [#7590](https://github.com/prefix-dev/pixi/pull/7590)
+
+
+#### New Contributors
+* @Dani-Google made their first contribution in [#7598](https://github.com/prefix-dev/pixi/pull/7598)
+* @enlivn made their first contribution in [#7131](https://github.com/prefix-dev/pixi/pull/7131)
+* @raphaelbetschart made their first contribution in [#7582](https://github.com/prefix-dev/pixi/pull/7582)
+* @NMertsch made their first contribution in [#7581](https://github.com/prefix-dev/pixi/pull/7581)
+* @danyeaw made their first contribution in [#7542](https://github.com/prefix-dev/pixi/pull/7542)
+
 ### [0.84.2] - 2026-11-10
 #### ✨ Highlights
 
