@@ -6488,7 +6488,7 @@ dependencies = [
  "rattler_s3",
  "rattler_shell",
  "rattler_solve",
- "rattler_upload",
+ "rattler_upload 0.16.0",
  "rattler_virtual_package_detectors",
  "regex",
  "reqwest",
@@ -8172,7 +8172,7 @@ dependencies = [
  "rattler_s3",
  "rattler_shell",
  "rattler_solve",
- "rattler_upload",
+ "rattler_upload 0.15.6",
  "rattler_virtual_packages",
  "rayon",
  "reflink-copy",
@@ -8950,6 +8950,44 @@ name = "rattler_upload"
 version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cacbc65d766a91f742eae456452c8e781c12efa8c4756e59743673ecf7ed2fb5"
+dependencies = [
+ "astral-reqwest-middleware",
+ "astral-reqwest-retry",
+ "base64 0.23.1",
+ "clap",
+ "fs-err",
+ "futures",
+ "hex",
+ "indicatif",
+ "miette 7.6.0",
+ "opendal",
+ "rattler_conda_types",
+ "rattler_config",
+ "rattler_digest",
+ "rattler_networking",
+ "rattler_package_streaming",
+ "rattler_redaction",
+ "rattler_s3",
+ "rattler_solve",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.11.0",
+ "sigstore-sign",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util 0.7.20",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "rattler_upload"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a82b5f7c870349c473d75ab33833cc46ad8a160616af4644ee6e4a13990aaff4"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
