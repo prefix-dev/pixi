@@ -88,3 +88,6 @@ uv-normalize = { workspace = true }
 uv-python-interpreter = { workspace = true }
 uv-threads = { workspace = true }
 zip = { workspace = true }
+
+[build-dependencies]
+embed-manifest = { workspace = true }
