@@ -6141,6 +6141,7 @@ dependencies = [
  "rattler_build_recipe",
  "rattler_build_variant_config",
  "rattler_conda_types",
+ "rattler_virtual_packages",
  "serde",
  "serde_json",
  "tempfile",
