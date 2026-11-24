@@ -66,4 +66,4 @@ pixi run -e noetic viz
 
 Add the visual marker for the turtle to the displays in rviz.
 
-If you now teleop the turtle, you should see it move in rviz aswell now.
+If you now teleop the turtle, you should see it move in rviz as well now.
