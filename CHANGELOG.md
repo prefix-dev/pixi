@@ -8,11 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.85.0] - 2026-11-24
 #### ✨ Highlights
 
-Pixi now selects platforms using locked package requirements, not just declared capabilities.
-It prefers platforms whose declarations match the machine, then tries other compatible candidates.
-This improves fallback between GPU and CPU platforms.
+We streamlined the platform selection process and overhauled [the multi-platform configuration guide](https://pixi.prefix.dev/dev/workspace/multi_platform_configuration/) and [the `platforms` manifest reference](https://pixi.prefix.dev/dev/reference/pixi_manifest/#platforms).
+This fixes some inconsistent behaviour and enables compatibility with dependencies on virtual packages provided by detectors which use semantics other than `>=`, such as `==`.
 
-Workspace platform definitions now use `subdir` instead of `platform`, distinguishing the conda operating system and architecture from a named Pixi platform with virtual packages.
+Workspace platform definitions now use the `subdir` key instead of `platform`, distinguishing the conda operating system and architecture from a named Pixi platform with virtual packages.
 The old `platform` key remains accepted but emits a deprecation warning.
 
 ```toml
@@ -23,7 +22,9 @@ platforms = [
 ]
 ```
 
-`pixi workspace platform add` also supports replacing an existing named platform's definition.
+`pixi tree` has gained JSON output via the new `--json` flag.
+
+Lock files produced by older Pixi versions may require a new `pixi lock` when using this version (and vice versa). 
 
 #### Features
 
