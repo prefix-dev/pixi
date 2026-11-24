@@ -20,7 +20,7 @@ pixi() {
     if [ ! -f $entrypoint ]
     then
         echo "First-time pixi setup..."
-        (PIXI_NO_PATH_UPDATE=true curl -fsSL https://pixi.sh/install.sh | sh) > /dev/null
+        (curl -fsSL https://pixi.sh/install.sh | PIXI_NO_PATH_UPDATE=true sh) > /dev/null
     fi
 
     # ensure that workspace envs are stored in the pixi cache
