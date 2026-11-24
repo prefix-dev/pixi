@@ -107,8 +107,8 @@ write-shards = false
 index-url = "https://pypi.org/simple"
 # list of additional urls
 extra-index-urls = [
-    "https://pypi.org/simple2",
-    { url = "https://pypi.org/simple3", exclude-newer = "7d" },
+  "https://pypi.org/simple2",
+  { url = "https://pypi.org/simple3", exclude-newer = "7d" },
 ]
 # can be "subprocess" or "disabled"
 keyring-provider = "subprocess"

@@ -568,9 +568,10 @@ async fn alter_config(
                         // replaced instead of kept as a duplicate.
                         if extra_index_urls.iter().any(|e| e.url == index.url) {
                             extra_index_urls.retain(|e| e.url != index.url);
-                            let array = toml_doc
-                                .get_or_insert_toml_array_mut(&["pypi-config"], "extra-index-urls")
-                                .into_diagnostic()?;
+                            let array = toml_doc.get_or_insert_toml_array_mut(
+                                &["pypi-config"],
+                                "extra-index-urls",
+                            )?;
                             retain_array_elements(array, |value| {
                                 extra_index_url_of(value).as_ref() != Some(&index.url)
                             });
