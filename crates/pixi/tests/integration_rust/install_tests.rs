@@ -2351,9 +2351,9 @@ async fn cuda_arch_selects_matching_build() {
 name = "cuda-arch-routing"
 channels = ["{channel_url}"]
 platforms = [
-    {{ name = "arch9", platform = "linux-64", cuda = "13", __cuda_arch = "9" }},
-    {{ name = "arch10", platform = "linux-64", cuda = {{ driver = "13", arch = "10" }} }},
-    {{ name = "arch12", platform = "linux-64", cuda = {{ driver = "13", arch = "12" }} }},
+    {{ name = "arch9", subdir = "linux-64", cuda = "13", __cuda_arch = "9" }},
+    {{ name = "arch10", subdir = "linux-64", cuda = {{ driver = "13", arch = "10" }} }},
+    {{ name = "arch12", subdir = "linux-64", cuda = {{ driver = "13", arch = "12" }} }},
 ]
 
 [dependencies]
@@ -2408,8 +2408,8 @@ async fn amdgpu_arch_selects_matching_build() {
 name = "amdgpu-arch-routing"
 channels = ["{channel_url}"]
 platforms = [
-    {{ name = "mi250", platform = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }},
-    {{ name = "rdna3", platform = "linux-64", amdgpu = "gfx1100" }},
+    {{ name = "mi250", subdir = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }},
+    {{ name = "rdna3", subdir = "linux-64", amdgpu = "gfx1100" }},
 ]
 
 [dependencies]

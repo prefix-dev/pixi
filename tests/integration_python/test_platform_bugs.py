@@ -213,7 +213,7 @@ def test_run_honours_platform_override_for_the_marker_check(
 [workspace]
 name = "override-run"
 channels = ["{virtual_packages_channel}"]
-platforms = [{{ platform = "linux-64", cuda = "13" }}]
+platforms = [{{ subdir = "linux-64", cuda = "13" }}]
 
 [dependencies]
 cuda = "*"
@@ -532,7 +532,7 @@ def test_platform_list_reports_the_real_machine_per_row(
 [workspace]
 name = "detected-vps"
 channels = ["{dummy_channel_1}"]
-platforms = ["{CURRENT_PLATFORM}", {{ name = "gpu", platform = "{CURRENT_PLATFORM}", cuda = "11.0" }}]
+platforms = ["{CURRENT_PLATFORM}", {{ name = "gpu", subdir = "{CURRENT_PLATFORM}", cuda = "11.0" }}]
 """,
     )
     output = verify_cli_command(
@@ -695,8 +695,8 @@ def test_locked_cuda_requirement_skips_declared_match(
 name = "locked-selection"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "{CURRENT_PLATFORM}", cuda = "12.0" }},
-    {{ name = "cpu", platform = "{CURRENT_PLATFORM}" }},
+    {{ name = "gpu", subdir = "{CURRENT_PLATFORM}", cuda = "12.0" }},
+    {{ name = "cpu", subdir = "{CURRENT_PLATFORM}" }},
 ]
 
 [target.gpu.dependencies]
@@ -740,7 +740,7 @@ def test_high_cuda_declaration_prefers_cpu_or_warns_for_locked_only(
 ) -> None:
     channel = DetectorChannel(tmp_pixi_workspace / "channel")
     channel.package("gpu", ["__cuda >=12"])
-    cpu_platform = f', {{ name = "cpu", platform = "{CURRENT_PLATFORM}" }}' if cpu else ""
+    cpu_platform = f', {{ name = "cpu", subdir = "{CURRENT_PLATFORM}" }}' if cpu else ""
     manifest = _write(
         tmp_pixi_workspace / "pixi.toml",
         f"""
@@ -748,7 +748,7 @@ def test_high_cuda_declaration_prefers_cpu_or_warns_for_locked_only(
 name = "high-declaration"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "gpu", platform = "{CURRENT_PLATFORM}", cuda = "12.8" }}{cpu_platform},
+    {{ name = "gpu", subdir = "{CURRENT_PLATFORM}", cuda = "12.8" }}{cpu_platform},
 ]
 
 [target.gpu.dependencies]
@@ -827,8 +827,8 @@ def test_locked_amd_exact_architecture_selects_fallback(
 name = "amd-selection"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "amd", platform = "linux-64", amdgpu = "gfx1103" }},
-    {{ name = "cpu", platform = "linux-64" }},
+    {{ name = "amd", subdir = "linux-64", amdgpu = "gfx1103" }},
+    {{ name = "cpu", subdir = "linux-64" }},
 ]
 
 [target.amd.dependencies]
@@ -862,8 +862,8 @@ def test_incompatible_locked_wheel_skips_platform(
 name = "wheel-selection"
 channels = ["{channel.url}"]
 platforms = [
-    {{ name = "wheel", platform = "linux-64" }},
-    {{ name = "fallback", platform = "linux-64" }},
+    {{ name = "wheel", subdir = "linux-64" }},
+    {{ name = "fallback", subdir = "linux-64" }},
 ]
 
 [target.wheel.dependencies]

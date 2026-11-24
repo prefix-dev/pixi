@@ -4,8 +4,8 @@ channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
 platforms = [
   # Try CUDA before CPU when its declaration and locked requirements fit.
-  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
-  { name = "linux-64-cpu", platform = "linux-64" },
+  { name = "linux-64-cuda", subdir = "linux-64", cuda = "12.0" },
+  { name = "linux-64-cpu", subdir = "linux-64" },
 ]
 
 [target.linux-64-cuda.dependencies]

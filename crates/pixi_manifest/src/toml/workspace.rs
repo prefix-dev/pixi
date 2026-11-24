@@ -22,6 +22,7 @@ use crate::{
         platform::TomlPixiPlatform, preview::TomlPreview,
     },
     utils::PixiSpanned,
+    warning::Deprecation,
     workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
 };
 
@@ -106,6 +107,7 @@ pub struct TomlWorkspace {
     pub channel_priority: Option<ChannelPriority>,
     pub solve_strategy: Option<SolveStrategy>,
     pub platforms: Spanned<IndexSet<PixiPlatform>>,
+    pub deprecated_platform_keys: Vec<Span>,
     pub license: Option<Spanned<String>>,
     pub license_file: Option<Spanned<PathBuf>>,
     pub readme: Option<Spanned<PathBuf>>,
@@ -190,6 +192,11 @@ impl TomlWorkspace {
         } = self.preview.into_preview();
 
         let mut warnings = preview_warnings;
+        warnings.extend(
+            self.deprecated_platform_keys
+                .into_iter()
+                .map(|span| Deprecation::platform_key(span).into()),
+        );
 
         // An empty `conda-pypi-map = {}` is soft-deprecated. It preserves the
         // legacy no-network behavior while keeping the conda-forge same-name
@@ -338,6 +345,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let solve_strategy = th
             .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
             .map(TomlWith::into_inner);
+        let mut deprecated_platform_keys = Vec::new();
         // Reject repeated names: `PixiPlatform`'s `Eq`/`Hash` are by name only,
         // so duplicates would otherwise silently collapse to the first entry.
         let platforms = match th.optional::<Spanned<Vec<Spanned<TomlPixiPlatform>>>>("platforms") {
@@ -348,6 +356,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
                 let mut seen: IndexMap<String, Span> = IndexMap::new();
                 for entry in spanned.value {
                     let entry_span = entry.span;
+                    deprecated_platform_keys.extend(entry.value.deprecated_platform_key);
                     let platform = entry.value.into_inner();
                     let name = platform.name().to_string();
                     if let Some(first) = seen.get(&name) {
@@ -421,6 +430,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             channel_priority,
             solve_strategy,
             platforms: platforms.unwrap_or_default(),
+            deprecated_platform_keys,
             license,
             license_file,
             readme,
@@ -553,7 +563,7 @@ mod test {
         channels = []
         platforms = [
           "linux-64",
-          { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+          { name = "linux-64-cuda", subdir = "linux-64", cuda = "12.0" },
           { name = "osx-arm64" },
         ]
         "#;
@@ -625,8 +635,8 @@ mod test {
         channels = []
         platforms = [
           "linux-64",
-          { name = "gpu-linux", platform = "linux-64", cuda = "12.0" },
-          { name = "mac", platform = "osx-arm64" },
+          { name = "gpu-linux", subdir = "linux-64", cuda = "12.0" },
+          { name = "mac", subdir = "osx-arm64" },
         ]
         "#;
         let workspace = TomlWorkspace::from_toml_str(input)
@@ -702,9 +712,9 @@ mod test {
         let input = r#"
         channels = []
         platforms = [
-          { name = "first", platform = "linux-64", __username_length = "10" },
-          { name = "second", platform = "linux-64", __username_length = "3" },
-          { name = "gpu", platform = "linux-64", cuda = "12" },
+          { name = "first", subdir = "linux-64", __username_length = "10" },
+          { name = "second", subdir = "linux-64", __username_length = "3" },
+          { name = "gpu", subdir = "linux-64", cuda = "12" },
         ]
         "#;
         let workspace = TomlWorkspace::from_toml_str(input)
@@ -760,8 +770,8 @@ mod test {
         [workspace]
         channels = []
         platforms = [
-          { name = "gpu", platform = "linux-64", cuda = "12.0" },
-          { name = "gpu", platform = "linux-64", cuda = "13.0" },
+          { name = "gpu", subdir = "linux-64", cuda = "12.0" },
+          { name = "gpu", subdir = "linux-64", cuda = "13.0" },
         ]
         "#,
         ));

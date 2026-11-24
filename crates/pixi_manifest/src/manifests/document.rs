@@ -864,16 +864,31 @@ impl ManifestDocument {
             .get_or_insert_toml_array_mut(&table.as_keys(), "scripts")?;
 
         if prepend {
-            // Drop existing occurrences first so the scripts end up at the
-            // front in the given order.
-            pixi_toml_edit::retain_array_elements(array, |item| {
-                item.as_str()
-                    .map(|s| !scripts.iter().any(|script| script == s))
-                    .unwrap_or(true)
-            });
+            // Put the scripts at the front in the given order. Existing ones
+            // move there with their comments and spelling.
             for (index, script) in scripts.iter().enumerate() {
-                pixi_toml_edit::insert_array_element(array, index, script.as_str().into());
+                let existing = array
+                    .iter()
+                    .skip(index)
+                    .position(|item| item.as_str() == Some(script.as_str()));
+                match existing {
+                    Some(offset) => {
+                        pixi_toml_edit::move_array_element(array, index + offset, index)
+                    }
+                    None => {
+                        pixi_toml_edit::insert_array_element(array, index, script.as_str().into())
+                    }
+                }
             }
+            // Drop duplicates the manifest already had behind the front.
+            let mut index = 0;
+            pixi_toml_edit::retain_array_elements(array, |item| {
+                index += 1;
+                index <= scripts.len()
+                    || item
+                        .as_str()
+                        .is_none_or(|s| !scripts.iter().any(|script| script == s))
+            });
         } else {
             for script in scripts {
                 if !array
@@ -2307,7 +2322,7 @@ test = ["test"]
     }
 
     /// Prepending moves already-present scripts to the front of the list
-    /// instead of duplicating them.
+    /// with their comments and spelling, instead of duplicating them.
     #[test]
     pub fn prepend_activation_scripts_moves_to_front() {
         let manifest_content = r#"[workspace]
@@ -2316,7 +2331,12 @@ name = "test"
 platforms = []
 
 [activation]
-scripts = ["a.sh", "b.sh"]
+scripts = [
+    "a.sh", # sets up a
+    # b needs a shell
+    'b.sh', # sets up b
+    "b.sh",
+]
 "#;
         let mut document = ManifestDocument::PixiToml(TomlDocument::new(
             DocumentMut::from_str(manifest_content).unwrap(),

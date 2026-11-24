@@ -156,8 +156,10 @@ class WorkspacePlatform(BaseModel):
             "propertyNames": {"maxLength": 64},
             "anyOf": [
                 {"required": ["name"]},
+                {"required": ["subdir"]},
                 {"required": ["platform"]},
             ],
+            "not": {"required": ["subdir", "platform"]},
         },
     )
 
@@ -166,11 +168,16 @@ class WorkspacePlatform(BaseModel):
         pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$",
         max_length=64,
         json_schema_extra=NotReservedPlatformName,
-        description="The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
+        description="The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `subdir` plus the declared virtual packages when omitted.",
+    )
+    subdir: Platform | None = Field(
+        None,
+        description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
     )
     platform: Platform | None = Field(
         None,
-        description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
+        deprecated=True,
+        description="Deprecated alias for `subdir`. Cannot be combined with `subdir`.",
     )
     cuda: NonEmptyStr | CudaTable | None = Field(
         None,

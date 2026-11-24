@@ -792,7 +792,7 @@ mod tests {
         channels = []
         platforms = [
             "linux-64",
-            { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+            { name = "linux-64-cuda", subdir = "linux-64", cuda = "12" },
         ]
 
         [environments]

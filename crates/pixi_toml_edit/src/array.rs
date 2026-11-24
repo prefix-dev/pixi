@@ -3,8 +3,8 @@ use toml_edit::{Array, Value};
 use crate::style::{
     ContainerStyle, DetachedSuffix, decor_prefix, decor_suffix, detach_suffix, detect_array_style,
     drop_first_line_comment, indent_after_newline, merge_comments, merge_standalone_lines,
-    raw_contains_newline, raw_str, split_first_line_comment, standalone_comment_lines,
-    starts_on_fresh_line,
+    raw_contains_newline, raw_str, split_first_line, split_first_line_comment,
+    standalone_comment_lines, starts_on_fresh_line,
 };
 
 /// Appends `value` to the array, mimicking its layout: in a multiline array
@@ -61,15 +61,16 @@ pub fn insert_array_element(array: &mut Array, index: usize, value: Value) {
         .get(index)
         .map(|displaced| decor_prefix(displaced.decor()).to_string())
         .unwrap_or_default();
+    let (first_line, displaced_rest) = split_first_line(&displaced_prefix);
     if let ContainerStyle::Multiline { indent } = &style
-        && let Some((first_line, rest)) = displaced_prefix.split_once('\n')
+        && !displaced_rest.is_empty()
     {
         // The first line of the displaced element's prefix belongs to the
         // line above (the opening bracket or the previous element): it stays
         // there by moving into the new element's prefix. The standalone
         // comment lines below it keep documenting the displaced element.
         let prefix = format!("{first_line}\n{indent}");
-        let displaced_rest = format!("\n{rest}");
+        let displaced_rest = displaced_rest.to_string();
         array.insert_formatted(index, value.decorated(prefix, ""));
         if let Some(displaced) = array.get_mut(index + 1) {
             displaced.decor_mut().set_prefix(displaced_rest);
@@ -86,6 +87,169 @@ pub fn insert_array_element(array: &mut Array, index: usize, value: Value) {
         && decor_prefix(displaced.decor()).is_empty()
     {
         displaced.decor_mut().set_prefix(" ");
+    }
+}
+
+/// Moves an existing value without regenerating it. Comments before a value
+/// and on its line move with it; comments on the preceding line stay behind.
+pub fn move_array_element(array: &mut Array, from: usize, to: usize) {
+    if from == to {
+        return;
+    }
+    let multiline = detect_array_style(array).is_multiline();
+    let mut value = array.remove(from);
+    if !multiline {
+        if from == 0
+            && let Some(first) = array.get_mut(0)
+        {
+            first
+                .decor_mut()
+                .set_prefix(decor_prefix(value.decor()).to_string());
+        }
+        value.decor_mut().clear();
+        insert_array_element(array, to, value);
+        return;
+    }
+
+    let prefix = decor_prefix(value.decor()).to_string();
+    let (preceding, own_prefix) = split_first_line(&prefix);
+    let following = array_gap(array, from).to_string();
+    let (own_comment, following_prefix) = split_first_line(&following);
+    let closing_newline = if from == array.len() && following_prefix.is_empty() {
+        "\n"
+    } else {
+        ""
+    };
+    set_array_gap(
+        array,
+        from,
+        format!("{preceding}{following_prefix}{closing_newline}"),
+    );
+
+    // Without a trailing comma, the last value can own its line comment
+    // in its suffix rather than the following gap.
+    let suffix = detach_suffix(value.decor_mut());
+    let own_comment = merge_comments(
+        (!own_comment.trim().is_empty()).then(|| own_comment.trim().to_string()),
+        suffix.comment,
+    );
+    insert_array_element(array, to, value);
+    // The value keeps its own line, unless it took the place of a value that
+    // shares its line with the one above, and no comment lines need a line.
+    let placed = decor_prefix(array.get(to).unwrap().decor());
+    if !own_prefix.is_empty()
+        && (placed.contains('\n') || standalone_comment_lines(own_prefix).is_some())
+    {
+        let (preceding, _) = split_first_line(placed);
+        let prefix = format!("{preceding}{own_prefix}");
+        array.get_mut(to).unwrap().decor_mut().set_prefix(prefix);
+    }
+    if own_comment.is_some() || suffix.standalone.is_some() {
+        let comment = own_comment
+            .map(|comment| format!(" {comment}"))
+            .unwrap_or_default();
+        let standalone = suffix.standalone.unwrap_or_default();
+        let following = array_gap(array, to + 1);
+        set_array_gap(array, to + 1, format!("{comment}{standalone}{following}"));
+    }
+}
+
+/// The decor in front of the element at `index`: its prefix, or the array's
+/// trailing decor in front of the closing bracket past the last element. The
+/// first line of a gap belongs to the line above it.
+fn array_gap(array: &Array, index: usize) -> &str {
+    match array.get(index) {
+        Some(value) => decor_prefix(value.decor()),
+        None => raw_str(array.trailing()),
+    }
+}
+
+fn set_array_gap(array: &mut Array, index: usize, gap: String) {
+    match array.get_mut(index) {
+        Some(value) => value.decor_mut().set_prefix(gap),
+        None => array.set_trailing(gap),
+    }
+}
+
+#[cfg(test)]
+mod move_tests {
+    use super::*;
+
+    #[test]
+    fn preserves_single_line_spacing_and_value_spelling() {
+        let entries = [
+            "'linux-aarch64'",
+            "{ name = 'linux-ci', platform = 'linux-64' }",
+            "{ name = 'mac-ci', subdir = 'osx-64' }",
+        ];
+        let input = format!("platforms = [{}]\n", entries.join(", "));
+        for from in 0..entries.len() {
+            for to in 0..entries.len() {
+                let mut document = input.parse::<toml_edit::DocumentMut>().unwrap();
+                move_array_element(document["platforms"].as_array_mut().unwrap(), from, to);
+                let mut reordered = entries.to_vec();
+                let moved = reordered.remove(from);
+                reordered.insert(to, moved);
+                assert_eq!(
+                    document.to_string(),
+                    format!("platforms = [{}]\n", reordered.join(", ")),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn preserves_comments_and_value_spelling() {
+        let entries = [
+            "  # before a\n  { name = 'a', platform = 'linux-64' }, # after a\n",
+            "  # before b\n  { name = 'b', subdir = 'osx-arm64' }, # after b\n",
+            "  # before c\n  'win-64', # after c\n",
+        ];
+        let input = format!("platforms = [ # header\n{}]\n", entries.concat());
+        for from in 0..entries.len() {
+            for to in 0..entries.len() {
+                let mut document = input.parse::<toml_edit::DocumentMut>().unwrap();
+                move_array_element(document["platforms"].as_array_mut().unwrap(), from, to);
+                let mut reordered = entries.to_vec();
+                let moved = reordered.remove(from);
+                reordered.insert(to, moved);
+                assert_eq!(
+                    document.to_string(),
+                    format!("platforms = [ # header\n{}]\n", reordered.concat()),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn moves_last_value_without_trailing_comma() {
+        let mut document = "platforms = [\n  'linux-64', # linux\n  'win-64' # windows\n]\n"
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        move_array_element(document["platforms"].as_array_mut().unwrap(), 1, 0);
+        insta::assert_snapshot!(document.to_string(), @"
+        platforms = [
+          'win-64', # windows
+          'linux-64' # linux
+        ]
+        ");
+        document
+            .to_string()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+    }
+
+    #[test]
+    fn moves_to_front_of_array_starting_on_bracket_line() {
+        let mut document = "channels = [\"a\", # A\n    \"b\", # B\n    \"c\",\n]\n"
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        move_array_element(document["channels"].as_array_mut().unwrap(), 2, 0);
+        insta::assert_snapshot!(document.to_string(), @r#"
+        channels = ["c", "a", # A
+            "b", # B
+        ]
+        "#);
     }
 }
 
@@ -126,34 +290,22 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
             standalone_comment_lines(&removed_prefix).map(str::to_string),
             standalone_comment_lines(&removed_suffix_rest).map(str::to_string),
         );
-        let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
-        if index + 1 < keep.len() {
-            if let Some(next) = array.get_mut(index + 1) {
-                let prefix = decor_prefix(next.decor()).to_string();
-                let mut new_prefix = drop_first_line_comment(&prefix);
-                if let Some(standalone) = &standalone {
-                    // Whatever follows the standalone lines must start on a
-                    // fresh line, or it would be swallowed by the comment.
-                    if !starts_on_fresh_line(&new_prefix) {
-                        new_prefix = format!("\n{indent}");
-                    }
-                    new_prefix = format!("{standalone}{new_prefix}");
-                }
-                next.decor_mut().set_prefix(new_prefix);
+        let mut gap = drop_first_line_comment(array_gap(array, index + 1));
+        if let Some(standalone) = &standalone {
+            // Whatever follows the standalone lines, the next element or the
+            // closing bracket, must start on a fresh line, or it would be
+            // swallowed by the comment.
+            if !starts_on_fresh_line(&gap) {
+                gap = if index + 1 < keep.len() {
+                    let indent = indent_after_newline(&removed_prefix).unwrap_or_default();
+                    format!("\n{indent}")
+                } else {
+                    String::from("\n")
+                };
             }
-        } else {
-            let trailing = raw_str(array.trailing()).to_string();
-            let mut new_trailing = drop_first_line_comment(&trailing);
-            if let Some(standalone) = &standalone {
-                // The closing bracket must start on a fresh line, or it would
-                // be swallowed by the comment.
-                if !starts_on_fresh_line(&new_trailing) {
-                    new_trailing = String::from("\n");
-                }
-                new_trailing = format!("{standalone}{new_trailing}");
-            }
-            array.set_trailing(new_trailing);
+            gap = format!("{standalone}{gap}");
         }
+        set_array_gap(array, index + 1, gap);
     }
 
     let removed_last = keep.last().is_some_and(|keep| !keep);
@@ -179,120 +331,6 @@ pub fn retain_array_elements(array: &mut Array, mut predicate: impl FnMut(&Value
     }
 }
 
-/// Moves the element at `from` to index `to`, keeping the comment on its
-/// line and the standalone comment lines directly above it attached to it.
-/// The surrounding elements keep their formatting. Out-of-range indices and
-/// `from == to` leave the array untouched.
-pub fn move_array_element(array: &mut Array, from: usize, to: usize) {
-    if from == to || to >= array.len() {
-        return;
-    }
-    let Some(mut value) = array.get(from).cloned() else {
-        return;
-    };
-
-    let (comment, standalone) = if detect_array_style(array).is_multiline() {
-        detach_element_lines(array, from)
-    } else {
-        (None, None)
-    };
-
-    let mut index = 0;
-    retain_array_elements(array, |_| {
-        let keep = index != from;
-        index += 1;
-        keep
-    });
-
-    value.decor_mut().clear();
-    insert_array_element(array, to, value);
-
-    if let Some(standalone) = standalone
-        && let Some(moved) = array.get_mut(to)
-    {
-        let prefix = decor_prefix(moved.decor()).to_string();
-        let new_prefix = match prefix.rsplit_once('\n') {
-            Some((head, indent)) => format!("{head}{standalone}\n{indent}"),
-            None => format!("{prefix}{standalone}\n"),
-        };
-        moved.decor_mut().set_prefix(new_prefix);
-    }
-    if let Some(comment) = comment {
-        attach_line_comment(array, to, &comment);
-    }
-}
-
-/// Detaches the comment on the line of the element at `index` and the
-/// standalone comment lines in front of it, so they can travel along when the
-/// element moves. The first line of the element's prefix stays: it belongs to
-/// the line above.
-fn detach_element_lines(array: &mut Array, index: usize) -> (Option<String>, Option<String>) {
-    let mut comment = None;
-    let mut standalone = None;
-    if let Some(element) = array.get_mut(index) {
-        let prefix = decor_prefix(element.decor()).to_string();
-        if let Some((first_line, rest)) = prefix.split_once('\n') {
-            let rest = format!("\n{rest}");
-            if let Some(lines) = standalone_comment_lines(&rest) {
-                standalone = Some(lines.to_string());
-                let indent = indent_after_newline(&rest).unwrap_or_default();
-                element
-                    .decor_mut()
-                    .set_prefix(format!("{first_line}\n{indent}"));
-            }
-        }
-        let suffix = decor_suffix(element.decor()).to_string();
-        if let Some((line_comment, rest)) = split_first_line_comment(&suffix) {
-            comment = Some(line_comment);
-            element.decor_mut().set_suffix(rest);
-        }
-    }
-    if comment.is_some() {
-        return (comment, standalone);
-    }
-    if let Some(next) = array.get_mut(index + 1) {
-        let prefix = decor_prefix(next.decor()).to_string();
-        if let Some((line_comment, rest)) = split_first_line_comment(&prefix) {
-            comment = Some(line_comment);
-            next.decor_mut().set_prefix(rest);
-        }
-    } else {
-        let trailing = raw_str(array.trailing()).to_string();
-        if let Some((line_comment, rest)) = split_first_line_comment(&trailing) {
-            comment = Some(line_comment);
-            array.set_trailing(rest);
-        }
-    }
-    (comment, standalone)
-}
-
-/// Puts `comment` at the end of the line of the element at `index`, behind
-/// its separator comma.
-fn attach_line_comment(array: &mut Array, index: usize, comment: &str) {
-    let indent = match detect_array_style(array) {
-        ContainerStyle::Multiline { indent } => indent,
-        ContainerStyle::SingleLine => String::new(),
-    };
-    if let Some(next) = array.get_mut(index + 1) {
-        let prefix = decor_prefix(next.decor()).to_string();
-        let new_prefix = if starts_on_fresh_line(&prefix) {
-            format!(" {comment}{prefix}")
-        } else {
-            format!(" {comment}\n{indent}{}", prefix.trim_start())
-        };
-        next.decor_mut().set_prefix(new_prefix);
-    } else {
-        let trailing = raw_str(array.trailing()).to_string();
-        let new_trailing = if starts_on_fresh_line(&trailing) {
-            format!(" {comment}{trailing}")
-        } else {
-            format!(" {comment}\n{trailing}")
-        };
-        array.set_trailing_comma(true);
-        array.set_trailing(new_trailing);
-    }
-}
-
 fn detach_last_element_suffix(array: &mut Array) -> DetachedSuffix {
     match array.iter_mut().last() {
         Some(last) => detach_suffix(last.decor_mut()),
@@ -312,9 +350,7 @@ mod tests {
     use insta::assert_snapshot;
     use toml_edit::{DocumentMut, Value};
 
-    use super::{
-        insert_array_element, move_array_element, push_array_element, retain_array_elements,
-    };
+    use super::{insert_array_element, push_array_element, retain_array_elements};
 
     fn push_in(toml: &str, key: &str, value: &str) -> String {
         let mut doc: DocumentMut = toml.parse().unwrap();
@@ -505,6 +541,18 @@ mod tests {
             "prio",
             "conda-forge",
             "bioconda",
+        ]
+        "#);
+    }
+
+    #[test]
+    fn insert_at_front_of_multiline_array_starting_on_bracket_line() {
+        let mut doc: DocumentMut = "channels = [\"a\", # A\n    \"b\",\n]\n".parse().unwrap();
+        let array = doc["channels"].as_array_mut().unwrap();
+        insert_array_element(array, 0, r#""prio""#.parse().unwrap());
+        assert_snapshot!(doc.to_string(), @r#"
+        channels = ["prio", "a", # A
+            "b",
         ]
         "#);
     }
@@ -928,114 +976,6 @@ mod tests {
         ]
         "#
         );
-    }
-
-    fn move_in(toml: &str, from: usize, to: usize) -> String {
-        let mut doc: DocumentMut = toml.parse().unwrap();
-        let array = doc["channels"].as_array_mut().unwrap();
-        move_array_element(array, from, to);
-        doc.to_string()
-    }
-
-    #[test]
-    fn move_to_front_of_single_line_array() {
-        assert_snapshot!(
-            move_in(r#"channels = ["a", "b", "c"]"#, 2, 0),
-            @r#"channels = ["c", "a", "b"]"#
-        );
-    }
-
-    #[test]
-    fn move_to_front_takes_comments_along() {
-        assert_snapshot!(
-            move_in(
-                r#"channels = [ # our channels
-    "a", # first
-    # the mirror
-    "b", # second
-    "c",
-]
-"#,
-                1,
-                0
-            ),
-            @r#"
-        channels = [ # our channels
-            # the mirror
-            "b", # second
-            "a", # first
-            "c",
-        ]
-        "#
-        );
-    }
-
-    #[test]
-    fn move_last_element_to_front_takes_comment_along() {
-        assert_snapshot!(
-            move_in(
-                r#"channels = [
-    "a", # first
-    "b" # last
-]
-"#,
-                1,
-                0
-            ),
-            @r#"
-        channels = [
-            "b", # last
-            "a" # first
-        ]
-        "#
-        );
-    }
-
-    #[test]
-    fn move_to_end_takes_comment_along() {
-        assert_snapshot!(
-            move_in(
-                r#"channels = [
-    "a", # first
-    "b",
-]
-"#,
-                0,
-                1
-            ),
-            @r#"
-        channels = [
-            "b",
-            "a", # first
-        ]
-        "#
-        );
-    }
-
-    #[test]
-    fn move_to_front_of_array_starting_on_bracket_line() {
-        assert_snapshot!(
-            move_in(
-                r#"channels = ["a", # A
-    "b", # B
-    "c",
-]
-"#,
-                2,
-                0
-            ),
-            @r#"
-        channels = ["c", "a", # A
-            "b", # B
-        ]
-        "#
-        );
-    }
-
-    #[test]
-    fn move_to_same_index_is_a_noop() {
-        let toml = "channels = [\n    \"a\", # first\n    \"b\",\n]\n";
-        assert_eq!(move_in(toml, 0, 0), toml);
     }
 
     #[test]
