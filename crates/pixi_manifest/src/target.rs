@@ -1331,8 +1331,8 @@ mod tests {
         name = "test"
         channels = []
         platforms = [
-            { name = "cuda-win-64", platform = "win-64", cuda = "12" },
-            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+            { name = "cuda-win-64", subdir = "win-64", cuda = "12" },
+            { name = "cuda-linux-64", subdir = "linux-64", cuda = "12" },
             "linux-64",
         ]
 

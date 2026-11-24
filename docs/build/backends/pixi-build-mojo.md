@@ -350,7 +350,7 @@ Build CPU and AMD GPU variants with `mojo_accelerator`:
 
 ```toml
 [workspace]
-platforms = [{ platform = "linux-64", glibc = "2.34", archspec = "x86_64_v3" }]
+platforms = [{ subdir = "linux-64", glibc = "2.34", archspec = "x86_64_v3" }]
 preview = ["pixi-build"]
 
 [workspace.build-variants]

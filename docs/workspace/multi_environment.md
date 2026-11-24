@@ -63,7 +63,7 @@ As an environment goes beyond just `dependencies`, both environments and feature
 ```toml title="Default features"
 [workspace]
 # This platform declares __glibc 2.33 as available on linux-64.
-platforms = [{ platform = "linux-64", glibc = "2.33" }]
+platforms = [{ subdir = "linux-64", glibc = "2.33" }]
 
 [dependencies] # short for [feature.default.dependencies]
 python = "*"
@@ -89,7 +89,7 @@ pytest = "*"
 [workspace]
 platforms = [
   "osx-arm64",
-  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+  { name = "linux-64-cuda", subdir = "linux-64", cuda = "12" },
 ]
 
 [feature.cuda]
@@ -445,10 +445,10 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
       "linux-64",
       "osx-64",
       "osx-arm64",
-      { name = "win-64-cuda", platform = "win-64", cuda = "12.1" },
-      { name = "linux-64-cuda", platform = "linux-64", cuda = "12.1" },
+      { name = "win-64-cuda", subdir = "win-64", cuda = "12.1" },
+      { name = "linux-64-cuda", subdir = "linux-64", cuda = "12.1" },
       # MLX is only available on macOS >=13.5 (>14.0 is recommended)
-      { name = "osx-arm64-mlx", platform = "osx-arm64", macos = "13.5" },
+      { name = "osx-arm64-mlx", subdir = "osx-arm64", macos = "13.5" },
     ]
 
     [tasks]

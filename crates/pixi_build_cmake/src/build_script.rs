@@ -6,6 +6,8 @@ pub struct BuildScriptContext {
     pub build_platform: BuildPlatform,
     pub source_dir: String,
     pub extra_args: Vec<String>,
+    /// Pass `--verbose` to `cmake --build`, which has a single verbose level.
+    pub verbose: bool,
 }
 
 #[derive(Copy, Clone, Serialize)]
@@ -46,6 +48,7 @@ mod test {
             build_platform,
             source_dir: String::from("my-prefix-dir"),
             extra_args: extra_args.clone(),
+            verbose: false,
         };
         let script = context.render();
 
@@ -65,13 +68,37 @@ mod test {
     }
 
     /// Renders the script for a platform.
-    fn render(build_platform: BuildPlatform) -> String {
+    fn render(build_platform: BuildPlatform, verbose: bool) -> String {
         BuildScriptContext {
             build_platform,
             source_dir: String::from("/src/demo"),
             extra_args: vec![],
+            verbose,
         }
         .render()
+    }
+
+    #[test]
+    fn test_build_verbosity() {
+        let build_lines = [BuildPlatform::Unix, BuildPlatform::Windows]
+            .into_iter()
+            .flat_map(|platform| {
+                [false, true].map(|verbose| {
+                    render(platform, verbose)
+                        .lines()
+                        .filter(|line| line.contains("cmake --build"))
+                        .map(str::trim)
+                        .collect::<String>()
+                })
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        insta::assert_snapshot!(build_lines, @r"
+        cmake --build . --target install
+        cmake --build . --target install --verbose
+        cmake --build . --target install
+        cmake --build . --target install --verbose
+        ");
     }
 
     /// An install prefix holding a space must reach cmake as one argument, so
@@ -79,11 +106,12 @@ mod test {
     #[test]
     fn test_the_install_prefix_is_quoted() {
         assert!(
-            render(BuildPlatform::Unix).contains(r#"-DCMAKE_INSTALL_PREFIX="$PREFIX""#),
+            render(BuildPlatform::Unix, false).contains(r#"-DCMAKE_INSTALL_PREFIX="$PREFIX""#),
             "the unix install prefix is unquoted"
         );
         assert!(
-            render(BuildPlatform::Windows).contains(r#"-DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%""#),
+            render(BuildPlatform::Windows, false)
+                .contains(r#"-DCMAKE_INSTALL_PREFIX="%LIBRARY_PREFIX%""#),
             "the windows install prefix is unquoted"
         );
     }
@@ -114,7 +142,8 @@ mod test {
         write_stub("ninja", "#!/bin/sh\nexit 0\n");
 
         let script = dir.path().join("build.sh");
-        fs_err::write(&script, render(BuildPlatform::Unix)).expect("failed to write the script");
+        fs_err::write(&script, render(BuildPlatform::Unix, false))
+            .expect("failed to write the script");
 
         let output = std::process::Command::new("bash")
             .arg(&script)
@@ -173,7 +202,7 @@ mod test {
     #[test]
     fn test_the_python_flag_bypasses_cmake_args() {
         for platform in [BuildPlatform::Unix, BuildPlatform::Windows] {
-            let script = render(platform);
+            let script = render(platform, false);
             assert!(
                 !script.contains("CMAKE_ARGS% -DPython_EXECUTABLE")
                     && !script.contains("CMAKE_ARGS -DPython_EXECUTABLE"),

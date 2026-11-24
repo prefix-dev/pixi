@@ -84,7 +84,7 @@ def _write_consumer(workspace: Path, channel: Path, platforms: list[dict[str, An
 def test_mojo_binary_installs_compiler_runtime(pixi: Path, tmp_pixi_workspace: Path) -> None:
     workspace = tmp_pixi_workspace
     workspace.joinpath("main.mojo").write_text('def main():\n    print("hello from Mojo")\n')
-    platforms = [{"platform": CURRENT_PLATFORM}]
+    platforms = [{"subdir": CURRENT_PLATFORM}]
     build_variants = {}
     build_config: dict[str, Any] = {"bins": [{"name": PACKAGE_NAME, "path": "main.mojo"}]}
     if CURRENT_PLATFORM == "linux-64":
@@ -198,7 +198,7 @@ def test_mojo_library_pins_compiler(
     compiler_build = _runtime_pin(index, "mojo-compiler", compiler_version)
 
     consumer = workspace.joinpath("consumer")
-    _write_consumer(consumer, channel, [{"platform": CURRENT_PLATFORM}])
+    _write_consumer(consumer, channel, [{"subdir": CURRENT_PLATFORM}])
     consumer.joinpath("main.mojo").write_text(
         "from probe import answer\n\ndef main():\n    print(answer())\n"
     )
@@ -307,11 +307,11 @@ def test_mojo_variants_publish_solve_and_run(pixi: Path, mojo_workspace: Path) -
 
     consumer = mojo_workspace.joinpath("consumer")
     platforms: list[dict[str, Any]] = [
-        {"name": "cpu", "platform": "linux-64", "glibc": "2.34"},
-        {"name": "matching-amd", "platform": "linux-64", "glibc": "2.34", "amdgpu": "gfx1103"},
-        {"name": "other-amd", "platform": "linux-64", "glibc": "2.34", "amdgpu": "gfx1100"},
-        {"name": "newer-amd", "platform": "linux-64", "glibc": "2.34", "amdgpu": "gfx1150"},
-        {"name": "newer-cpu", "platform": "linux-64", "glibc": "2.34", "archspec": "x86_64_v4"},
+        {"name": "cpu", "subdir": "linux-64", "glibc": "2.34"},
+        {"name": "matching-amd", "subdir": "linux-64", "glibc": "2.34", "amdgpu": "gfx1103"},
+        {"name": "other-amd", "subdir": "linux-64", "glibc": "2.34", "amdgpu": "gfx1100"},
+        {"name": "newer-amd", "subdir": "linux-64", "glibc": "2.34", "amdgpu": "gfx1150"},
+        {"name": "newer-cpu", "subdir": "linux-64", "glibc": "2.34", "archspec": "x86_64_v4"},
     ]
     for platform in platforms:
         platform.setdefault("archspec", "x86_64_v3")
@@ -369,7 +369,7 @@ def test_mojo_variants_publish_solve_and_run(pixi: Path, mojo_workspace: Path) -
     _write_consumer(
         older_cpu,
         channel,
-        [{"name": "v2", "platform": "linux-64", "glibc": "2.34", "archspec": "x86_64_v2"}],
+        [{"name": "v2", "subdir": "linux-64", "glibc": "2.34", "archspec": "x86_64_v2"}],
     )
     verify_cli_command(
         [pixi, "lock"],

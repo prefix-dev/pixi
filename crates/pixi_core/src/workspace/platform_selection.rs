@@ -383,8 +383,8 @@ mod tests {
                 name = "selection"
                 channels = []
                 platforms = [
-                    { name = "first", platform = "linux-64", cuda = "99" },
-                    { name = "second", platform = "linux-64", cuda = "99" },
+                    { name = "first", subdir = "linux-64", cuda = "99" },
+                    { name = "second", subdir = "linux-64", cuda = "99" },
                 ]
                 [dependencies]
                 foo = "*"
@@ -534,7 +534,7 @@ mod tests {
                 [workspace]
                 name = "emulation"
                 channels = []
-                platforms = [{ name = "intel", platform = "osx-64", cuda = "99" }]
+                platforms = [{ name = "intel", subdir = "osx-64", cuda = "99" }]
                 [dependencies]
                 foo = "*"
             "#,

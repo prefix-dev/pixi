@@ -210,7 +210,7 @@ fn workspace_declaring(channel: &Url, subdir: Subdir, declares: &[(&str, &str)])
             .map(|(name, version)| format!(r#"{name} = "{version}""#))
             .collect::<Vec<_>>()
             .join(", ");
-        format!(r#"{{ platform = "{subdir}", {entries} }}"#)
+        format!(r#"{{ subdir = "{subdir}", {entries} }}"#)
     };
     let pixi = PixiControl::from_manifest(&format!(
         r#"

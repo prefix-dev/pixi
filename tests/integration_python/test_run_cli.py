@@ -143,7 +143,7 @@ def test_run_wildcard_target_selector_resolves_per_platform(
 [workspace]
 name = "glob-target-test"
 channels = []
-platforms = ["{CURRENT_PLATFORM}", {{ name = "{gpu_platform}", platform = "{CURRENT_PLATFORM}" }}]
+platforms = ["{CURRENT_PLATFORM}", {{ name = "{gpu_platform}", subdir = "{CURRENT_PLATFORM}" }}]
 
 [tasks]
 hello = "echo default-task"

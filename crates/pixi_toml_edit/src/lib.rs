@@ -17,7 +17,9 @@ mod array;
 mod entry;
 mod style;
 
-pub use array::{insert_array_element, push_array_element, retain_array_elements};
+pub use array::{
+    insert_array_element, move_array_element, push_array_element, retain_array_elements,
+};
 pub use entry::{
     find_table_key, remove_entry, remove_inline_table_entry, remove_table_entry, upsert_entry,
     upsert_inline_table_entry, upsert_table_entry,

@@ -31,5 +31,8 @@ pixi upload anaconda [OPTIONS] --owner <OWNER>
 - <a id="arg---force" href="#arg---force">`--force (-f)`</a>
 :  Replace files on conflict
 <br>**env**: `ANACONDA_FORCE`
+- <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing (-s)`</a>
+:  Skip upload if package already exists
+<br>**env**: `ANACONDA_SKIP_EXISTING`
 
 --8<-- "docs/reference/cli/pixi/upload/anaconda_extender:example"

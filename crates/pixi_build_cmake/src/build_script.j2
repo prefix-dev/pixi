@@ -61,7 +61,7 @@ if not exist build.ninja (
     @if errorlevel 1 exit 1
 )
 
-cmake --build . --target install
+cmake --build . --target install{% if verbose %} --verbose{% endif %}
 @if errorlevel 1 exit 1
 
 {# Non Windows #}
@@ -70,5 +70,5 @@ if [ ! -f "build.ninja" ]; then
     cmake {{ cmake_args | join(" \\\n        ") }}
 fi
 
-cmake --build . --target install
+cmake --build . --target install{% if verbose %} --verbose{% endif %}
 {% endif -%}
