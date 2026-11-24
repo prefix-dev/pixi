@@ -212,7 +212,17 @@ The backend reads dependencies from the `DESCRIPTION` file:
 
 ### Built-in Packages
 
-Packages that are included with R (such as `stats`, `utils`, `base`, `methods`, `Matrix`, `MASS`, etc.) are automatically filtered out and not added as separate dependencies.
+R's base packages (such as `stats`, `utils`, `base` and `methods`) come with `r-base`, so they are filtered out and not added as separate dependencies.
+R's recommended packages (such as `MASS`, `Matrix` and `mgcv`) are separate packages on conda-forge (`r-mass`, `r-matrix`, `r-mgcv`), so they are added like any other dependency.
+
+### Rust
+
+Packages with Rust code declare it in `SystemRequirements`, as CRAN asks: `Cargo (Rust's package manager), rustc`.
+When `SystemRequirements` mentions `cargo` or `rustc`, the backend adds `rust` to the build requirements, and on Windows also `rust-std-x86_64-pc-windows-gnu`, since R packages build their Rust code for the GNU target there.
+
+### CMake and pkg-config
+
+When `SystemRequirements` names `cmake`, the backend adds `cmake` to the build requirements, and when it names `pkg-config`, `pkg-config`, so the build doesn't depend on whichever of them is on the machine's `PATH`.
 
 ## Build Process
 

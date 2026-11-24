@@ -35,9 +35,12 @@ pub struct TopLevelProgress {
     registry: Arc<OperationRegistry>,
     source_checkout_reporter: Arc<GitCheckoutProgress>,
     conda_solve_reporter: MainProgressBar<String>,
-    /// `OperationId` → bar slot in `conda_solve_reporter`. Lets
-    /// `on_started` / `on_finished` find the bar created at `on_queued`.
-    solve_bars: Mutex<HashMap<OperationId, usize>>,
+    /// Pixi solve `OperationId` → its bar slot in `conda_solve_reporter`,
+    /// until the pixi solve's conda solve claims it.
+    pixi_solve_bars: Mutex<HashMap<OperationId, usize>>,
+    /// Conda solve `OperationId` → its bar in `conda_solve_reporter`. Lets
+    /// `on_started` / `on_finished` find the bar chosen at `on_queued`.
+    solve_bars: Mutex<HashMap<OperationId, CondaSolveBar>>,
     /// `OperationId` → bar slot in `conda_solve_reporter` for build-backend
     /// metadata fetches. Kept separate from `solve_bars` so they can be
     /// resolved independently in the reporter callbacks.
@@ -96,6 +99,7 @@ impl TopLevelProgress {
             registry,
             source_checkout_reporter,
             conda_solve_reporter,
+            pixi_solve_bars: Mutex::new(HashMap::new()),
             solve_bars: Mutex::new(HashMap::new()),
             backend_metadata_bars: Mutex::new(HashMap::new()),
             repodata_reporter,
@@ -146,8 +150,12 @@ impl TopLevelProgress {
         self.registry.allocate()
     }
 
+    #[cfg(test)]
     fn solve_bar(&self, id: OperationId) -> Option<usize> {
-        self.solve_bars.lock().get(&id).copied()
+        match self.solve_bars.lock().get(&id)? {
+            CondaSolveBar::Bar(bar) => Some(*bar),
+            CondaSolveBar::Unclaimed { .. } => None,
+        }
     }
 }
 
@@ -192,45 +200,64 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
         let bar = self
             .conda_solve_reporter
             .queued(format!("{} ({})", env.name, env.platform));
-        self.solve_bars.lock().insert(id, bar);
+        self.pixi_solve_bars.lock().insert(id, bar);
         id
     }
 
     fn on_started(&self, _solve_id: OperationId) {}
 
     fn on_finished(&self, solve_id: OperationId) {
-        self.solve_bars.lock().remove(&solve_id);
+        // A claimed bar is finished by the conda solve that claimed it.
+        // Otherwise no conda solve ran under this pixi solve, e.g. because it
+        // failed earlier, its conda solve was cancelled before starting, or
+        // its conda solve was shared with another pixi solve, so finish the
+        // bar here or it would never be cleared.
+        if let Some(bar) = self.pixi_solve_bars.lock().remove(&solve_id) {
+            self.conda_solve_reporter.finish(bar);
+        }
     }
 }
 
 impl pixi_command_dispatcher::CondaSolveReporter for TopLevelProgress {
     fn on_queued(&self, env: &SolveCondaEnvironmentSpec) -> OperationId {
-        // Reuse the parent pixi-solve's bar slot when one is active so
-        // a conda solve nested inside a pixi solve renders as the same
-        // entry rather than a fresh row.
+        // A pixi solve's own conda solve renders as the pixi solve's entry
+        // rather than a fresh row. Only a direct child qualifies: solves
+        // further down, such as a build-backend environment, are separate
+        // work, and sharing the bar would finish it twice.
         let id = self.alloc();
-        let parent_bar = self
-            .registry
-            .ancestors(id)
-            .find_map(|ancestor| self.solve_bar(ancestor));
-        let bar = match parent_bar {
-            Some(bar) => bar,
-            None => self
-                .conda_solve_reporter
-                .queued(env.name.clone().unwrap_or_default()),
+        let name = env.name.clone().unwrap_or_default();
+        let entry = match self.registry.parent_of(id) {
+            Some(pixi_solve) if self.pixi_solve_bars.lock().contains_key(&pixi_solve) => {
+                CondaSolveBar::Unclaimed { pixi_solve, name }
+            }
+            _ => CondaSolveBar::Bar(self.conda_solve_reporter.queued(name)),
         };
-        self.solve_bars.lock().insert(id, bar);
+        self.solve_bars.lock().insert(id, entry);
         id
     }
 
     fn on_started(&self, solve_id: OperationId) {
-        if let Some(bar) = self.solve_bar(solve_id) {
-            self.conda_solve_reporter.start(bar);
-        }
+        let Some(entry) = self.solve_bars.lock().remove(&solve_id) else {
+            return;
+        };
+        let bar = match entry {
+            CondaSolveBar::Bar(bar) => bar,
+            CondaSolveBar::Unclaimed { pixi_solve, name } => {
+                // Claim the pixi solve's bar, taking over finishing it, unless
+                // the pixi solve has already finished or another conda solve
+                // claimed it first.
+                let claimed = self.pixi_solve_bars.lock().remove(&pixi_solve);
+                claimed.unwrap_or_else(|| self.conda_solve_reporter.queued(name))
+            }
+        };
+        self.solve_bars
+            .lock()
+            .insert(solve_id, CondaSolveBar::Bar(bar));
+        self.conda_solve_reporter.start(bar);
     }
 
     fn on_finished(&self, solve_id: OperationId) {
-        if let Some(bar) = self.solve_bars.lock().remove(&solve_id) {
+        if let Some(CondaSolveBar::Bar(bar)) = self.solve_bars.lock().remove(&solve_id) {
             self.conda_solve_reporter.finish(bar);
         }
     }
@@ -280,6 +307,19 @@ impl BuildBackendMetadataReporter for TopLevelProgress {
     }
 }
 
+/// The bar of a conda solve.
+enum CondaSolveBar {
+    /// Its own entry, or the pixi solve bar it claimed.
+    Bar(usize),
+    /// A pixi solve's own conda solve that has not started yet. It claims the
+    /// pixi solve's bar only when it starts: one cancelled while waiting for a
+    /// solver never reports finishing, so the pixi solve must finish its bar.
+    Unclaimed {
+        pixi_solve: OperationId,
+        name: String,
+    },
+}
+
 /// Clears the progress bars of the reporter it was created from once it goes
 /// out of scope. See [`TopLevelProgress::clear_when_done`].
 #[must_use = "the bars are cleared when this guard drops, so it must be bound"]
@@ -289,6 +329,147 @@ impl Drop for ClearWhenDone {
     fn drop(&mut self) {
         if let Some(progress) = &self.0 {
             progress.on_clear();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::executor::block_on;
+    use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget};
+    use itertools::Itertools;
+    use pixi_command_dispatcher::{
+        CondaSolveReporter, PixiSolveEnvironmentSpec, PixiSolveReporter, SolveCondaEnvironmentSpec,
+    };
+    use pixi_compute_reporters::{OperationId, OperationRegistry};
+
+    use super::TopLevelProgress;
+
+    fn progress() -> TopLevelProgress {
+        let multi_progress = MultiProgress::with_draw_target(ProgressDrawTarget::hidden());
+        let anchor_pb = multi_progress.add(ProgressBar::hidden());
+        TopLevelProgress::new(OperationRegistry::new(), multi_progress, anchor_pb)
+    }
+
+    fn queue_pixi_solve(progress: &TopLevelProgress) -> OperationId {
+        let id = PixiSolveReporter::on_queued(
+            progress,
+            &PixiSolveEnvironmentSpec {
+                name: "default".to_owned(),
+                platform: "linux-64".to_owned(),
+                has_direct_conda_dependency: false,
+            },
+        );
+        PixiSolveReporter::on_started(progress, id);
+        id
+    }
+
+    fn queue_conda_solve(progress: &TopLevelProgress) -> OperationId {
+        CondaSolveReporter::on_queued(progress, &SolveCondaEnvironmentSpec::default())
+    }
+
+    fn pixi_bar(progress: &TopLevelProgress, id: OperationId) -> usize {
+        progress.pixi_solve_bars.lock()[&id]
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/7369>.
+    #[test]
+    fn nested_conda_solve_gets_its_own_bar() {
+        let progress = progress();
+        let pixi = queue_pixi_solve(&progress);
+        let pixi_bar = pixi_bar(&progress, pixi);
+        block_on(pixi.scope_active(async {
+            // A build-backend environment solved on behalf of the pixi
+            // solve, one operation further down.
+            let backend = progress.registry().allocate();
+            let nested = backend
+                .scope_active(async { queue_conda_solve(&progress) })
+                .await;
+            assert_ne!(progress.solve_bar(nested), Some(pixi_bar));
+            CondaSolveReporter::on_started(&progress, nested);
+            CondaSolveReporter::on_finished(&progress, nested);
+
+            // A failure elsewhere clears the finished bars before the pixi
+            // solve's own conda solve runs.
+            progress.on_clear();
+
+            let own = queue_conda_solve(&progress);
+            CondaSolveReporter::on_started(&progress, own);
+            assert_eq!(progress.solve_bar(own), Some(pixi_bar));
+            CondaSolveReporter::on_finished(&progress, own);
+        }));
+        PixiSolveReporter::on_finished(&progress, pixi);
+    }
+
+    /// A pixi solve that fails before its conda solve, or whose conda solve
+    /// is shared with another pixi solve, must still finish its bar.
+    #[test]
+    fn unclaimed_pixi_solve_bar_is_finished() {
+        let progress = progress();
+        let pixi = queue_pixi_solve(&progress);
+        let pixi_bar = pixi_bar(&progress, pixi);
+        PixiSolveReporter::on_finished(&progress, pixi);
+        progress.on_clear();
+        assert!(!progress.conda_solve_reporter.is_tracked(pixi_bar));
+    }
+
+    /// A conda solve cancelled while waiting for a solver never reports
+    /// finishing, so it must not take the pixi solve's bar with it.
+    #[test]
+    fn cancelled_queued_conda_solve_leaves_the_bar_to_the_pixi_solve() {
+        let progress = progress();
+        let pixi = queue_pixi_solve(&progress);
+        let pixi_bar = pixi_bar(&progress, pixi);
+        block_on(pixi.scope_active(async { queue_conda_solve(&progress) }));
+        PixiSolveReporter::on_finished(&progress, pixi);
+        progress.on_clear();
+        assert!(!progress.conda_solve_reporter.is_tracked(pixi_bar));
+    }
+
+    /// Every order in which the dispatcher can report a pixi solve, its own
+    /// conda solve and a nested build-backend solve, with a clear after each
+    /// event, must neither panic nor leave a bar behind.
+    #[test]
+    fn interleaved_solves_never_panic_and_finish_every_bar() {
+        // 0-2: nested queued/started/finished, 3-5: own queued/started/
+        // finished, 6: pixi solve finished. The nested solve may outlive the
+        // pixi solve, as a shared backend environment does.
+        let orders = (0..7u8).permutations(7).filter(|order| {
+            let pos = |event| order.iter().position(|e| *e == event).unwrap();
+            pos(0) < pos(1)
+                && pos(1) < pos(2)
+                && pos(3) < pos(4)
+                && pos(4) < pos(5)
+                && pos(5) < pos(6)
+        });
+        for order in orders {
+            let progress = progress();
+            let pixi = queue_pixi_solve(&progress);
+            let backend = progress.registry().allocate();
+            let (mut nested, mut own) = (None, None);
+            for event in order {
+                match event {
+                    0 => {
+                        nested = Some(block_on(pixi.scope_active(
+                            backend.scope_active(async { queue_conda_solve(&progress) }),
+                        )))
+                    }
+                    1 => CondaSolveReporter::on_started(&progress, nested.unwrap()),
+                    2 => CondaSolveReporter::on_finished(&progress, nested.unwrap()),
+                    3 => {
+                        own = Some(block_on(
+                            pixi.scope_active(async { queue_conda_solve(&progress) }),
+                        ))
+                    }
+                    4 => CondaSolveReporter::on_started(&progress, own.unwrap()),
+                    5 => CondaSolveReporter::on_finished(&progress, own.unwrap()),
+                    _ => PixiSolveReporter::on_finished(&progress, pixi),
+                }
+                progress.on_clear();
+            }
+            assert!((0..3).all(|bar| !progress.conda_solve_reporter.is_tracked(bar)));
+            assert!(progress.pixi_solve_bars.lock().is_empty());
+            assert!(progress.solve_bars.lock().is_empty());
         }
     }
 }

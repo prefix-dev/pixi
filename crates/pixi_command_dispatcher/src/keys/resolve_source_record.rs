@@ -425,6 +425,7 @@ async fn assemble_source_record_inner(
             .as_ref()
             .map(ToString::to_string),
         name: output.metadata.name.clone(),
+        // Validated when the backend returned its outputs.
         build: output.metadata.build.clone(),
         version: output.metadata.version.clone(),
         build_number: output.metadata.build_number,
@@ -716,7 +717,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::new_unchecked(name),
             "1.0.0".parse::<VersionWithSource>().unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         package_record.subdir = subdir.into();
         UnresolvedPixiRecord::Binary(Arc::new(RepoDataRecord {

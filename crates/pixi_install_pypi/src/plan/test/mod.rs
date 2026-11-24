@@ -454,7 +454,7 @@ fn test_local_source_newer_than_local_metadata() {
     // Modify pyproject.toml to change its content and timestamp
     std::thread::sleep(std::time::Duration::from_millis(10));
     pyproject
-        .write_all(b"[build-system]\nrequires = [\"hatchling\"]")
+        .write_all(b"\n[tool.test]\nmodified = true\n")
         .unwrap();
     pyproject.sync_all().unwrap();
 

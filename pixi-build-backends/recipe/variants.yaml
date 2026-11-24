@@ -14,7 +14,7 @@ c_stdlib_version:
   - if: linux
     then: 2.17
   - if: osx and x86_64
-    then: 10.13
+    then: 11.0
   - if: osx and arm64
     then: 11.0
 c_compiler:
@@ -53,4 +53,4 @@ python_min:
 
 # Pin the compiler used
 rust_compiler_version:
-  - 1.95.0
+  - 1.98.1

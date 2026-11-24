@@ -6,25 +6,27 @@ use std::{
     str::FromStr,
 };
 
+use chrono::{DateTime, Utc};
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::SourceCode;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    NamedChannelOrUrl, ParseStrictness::Strict, ParseVersionError, ParseVersionSpecError, Subdir,
-    Version, VersionSpec,
+    NamedChannelOrUrl, PackageName, ParseStrictness::Strict, ParseVersionError,
+    ParseVersionSpecError, VersionSpec, VersionWithSource,
 };
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError, PixiPlatform,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerConfig,
+    ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform,
     PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
     consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
-    error::{DependencyError, UnknownFeature},
+    error::{DependencyError, GenericError, UnknownFeature},
     feature::{Feature, FeatureName},
     manifests::document::ManifestDocument,
     solve_group::SolveGroups,
@@ -39,7 +41,7 @@ use crate::{
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
 /// describes the part related to the workspace only.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct WorkspaceManifest {
     /// Information about the project
     pub workspace: Workspace,
@@ -55,6 +57,22 @@ pub struct WorkspaceManifest {
 
     /// The solve groups that are part of the project.
     pub solve_groups: SolveGroups,
+
+    /// The time relative `exclude-newer` cutoffs are resolved against, fixed
+    /// at load so that every environment resolves them to the same time.
+    pub loaded_at: DateTime<Utc>,
+}
+
+impl Default for WorkspaceManifest {
+    fn default() -> Self {
+        Self {
+            workspace: Workspace::default(),
+            features: IndexMap::default(),
+            environments: Environments::default(),
+            solve_groups: SolveGroups::default(),
+            loaded_at: Utc::now(),
+        }
+    }
 }
 
 impl WorkspaceManifest {
@@ -76,11 +94,11 @@ impl WorkspaceManifest {
     }
 
     /// Register the per-subdir platforms each environment and solve group
-    /// composes from the rich platforms its features reference, so the composed
+    /// composes from the platforms its features reference, so the composed
     /// names resolve for name-based consumers (lock keying, platform lookup).
     ///
     /// Only runs on the subdir-only `[system-requirements]` path; workspaces
-    /// with custom rich platforms match by name and need no composition.
+    /// declaring inline-table platform entries match by name and need no composition.
     pub(crate) fn register_composed_platforms(&mut self) -> Result<(), TomlError> {
         if !self.workspace.use_platform_composition {
             return Ok(());
@@ -131,6 +149,11 @@ impl WorkspaceManifest {
         features
     }
 
+    /// Returns every feature, including the default feature, in manifest order.
+    pub fn features(&self) -> &IndexMap<FeatureName, Feature> {
+        &self.features
+    }
+
     /// Returns the default feature.
     ///
     /// This is the feature that is added implicitly by the tables at the root
@@ -150,13 +173,13 @@ impl WorkspaceManifest {
 
     /// Returns the mutable feature with the given name or `Err` if it does not
     /// exist.
-    pub fn feature_mut<Q>(&mut self, name: &Q) -> Result<&mut Feature, FeatureNotFoundError>
-    where
-        Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
-    {
+    pub fn feature_mut(
+        &mut self,
+        name: &FeatureName,
+    ) -> Result<&mut Feature, FeatureNotFoundError> {
         self.features
             .get_mut(name)
-            .ok_or_else(|| FeatureNotFoundError(name.to_string()))
+            .ok_or_else(|| FeatureNotFoundError(name.clone()))
     }
 
     /// Returns the mutable feature with the given name
@@ -208,6 +231,24 @@ impl WorkspaceManifest {
             .flat_map(|target| target.tasks.iter())
             .map(|(name, task)| (name.clone(), task))
             .collect())
+    }
+
+    /// Returns whether the task `name` is declared in the target for
+    /// `platform` itself. Unlike [`Self::tasks`], this ignores the tasks
+    /// inherited from the default target.
+    pub fn declares_task(
+        &self,
+        name: &TaskName,
+        platform: Option<&PixiPlatform>,
+        feature_name: &FeatureName,
+    ) -> Result<bool, GetFeatureError> {
+        Ok(self
+            .features
+            .get(feature_name)
+            .ok_or(GetFeatureError::FeatureDoesNotExist(feature_name.clone()))?
+            .targets
+            .for_opt_target(platform.map(PixiPlatform::as_target_selector).as_ref())
+            .is_some_and(|target| target.tasks.contains_key(name)))
     }
 
     /// Returns a mutable reference to a [`WorkspaceTarget`], creating it if
@@ -324,23 +365,40 @@ fn missing_activation_feature_error(
         }
         Some(_) => ActivationEditError::NoneDefined {
             what,
-            location: feature_name.user_facing().to_string(),
+            location: ActivationLocation::new(None, feature_name),
         },
-        None => ActivationEditError::FeatureNotFound(feature_name.as_str().to_owned()),
+        None => ActivationEditError::FeatureNotFound(feature_name.clone()),
     }
 }
 
-/// A human-readable description of the feature/target an activation edit
-/// applies to, used in error messages.
-fn activation_location(target: Option<&TargetSelector>, feature_name: &FeatureName) -> String {
-    let feature = if feature_name.is_default() {
-        "the default feature".to_string()
-    } else {
-        feature_name.user_facing().to_string()
-    };
-    match target {
-        Some(target) => format!("{feature} and target '{target}'"),
-        None => feature,
+/// The feature/target an activation edit applies to. Its [`Display`] is the
+/// human-readable description used in error messages.
+#[derive(Debug, Clone)]
+pub struct ActivationLocation {
+    pub feature_name: FeatureName,
+    pub target: Option<TargetSelector>,
+}
+
+impl ActivationLocation {
+    fn new(target: Option<&TargetSelector>, feature_name: &FeatureName) -> Self {
+        Self {
+            feature_name: feature_name.clone(),
+            target: target.cloned(),
+        }
+    }
+}
+
+impl Display for ActivationLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.feature_name.is_default() {
+            write!(f, "the default feature")?;
+        } else {
+            write!(f, "{}", self.feature_name.user_facing())?;
+        }
+        if let Some(target) = &self.target {
+            write!(f, " and target '{target}'")?;
+        }
+        Ok(())
     }
 }
 
@@ -363,14 +421,25 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task already exists
-        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
-            && tasks.contains_key(&name)
+        // A task inherited from the default target may be overridden for a
+        // platform. A missing feature is created below.
+        if self
+            .workspace
+            .declares_task(&name, platform, feature_name)
+            .unwrap_or(false)
         {
             return Err(TaskEditError::AlreadyExists(name));
         }
 
         self.ensure_inline_environment(feature_name)?;
+
+        // Refuse to write a task that refers to an environment that does not
+        // exist, the manifest would fail to parse afterwards.
+        for environment in task.referenced_environments() {
+            if self.workspace.environments.find(environment).is_none() {
+                return Err(TaskEditError::UnknownEnvironment(environment.clone()));
+            }
+        }
 
         // Add the task to the Toml manifest
         self.document
@@ -379,7 +448,7 @@ impl WorkspaceManifestMut<'_> {
         // Add the task to the manifest
         self.workspace
             .get_or_insert_target_mut(
-                platform.map(TargetSelector::from).as_ref(),
+                platform.map(PixiPlatform::as_target_selector).as_ref(),
                 Some(feature_name),
             )
             .tasks
@@ -398,11 +467,9 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task exists
         if !self
             .workspace
-            .tasks(platform, feature_name)?
-            .contains_key(&name)
+            .declares_task(&name, platform, feature_name)?
         {
             return Err(TaskEditError::NotFound(name));
         }
@@ -417,7 +484,7 @@ impl WorkspaceManifestMut<'_> {
             .feature_mut(feature_name)
             .expect("feature existence checked above")
             .targets
-            .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
+            .for_opt_target_mut(platform.map(PixiPlatform::as_target_selector).as_ref())
             .map(|target| target.tasks.remove(&name));
 
         Ok(())
@@ -492,7 +559,7 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
     ) -> Result<(), ActivationEditError> {
         const WHAT: &str = "activation scripts";
-        let location = activation_location(target, feature_name);
+        let location = ActivationLocation::new(target, feature_name);
         if self.workspace.features.get(feature_name).is_none() {
             return Err(missing_activation_feature_error(
                 self.workspace,
@@ -596,7 +663,7 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
     ) -> Result<(), ActivationEditError> {
         const WHAT: &str = "activation environment variables";
-        let location = activation_location(target, feature_name);
+        let location = ActivationLocation::new(target, feature_name);
         if self.workspace.features.get(feature_name).is_none() {
             return Err(missing_activation_feature_error(
                 self.workspace,
@@ -796,6 +863,30 @@ impl WorkspaceManifestMut<'_> {
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
+        // Refuse to remove an environment that tasks still refer to, the
+        // manifest would fail to parse afterwards. Tasks defined inline on the
+        // environment are removed along with it.
+        let referencing_tasks = self
+            .workspace
+            .features
+            .values()
+            .filter(|feature| feature.name.environment_name().map(|n| n.as_str()) != Some(name))
+            .flat_map(|feature| feature.targets.targets())
+            .flat_map(|target| &target.tasks)
+            .filter(|(_, task)| task.referenced_environments().any(|e| e.as_str() == name))
+            .map(|(task_name, _)| format!("'{}'", task_name.as_str()))
+            .sorted()
+            .dedup()
+            .collect_vec();
+        if !referencing_tasks.is_empty() {
+            let referencing_tasks = referencing_tasks.join(", ");
+            return Err(GenericError::new(format!(
+                "cannot remove environment '{name}' because tasks refer to it: {referencing_tasks}"
+            ))
+            .with_help("remove these references first")
+            .into());
+        }
+
         // Remove the environment from the TOML document
         if !self.document.remove_environment(name)? {
             return Ok(false);
@@ -824,7 +915,8 @@ impl WorkspaceManifestMut<'_> {
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     ///
-    /// Returns the list of environments that were modified.
+    /// Returns the list of environments that were modified. Errors when the
+    /// feature does not exist.
     pub fn remove_feature(
         &mut self,
         feature_name: &FeatureName,
@@ -834,8 +926,7 @@ impl WorkspaceManifestMut<'_> {
         }
 
         if self.workspace.features.get(feature_name).is_none() {
-            tracing::warn!("Feature `{}` doesn't exist", feature_name);
-            return Ok(Vec::new());
+            return Err(GetFeatureError::FeatureDoesNotExist(feature_name.clone()).into());
         }
 
         self.workspace.features.shift_remove(feature_name);
@@ -907,103 +998,123 @@ impl WorkspaceManifestMut<'_> {
             .collect()
     }
 
-    /// Declare `platforms` on the workspace, skipping any already present.
-    /// Returns the platforms that were actually added (empty when every
-    /// requested platform was already declared).
+    /// Declare or replace workspace platforms, returning an outcome for every
+    /// requested platform. Replacements keep their declaration position.
     pub fn add_workspace_platforms(
         &mut self,
         platforms: &IndexSet<PixiPlatform>,
-    ) -> Result<IndexSet<PixiPlatform>, PlatformEditError> {
-        // A platform's identity is its (subdir, customised virtual packages)
-        // definition, not its name. Reject adding a second entry that duplicates
-        // an existing definition under a different name -- it would produce a
-        // redundant duplicate solve. Same name + same definition is handled as a
-        // no-op below.
-        for incoming in platforms {
-            if let Some(existing) = self.workspace.workspace.platforms.iter().find(|existing| {
-                existing.name() != incoming.name() && existing.has_same_definition(incoming)
-            }) {
-                return Err(duplicate_definition_error(existing, incoming));
-            }
-        }
-
-        // Only platforms that aren't already declared cause a change. Re-adding
-        // an existing platform (e.g. `pixi add <dep> --platform linux-64` when
-        // linux-64 is already declared) must leave the document untouched.
-        let mut new_platforms: IndexSet<PixiPlatform> = platforms
-            .iter()
-            .filter(|p| !self.workspace.workspace.platforms.contains(*p))
-            .cloned()
-            .collect();
-
-        // While the legacy migration is pending a re-added bare subdir (e.g.
-        // `--platform linux-64`) won't match by identity above: the in-memory
-        // entry for that subdir has been extended with the synthesised virtual
-        // packages. Its bare form being absent from the list is the signal that
-        // it got extended, so drop subdir-platforms whose subdir is already
-        // declared.
-        if self.workspace.workspace.must_migrate {
-            let declared_subdirs: HashSet<Subdir> = self
+    ) -> Result<IndexMap<PixiPlatform, PlatformAddOutcome>, PlatformEditError> {
+        // Validate before changing anything, including collisions within the
+        // incoming batch. A replacement cannot duplicate another name's definition.
+        for (index, incoming) in platforms.iter().enumerate() {
+            if let Some(existing) = self
                 .workspace
                 .workspace
                 .platforms
                 .iter()
+                .chain(platforms.iter().take(index))
+                .find(|existing| {
+                    existing.name() != incoming.name() && existing.has_same_definition(incoming)
+                })
+            {
+                return Err(duplicate_definition_error(existing, incoming));
+            }
+        }
+        for incoming in platforms {
+            if let Some(existing) = self.workspace.workspace.platforms.get(incoming)
+                && (existing.is_subdir_platform() || incoming.is_subdir_platform())
+                && !existing.has_same_definition(incoming)
+            {
+                return Err(PixiPlatformError::IsSubdirPlatform.into());
+            }
+        }
+        let legacy_subdirs = self.workspace.workspace.must_migrate.then(|| {
+            self.workspace
+                .workspace
+                .platforms
+                .iter()
                 .map(PixiPlatform::subdir)
-                .collect();
-            new_platforms
-                .retain(|p| !(p.is_subdir_platform() && declared_subdirs.contains(&p.subdir())));
+                .collect::<HashSet<_>>()
+        });
+
+        let mut outcomes = IndexMap::with_capacity(platforms.len());
+        for incoming in platforms {
+            // Pending legacy migrations synthesize names and virtual packages.
+            // Re-adding the original bare subdir must not undo that migration.
+            let legacy_reference = incoming.is_subdir_platform()
+                && legacy_subdirs
+                    .as_ref()
+                    .is_some_and(|subdirs| subdirs.contains(&incoming.subdir()));
+            let outcome = if legacy_reference {
+                PlatformAddOutcome::Unchanged
+            } else if let Some(existing) = self.workspace.workspace.platforms.get(incoming) {
+                if existing.has_same_definition(incoming) {
+                    PlatformAddOutcome::Unchanged
+                } else {
+                    let previous = self
+                        .workspace
+                        .workspace
+                        .platforms
+                        .replace(incoming.clone())
+                        .expect("platform was just located");
+                    PlatformAddOutcome::Replaced { previous }
+                }
+            } else {
+                self.workspace.workspace.platforms.insert(incoming.clone());
+                PlatformAddOutcome::Added
+            };
+            outcomes.insert(incoming.clone(), outcome);
         }
 
-        if new_platforms.is_empty() {
-            return Ok(IndexSet::new());
+        if outcomes
+            .values()
+            .all(|outcome| matches!(outcome, PlatformAddOutcome::Unchanged))
+        {
+            return Ok(outcomes);
         }
 
-        // A newly-added non-subdir platform is the only edit that commits the
-        // legacy `[system-requirements]` migration to disk.
-        let added_rich = new_platforms.iter().any(|p| !p.is_subdir_platform());
-        if added_rich {
-            // The workspace now declares a custom rich platform, so it is no
-            // longer subdir-only: match platforms by name instead of composing.
+        let changed_non_subdir = outcomes.iter().any(|(platform, outcome)| {
+            !platform.is_subdir_platform() && !matches!(outcome, PlatformAddOutcome::Unchanged)
+        });
+        if changed_non_subdir {
             self.workspace.workspace.use_platform_composition = false;
         }
-        self.workspace
-            .workspace
-            .platforms
-            .extend(new_platforms.iter().cloned());
-
-        // Capture this before `commit_if_needed` clears the flag: a committing
-        // migration rewrites every entry's shape, so the stale on-disk array
-        // has to be re-rendered wholesale rather than appended to.
         let was_migrating = self.workspace.workspace.must_migrate;
-        migrate_to_rich_platforms::commit_if_needed(self, added_rich)?;
+        migrate_system_requirements::commit_if_needed(self, changed_non_subdir)?;
 
+        let added = outcomes.iter().filter_map(|(platform, outcome)| {
+            matches!(outcome, PlatformAddOutcome::Added).then_some(platform)
+        });
         if self.workspace.workspace.must_migrate {
-            // Still in legacy shape (only subdir platforms were added): append
-            // them as bare strings so the on-disk `[system-requirements]` stays
-            // authoritative and the in-memory migration isn't leaked into
-            // `platforms`.
-            self.append_subdir_platforms_toml(&new_platforms)?;
+            // Keep the legacy on-disk system requirements authoritative.
+            self.append_subdir_platforms_toml(added)?;
         } else if was_migrating {
-            // The migration just committed: the document still holds the legacy
-            // bare-subdir entries, so re-render the whole array from the
-            // migrated in-memory set.
             self.rewrite_workspace_platforms_toml()?;
         } else {
-            // Steady state: append only the new entries so the existing array's
-            // order, formatting, and comments survive untouched.
-            self.append_workspace_platforms_toml(&new_platforms)?;
+            for (platform, outcome) in &outcomes {
+                if matches!(outcome, PlatformAddOutcome::Replaced { .. }) {
+                    let index = self
+                        .workspace
+                        .workspace
+                        .platforms
+                        .get_index_of(platform)
+                        .expect("replacement remains declared");
+                    self.replace_workspace_platform_value(index, platform)?;
+                }
+            }
+            self.append_workspace_platforms_toml(added)?;
         }
 
-        Ok(new_platforms)
+        Ok(outcomes)
     }
 
     /// Append `new_platforms` to the `platforms` array as bare subdir strings,
     /// leaving the existing entries untouched. Used while the legacy
     /// `[system-requirements]` migration is still pending, where every added
     /// platform is a subdir-platform.
-    fn append_subdir_platforms_toml(
+    fn append_subdir_platforms_toml<'a>(
         &mut self,
-        new_platforms: &IndexSet<PixiPlatform>,
+        new_platforms: impl IntoIterator<Item = &'a PixiPlatform>,
     ) -> Result<(), TomlError> {
         let array = self
             .document
@@ -1015,13 +1126,13 @@ impl WorkspaceManifestMut<'_> {
     }
 
     /// Append `new_platforms` to the `platforms` array in their existing
-    /// in-memory shape (bare string for subdir-platforms, inline table for rich
-    /// entries), leaving the entries already in the document untouched so their
+    /// in-memory shape (string entries for subdir platforms, inline-table entries
+    /// otherwise), leaving the entries already in the document untouched so their
     /// order, formatting, and comments are preserved. Used for steady-state
     /// `add` once any legacy migration has settled.
-    fn append_workspace_platforms_toml(
+    fn append_workspace_platforms_toml<'a>(
         &mut self,
-        new_platforms: &IndexSet<PixiPlatform>,
+        new_platforms: impl IntoIterator<Item = &'a PixiPlatform>,
     ) -> Result<(), TomlError> {
         let array = self
             .document
@@ -1037,8 +1148,8 @@ impl WorkspaceManifestMut<'_> {
 
     /// Rewrite the `platforms` array in the TOML document from the current
     /// in-memory workspace state, preserving declaration order. Each entry is
-    /// emitted as a bare string for subdir-platforms and as an inline table for
-    /// rich entries (custom name and/or declared virtual packages). Reserved
+    /// emitted as a string entry for subdir platforms and as an inline-table entry
+    /// otherwise (custom name and/or declared virtual packages). Reserved
     /// for the legacy migration commit, where every entry changes shape;
     /// steady-state edits use the in-place helpers so they don't reflow the
     /// whole array.
@@ -1121,18 +1232,19 @@ impl WorkspaceManifestMut<'_> {
         let before = updated.clone();
         updated.apply_edit(edit)?;
         if updated.subdir() == before.subdir()
-            && updated.declared_virtual_packages() == before.declared_virtual_packages()
+            && updated.manifest_virtual_package_records()
+                == before.manifest_virtual_package_records()
         {
             return Ok(());
         }
 
         // A pending legacy migration re-renders the whole array (every subdir
-        // entry becomes its rich form and `[system-requirements]` drops out),
+        // entry becomes an inline-table entry and `[system-requirements]` drops out),
         // so the in-memory set and the document diverge. Capture this before
         // `commit_if_needed` clears the flag.
         let was_migrating = self.workspace.workspace.must_migrate;
 
-        // An edit that yields a custom rich platform leaves the workspace no
+        // An edit that yields a non-subdir platform leaves the workspace no
         // longer subdir-only: match platforms by name instead of composing.
         if !updated.is_subdir_platform() {
             self.workspace.workspace.use_platform_composition = false;
@@ -1152,10 +1264,10 @@ impl WorkspaceManifestMut<'_> {
             self.rename_feature_platform_references(name, &new_name)?;
         }
 
-        // A real edit of a rich platform commits a pending legacy migration:
-        // the on-disk subdir entry becomes its rich form and the
-        // `[system-requirements]` tables drop out.
-        migrate_to_rich_platforms::commit_if_needed(self, true)?;
+        // A real edit of a platform with custom virtual packages commits a pending
+        // legacy migration: the on-disk subdir entry becomes an inline-table entry
+        // and the `[system-requirements]` tables drop out.
+        migrate_system_requirements::commit_if_needed(self, true)?;
 
         if was_migrating {
             // The migration rebuilt the whole platform set; re-render it.
@@ -1193,8 +1305,6 @@ impl WorkspaceManifestMut<'_> {
             }
         }
 
-        let before: Vec<PixiPlatformName> = platforms.iter().map(|p| p.name().clone()).collect();
-
         // Remove first, then resolve the destination against the reduced set so
         // `Before`/`After` land relative to the anchor's post-removal index.
         let platform = self
@@ -1215,18 +1325,18 @@ impl WorkspaceManifestMut<'_> {
             .platforms
             .shift_insert(to, platform);
 
-        if self
-            .workspace
-            .workspace
-            .platforms
-            .iter()
-            .map(PixiPlatform::name)
-            .eq(before.iter())
-        {
+        if from == to {
             return Ok(());
         }
 
-        Ok(self.rewrite_workspace_platforms_toml()?)
+        if self.workspace.workspace.must_migrate {
+            return Ok(self.rewrite_workspace_platforms_toml()?);
+        }
+        let array = self
+            .document
+            .get_array_mut("platforms", &Default::default())?;
+        pixi_toml_edit::move_array_element(array, from, to);
+        Ok(())
     }
 
     /// Rewrite the `index`th entry of the workspace `platforms` array from
@@ -1303,10 +1413,9 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
-    /// Add `platforms` to the workspace and, for a non-default feature, to that
-    /// feature. Returns the requested platforms that caused an actual change
-    /// (added to the workspace or to the feature); already-declared platforms
-    /// are excluded so callers can report them as no-ops.
+    /// Add or replace workspace platforms and add them to a non-default feature.
+    /// Returns an outcome for every request; adding feature membership upgrades
+    /// an unchanged workspace definition to [`PlatformAddOutcome::Added`].
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
@@ -1314,24 +1423,28 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: impl IntoIterator<Item = &'a PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> Result<IndexSet<PixiPlatform>, PlatformEditError> {
+    ) -> Result<IndexMap<PixiPlatform, PlatformAddOutcome>, PlatformEditError> {
         let pixi_platforms: IndexSet<PixiPlatform> = platforms.into_iter().cloned().collect();
         // Nothing to add (e.g. `pixi add <dep>` with no `--platform`): leave the
         // document untouched. Rewriting it here would flush the in-memory
         // `[system-requirements]` migration into `platforms` while leaving the
         // legacy table behind, yielding a manifest that no longer parses.
         if pixi_platforms.is_empty() {
-            return Ok(IndexSet::new());
+            return Ok(IndexMap::new());
         }
+        let mut outcomes = self.add_workspace_platforms(&pixi_platforms)?;
         self.ensure_inline_environment(feature_name)?;
         let platform_names: IndexSet<PixiPlatformName> =
             pixi_platforms.iter().map(|p| p.name().clone()).collect();
-        let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
         let added_to_feature = self.add_feature_platforms(platform_names, feature_name)?;
-        Ok(pixi_platforms
-            .into_iter()
-            .filter(|p| added_to_workspace.contains(p) || added_to_feature.contains(p.name()))
-            .collect())
+        for (platform, outcome) in &mut outcomes {
+            if matches!(outcome, PlatformAddOutcome::Unchanged)
+                && added_to_feature.contains(platform.name())
+            {
+                *outcome = PlatformAddOutcome::Added;
+            }
+        }
+        Ok(outcomes)
     }
 
     /// Remove platforms from the workspace and, optionally, from a non-default
@@ -1412,8 +1525,8 @@ impl WorkspaceManifestMut<'_> {
             .collect();
         if !missing.is_empty() {
             return Err(PlatformEditError::NotDeclaredByFeature {
-                feature: feature_name.user_facing().to_string(),
-                missing: missing.iter().map(|pn| pn.as_str()).join(", "),
+                feature_name: feature_name.clone(),
+                missing: missing.into_iter().cloned().collect(),
             });
         }
 
@@ -1531,7 +1644,7 @@ impl WorkspaceManifestMut<'_> {
     /// [`TargetSelector`] used to key target tables. For platforms whose name
     /// matches the conda subdir and that declare no virtual packages we use
     /// `Subdir(...)` so the in-memory key matches the natural `target.linux-64`
-    /// TOML form; richer platforms key under `Platform(name)`.
+    /// TOML form; other platforms key under `Platform(name)`.
     fn platform_target_selector(
         &self,
         platform_name: Option<&PixiPlatformName>,
@@ -1773,7 +1886,7 @@ impl WorkspaceManifestMut<'_> {
                 current
                     .iter()
                     .position(|x| x.channel.to_string() == c.channel.to_string())
-                    .ok_or_else(|| RemoveChannelsError::NotFound(c.channel.as_str().to_owned()))
+                    .ok_or_else(|| RemoveChannelsError::NotFound(c.channel.clone()))
                     .map(|_| c.channel.to_string())
             })
             .collect::<Result<_, _>>()?;
@@ -1832,6 +1945,22 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
+    /// Enables a preview flag in both the parsed workspace and the TOML document.
+    /// Returns false if the flag was already enabled.
+    pub fn add_preview_flag(&mut self, flag: KnownPreviewFlag) -> Result<bool, TomlError> {
+        let added = self.document.add_preview_flag(flag.into())?;
+        match &mut self.workspace.workspace.preview {
+            Preview::Flags(flags) => {
+                if !flags.contains(&flag) {
+                    flags.push(flag);
+                }
+            }
+            preview @ Preview::AllEnabled(false) => *preview = Preview::Flags(vec![flag]),
+            Preview::AllEnabled(true) => {}
+        }
+        Ok(added)
+    }
+
     /// Set the workspace name.
     ///
     /// This function modifies both the workspace and the TOML document. Use
@@ -1858,7 +1987,7 @@ impl WorkspaceManifestMut<'_> {
     pub fn set_version(&mut self, version: &str) -> Result<(), InvalidVersionError> {
         // Update in both the manifest and the toml
         self.workspace.workspace.version =
-            Some(Version::from_str(version).map_err(InvalidVersionError)?);
+            Some(VersionWithSource::from_str(version).map_err(InvalidVersionError)?);
         self.document.set_version(version);
         Ok(())
     }
@@ -1877,6 +2006,99 @@ impl WorkspaceManifestMut<'_> {
             None => None,
         };
         Ok(self.document.set_requires_pixi(version)?)
+    }
+
+    /// Sets or removes the `exclude-newer` cutoff of the workspace.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Replaces the `exclude-newer` of the workspace with `config`, written
+    /// as `value`, the TOML that `config` was parsed from.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer(
+        &mut self,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.replace(
+            self.document.workspace_table_mut()?,
+            value,
+            config,
+        )
+    }
+
+    /// Exempts the releases of `name` that match the spec of `exemption`
+    /// from the `exclude-newer` cutoff, replacing an existing exemption of the
+    /// package.
+    pub fn add_exclude_newer_exemption(
+        &mut self,
+        name: PackageName,
+        exemption: ExcludeNewerExemption,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.add_exemption(
+            self.document.workspace_table_mut()?,
+            name,
+            exemption,
+        )
+    }
+
+    /// Removes the `exclude-newer` exemption of `name`. Returns false if the
+    /// package was not exempt.
+    pub fn remove_exclude_newer_exemption(
+        &mut self,
+        name: &PackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Sets or removes the `pypi-exclude-newer` cutoff of the workspace.
+    pub fn set_pypi_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Exempts every release of the PyPI package `name` from the
+    /// `pypi-exclude-newer` cutoff.
+    pub fn add_pypi_exclude_newer_exemption(
+        &mut self,
+        name: PypiPackageName,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .add_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Removes the `pypi-exclude-newer` exemption of `name`. Returns false if
+    /// the package was not exempt.
+    pub fn remove_pypi_exclude_newer_exemption(
+        &mut self,
+        name: &PypiPackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
     }
 }
 
@@ -1908,21 +2130,24 @@ fn duplicate_definition_error(
     existing: &PixiPlatform,
     incoming: &PixiPlatform,
 ) -> PlatformEditError {
-    let customised = existing.customised_virtual_packages();
-    let definition = if customised.is_empty() {
-        format!("subdir '{}'", existing.subdir())
-    } else {
-        let vps = customised
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!("subdir '{}' with virtual packages {vps}", existing.subdir())
-    };
     PlatformEditError::DuplicateDefinition {
         incoming: incoming.name().clone(),
         existing: existing.name().clone(),
-        definition,
+        definition: format_platform_definition(existing),
+    }
+}
+
+/// Format a platform's subdir and customized virtual packages for diagnostics.
+pub fn format_platform_definition(platform: &PixiPlatform) -> String {
+    let customised = platform.customised_virtual_packages();
+    if customised.is_empty() {
+        format!("subdir '{}'", platform.subdir())
+    } else {
+        let vps = customised
+            .iter()
+            .map(crate::platform::format_virtual_package)
+            .join(", ");
+        format!("subdir '{}' with virtual packages {vps}", platform.subdir())
     }
 }
 
@@ -2033,17 +2258,20 @@ pub enum RemoveDependencyError {
 /// exist.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 #[error("Feature {} does not exist", consts::FEATURE_STYLE.apply_to(.0))]
-pub struct FeatureNotFoundError(pub String);
+pub struct FeatureNotFoundError(pub FeatureName);
 
 /// Errors from [`WorkspaceManifestMut::add_task`] and
 /// [`WorkspaceManifestMut::remove_task`].
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum TaskEditError {
-    #[error("task {0} already exists")]
+    #[error("task '{0}' already exists")]
     AlreadyExists(TaskName),
 
-    #[error("task {0} does not exist")]
+    #[error("task '{0}' does not exist")]
     NotFound(TaskName),
+
+    #[error("the environment '{0}' does not exist")]
+    UnknownEnvironment(EnvironmentName),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -2060,21 +2288,27 @@ pub enum ActivationEditError {
     #[error("the environment '{0}' does not exist")]
     EnvironmentNotFound(EnvironmentName),
 
-    #[error("the feature '{0}' does not exist")]
-    FeatureNotFound(String),
+    #[error("the feature '{}' does not exist", .0.as_str())]
+    FeatureNotFound(FeatureName),
 
     /// `what` names the kind of entry, e.g. "activation scripts".
     #[error("no {what} are defined for {location}")]
     NoneDefined {
         what: &'static str,
-        location: String,
+        location: ActivationLocation,
     },
 
     #[error("the activation script '{script}' was not found for {location}")]
-    ScriptNotFound { script: String, location: String },
+    ScriptNotFound {
+        script: String,
+        location: ActivationLocation,
+    },
 
     #[error("the activation environment variable '{key}' was not found for {location}")]
-    EnvVarNotFound { key: String, location: String },
+    EnvVarNotFound {
+        key: String,
+        location: ActivationLocation,
+    },
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -2096,7 +2330,22 @@ pub enum EnvironmentEditError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    Feature(#[from] GetFeatureError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     Toml(#[from] TomlError),
+}
+
+/// Outcome of adding a platform to a workspace or feature.
+#[derive(Debug, Clone)]
+pub enum PlatformAddOutcome {
+    /// The platform or its feature membership was added.
+    Added,
+    /// The same name's definition was fully replaced.
+    Replaced { previous: PixiPlatform },
+    /// Neither the definition nor feature membership changed.
+    Unchanged,
 }
 
 /// Errors from adding, editing, moving or removing platforms.
@@ -2120,8 +2369,15 @@ pub enum PlatformEditError {
     #[error("cannot move platform '{0}' relative to itself")]
     MoveRelativeToItself(PixiPlatformName),
 
-    #[error("{feature} does not declare platform(s): {missing}")]
-    NotDeclaredByFeature { feature: String, missing: String },
+    #[error(
+        "{} does not declare platform(s): {}",
+        .feature_name.user_facing(),
+        .missing.iter().join(", ")
+    )]
+    NotDeclaredByFeature {
+        feature_name: FeatureName,
+        missing: Vec<PixiPlatformName>,
+    },
 
     #[error(transparent)]
     InvalidEdit(#[from] PixiPlatformError),
@@ -2147,8 +2403,8 @@ pub enum AddDependencyError {
 /// Errors from [`WorkspaceManifestMut::remove_channels`].
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum RemoveChannelsError {
-    #[error("channel {0} does not exist")]
-    NotFound(String),
+    #[error("channel {} does not exist", .0.as_str())]
+    NotFound(NamedChannelOrUrl),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -2180,7 +2436,7 @@ pub enum SetRequiresPixiError {
 /// once the legacy syntax is fully retired: drop the module, drop the
 /// `must_migrate` field on `Workspace`, drop the two call sites in
 /// `add_workspace_platforms` and `edit_workspace_platform`.
-mod migrate_to_rich_platforms {
+mod migrate_system_requirements {
     use super::WorkspaceManifestMut;
     use crate::{FeatureName, TomlError};
 
@@ -2190,9 +2446,9 @@ mod migrate_to_rich_platforms {
     /// synthesised names. Clears `must_migrate` afterwards.
     pub(super) fn commit_if_needed(
         manifest: &mut WorkspaceManifestMut<'_>,
-        edit_produces_rich: bool,
+        edit_produces_non_subdir: bool,
     ) -> Result<(), TomlError> {
-        if !manifest.workspace.workspace.must_migrate || !edit_produces_rich {
+        if !manifest.workspace.workspace.must_migrate || !edit_produces_non_subdir {
             return Ok(());
         }
 
@@ -2242,11 +2498,12 @@ mod tests {
     use itertools::Itertools;
     use miette::NarratableReportHandler;
     use pixi_spec::PixiSpec;
-    use pixi_test_utils::format_parse_error;
+    use pixi_test_utils::{format_diagnostic, format_parse_error};
     use rattler_conda_types::{
         MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
         Subdir, Version, VersionSpec,
+        package::BuildString,
     };
     use rstest::rstest;
     use toml_edit::DocumentMut;
@@ -2348,6 +2605,56 @@ start = "python -m flask run --port=5050"
         rattler_conda_types::ChannelConfig::default_with_root_dir(
             std::env::current_dir().expect("Could not retrieve the current directory"),
         )
+    }
+
+    #[rstest]
+    #[case("", true)]
+    #[case("preview = false", true)]
+    #[case("preview = true", false)]
+    #[case("preview = [\"pixi-build\"]", false)]
+    #[case("preview = [\"existing-flag\"]", true)]
+    fn test_add_preview_flag_keeps_parsed_and_document_in_sync(
+        #[case] preview: &str,
+        #[case] expected_added: bool,
+    ) {
+        let source = format!("{PROJECT_BOILERPLATE}\n{preview}\n");
+        let mut workspace = parse_pixi_toml(&source);
+
+        assert_eq!(
+            workspace
+                .editable()
+                .add_preview_flag(KnownPreviewFlag::PixiBuild)
+                .unwrap(),
+            expected_added
+        );
+        assert!(
+            !workspace
+                .editable()
+                .add_preview_flag(KnownPreviewFlag::PixiBuild)
+                .unwrap()
+        );
+
+        let rendered = workspace.document.render().unwrap();
+        let reparsed = parse_pixi_toml(&rendered);
+        assert_eq!(
+            workspace.manifest.workspace.preview,
+            reparsed.manifest.workspace.preview
+        );
+        assert!(
+            workspace
+                .manifest
+                .workspace
+                .preview
+                .is_enabled(KnownPreviewFlag::PixiBuild)
+        );
+        if preview.contains("existing-flag") {
+            let document = DocumentMut::from_str(&rendered).unwrap();
+            let flags = document["project"]["preview"].as_array().unwrap();
+            assert_eq!(
+                flags.iter().filter_map(Value::as_str).collect::<Vec<_>>(),
+                ["existing-flag", "pixi-build"]
+            );
+        }
     }
 
     #[test]
@@ -3674,7 +3981,7 @@ platforms = ["linux-64", "osx-64"]
             rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from(name).unwrap(),
                 version: Version::from_str(version).unwrap(),
-                build_string: build.to_string(),
+                build_string: BuildString::new_unchecked(build),
             }
         }
         // `"0"` build strings mirror what rattler's detection emits for
@@ -3720,7 +4027,7 @@ platforms = ["linux-64", "osx-64"]
             let cuda = rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             };
             PixiPlatform::new_with_defaults(
                 PixiPlatformName::try_from(name).unwrap(),
@@ -3754,6 +4061,11 @@ platforms = ["linux-64", "osx-64"]
             help.contains("reuse the existing platform 'gpu-a'"),
             "{help}"
         );
+        let message = err.to_string();
+        assert!(
+            message.contains("with virtual packages __cuda=12)"),
+            "{message}"
+        );
 
         // Re-adding the identical platform (same name + definition) is a no-op.
         workspace
@@ -3763,13 +4075,258 @@ platforms = ["linux-64", "osx-64"]
     }
 
     #[test]
-    fn test_rich_platform_and_feature_reference_are_all_listed() {
+    fn test_add_replaces_definition_preserving_position_and_decor() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = [
+    "win-64", # first
+    # keep this platform's comment
+    { name = "gpu", platform = "linux-64", cuda = "12.0", glibc = "2.28" }, # gpu
+    "osx-arm64", # last
+]
+"#;
+        for subdir in [Subdir::Linux64, Subdir::LinuxAarch64] {
+            let mut workspace = parse_pixi_toml(file_contents);
+            let mut editable = workspace.editable();
+            let original = editable.workspace.workspace.platforms[1].clone();
+            let replacement = PixiPlatform::new_with_defaults(
+                original.name().clone(),
+                subdir,
+                vec![gvp("__cuda", "13.0")],
+            )
+            .unwrap();
+
+            let outcomes = editable
+                .add_platforms([&replacement], &FeatureName::Default)
+                .unwrap();
+
+            assert_eq!(outcomes.len(), 1);
+            assert_matches::assert_matches!(
+                &outcomes[&replacement],
+                PlatformAddOutcome::Replaced { previous }
+                    if previous.has_same_definition(&original)
+            );
+            assert_eq!(platform_order(&editable), ["win-64", "gpu", "osx-arm64"]);
+            assert!(
+                editable.workspace.workspace.platforms[1].has_same_definition(&replacement),
+                "replacement must drop the old glibc override and allow a subdir change"
+            );
+            let after = editable.document.to_string();
+            let rendered = crate::toml::platform::pixi_platform_to_toml_value(&replacement);
+            assert_eq!(
+                after,
+                file_contents.replace(
+                    r#"{ name = "gpu", platform = "linux-64", cuda = "12.0", glibc = "2.28" }"#,
+                    &rendered.to_string(),
+                )
+            );
+            let reparsed = parse_pixi_toml(&after);
+            assert!(reparsed.manifest.workspace.platforms[1].has_same_definition(&replacement));
+        }
+    }
+
+    #[test]
+    fn test_add_identical_definition_leaves_document_untouched() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = [
+    { name = 'gpu', platform = 'linux-64', cuda = '12.0' }, # keep spelling
+]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        let platform = editable.workspace.workspace.platforms[0].clone();
+        let outcomes = editable
+            .add_platforms([&platform], &FeatureName::Default)
+            .unwrap();
+        assert_eq!(outcomes.len(), 1);
+        assert_matches::assert_matches!(&outcomes[&platform], PlatformAddOutcome::Unchanged);
+        assert_eq!(editable.document.to_string(), file_contents);
+    }
+
+    #[test]
+    fn test_add_replacement_rejects_duplicate_definition_before_mutation() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = [
+    { name = "gpu", subdir = "linux-64", cuda = "12.0" },
+    { name = "other", subdir = "linux-64", cuda = "13.0" },
+]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        let original = editable.workspace.workspace.platforms[0].clone();
+        let replacement = PixiPlatform::new_with_defaults(
+            original.name().clone(),
+            Subdir::Linux64,
+            vec![gvp("__cuda", "13.0")],
+        )
+        .unwrap();
+        let added = PixiPlatform::from_subdir(Subdir::OsxArm64);
+        let err = editable
+            .add_platforms([&added, &replacement], &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(
+            err,
+            PlatformEditError::DuplicateDefinition { incoming, existing, .. }
+                if incoming.as_str() == "gpu" && existing.as_str() == "other"
+        );
+        assert_eq!(editable.document.to_string(), file_contents);
+        assert_eq!(platform_order(&editable), ["gpu", "other"]);
+        assert!(editable.workspace.workspace.platforms[0].has_same_definition(&original));
+    }
+
+    #[test]
+    fn test_add_rejects_duplicate_definitions_in_incoming_batch() {
+        let file_contents = "[workspace]\nname = \"foo\"\nchannels = []\nplatforms = []\n";
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        let platforms: Vec<_> = ["gpu-a", "gpu-b"]
+            .into_iter()
+            .map(|name| {
+                PixiPlatform::new_with_defaults(
+                    PixiPlatformName::try_from(name).unwrap(),
+                    Subdir::Linux64,
+                    vec![gvp("__cuda", "13.0")],
+                )
+                .unwrap()
+            })
+            .collect();
+        let err = editable
+            .add_platforms(&platforms, &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(err, PlatformEditError::DuplicateDefinition { .. });
+        assert!(editable.workspace.workspace.platforms.is_empty());
+        assert_eq!(editable.document.to_string(), file_contents);
+    }
+
+    #[test]
+    fn test_add_platform_outcomes_include_feature_membership_and_replacements() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = [
+    "win-64",
+    { name = "gpu", subdir = "linux-64", cuda = "12.0" },
+]
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        let feature = FeatureName::from("cuda");
+        let windows = PixiPlatform::from_subdir(Subdir::Win64);
+        let added = PixiPlatform::from_subdir(Subdir::OsxArm64);
+        let original = editable.workspace.workspace.platforms[1].clone();
+        let replacement = PixiPlatform::new_with_defaults(
+            original.name().clone(),
+            Subdir::Linux64,
+            vec![gvp("__cuda", "13.0")],
+        )
+        .unwrap();
+        let outcomes = editable
+            .add_platforms([&windows, &replacement, &added], &feature)
+            .unwrap();
+        assert_eq!(outcomes.len(), 3);
+        assert_matches::assert_matches!(&outcomes[&windows], PlatformAddOutcome::Added);
+        assert_matches::assert_matches!(&outcomes[&added], PlatformAddOutcome::Added);
+        assert_matches::assert_matches!(
+            &outcomes[&replacement],
+            PlatformAddOutcome::Replaced { previous }
+                if previous.has_same_definition(&original)
+        );
+        let feature_platforms = editable
+            .workspace
+            .feature(&feature)
+            .unwrap()
+            .platforms
+            .as_ref()
+            .unwrap();
+        assert_eq!(
+            feature_platforms
+                .iter()
+                .map(|name| name.as_str())
+                .collect::<Vec<_>>(),
+            ["win-64", "gpu", "osx-arm64"]
+        );
+        let before = editable.document.to_string();
+        let outcomes = editable
+            .add_platforms([&windows, &replacement, &added], &feature)
+            .unwrap();
+        assert_eq!(outcomes.len(), 3);
+        assert!(
+            outcomes
+                .values()
+                .all(|outcome| matches!(outcome, PlatformAddOutcome::Unchanged))
+        );
+        assert_eq!(editable.document.to_string(), before);
+    }
+
+    #[test]
+    fn test_add_replacement_commits_pending_legacy_migration() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[system-requirements]
+cuda = "12.0"
+
+[feature.gpu]
+platforms = ["linux-64"]
+system-requirements = { cuda = "12.0" }
+"#;
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        assert!(editable.workspace.workspace.must_migrate);
+        let original = editable.workspace.workspace.platforms[0].clone();
+        let replacement = PixiPlatform::new_with_defaults(
+            original.name().clone(),
+            Subdir::Linux64,
+            vec![gvp("__cuda", "13.0")],
+        )
+        .unwrap();
+        let outcomes = editable
+            .add_platforms([&replacement], &FeatureName::Default)
+            .unwrap();
+        assert_matches::assert_matches!(
+            &outcomes[&replacement],
+            PlatformAddOutcome::Replaced { previous }
+                if previous.has_same_definition(&original)
+        );
+        assert!(!editable.workspace.workspace.must_migrate);
+        assert!(!editable.workspace.workspace.use_platform_composition);
+        let after = editable.document.to_string();
+        assert!(!after.contains("system-requirements"), "{after}");
+        let reparsed = parse_pixi_toml(&after);
+        assert_eq!(reparsed.manifest.workspace.platforms.len(), 1);
+        assert!(reparsed.manifest.workspace.platforms[0].has_same_definition(&replacement));
+        assert!(
+            reparsed
+                .manifest
+                .feature(&FeatureName::from("gpu"))
+                .unwrap()
+                .platforms
+                .as_ref()
+                .unwrap()
+                .contains(replacement.name())
+        );
+    }
+
+    #[test]
+    fn test_platform_with_virtual_packages_and_feature_reference_are_all_listed() {
         let file_contents = r#"
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = [
   "linux-64",
-  { platform = "linux-64", cuda = "12.9" },
+  { subdir = "linux-64", cuda = "12.9" },
 ]
 
 [feature.cuda-backends]
@@ -3777,8 +4334,8 @@ platforms = ["linux-64-cuda-12-9"]
 "#;
         let workspace = parse_pixi_toml(file_contents);
 
-        // The workspace must list both the bare subdir and the rich
-        // cuda-tagged platform, with the rich entry synthesised to a stable
+        // The workspace must list both the bare subdir and the
+        // cuda-tagged platform, with the latter synthesised to a stable
         // name. The feature reference resolves to the existing entry without
         // adding a duplicate.
         let names: Vec<String> = workspace
@@ -5236,6 +5793,40 @@ boltons = { workspace = true }
     }
 
     #[test]
+    fn test_remove_environment_referenced_by_task() {
+        let contents = r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [environments]
+        foo = []
+        bar = []
+
+        [environments.baz.tasks]
+        own = { cmd = "echo", default-environment = "baz" }
+
+        [tasks]
+        a = "echo"
+        b = [{ task = "a", environment = "foo" }]
+        c = { cmd = "echo", default-environment = "foo" }
+        "#;
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let err = manifest.remove_environment("foo").unwrap_err();
+        assert_snapshot!(format_diagnostic(&err), @r"
+        × cannot remove environment 'foo' because tasks refer to it: 'b', 'c'
+        help: remove these references first
+        ");
+        assert!(manifest.workspace.environment("foo").is_some());
+
+        // Only the environment's own inline tasks refer to it.
+        assert!(manifest.remove_environment("baz").unwrap());
+        assert!(manifest.remove_environment("bar").unwrap());
+    }
+
+    #[test]
     fn test_remove_feature() {
         let contents = r#"
         [workspace]
@@ -5276,11 +5867,11 @@ boltons = { workspace = true }
                 .is_none()
         );
 
-        // Remove non-existent feature should succeed
-        let result = manifest
+        // Remove non-existent feature should fail
+        let err = manifest
             .remove_feature(&FeatureName::from_str("nonexistent").unwrap())
-            .unwrap();
-        assert!(result.is_empty());
+            .unwrap_err();
+        assert_eq!(err.to_string(), "feature 'nonexistent' does not exist");
 
         // Remove feature used by environment should succeed and update environments
         let modified = manifest
@@ -6150,6 +6741,21 @@ openssl = "<2"
         assert_eq!(linux_spec, "<2");
     }
 
+    /// The default feature of a manifest, to call [`FeaturesExt`] methods on.
+    struct DefaultFeature<'a>(&'a WorkspaceManifest);
+
+    impl<'a> HasWorkspaceManifest<'a> for DefaultFeature<'a> {
+        fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+            self.0
+        }
+    }
+
+    impl<'a> HasFeaturesIter<'a> for DefaultFeature<'a> {
+        fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+            std::iter::once(self.0.default_feature())
+        }
+    }
+
     #[test]
     fn test_package_exclude_newer_tables_are_parsed() {
         let contents = r#"
@@ -6191,24 +6797,304 @@ boltons = "0d"
     }
 
     #[test]
+    fn test_exclude_newer_table_syntax_is_parsed() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+polars = "1.43.1"
+py-rattler = "*"
+numpy = { version = "2.*", channel = "conda-forge" }
+
+[workspace.pypi-exclude-newer]
+cutoff = "2025-01-01"
+exemptions = { torch = "*" }
+"#;
+        use pixi_pypi_spec::PypiPackageName;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let workspace = parse_pixi_toml(contents).manifest.workspace;
+        assert_eq!(workspace.exclude_newer.cutoff.unwrap().to_string(), "7days");
+        assert_eq!(
+            workspace
+                .exclude_newer
+                .exemptions
+                .keys()
+                .map(PackageName::as_source)
+                .sorted()
+                .collect::<Vec<_>>(),
+            ["numpy", "polars", "py-rattler"]
+        );
+        assert_eq!(
+            workspace.pypi_exclude_newer.cutoff.unwrap().to_string(),
+            "2025-01-02 00:00:00 UTC"
+        );
+        assert!(
+            workspace
+                .pypi_exclude_newer
+                .exemptions
+                .contains_key(&PypiPackageName::from_str("torch").unwrap())
+        );
+        assert!(workspace.exclude_newer_package_overrides.is_empty());
+        assert!(workspace.pypi_exclude_newer_package_overrides.is_empty());
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+polars = "0d"
+openssl = "2025-01-01"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_replacement_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "2025-01-01"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_with_date_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2025-01-01"
+
+[exclude-newer]
+polars = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_with_dotted_names_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+"ruamel.yaml" = "0d"
+
+[pypi-exclude-newer]
+"zope.interface" = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_keep_existing_exemptions() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "7d", exemptions = { zlib = "1.3.1", polars = "1.0" } }
+pypi-exclude-newer = { exemptions = { requests = "*" } }
+
+[exclude-newer]
+polars = "0d"
+openssl = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_any_cutoff_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_exemptions() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43.1", numpy = "*" } }
+"#;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let resolved = features
+            .exclude_newer_config_resolved(&default_channel_config())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            resolved
+                .exemptions()
+                .iter()
+                .map(|exemption| exemption.spec.to_string())
+                .sorted()
+                .collect::<Vec<_>>(),
+            ["numpy *", "polars ==1.43.1"]
+        );
+
+        use pixi_test_utils::uploaded_record;
+
+        let config: rattler_solve::ExcludeNewer = resolved.into();
+        assert!(!config.is_excluded(&uploaded_record("polars", "1.43.1", None)));
+        assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", None)));
+        assert!(!config.is_excluded(&uploaded_record("numpy", "2.0.0", None)));
+        assert!(config.is_excluded(&uploaded_record("pandas", "2.0.0", None)));
+    }
+
+    /// Regression test. Every solve resolved a relative cutoff against its
+    /// own `Utc::now()`, so the compute keys carrying the resolved cutoff,
+    /// such as the build backend environment, were never deduplicated.
+    #[test]
+    fn test_relative_exclude_newer_resolves_against_load_time() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "14d"
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let expected = manifest.loaded_at - chrono::Duration::days(14);
+
+        let resolve = || {
+            features
+                .exclude_newer_config_resolved(&default_channel_config())
+                .unwrap()
+                .unwrap()
+        };
+        let first = resolve();
+        assert_eq!(first.cutoff, expected);
+        assert_eq!(first, resolve());
+
+        let pypi = features.pypi_exclude_newer_config_resolved();
+        assert_eq!(pypi.cutoff, Some(expected));
+        assert_eq!(pypi, features.pypi_exclude_newer_config_resolved());
+    }
+
+    #[test]
+    fn test_pypi_exclude_newer_config_falls_back_to_conda_cutoff() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let resolved = features.pypi_exclude_newer_config_resolved();
+        assert_eq!(
+            resolved.cutoff.unwrap(),
+            "2015-12-02T02:07:43Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+        );
+        assert_eq!(
+            resolved
+                .exempt_packages
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["torch"]
+        );
+
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+pypi-exclude-newer = "2016-12-02T02:07:43Z"
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        assert_eq!(
+            features
+                .pypi_exclude_newer_config_resolved()
+                .cutoff
+                .unwrap(),
+            "2016-12-02T02:07:43Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn test_exclude_newer_config_applies_package_overrides() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [project]
 name = "foo"
@@ -6222,11 +7108,7 @@ polars = "0d"
 
         let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&default_channel_config())
             .unwrap()
@@ -6242,23 +7124,6 @@ polars = "0d"
 
     #[test]
     fn test_exclude_newer_config_applies_channel_overrides() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [project]
 name = "foo"
@@ -6269,11 +7134,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 
         let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let channel_config = default_channel_config();
         let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&channel_config)
@@ -6298,7 +7159,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
     }
 
     #[test]
-    fn test_legacy_sysreqs_migration_commits_on_rich_add() {
+    fn test_legacy_sysreqs_migration_commits_on_virtual_package_add() {
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -6325,18 +7186,18 @@ exclude-newer = "2015-12-02T02:07:43Z"
         assert!(initial.contains("system-requirements ="));
 
         let mut editable = workspace.editable();
-        let rich = PixiPlatform::new(
+        let platform = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-12-4").unwrap(),
             Subdir::Linux64,
             vec![rattler_conda_types::GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12.4").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
-        .expect("rich platform with name != subdir");
+        .expect("platform with name != subdir");
         editable
-            .add_platforms([&rich], &FeatureName::Default)
+            .add_platforms([&platform], &FeatureName::Default)
             .unwrap();
 
         // Flag clears, legacy tables are gone, feature platforms point at the
@@ -6390,7 +7251,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             .unwrap();
 
         // Subdir-only add: legacy syntax stays put, flag still set so a later
-        // rich add will trigger the migration.
+        // add with custom virtual packages will trigger the migration.
         assert!(editable.workspace.workspace.must_migrate);
         let after = editable.document.to_string();
         assert!(after.contains("[system-requirements]"));
@@ -6408,8 +7269,8 @@ exclude-newer = "2015-12-02T02:07:43Z"
         // is already declared (the parse-time shim extended it with the
         // synthesised VPs), so re-adding it must touch neither the `platforms`
         // array nor the `[system-requirements]` table -- otherwise the file
-        // ends up with a rich platform alongside the legacy table and no longer
-        // parses.
+        // ends up with an inline-table platform entry alongside the legacy table
+        // and no longer parses.
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -6425,12 +7286,12 @@ exclude-newer = "2015-12-02T02:07:43Z"
         let before = workspace.editable().document.to_string();
 
         let mut editable = workspace.editable();
-        editable
-            .add_platforms(
-                [PixiPlatform::from_subdir(Subdir::Linux64)].iter(),
-                &FeatureName::Default,
-            )
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
+        let outcomes = editable
+            .add_platforms([&platform], &FeatureName::Default)
             .unwrap();
+        assert_eq!(outcomes.len(), 1);
+        assert_matches::assert_matches!(&outcomes[&platform], PlatformAddOutcome::Unchanged);
 
         assert!(editable.workspace.workspace.must_migrate);
         assert_eq!(
@@ -6444,7 +7305,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         rattler_conda_types::GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -6464,10 +7325,10 @@ exclude-newer = "2015-12-02T02:07:43Z"
     }
 
     #[test]
-    fn test_legacy_sysreqs_migration_commits_on_rich_edit() {
-        // Editing the virtual packages of the rich platform the parse-time shim
+    fn test_legacy_sysreqs_migration_commits_on_virtual_package_edit() {
+        // Editing the virtual packages of the platform the parse-time shim
         // synthesised from `[system-requirements]` upgrades the manifest: the
-        // on-disk subdir entry becomes rich and the legacy table drops out.
+        // on-disk subdir entry becomes an inline-table entry and the legacy table drops out.
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -6486,7 +7347,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             .platforms
             .iter()
             .find(|p| !p.is_subdir_platform())
-            .expect("legacy sysreqs should have produced a synthesised rich platform")
+            .expect("legacy sysreqs should have produced a synthesised platform")
             .name()
             .clone();
 
@@ -6502,13 +7363,13 @@ exclude-newer = "2015-12-02T02:07:43Z"
             .unwrap();
 
         // The migration committed: flag cleared, legacy table gone, the edited
-        // VP version landed in the rich entry.
+        // VP version landed in the inline-table entry.
         assert!(!editable.workspace.workspace.must_migrate);
         let after = editable.document.to_string();
         assert_no_sysreqs(&after);
         assert!(
             after.contains("cuda = \"12.5\""),
-            "edited cuda version should be in the rich platform entry:\n{after}",
+            "edited cuda version should be in the platform entry:\n{after}",
         );
     }
 
@@ -6520,7 +7381,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             [workspace]
             name = "foo"
             channels = []
-            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu", subdir = "linux-64", cuda = "12.0" }]
         "#;
 
         let mut workspace = parse_pixi_toml(file_contents);
@@ -6548,14 +7409,14 @@ exclude-newer = "2015-12-02T02:07:43Z"
     }
 
     #[test]
-    fn test_edit_rich_vp_change_rewrites_toml() {
-        // Editing the VPs of an already-rich platform (no legacy migration in
-        // play) rewrites just that entry.
+    fn test_edit_virtual_package_change_rewrites_toml() {
+        // Editing the VPs of a platform with no legacy migration in play
+        // rewrites just that entry.
         let file_contents = r#"
             [workspace]
             name = "foo"
             channels = []
-            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu", subdir = "linux-64", cuda = "12.0" }]
         "#;
 
         let mut workspace = parse_pixi_toml(file_contents);
@@ -6587,7 +7448,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 name = "named-variants"
 channels = ["conda-forge"]
 platforms = [
-    { name = "modern", platform = "linux-64" },
+    { name = "modern", subdir = "linux-64" },
     "linux-64",
 ]
 "#;
@@ -6604,7 +7465,7 @@ platforms = [
                         rattler_conda_types::GenericVirtualPackage {
                             name: rattler_conda_types::PackageName::try_from("__archspec").unwrap(),
                             version: Version::major(0),
-                            build_string: "x86_64_v3".to_string(),
+                            build_string: BuildString::new_unchecked("x86_64_v3"),
                         },
                     ],
                     ..Default::default()
@@ -6618,7 +7479,7 @@ platforms = [
 name = "named-variants"
 channels = ["conda-forge"]
 platforms = [
-    { name = "modern", platform = "linux-64", archspec = "x86_64_v3" },
+    { name = "modern", subdir = "linux-64", archspec = "x86_64_v3" },
     "linux-64",
 ]
 "#,
@@ -6657,7 +7518,7 @@ platforms = [
 
     #[test]
     fn test_remove_platform_modifies_toml_without_upgrade() {
-        // Removal must edit the array but never enrich the surviving entries or
+        // Removal must edit the array but never change the surviving entries or
         // commit a pending migration.
         let file_contents = r#"
             [workspace]
@@ -6701,7 +7562,7 @@ platforms = [
             [workspace]
             name = "foo"
             channels = []
-            platforms = [{ platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ subdir = "linux-64", cuda = "12.0" }]
 
             [feature.gpu]
             platforms = ["linux-64-cuda-12-0"]
@@ -6746,7 +7607,7 @@ platforms = [
     #[test]
     fn test_edit_adds_vp_to_subdir_platform_and_renames_references() {
         // Adding a VP to a bare subdir-platform renames it; the feature that
-        // pointed at the bare name must be updated to the new rich name.
+        // pointed at the bare name must be updated to the new platform name.
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -6804,6 +7665,9 @@ platforms = [
             [tasks]
             hello = "echo hello"
 
+            [target.linux-64.tasks]
+            lin = "echo lin"
+
             [feature.f1.activation]
             scripts = ["a.sh"]
             env = { FOO = "1" }
@@ -6824,11 +7688,61 @@ platforms = [
             )
             .unwrap_err();
         assert_matches::assert_matches!(&err, TaskEditError::AlreadyExists(name) if *name == hello);
-        assert_eq!(err.to_string(), "task hello already exists");
+        assert_eq!(err.to_string(), "task 'hello' already exists");
         let err = manifest
             .remove_task(TaskName::from("nope"), None, &FeatureName::Default)
             .unwrap_err();
         assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        // A task inherited from the default target is not declared for a
+        // platform.
+        let linux = PixiPlatform::from_subdir(Subdir::Linux64);
+        let err = manifest
+            .remove_task(hello.clone(), Some(&linux), &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        let lin = TaskName::from("lin");
+        manifest
+            .remove_task(lin.clone(), Some(&linux), &FeatureName::Default)
+            .unwrap();
+        assert!(
+            !manifest
+                .workspace
+                .declares_task(&lin, Some(&linux), &FeatureName::Default)
+                .unwrap()
+        );
+        manifest
+            .add_task(
+                lin.clone(),
+                Task::Plain("echo lin".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        assert!(
+            manifest
+                .workspace
+                .declares_task(&lin, Some(&linux), &FeatureName::Default)
+                .unwrap()
+        );
+        // A task from the default target can be overridden for a platform,
+        // but only once.
+        manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        let err = manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::AlreadyExists(_));
         let err = manifest
             .remove_task(hello, None, &FeatureName::from("nosuch"))
             .unwrap_err();

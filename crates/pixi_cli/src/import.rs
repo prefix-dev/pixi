@@ -5,7 +5,7 @@ use clap::{Parser, ValueEnum, ValueHint};
 use indexmap::IndexSet;
 use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_config::ConfigCli;
-use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
+use pixi_core::environment::sanity_check_workspace;
 use pixi_manifest::{
     EnvironmentName, FeatureName, HasFeaturesIter, NewEnvironment, PixiPlatformName,
     PrioritizedChannel,
@@ -28,7 +28,7 @@ pub enum ImportFileFormat {
     PypiTxt,
 }
 
-/// Imports a file into an environment in an existing workspace.
+/// Import a file into an environment in an existing workspace
 ///
 /// If `--format` isn't provided, `import` will try each format in turn
 #[derive(Parser, Debug, Default, Clone)]
@@ -141,11 +141,12 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
     let (input_file, platforms, workspace_config) =
         (args.file, args.platforms, args.workspace_config);
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(source)
         .with_search_start(workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config);
+        .with_cli_config(args.config)
+        .locate()
+        .await?;
 
     sanity_check_workspace(&workspace).await?;
 

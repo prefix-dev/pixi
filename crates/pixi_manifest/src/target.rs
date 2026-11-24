@@ -855,10 +855,10 @@ impl<T> Targets<T> {
     /// and the default target last.
     ///
     /// This also always includes the default target.
-    pub fn resolve<'a>(
+    pub fn resolve<'a, 'p>(
         &'a self,
-        platform: Option<&'a PixiPlatform>,
-    ) -> impl DoubleEndedIterator<Item = &'a T> + 'a {
+        platform: Option<&'p PixiPlatform>,
+    ) -> impl DoubleEndedIterator<Item = &'a T> + use<'a, 'p, T> {
         if let Some(platform) = platform {
             Either::Left(self.resolve_for_platform(platform))
         } else {
@@ -875,10 +875,10 @@ impl<T> Targets<T> {
     /// This also always includes the default target.
     ///
     /// You should use the [`Self::resolve`] function.
-    fn resolve_for_platform<'a>(
+    fn resolve_for_platform<'a, 'p>(
         &'a self,
-        platform: &'a PixiPlatform,
-    ) -> impl DoubleEndedIterator<Item = &'a T> + 'a {
+        platform: &'p PixiPlatform,
+    ) -> impl DoubleEndedIterator<Item = &'a T> + use<'a, 'p, T> {
         std::iter::once(&self.default_target)
             .chain(self.targets.iter().filter_map(move |(selector, target)| {
                 if selector.matches(platform) {
@@ -1321,7 +1321,7 @@ mod tests {
         assert!(!selector.matches(&PixiPlatform::from_subdir(Subdir::Win64)));
     }
 
-    /// A glob target applies to every matching rich platform, and a more
+    /// A glob target applies to every matching platform, and a more
     /// specific exact selector defined *after* it wins by insertion order.
     #[test]
     fn glob_target_applies_with_insertion_order_precedence() {
@@ -1331,8 +1331,8 @@ mod tests {
         name = "test"
         channels = []
         platforms = [
-            { name = "cuda-win-64", platform = "win-64", cuda = "12" },
-            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+            { name = "cuda-win-64", subdir = "win-64", cuda = "12" },
+            { name = "cuda-linux-64", subdir = "linux-64", cuda = "12" },
             "linux-64",
         ]
 

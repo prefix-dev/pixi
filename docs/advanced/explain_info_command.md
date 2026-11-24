@@ -41,12 +41,7 @@ If this is incorrect, please file an issue on the [Pixi repo](https://github.com
 
 ### Virtual packages
 
-The virtual packages that Pixi can find on your machine.
-
-In the Conda ecosystem, you can depend on virtual packages.
-These packages aren't real dependencies that are going to be installed, but rather are being used in the solve step to find if a package can be installed on the machine.
-A simple example: When a package depends on Cuda drivers being present on the host machine it can do that by depending on the `__cuda` virtual package.
-In that case, if Pixi cannot find the `__cuda` virtual package on your machine the installation will fail.
+The [virtual packages](../conda_ecosystem.md#virtual-packages-describing-the-host-system) that Pixi detects on your machine.
 
 ### Cache dir
 
@@ -56,6 +51,15 @@ Checkout the [cache documentation](../workspace/environment.md#caching-packages)
 ### Auth storage
 
 Check the [authentication documentation](../deployment/authentication.md)
+
+### TLS root certs
+
+The root certificates Pixi trusts for HTTPS connections.
+This is shown in both the `Global` and the `Workspace` section.
+The `Global` section shows what `pixi global` uses, which always reads the default configuration locations: it ignores a workspace's `.pixi/config.toml`, `--config-file` and `--no-config`.
+Both take the build's default, the [`tls-root-certs`](../reference/pixi_configuration.md#tls-root-certs) setting, the `--tls-root-certs` flag or `PIXI_TLS_ROOT_CERTS`, and the `SSL_CERT_FILE` and `SSL_CERT_DIR` environment variables into account.
+For example, `webpki (default)` means the bundled Mozilla roots are used because nothing else is configured, and `SSL_CERT_FILE=/etc/ssl/ca.pem (overrides system)` means the certificates from that file replace the system store.
+PyPI requests use the same certificates, unless [`pypi-config.allow-insecure-host`](../reference/pixi_configuration.md#pypi-config) is set: uv then builds its own HTTP client, which picks its root certificates separately and may not match this line.
 
 ### Cache size
 
@@ -85,6 +89,11 @@ The environment info defined per environment. If you don't have any environments
 This lists which features are enabled in the environment.
 For the default this is only `default`
 
+### Solve group
+
+The [solve group](../workspace/multi_environment.md) the environment belongs to, shown only when configured.
+Environments in the same solve group use the same versions of shared dependencies.
+
 ### Channels
 
 The list of channels used in this environment.
@@ -99,7 +108,17 @@ The list of dependencies defined for this environment.
 
 ### Target platforms
 
-The platforms the workspace has defined.
+The platforms the workspace has defined (for this environment).
+
+### Selected platform and selection source
+
+The platform used to filter this diagnostic output, separate from the installed platform below.
+`Selection source` reports whether it came from the installed prefix, a host match, lock fallback, or the host baseline for a dependency-free environment.
+In JSON, `selected_platform_source` uses `installed`, `host_match`, `lock_fallback`, or `host_baseline`.
+
+`pixi info` never solves or verifies lock freshness.
+Unless it reuses an installed platform or selects the host baseline, it reads the existing lock to check requirements, even when a declaration matches the host.
+The next installation can select differently; see [diagnostic selection](../workspace/multi_platform_configuration.md#diagnostic-selection).
 
 ### Resolved platform
 

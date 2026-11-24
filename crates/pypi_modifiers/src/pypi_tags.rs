@@ -114,7 +114,7 @@ fn get_linux_platform_tags(
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let arch = get_arch_tags(platform)?;
 
-    let (family, version) = declared_libc(platform.declared_virtual_packages())
+    let (family, version) = declared_libc(platform.manifest_virtual_package_records().as_ref())
         .unwrap_or_else(|| ("glibc", default_glibc_version(platform.subdir())));
 
     match family {
@@ -166,7 +166,11 @@ fn get_windows_platform_tags(
 /// macOS version pixi targets: declared `__osx`, else the subdir default.
 /// Call only for macOS platforms.
 fn macos_target_version(platform: &PixiPlatform) -> Version {
-    declared_version(platform.declared_virtual_packages(), "__osx").unwrap_or_else(|| {
+    declared_version(
+        platform.manifest_virtual_package_records().as_ref(),
+        "__osx",
+    )
+    .unwrap_or_else(|| {
         default_mac_os_version(platform.subdir())
             .expect("macos_target_version() called with non-osx platform")
     })
@@ -402,7 +406,7 @@ pub fn get_tags_from_machine(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rattler_conda_types::VersionWithSource;
+    use rattler_conda_types::{VersionWithSource, package::BuildString};
     use rattler_virtual_packages::{LibC, Osx};
     use std::str::FromStr;
     use uv_distribution_filename::WheelFilename;
@@ -472,7 +476,7 @@ mod tests {
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "12.0".parse().unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -485,7 +489,7 @@ mod tests {
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "15".parse().unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -619,7 +623,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            "h2334245_104_cp313".parse().unwrap(),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -647,7 +651,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            "h2334245_104_cp313".parse().unwrap(),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -673,7 +677,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            "h2334245_104_cp313".parse().unwrap(),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -690,7 +694,7 @@ mod tests {
         assert!(!wheel.is_compatible(&res));
     }
 
-    fn rich_platform(
+    fn make_platform(
         name: &str,
         subdir: Subdir,
         declared: Vec<GenericVirtualPackage>,
@@ -707,7 +711,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -715,7 +719,7 @@ mod tests {
     /// family and version read straight from the declaration.
     #[test]
     fn linux_tag_reads_musl_from_platform() {
-        let platform = rich_platform(
+        let platform = make_platform(
             "alpine",
             Subdir::LinuxAarch64,
             vec![declared("__musl", "1.2.4")],
@@ -731,7 +735,7 @@ mod tests {
     /// declared version (not the default).
     #[test]
     fn linux_tag_reads_glibc_from_platform() {
-        let platform = rich_platform(
+        let platform = make_platform(
             "modern-linux",
             Subdir::Linux64,
             vec![declared("__glibc", "2.36")],
@@ -768,7 +772,7 @@ mod tests {
     /// version (not the subdir's default).
     #[test]
     fn macos_tag_reads_osx_from_platform() {
-        let platform = rich_platform(
+        let platform = make_platform(
             "modern-mac",
             Subdir::OsxArm64,
             vec![declared("__osx", "14.0")],
@@ -787,7 +791,7 @@ mod tests {
     /// minor defaulting to 0, instead of failing the pypi-tag build.
     #[test]
     fn macos_tag_accepts_major_only_version() {
-        let platform = rich_platform("macos-15", Subdir::OsxArm64, vec![declared("__osx", "15")]);
+        let platform = make_platform("macos-15", Subdir::OsxArm64, vec![declared("__osx", "15")]);
         let res = get_macos_platform_tags(&platform).unwrap();
         assert_eq!(
             res.os(),

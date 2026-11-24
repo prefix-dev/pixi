@@ -109,7 +109,8 @@ To override or change the mapping of conda packages to PyPI packages, you can us
 
 `conda-pypi-map` layers your entries on top of the default mapping.
 For each package, Pixi first consults your entries and falls back to the default mapping only when your mapping does not mention the package.
-As a final fallback, Pixi can assume that the conda package name is also the PyPI package name. This same-name heuristic is enabled by default for conda-forge and can be enabled explicitly for other channels.
+As a final fallback, Pixi can assume that the conda package name is also the PyPI package name. This same-name heuristic is enabled by default for conda-forge and for the [conda-pypi](https://github.com/conda/conda-pypi) channel, and can be enabled explicitly for other channels.
+Packages from the conda-pypi channel are PyPI wheels, so Pixi derives their PURL from the package name directly and never consults the default mapping for them.
 
 This means fixing a single incorrectly mapped package is a one-liner:
 
@@ -135,7 +136,7 @@ For each conda package, Pixi derives PyPI names in this order:
 4. If the package is explicitly marked as not available on PyPI (`false` in TOML, or `null`/`[]` in JSON), lookup stops and no PURL is emitted.
 5. If the package is missing from a project-defined mapping, `mapping-mode = "overlay"` falls back to the default mapping data. With `mapping-mode = "replace"`, Pixi skips the default mapping data for that channel.
 6. If fallback is allowed, Pixi consults the default prefix.dev mapping.
-7. If `same-name-heuristic` is enabled for the package's channel, Pixi may finally use the conda package name as the PyPI package name. This defaults to enabled for conda-forge and disabled for other channels.
+7. If `same-name-heuristic` is enabled for the package's channel, Pixi may finally use the conda package name as the PyPI package name. This defaults to enabled for conda-forge and the conda-pypi channel and disabled for other channels.
 
 ### Offline and firewall-restricted environments
 
@@ -168,13 +169,13 @@ steer transitive dependencies without adding a new direct dependency.
 The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
 the requirement used for that package during PyPI resolution.
 
-Package-specific `exclude-newer` values are configured separately from both mechanisms:
+Package-specific `exclude-newer` exemptions are configured separately from both mechanisms:
 
-- use [`[exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for conda packages
-- use [`[pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for PyPI packages
+- use the `exemptions` of [`[workspace.exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for conda packages
+- use the `exemptions` of [`[workspace.pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for PyPI packages
 
 PyPI still does not have a conda-style per-channel cutoff. When you use a separate package index,
-pin the package with `index = "..."` and set its cutoff in `[pypi-exclude-newer]`.
+pin the package with `index = "..."` and exempt it in `[workspace.pypi-exclude-newer]`.
 
 ### Pinned package conflicts
 

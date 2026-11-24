@@ -90,6 +90,20 @@ def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command([pixi, "install", "--manifest-path", manifest_path])
 
 
+def test_pixi_init_pyproject_read_only(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pyproject.toml"
+    manifest_path.write_text('[project]\nname = "foo"\n')
+    manifest_path.chmod(0o444)
+
+    # Failing to extend the existing pyproject.toml must report why
+    verify_cli_command(
+        [pixi, "init", tmp_pixi_workspace, "--format", "pyproject"],
+        ExitCode.FAILURE,
+        stderr_contains=["failed to extend", "pyproject.toml"],
+        stderr_excludes="Missing field",
+    )
+
+
 def test_pixi_init_gitignore_append_newline(pixi: Path, tmp_pixi_workspace: Path) -> None:
     gitignore_path = tmp_pixi_workspace / ".gitignore"
     # Write some existing content without a trailing newline

@@ -1,0 +1,33 @@
+---
+source: crates/pixi_manifest/src/pyproject.rs
+expression: "warnings.into_iter().map(|warning|\npixi_test_utils::format_parse_error(source,\nwarning)).collect::<Vec<_>>().join(\"\\n\\n\")"
+---
+  ⚠ the top-level `[tool.pixi.exclude-newer]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[tool.pixi.workspace.exclude-newer]`
+    ╭─[pixi.toml:10:1]
+  9 │
+ 10 │ ╭─▶ [tool.pixi.exclude-newer]
+ 11 │ ├─▶ polars = "0d"
+    · ╰──── replace this with `[tool.pixi.workspace.exclude-newer.exemptions]`
+ 12 │
+    ╰────
+  help: move the entries to the `exemptions` of `[tool.pixi.workspace.exclude-newer]` instead, e.g. replace the current `exclude-newer` of `[tool.pixi.workspace]` with
+
+        [tool.pixi.workspace.exclude-newer]
+        cutoff = "7days"
+        exemptions = { polars = "*" }
+
+        An exemption allows the matching releases regardless of their upload time. Narrow `"*"` down to the releases you vetted, e.g. `"1.2.3"`.
+
+  ⚠ the top-level `[tool.pixi.pypi-exclude-newer]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[tool.pixi.workspace.pypi-exclude-newer]`
+    ╭─[pixi.toml:13:1]
+ 12 │
+ 13 │ ╭─▶ [tool.pixi.pypi-exclude-newer]
+ 14 │ ├─▶ boltons = "0d"
+    · ╰──── replace this with `[tool.pixi.workspace.pypi-exclude-newer.exemptions]`
+    ╰────
+  help: move the entries to the `exemptions` of `[tool.pixi.workspace.pypi-exclude-newer]` instead, e.g. replace the current `pypi-exclude-newer` of `[tool.pixi.workspace]` with
+
+        [tool.pixi.workspace.pypi-exclude-newer]
+        exemptions = { boltons = "*" }
+
+        An exemption allows every release of the package regardless of its upload time.

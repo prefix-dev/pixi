@@ -13,4 +13,5 @@ mod cache;
 mod key;
 mod reify;
 
+pub use key::LegacySourceEnvError;
 pub use reify::reify_legacy_source_envs;

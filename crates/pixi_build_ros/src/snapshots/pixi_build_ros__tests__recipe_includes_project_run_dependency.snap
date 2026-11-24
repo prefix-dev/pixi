@@ -48,6 +48,9 @@ requirements:
     - coreutils
     - "${{ compiler('c') }}"
     - "${{ compiler('cxx') }}"
+    - if: build_platform != target_platform
+      then: "cross-python_${{ target_platform }}"
+    - ros-distro-mutex * noetic_*
   host:
     - ros-noetic-catkin
     - ros-noetic-ros-package
@@ -57,14 +60,15 @@ requirements:
     - pip
     - pkg-config
     - setuptools
-    - ros-distro-mutex
+    - ros-distro-mutex * noetic_*
   run:
     - rich >=10.0
     - ros-noetic-ros-package
     - ros-noetic-multi-package
-    - ros-distro-mutex
+    - ros-distro-mutex * noetic_*
 about:
   homepage: "https://test.io/custom_ros"
+  license: Apache-2.0
   summary: Demo
   description: Demo
   repository: "https://github.com/test/custom_ros"

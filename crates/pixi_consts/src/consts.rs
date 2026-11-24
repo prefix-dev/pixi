@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.81.0",
+    None => "0.84.2",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -40,6 +40,7 @@ pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-v0";
+pub const VIRTUAL_PACKAGE_DETECTORS_CACHE_DIR: &str = "virtual-package-detectors-v0";
 pub const CACHED_URL_DIR: &str = "url-v0";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
@@ -124,6 +125,14 @@ pub const RELEASES_URL: &str = "https://github.com/prefix-dev/pixi/releases";
 pub const RELEASES_API_BY_TAG: &str = "https://api.github.com/repos/prefix-dev/pixi/releases/tags";
 pub const RELEASES_API_LATEST: &str =
     "https://api.github.com/repos/prefix-dev/pixi/releases/latest";
+
+// Development builds of `main`, published by `.github/workflows/dev-release.yml`.
+// Note: no trailing slash!
+pub const NIGHTLY_RELEASES_URL: &str = "https://github.com/prefix-dev/pixi-nightly/releases";
+pub const NIGHTLY_RELEASES_API_BY_TAG: &str =
+    "https://api.github.com/repos/prefix-dev/pixi-nightly/releases/tags";
+pub const NIGHTLY_RELEASES_API_LATEST: &str =
+    "https://api.github.com/repos/prefix-dev/pixi-nightly/releases/latest";
 
 /// Endpoint for the anonymous installation/update ping, sent by
 /// `pixi __install-ping` (called from the install scripts) and `pixi self-update`.

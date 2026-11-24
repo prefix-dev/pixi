@@ -60,8 +60,7 @@ impl<'a> WorkspaceAnchor<'a> {
     /// If the original `given` was an explicit absolute path (not a `file://` URL), it is
     /// preserved, mirroring the behavior of [`WorkspaceAnchor::given_for_location`].
     pub fn relative_given_for_file_url(&self, url: &VerbatimUrl) -> Option<String> {
-        let url_ref: &url::Url = url;
-        if url_ref.scheme() != "file" {
+        if url.scheme() != "file" {
             return None;
         }
         // Preserve absolute paths the user explicitly wrote.
@@ -71,7 +70,7 @@ impl<'a> WorkspaceAnchor<'a> {
         {
             return url.given().map(str::to_owned);
         }
-        let abs_path = url_ref.to_file_path().ok()?;
+        let abs_path = url.to_file_path().ok()?;
         self.relative_path(&abs_path).ok().map(|p| p.to_string())
     }
 

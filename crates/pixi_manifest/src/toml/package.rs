@@ -8,7 +8,7 @@ use pixi_build_types::ConditionalExpression;
 use pixi_spec::TomlSpec;
 pub use pixi_toml::TomlFromStr;
 use pixi_toml::{DeserializeAs, Same, TomlIndexMap, TomlWith};
-use rattler_conda_types::{PackageName, Version};
+use rattler_conda_types::{PackageName, VersionWithSource};
 use thiserror::Error;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
@@ -135,7 +135,7 @@ where
 pub struct TomlPackage {
     // Fields that can be inherited from workspace or specified directly
     pub name: Option<WorkspaceInheritableField<String>>,
-    pub version: Option<WorkspaceInheritableField<Version>>,
+    pub version: Option<WorkspaceInheritableField<VersionWithSource>>,
     pub description: Option<WorkspaceInheritableField<String>>,
     pub authors: Option<WorkspaceInheritableField<Vec<String>>>,
     pub license: Option<WorkspaceInheritableField<Spanned<String>>>,
@@ -166,7 +166,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
 
         let name = th.optional("name");
         let version = th
-            .optional::<TomlWith<_, WorkspaceInheritableField<TomlFromStr<Version>>>>("version")
+            .optional::<TomlWith<_, WorkspaceInheritableField<TomlFromStr<VersionWithSource>>>>(
+                "version",
+            )
             .map(TomlWith::into_inner);
         let description = th.optional("description");
         let authors = th.optional("authors");
@@ -238,7 +240,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
 #[derive(Debug, Clone, Default)]
 pub struct WorkspacePackageProperties {
     pub name: Option<String>,
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
     pub description: Option<String>,
     pub authors: Option<Vec<String>>,
     pub license: Option<String>,
@@ -283,7 +285,7 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
 #[derive(Debug, Clone, Default)]
 pub struct PackageDefaults {
     pub name: Option<String>,
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
     pub description: Option<String>,
     pub authors: Option<Vec<String>>,
     pub license: Option<String>,
@@ -1057,7 +1059,7 @@ mod test {
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties {
             name: Some("workspace-name".to_string()),
-            version: Some("1.0.0".parse().unwrap()),
+            version: Some("1.01".parse().unwrap()),
             description: Some("Workspace description".to_string()),
             ..Default::default()
         };
@@ -1071,7 +1073,7 @@ mod test {
             )
             .unwrap();
         assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
-        assert_eq!(manifest.value.package.version.unwrap().to_string(), "1.0.0");
+        assert_eq!(manifest.value.package.version.unwrap().as_str(), "1.01");
         assert_eq!(
             manifest.value.package.description,
             Some("Package description".to_string())

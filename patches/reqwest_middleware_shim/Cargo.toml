@@ -6,13 +6,6 @@ description = "Shim that re-exports astral-reqwest-middleware so consumers of cr
 license = "MIT OR Apache-2.0"
 publish = false
 
-[lib]
-name = "reqwest_middleware"
-path = "src/lib.rs"
-
-[dependencies]
-inner = { package = "astral-reqwest-middleware", version = "0.5" }
-
 [features]
 default = []
 charset = ["inner/charset"]
@@ -20,3 +13,10 @@ http2 = ["inner/http2"]
 json = ["inner/json"]
 multipart = ["inner/multipart"]
 rustls = ["inner/rustls"]
+
+[lib]
+name = "reqwest_middleware"
+path = "src/lib.rs"
+
+[dependencies]
+inner = { package = "astral-reqwest-middleware", version = "0.5" }

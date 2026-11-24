@@ -408,7 +408,7 @@ pub fn apply_variant(
 
                     let pinned = pin
                         .pin_compatible
-                        .apply(&pin_package.version, &pin_package.build)?;
+                        .apply(&pin_package.version, pin_package.build.as_str())?;
                     Ok(PinCompatibleDependency {
                         spec: pinned,
                         name: name.as_normalized().to_string(),

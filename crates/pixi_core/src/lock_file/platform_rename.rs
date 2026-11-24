@@ -16,13 +16,16 @@
 //!
 //! On disk, `pixi.lock` carries the manifest names verbatim (explicit or
 //! synthesized), so external tools can look up a platform under the same name
-//! the manifest uses. Older pixi versions wrote rich platforms under short
-//! `p1`, `p2`, ... aliases instead; because this pass matches by identity
-//! rather than name, those legacy aliases map back to the manifest names on
-//! load and disappear the next time the lock file is written.
+//! the manifest uses. Older pixi versions wrote platforms with custom virtual
+//! packages under short `p1`, `p2`, ... aliases instead; because this pass matches
+//! by identity rather than name, those legacy aliases map back to the manifest
+//! names on load and disappear the next time the lock file is written.
 use std::{collections::HashMap, path::Path};
 
-use pixi_manifest::{PixiPlatform, WorkspaceManifest, platform};
+use pixi_manifest::{
+    PixiPlatform, WorkspaceManifest,
+    platform::{self, VirtualPackageRecords},
+};
 use pixi_record::{LockFileResolver, LockFileResolverError, LockFileWriter};
 use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::{LockFile, LockedPackage, PlatformData, PlatformName};
@@ -120,8 +123,12 @@ fn compute_renames(lock_file: &LockFile, manifest: &WorkspaceManifest) -> HashMa
 /// subdir defaults so only user-set customisations participate in the match.
 fn workspace_customisations(platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
     let subdir = platform.subdir();
-    let mut customised: Vec<GenericVirtualPackage> = platform
-        .declared_virtual_packages()
+    let records = match platform.records() {
+        VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+            records
+        }
+    };
+    let mut customised: Vec<GenericVirtualPackage> = records
         .iter()
         .filter(|gvp| !platform::is_subdir_default(gvp, subdir))
         .cloned()
@@ -262,10 +269,10 @@ mod tests {
         builder.finish()
     }
 
-    /// Older pixi versions wrote rich platforms to disk under short `p1`,
-    /// `p2`, ... aliases in workspace declaration order. The identity-based
-    /// load pass maps those legacy aliases back to the manifest names, so
-    /// such lock files keep working without a re-solve and pick up the real
+    /// Older pixi versions wrote platforms with custom virtual packages to disk
+    /// under short `p1`, `p2`, ... aliases in workspace declaration order. The
+    /// identity-based load pass maps those legacy aliases back to the manifest
+    /// names, so such lock files keep working without a re-solve and pick up the real
     /// names on their next write.
     #[test]
     fn legacy_pn_aliases_align_to_manifest_names() {
@@ -275,9 +282,9 @@ mod tests {
             name = "demo"
             channels = []
             platforms = [
-              { name = "mac", platform = "osx-arm64", macos = "13.5" },
+              { name = "mac", subdir = "osx-arm64", macos = "13.5" },
               "linux-64",
-              { name = "gpu", platform = "linux-64", cuda = "12.0" },
+              { name = "gpu", subdir = "linux-64", cuda = "12.0" },
             ]
             "#,
         );
@@ -324,7 +331,7 @@ mod tests {
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{ name = "gpu-linux", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu-linux", subdir = "linux-64", cuda = "12.0" }]
             "#,
         );
         let lock = lockfile_with(
@@ -386,7 +393,7 @@ mod tests {
             channels = []
             platforms = [
               "linux-64",
-              { name = "gpu-linux", platform = "linux-64", cuda = "12.0" },
+              { name = "gpu-linux", subdir = "linux-64", cuda = "12.0" },
             ]
             "#,
         );
@@ -428,7 +435,7 @@ mod tests {
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{ name = "gpu-linux", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu-linux", subdir = "linux-64", cuda = "12.0" }]
             "#,
         );
         // Older lockfile that materialised the linux-64 defaults alongside
@@ -464,7 +471,7 @@ mod tests {
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu", subdir = "linux-64", cuda = "12.0" }]
             "#,
         );
         // `build-tool` is referenced only from the source record's
@@ -520,7 +527,7 @@ packages:
             [workspace]
             name = "demo"
             channels = []
-            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            platforms = [{ name = "gpu", subdir = "linux-64", cuda = "12.0" }]
             "#,
         );
         // `host-tool` is referenced only from the source record's

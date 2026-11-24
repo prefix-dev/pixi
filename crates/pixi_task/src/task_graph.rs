@@ -8,9 +8,13 @@ use std::{
 
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_core::{Workspace, workspace::Environment};
+use pixi_core::{
+    Workspace,
+    lock_file::UpdatePrefixError,
+    workspace::{Environment, platform_selection::ResolvedPlatform},
+};
 use pixi_manifest::{
-    EnvironmentName, PixiPlatform, Task, TaskName,
+    EnvironmentName, Task, TaskName,
     task::{
         ArgValues, CmdArgs, Custom, TaskArg, TemplateStringError, TypedArg, TypedDependency,
         TypedDependencyArg,
@@ -19,7 +23,7 @@ use pixi_manifest::{
 use thiserror::Error;
 
 use crate::{
-    TaskDisambiguation,
+    DisambiguationError, TaskDisambiguation,
     error::{
         AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError,
         UnrunnableTaskError,
@@ -134,7 +138,7 @@ impl TaskNode<'_> {
     pub(crate) fn full_command(
         &self,
         context: &pixi_manifest::task::TaskRenderContext,
-    ) -> miette::Result<Option<String>> {
+    ) -> Result<Option<String>, pixi_manifest::task::TemplateStringError> {
         let mut cmd = self.task.as_single_command(context)?;
 
         let extra = self.extra_passthrough_args();
@@ -183,9 +187,6 @@ pub struct TaskGraph<'p> {
 
     /// The tasks in the graph
     nodes: Vec<TaskNode<'p>>,
-
-    /// The platform the search was pinned to by `pixi run --platform`, if any.
-    platform: Option<&'p PixiPlatform>,
 }
 impl fmt::Display for TaskGraph<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -211,11 +212,6 @@ impl<'p> TaskGraph<'p> {
         self.project
     }
 
-    /// The platform the search was pinned to by `pixi run --platform`, if any.
-    pub fn platform(&self) -> Option<&'p PixiPlatform> {
-        self.platform
-    }
-
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
     ///
     /// When `prefer_executable` is [`PreferExecutable::Always`], the first
@@ -223,14 +219,18 @@ impl<'p> TaskGraph<'p> {
     /// name exists. Instead, the arguments are treated as a custom command to
     /// execute within the environment, allowing running executables that
     /// collide with task names.
-    pub fn from_cmd_args<D: TaskDisambiguation<'p>>(
+    pub async fn from_cmd_args<D, F>(
         project: &'p Workspace,
-        search_envs: &SearchEnvironments<'p, D>,
+        search_envs: &mut SearchEnvironments<'p, F, D>,
         args: Vec<String>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
         templated: bool,
-    ) -> Result<Self, TaskGraphError> {
+    ) -> Result<Self, TaskGraphError>
+    where
+        D: TaskDisambiguation<'p>,
+        F: AsyncFn(&Environment<'p>) -> Result<ResolvedPlatform<'p>, UpdatePrefixError>,
+    {
         // Split 'args' into arguments if it's a single string, supporting commands
         // like: `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or
         // `"echo 'Hello World'"` This prevents shell interpretation of pixi run
@@ -248,7 +248,10 @@ impl<'p> TaskGraph<'p> {
             && let Some(name) = args.first()
         {
             let task_name = TaskName::from(name.clone());
-            match search_envs.find_task(task_name.clone(), FindTaskSource::CmdArgs, None) {
+            match search_envs
+                .find_task(task_name.clone(), FindTaskSource::CmdArgs, None)
+                .await
+            {
                 Err(FindTaskError::MissingTask(_)) => {
                     // The name may still be a task elsewhere (another env or
                     // platform); a shell fallback would say "command not found".
@@ -261,12 +264,18 @@ impl<'p> TaskGraph<'p> {
                                 .explicit_environment
                                 .as_ref()
                                 .map(|env| env.name().clone()),
-                            platform: search_envs.platform.map(|p| p.name().clone()),
+                            platform: search_envs.platform.clone(),
                         }));
                     }
                 }
                 Err(FindTaskError::AmbiguousTask(err)) => {
                     return Err(TaskGraphError::AmbiguousTask(err));
+                }
+                Err(FindTaskError::Disambiguation(err)) => {
+                    return Err(TaskGraphError::Disambiguation(err));
+                }
+                Err(FindTaskError::PlatformResolution(err)) => {
+                    return Err(TaskGraphError::PlatformResolution(err));
                 }
                 Ok((task_env, task)) => {
                     // If an explicit environment was specified and the task is from the default
@@ -275,6 +284,7 @@ impl<'p> TaskGraph<'p> {
                         Some(explicit_env) if task_env.is_default() => explicit_env,
                         _ => task_env,
                     };
+                    search_envs.prepare_environment(&run_env).await?;
 
                     let task_name = args.remove(0);
 
@@ -335,7 +345,6 @@ impl<'p> TaskGraph<'p> {
                     if skip_deps {
                         return Ok(Self {
                             project,
-                            platform: search_envs.platform,
                             nodes: vec![TaskNode {
                                 name: Some(task_name.into()),
                                 task: Cow::Borrowed(task),
@@ -361,7 +370,8 @@ impl<'p> TaskGraph<'p> {
                                 .map(|a| TypedDependencyArg::Positional(a.clone()))
                                 .collect(),
                         ),
-                    );
+                    )
+                    .await;
                 }
             }
         }
@@ -371,6 +381,7 @@ impl<'p> TaskGraph<'p> {
             .explicit_environment
             .clone()
             .unwrap_or_else(|| project.default_environment());
+        search_envs.prepare_environment(&run_environment).await?;
 
         // For CLI arguments, we want to construct a proper shell command.
         // When we have multiple arguments from CLI, they've already been parsed by the shell
@@ -409,15 +420,20 @@ impl<'p> TaskGraph<'p> {
             },
             None,
         )
+        .await
     }
 
     /// Constructs a new instance of a [`TaskGraph`] from a root task.
-    fn from_root<D: TaskDisambiguation<'p>>(
+    async fn from_root<D, F>(
         project: &'p Workspace,
-        search_environments: &SearchEnvironments<'p, D>,
+        search_environments: &mut SearchEnvironments<'p, F, D>,
         root: TaskNode<'p>,
         root_args: Option<Vec<TypedDependencyArg>>,
-    ) -> Result<Self, TaskGraphError> {
+    ) -> Result<Self, TaskGraphError>
+    where
+        D: TaskDisambiguation<'p>,
+        F: AsyncFn(&Environment<'p>) -> Result<ResolvedPlatform<'p>, UpdatePrefixError>,
+    {
         let mut task_name_with_args_to_node: HashMap<TypedDependency, TaskId> =
             HashMap::from_iter(root.name.clone().into_iter().map(|name| {
                 (
@@ -441,11 +457,10 @@ impl<'p> TaskGraph<'p> {
             let mut deps_to_process: Vec<(TypedDependency, Environment<'p>, &Task)> = Vec::new();
 
             // Iterate over all the dependencies of the node and add them to the graph.
-            let node_platform = search_environments.search_platform_for(&node.run_environment);
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
                 let context = pixi_manifest::task::TaskRenderContext {
-                    platform: node_platform,
+                    platform: search_environments.search_platform_for(&node.run_environment),
                     environment_name: node.run_environment.name(),
                     manifest_path: None,
                     args: node.args.as_ref(),
@@ -472,21 +487,32 @@ impl<'p> TaskGraph<'p> {
                     Cow::Owned(_) => unreachable!("only named tasks can have dependencies"),
                 };
 
-                let task_specific_environment = dependency
-                    .environment
-                    .clone()
-                    .and_then(|environment| project.environment(&environment));
+                let task_specific_environment =
+                    dependency.environment.as_ref().map(|environment| {
+                        project
+                            .environment(environment)
+                            .expect("task environments are validated when the manifest is parsed")
+                    });
 
-                let (task_env, task_dependency) = match search_environments.find_task(
-                    dependency.task_name.clone(),
-                    FindTaskSource::DependsOn(node_name, task_ref),
-                    task_specific_environment,
-                ) {
+                let (task_env, task_dependency) = match search_environments
+                    .find_task(
+                        dependency.task_name.clone(),
+                        FindTaskSource::DependsOn(node_name, task_ref),
+                        task_specific_environment,
+                    )
+                    .await
+                {
                     Err(FindTaskError::MissingTask(err)) => {
                         return Err(TaskGraphError::MissingTask(err));
                     }
                     Err(FindTaskError::AmbiguousTask(err)) => {
                         return Err(TaskGraphError::AmbiguousTask(err));
+                    }
+                    Err(FindTaskError::Disambiguation(err)) => {
+                        return Err(TaskGraphError::Disambiguation(err));
+                    }
+                    Err(FindTaskError::PlatformResolution(err)) => {
+                        return Err(TaskGraphError::PlatformResolution(err));
                     }
                     Ok(result) => result,
                 };
@@ -526,11 +552,7 @@ impl<'p> TaskGraph<'p> {
             next_node_to_visit += 1;
         }
 
-        Ok(Self {
-            project,
-            nodes,
-            platform: search_environments.platform,
-        })
+        Ok(Self { project, nodes })
     }
 
     fn merge_args(
@@ -702,6 +724,14 @@ pub enum TaskGraphError {
     #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Disambiguation(DisambiguationError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PlatformResolution(#[from] std::sync::Arc<UpdatePrefixError>),
+
     #[error("could not split task, assuming non valid task")]
     InvalidTask,
 
@@ -736,7 +766,7 @@ mod test {
     use rattler_conda_types::Subdir;
 
     use crate::{
-        task_environment::SearchEnvironments,
+        task_environment::search_for_test,
         task_graph::{PreferExecutable, TaskGraph, TaskGraphError, join_args_with_single_quotes},
     };
 
@@ -799,7 +829,7 @@ mod test {
             self
         }
 
-        fn build_graph(&self) -> Result<(Workspace, Vec<String>), TaskGraphError> {
+        async fn build_graph(&self) -> Result<(Workspace, Vec<String>), TaskGraphError> {
             let project = Workspace::from_str(Path::new("pixi.toml"), self.workspace_str).unwrap();
             let environment = self
                 .environment_name
@@ -814,7 +844,7 @@ mod test {
                     .platform_by_name(&name)
                     .expect("test workspace must declare the named platform")
             });
-            let search_envs = SearchEnvironments::from_opt_env(
+            let mut search_envs = search_for_test(
                 &project,
                 environment,
                 named_platform.or(self.platform.as_ref()),
@@ -822,12 +852,13 @@ mod test {
 
             let graph = TaskGraph::from_cmd_args(
                 &project,
-                &search_envs,
+                &mut search_envs,
                 self.run_args.iter().map(|arg| arg.to_string()).collect(),
                 self.skip_deps,
                 self.prefer_executable,
                 self.templated,
-            )?;
+            )
+            .await?;
 
             let commands = graph
                 .topological_order()
@@ -844,16 +875,17 @@ mod test {
                     task.full_command(&context).ok().flatten()
                 })
                 .collect();
+            drop(search_envs);
 
             Ok((project, commands))
         }
 
-        fn commands_in_order(&self) -> Vec<String> {
-            self.build_graph().unwrap().1
+        async fn commands_in_order(&self) -> Vec<String> {
+            self.build_graph().await.unwrap().1
         }
 
-        fn expect_error(&self) -> TaskGraphError {
-            self.build_graph().unwrap_err()
+        async fn expect_error(&self) -> TaskGraphError {
+            self.build_graph().await.unwrap_err()
         }
     }
 
@@ -861,8 +893,8 @@ mod test {
     /// fall through to "execute as a shell command" (which reports a
     /// confusing "command not found") -- it errors, pointing at the
     /// environments that define the task.
-    #[test]
-    fn test_task_in_other_environment_is_not_treated_as_executable() {
+    #[tokio::test]
+    async fn test_task_in_other_environment_is_not_treated_as_executable() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -881,7 +913,8 @@ mod test {
     "#;
         let err = TaskGraphTest::new(workspace_str, &["test"])
             .environment("prod")
-            .expect_error();
+            .expect_error()
+            .await;
         assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
             assert_eq!(err.task_name.as_str(), "test");
             assert_eq!(
@@ -894,8 +927,8 @@ mod test {
     /// The platform axis of the same guard: a task defined only for another
     /// *platform* must also surface as an `UnrunnableTask` carrying the pinned
     /// platform, rather than falling through to a shell command.
-    #[test]
-    fn test_task_on_other_platform_reports_pinned_platform() {
+    #[tokio::test]
+    async fn test_task_on_other_platform_reports_pinned_platform() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -907,7 +940,8 @@ mod test {
     "#;
         let err = TaskGraphTest::new(workspace_str, &["mac-only"])
             .platform(Subdir::Linux64)
-            .expect_error();
+            .expect_error()
+            .await;
         assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
             assert_eq!(err.task_name.as_str(), "mac-only");
             assert_eq!(err.platform.as_ref().map(|p| p.as_str()), Some("linux-64"));
@@ -918,8 +952,8 @@ mod test {
         });
     }
 
-    #[test]
-    fn test_ordered_commands() {
+    #[tokio::test]
+    async fn test_ordered_commands() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -933,15 +967,17 @@ mod test {
         top = { cmd = "echo top", depends-on = ["task1", "task2"] }
     "#;
         let run_args = &["top", "--test"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(
             commands,
             vec!["echo root", "echo task1", "echo task2", "echo top '--test'"]
         );
     }
 
-    #[test]
-    fn test_cycle_ordered_commands() {
+    #[tokio::test]
+    async fn test_cycle_ordered_commands() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -955,15 +991,17 @@ mod test {
         top = { cmd = "echo top", depends-on = ["task1", "task2"] }
     "#;
         let run_args = &["top"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(
             commands,
             vec!["echo root", "echo task1", "echo task2", "echo top"]
         );
     }
 
-    #[test]
-    fn test_platform_ordered_commands() {
+    #[tokio::test]
+    async fn test_platform_ordered_commands() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -984,7 +1022,8 @@ mod test {
         // Linux should give hello linux
         let commands = TaskGraphTest::new(workspace_str, run_args)
             .platform(Subdir::Linux64)
-            .commands_in_order();
+            .commands_in_order()
+            .await;
         assert_eq!(
             commands,
             vec!["echo linux", "echo task1", "echo task2", "echo top"]
@@ -993,15 +1032,16 @@ mod test {
         // On other platforms we should get echo root
         let commands = TaskGraphTest::new(workspace_str, run_args)
             .platform(Subdir::OsxArm64)
-            .commands_in_order();
+            .commands_in_order()
+            .await;
         assert_eq!(
             commands,
             vec!["echo root", "echo task1", "echo task2", "echo top"]
         );
     }
 
-    #[test]
-    fn test_custom_command() {
+    #[tokio::test]
+    async fn test_custom_command() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1009,12 +1049,14 @@ mod test {
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
     "#;
         let run_args = &["echo bla"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo bla"]);
     }
 
-    #[test]
-    fn test_multi_env() {
+    #[tokio::test]
+    async fn test_multi_env() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1028,12 +1070,14 @@ mod test {
         build = ["build"]
     "#;
         let run_args = &["build"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo build"]);
     }
 
-    #[test]
-    fn test_multi_env_default() {
+    #[tokio::test]
+    async fn test_multi_env_default() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1050,12 +1094,14 @@ mod test {
         build = ["build"]
     "#;
         let run_args = &["start"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["hello world"]);
     }
 
-    #[test]
-    fn test_cross_env_task_dependency() {
+    #[tokio::test]
+    async fn test_cross_env_task_dependency() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1078,15 +1124,16 @@ mod test {
         let run_args = &["start"];
         let commands = TaskGraphTest::new(workspace_str, run_args)
             .environment("cuda")
-            .commands_in_order();
+            .commands_in_order()
+            .await;
         assert_eq!(
             commands,
             vec!["python train.py --cuda", "python test.py --cuda"]
         );
     }
 
-    #[test]
-    fn test_multi_env_defaults() {
+    #[tokio::test]
+    async fn test_multi_env_defaults() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1104,12 +1151,14 @@ mod test {
         build = ["build"]
     "#;
         let run_args = &["foobar"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo foo", "echo bar"]);
     }
 
-    #[test]
-    fn test_multi_env_defaults_ambiguity() {
+    #[tokio::test]
+    async fn test_multi_env_defaults_ambiguity() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1130,12 +1179,14 @@ mod test {
         let run_args = &["foobar"];
 
         // As foo is really ambiguous it should error
-        let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
+        let error = TaskGraphTest::new(workspace_str, run_args)
+            .expect_error()
+            .await;
         assert_matches!(error, TaskGraphError::AmbiguousTask(_));
     }
 
-    #[test]
-    fn test_skip_deps() {
+    #[tokio::test]
+    async fn test_skip_deps() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1149,10 +1200,13 @@ mod test {
         let run_args = &["bar"];
         let with_skip = TaskGraphTest::new(workspace_str, run_args)
             .skip_deps()
-            .commands_in_order();
+            .commands_in_order()
+            .await;
         assert_eq!(with_skip, vec!["echo bar"]);
 
-        let without_skip = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let without_skip = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(without_skip, vec!["echo foo", "echo bar"]);
     }
 
@@ -1181,8 +1235,8 @@ mod test {
     ///
     /// Verifies that `pixi run echo '{{ hello }}'` does not fail when
     /// templating is disabled (the default for CLI commands).
-    #[test]
-    fn test_custom_command_with_braces_no_template() {
+    #[tokio::test]
+    async fn test_custom_command_with_braces_no_template() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1193,7 +1247,7 @@ mod test {
         let project =
             Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
-        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search_envs = search_for_test(&project, None, None);
 
         // Without --templated, {{ hello }} should pass through as-is.
         // Multiple args simulate how the shell + clap deliver them:
@@ -1201,12 +1255,13 @@ mod test {
         // becomes args = ["echo", "{{ hello }}"]
         let graph = TaskGraph::from_cmd_args(
             &project,
-            &search_envs,
+            &mut search_envs,
             vec!["echo".to_string(), "{{ hello }}".to_string()],
             false,
             PreferExecutable::TaskFirst,
             false,
         )
+        .await
         .expect("should not fail with braces when templating is disabled");
 
         let order = graph.topological_order();
@@ -1229,8 +1284,8 @@ mod test {
 
     /// Verifies that `pixi run --templated echo '{{ pixi.platform }}'`
     /// renders template variables.
-    #[test]
-    fn test_custom_command_with_templated_flag() {
+    #[tokio::test]
+    async fn test_custom_command_with_templated_flag() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1241,7 +1296,7 @@ mod test {
         let project =
             Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
-        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search_envs = search_for_test(&project, None, None);
 
         // With --templated, {{ pixi.platform }} should be rendered.
         // Multiple args simulate how the shell + clap deliver them:
@@ -1249,12 +1304,13 @@ mod test {
         // becomes args = ["echo", "{{ pixi.platform }}"]
         let graph = TaskGraph::from_cmd_args(
             &project,
-            &search_envs,
+            &mut search_envs,
             vec!["echo".to_string(), "{{ pixi.platform }}".to_string()],
             false,
             PreferExecutable::TaskFirst,
             true,
         )
+        .await
         .expect("should succeed with valid template variable");
 
         let order = graph.topological_order();
@@ -1275,8 +1331,8 @@ mod test {
         assert!(!cmd.contains("{{"));
     }
 
-    #[test]
-    fn test_choices_valid_value() {
+    #[tokio::test]
+    async fn test_choices_valid_value() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1288,12 +1344,14 @@ mod test {
         args = [{ arg = "target", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build", "debug"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo debug"]);
     }
 
-    #[test]
-    fn test_choices_invalid_value() {
+    #[tokio::test]
+    async fn test_choices_invalid_value() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1305,7 +1363,9 @@ mod test {
         args = [{ arg = "target", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build", "profile"];
-        let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
+        let error = TaskGraphTest::new(workspace_str, run_args)
+            .expect_error()
+            .await;
         assert_matches!(error, TaskGraphError::InvalidArgValue(err) => {
             assert_eq!(err.arg, "target");
             assert_eq!(err.task, "build");
@@ -1314,8 +1374,8 @@ mod test {
         });
     }
 
-    #[test]
-    fn test_choices_missing_value() {
+    #[tokio::test]
+    async fn test_choices_missing_value() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1327,7 +1387,9 @@ mod test {
         args = [{ arg = "target", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build"];
-        let error = TaskGraphTest::new(workspace_str, run_args).expect_error();
+        let error = TaskGraphTest::new(workspace_str, run_args)
+            .expect_error()
+            .await;
         assert_matches!(error, TaskGraphError::MissingArgument(err) => {
             assert_eq!(err.arg, "target");
             assert_eq!(err.task, "build");
@@ -1335,8 +1397,8 @@ mod test {
         });
     }
 
-    #[test]
-    fn test_choices_with_valid_default() {
+    #[tokio::test]
+    async fn test_choices_with_valid_default() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1347,12 +1409,14 @@ mod test {
         args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo debug"]);
     }
 
-    #[test]
-    fn test_prefer_executable_always() {
+    #[tokio::test]
+    async fn test_prefer_executable_always() {
         let workspace_str = r#"
         [workspace]
         name = "pixi"
@@ -1366,16 +1430,17 @@ mod test {
         let project =
             Workspace::from_str(Path::new("pixi.toml"), workspace_str).expect("valid workspace");
 
-        let search_envs = SearchEnvironments::from_opt_env(&project, None, None);
+        let mut search_envs = search_for_test(&project, None, None);
 
         let graph = TaskGraph::from_cmd_args(
             &project,
-            &search_envs,
+            &mut search_envs,
             vec!["foo".to_string()],
             false,
             PreferExecutable::Always,
             false,
         )
+        .await
         .expect("graph should be created");
 
         // When PreferExecutable::Always is used, we should not resolve the command
@@ -1386,8 +1451,8 @@ mod test {
         assert!(task.name.is_none());
     }
 
-    #[test]
-    fn test_double_dash_separator_with_typed_args() {
+    #[tokio::test]
+    async fn test_double_dash_separator_with_typed_args() {
         // pixi run build release -- --verbose
         // "release" fills the typed arg; "--verbose" is forwarded to the command.
         // `--` can appear anywhere after the task name for tasks with typed args.
@@ -1402,12 +1467,14 @@ mod test {
         args = [{ arg = "target", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build", "release", "--", "--verbose"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo release '--verbose'"]);
     }
 
-    #[test]
-    fn test_double_dash_with_defaults_only() {
+    #[tokio::test]
+    async fn test_double_dash_with_defaults_only() {
         // pixi run build -- --verbose
         // No typed arg value provided; default "debug" is used; "--verbose" is appended
         let workspace_str = r#"
@@ -1421,12 +1488,14 @@ mod test {
         args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build", "--", "--verbose"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo debug '--verbose'"]);
     }
 
-    #[test]
-    fn test_double_dash_with_free_form_args() {
+    #[tokio::test]
+    async fn test_double_dash_with_free_form_args() {
         // Task has NO typed args. `--` only acts as a separator when it is the
         // first arg after the task name. Here "arg1" comes first, so `--` is
         // passed through verbatim to the underlying command.
@@ -1440,12 +1509,14 @@ mod test {
         cmd = "echo"
     "#;
         let run_args = &["mytask", "arg1", "--", "arg2"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo 'arg1' '--' 'arg2'"]);
     }
 
-    #[test]
-    fn test_double_dash_first_with_free_form_args() {
+    #[tokio::test]
+    async fn test_double_dash_first_with_free_form_args() {
         // Task has NO typed args. `--` is the first arg after the task name, so
         // it is consumed by pixi and the remaining args are forwarded.
         let workspace_str = r#"
@@ -1458,12 +1529,14 @@ mod test {
         cmd = "echo"
     "#;
         let run_args = &["mytask", "--", "arg1", "arg2"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo 'arg1' 'arg2'"]);
     }
 
-    #[test]
-    fn test_double_dash_custom_command_preserved() {
+    #[tokio::test]
+    async fn test_double_dash_custom_command_preserved() {
         // Custom commands (no pixi task found) pass `--` through verbatim.
         // e.g. `pixi run git log -- somefile`
         let workspace_str = r#"
@@ -1473,12 +1546,14 @@ mod test {
         platforms = ["linux-64"]
     "#;
         let run_args = &["git", "log", "--", "somefile"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["'git' 'log' '--' 'somefile'"]);
     }
 
-    #[test]
-    fn test_double_dash_no_extra_args() {
+    #[tokio::test]
+    async fn test_double_dash_no_extra_args() {
         // Trailing "--" with nothing after it, and `--` is the first arg after
         // the task name, so it is consumed. Task uses its default value.
         let workspace_str = r#"
@@ -1492,12 +1567,14 @@ mod test {
         args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
     "#;
         let run_args = &["build", "--"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo debug"]);
     }
 
-    #[test]
-    fn test_double_dash_prefix_not_separator() {
+    #[tokio::test]
+    async fn test_double_dash_prefix_not_separator() {
         // `--verbose` is NOT the `--` separator — only the exact token `--`
         // (with a space after it) is recognised. A flag like `--verbose` as the
         // first arg is forwarded to the underlying command unchanged.
@@ -1511,14 +1588,16 @@ mod test {
         cmd = "echo"
     "#;
         let run_args = &["mytask", "--verbose"];
-        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        let commands = TaskGraphTest::new(workspace_str, run_args)
+            .commands_in_order()
+            .await;
         assert_eq!(commands, vec!["echo '--verbose'"]);
     }
 
     /// `{{ pixi.platform }}` renders the platform the search was pinned to
     /// (https://github.com/prefix-dev/pixi/issues/6773).
-    #[test]
-    fn test_platform_template_renders_pinned_custom_platform() {
+    #[tokio::test]
+    async fn test_platform_template_renders_pinned_custom_platform() {
         let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let workspace_str = format!(
             r#"
@@ -1526,8 +1605,8 @@ mod test {
         name = "pixi"
         channels = []
         platforms = [
-            {{ name = "generic", platform = "{current}" }},
-            {{ name = "local", platform = "{current}", cuda = "12" }},
+            {{ name = "generic", subdir = "{current}" }},
+            {{ name = "local", subdir = "{current}", cuda = "12" }},
         ]
 
         [tasks]
@@ -1539,6 +1618,7 @@ mod test {
         let (_project, commands) = TaskGraphTest::new(&workspace_str, &["which-platform"])
             .named_platform("local")
             .build_graph()
+            .await
             .unwrap();
         assert_eq!(commands, vec!["echo local"]);
 
@@ -1546,6 +1626,7 @@ mod test {
         // first, no extra virtual packages), so that is what renders.
         let (_project, commands) = TaskGraphTest::new(&workspace_str, &["which-platform"])
             .build_graph()
+            .await
             .unwrap();
         assert_eq!(commands, vec!["echo generic"]);
     }

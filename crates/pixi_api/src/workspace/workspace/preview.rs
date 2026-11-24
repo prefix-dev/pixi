@@ -1,11 +1,48 @@
 use std::path::PathBuf;
 
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_core::Workspace;
-use pixi_manifest::{KnownPreviewFlag, ManifestDocument, ManifestProvenance};
+use pixi_manifest::{
+    KnownPreviewFlag, LoadManifestsError, ManifestDocument, ManifestDocumentError,
+    ManifestProvenance, ManifestRenderError, ProvenanceError, TomlError,
+};
+use thiserror::Error;
 
 use crate::Interface;
+use crate::workspace::workspace::SaveManifestError;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum PreviewFlagsError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Provenance(#[from] ProvenanceError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Document(#[from] ManifestDocumentError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Render(#[from] ManifestRenderError),
+
+    #[error("the manifest would no longer load without '{flags}'")]
+    #[diagnostic(help("pass `--force` to remove anyway"))]
+    StillNeeded {
+        flags: String,
+        #[source]
+        #[diagnostic_source]
+        source: LoadManifestsError,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
+}
 
 pub async fn list(workspace: &Workspace) -> Vec<KnownPreviewFlag> {
     workspace.workspace.value.workspace.preview.enabled_flags()
@@ -19,18 +56,18 @@ pub async fn add<I: Interface>(
     interface: &I,
     manifest_path: PathBuf,
     flags: Vec<KnownPreviewFlag>,
-) -> miette::Result<()> {
-    let provenance = ManifestProvenance::from_path(manifest_path).into_diagnostic()?;
+) -> Result<(), PreviewFlagsError> {
+    let provenance = ManifestProvenance::from_path(manifest_path)?;
     let mut document = ManifestDocument::from_provenance(&provenance)?;
 
     let mut added = Vec::new();
     for flag in flags {
-        if document.add_preview_flag(flag.into()).into_diagnostic()? {
+        if document.add_preview_flag(flag.into())? {
             added.push(flag);
         }
     }
 
-    let contents = document.render().into_diagnostic()?;
+    let contents = document.render()?;
     save(&provenance, &contents).await?;
 
     if added.is_empty() {
@@ -65,16 +102,13 @@ pub async fn remove<I: Interface>(
     manifest_path: PathBuf,
     flags: Vec<KnownPreviewFlag>,
     force: bool,
-) -> miette::Result<()> {
-    let provenance = ManifestProvenance::from_path(manifest_path).into_diagnostic()?;
+) -> Result<(), PreviewFlagsError> {
+    let provenance = ManifestProvenance::from_path(manifest_path)?;
     let mut document = ManifestDocument::from_provenance(&provenance)?;
 
     let mut removed = Vec::new();
     for flag in flags {
-        if document
-            .remove_preview_flag(flag.into())
-            .into_diagnostic()?
-        {
+        if document.remove_preview_flag(flag.into())? {
             removed.push(flag);
         }
     }
@@ -86,14 +120,13 @@ pub async fn remove<I: Interface>(
         return Ok(());
     }
 
-    let contents = document.render().into_diagnostic()?;
+    let contents = document.render()?;
     match Workspace::from_str(&provenance.path, &contents) {
-        Err(err) if !force => {
-            return Err(miette::Report::new(err).wrap_err(format!(
-                "The manifest would no longer load without '{}'. \
-                 Pass `--force` to remove anyway.",
-                removed.iter().format("', '")
-            )));
+        Err(source) if !force => {
+            return Err(PreviewFlagsError::StillNeeded {
+                flags: removed.iter().format("', '").to_string(),
+                source,
+            });
         }
         load_result => {
             save(&provenance, &contents).await?;
@@ -116,8 +149,11 @@ pub async fn remove<I: Interface>(
 }
 
 /// Persists the edited manifest to disk.
-async fn save(provenance: &ManifestProvenance, contents: &str) -> miette::Result<()> {
+async fn save(provenance: &ManifestProvenance, contents: &str) -> Result<(), SaveManifestError> {
     pixi_utils::atomic_write::atomic_write(&provenance.path, contents)
         .await
-        .into_diagnostic()
+        .map_err(|source| SaveManifestError {
+            path: provenance.path.clone(),
+            source,
+        })
 }

@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × duplicate key: `scikit_learn`
+   ╭─[pixi.toml:7:1]
+ 5 │ [pypi-exclude-newer.exemptions]
+ 6 │ scikit-learn = "*"
+   · ──────┬─────
+   ·       ╰── first defined here
+ 7 │ scikit_learn = "*"
+   · ──────┬─────
+   ·       ╰── duplicate defined here
+   ╰────

@@ -1,19 +1,23 @@
 """Integration tests for the pixi-build-ros backend."""
 
+import json
+import tempfile
 from pathlib import Path
 
 import pytest
+from rattler.package_streaming import extract
 
+from ..common import CURRENT_PLATFORM
 from .common import ExitCode, copytree_with_local_backend, package_files, verify_cli_command
 
 ROS_WORKSPACE_NAME = "ros-workspace"
 ROS_PACKAGE_DIRS = ["navigator", "navigator_py", "distro_less_package"]
 ROS_IMPLICIT_PACKAGE_DIR = "navigator_implicit"
 ROS_PACKAGE_OUTPUT_NAMES = {
-    "navigator": "ros-humble-navigator",
-    "navigator_py": "ros-humble-navigator-py",
+    "navigator": "ros2-navigator",
+    "navigator_py": "ros2-navigator-py",
     # The `humble` distro is automatically selected from the channels in the pixi.toml
-    "distro_less_package": "ros-humble-distro-less-package",
+    "distro_less_package": "ros2-distro-less-package",
 }
 
 
@@ -54,6 +58,13 @@ def test_ros_packages_build(
     built_packages = list(output_dir.glob("*.conda"))
     assert built_packages, f"no package artifacts produced for {expected_name}"
     assert any(expected_name in artifact.name for artifact in built_packages)
+    if package_dir == "navigator_py":
+        entrypoint = (
+            "Library/lib/navigator_py/navigator.exe"
+            if CURRENT_PLATFORM == "win-64"
+            else "lib/navigator_py/navigator"
+        )
+        assert entrypoint in package_files(built_packages[0])
 
 
 @pytest.mark.slow
@@ -173,3 +184,77 @@ def test_ros_python_rebuild_omits_removed_module(
     stale_module.unlink()
     second_package = _publish(pixi, manifest_path, workspace.joinpath("dist-second"))
     assert not [path for path in package_files(second_package) if "stale" in path]
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    CURRENT_PLATFORM != "linux-64", reason="cross-compiles from linux-64 to linux-aarch64"
+)
+def test_ros_python_package_cross_compiles(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    workspace = _prepare_ros_workspace(build_data, tmp_pixi_workspace)
+    manifest_path = workspace.joinpath("src", "navigator_py", "pixi.toml")
+    output_dir = workspace.joinpath("dist")
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--target-platform",
+            "linux-aarch64",
+            "--target-dir",
+            str(output_dir),
+            "--path",
+            manifest_path,
+        ],
+    )
+
+    [package] = output_dir.glob("*.conda")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        extract(package, Path(temp_dir))
+        index = json.loads(Path(temp_dir, "info", "index.json").read_text())
+    assert index["subdir"] == "linux-aarch64"
+    assert any(path.endswith("navigator_py/__init__.py") for path in package_files(package))
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    CURRENT_PLATFORM.startswith("win"), reason="the Windows script installs with setup.py"
+)
+@pytest.mark.parametrize(
+    ("verbosity_args", "pip_verbose_shown"),
+    [([], False), (["-vvv"], True)],
+    ids=["default", "verbose"],
+)
+def test_ros_pip_verbosity_follows_pixi(
+    pixi: Path,
+    build_data: Path,
+    tmp_pixi_workspace: Path,
+    verbosity_args: list[str],
+    pip_verbose_shown: bool,
+) -> None:
+    """
+    pip's verbose output only shows up when pixi's own verbosity asks for it.
+    """
+    workspace = _prepare_ros_workspace(build_data, tmp_pixi_workspace)
+    package_dir = workspace.joinpath("src", "navigator_py")
+    # Without `install_scripts` in setup.cfg the package installs with pip.
+    package_dir.joinpath("setup.cfg").unlink()
+
+    # pip prints its own version and location only in verbose mode.
+    pip_verbose_line = "Using pip "
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            *verbosity_args,
+            "--target-dir",
+            workspace.joinpath("dist"),
+            "--path",
+            package_dir.joinpath("pixi.toml"),
+        ],
+        stderr_contains=pip_verbose_line if pip_verbose_shown else None,
+        stderr_excludes=None if pip_verbose_shown else pip_verbose_line,
+        strip_ansi=True,
+    )

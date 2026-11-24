@@ -221,9 +221,12 @@ def test_a_signal_sent_to_pixi_reaches_the_entrypoint(pixi: Path, tmp_pixi_works
     script = tmp_pixi_workspace / "signal.code"
     started = tmp_pixi_workspace / "started"
     terminated = tmp_pixi_workspace / "terminated"
+    # The trap has to exit: a SIGTERM that lands before `wait` starts runs the
+    # trap once the current command finishes, and the script would then carry
+    # on into the 30s sleep.
     script.write_text(f"""# /// conda-script
 # channels = ["{CONDA_FORGE_CHANNEL}"]
-# entrypoint = "sh -c \\"trap 'touch {terminated}' TERM; touch {started}; sleep 30 & wait\\""
+# entrypoint = "sh -c \\"trap 'touch {terminated}; exit 143' TERM; touch {started}; sleep 30 & wait\\""
 #
 # [dependencies]
 # coreutils = "*"

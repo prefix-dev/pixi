@@ -8,6 +8,7 @@ pixi tree pre-commit
 pixi tree -i yaml
 pixi tree --environment docs
 pixi tree --platform win-64
+pixi tree --json
 ```
 
 Output will look like this, where direct packages in the [manifest file](../../pixi_manifest.md) will be green.
@@ -97,6 +98,37 @@ yaml v0.2.5
     └── pre-commit v3.3.3
 ```
 
+
+Use `--json` to get the same tree as JSON, for example for consumption by other tools.
+Each node has the same fields, nested under `dependencies`, or under `required_by` with `--invert`.
+A package whose subtree was already shown earlier has `is_deduplicated` set to `true` and no children, like the `(*)` marker above.
+Every direct dependency, or every package matching the regex, is listed at the top level, even if it was already shown below another one.
+
+```shell
+➜ pixi tree --json pre-commit
+[
+  {
+    "name": "pre-commit",
+    "version": "3.3.3",
+    "kind": "conda",
+    "is_explicit": true,
+    "via_extras": [],
+    "is_deduplicated": false,
+    "dependencies": [
+      {
+        "name": "cfgv",
+        "version": "3.3.1",
+        "kind": "conda",
+        "is_explicit": false,
+        "via_extras": [],
+        "is_deduplicated": false,
+        "dependencies": [ ... ]
+      },
+...
+```
+
+`version` is `null` if it is unknown, and `kind` is `null` for dependencies that aren't part of the locked environment.
+`via_extras` lists the extras of the parent PyPI package that pulled in the dependency.
 
 !!! warning
     Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.

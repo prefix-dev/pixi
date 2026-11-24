@@ -515,7 +515,12 @@ struct RepodataReporterInner {
     multi_progress: MultiProgress,
     pb: ProgressBar,
     title: Option<String>,
-    downloads: Arc<RwLock<Vec<TrackedDownload>>>,
+    /// A map from unique IDs to tracked downloads.
+    /// When a download is forgotten by [`RepodataReporterInner::clear`],
+    /// it is dropped from the map, so its callbacks can be told apart
+    /// from those for currently tracked downloads.
+    downloads: Arc<RwLock<HashMap<usize, TrackedDownload>>>,
+    next_download_id: usize,
     unsupported_revision_warnings: HashSet<String>,
 }
 
@@ -538,7 +543,8 @@ impl RepodataReporter {
                 multi_progress,
                 pb,
                 title: Some(title),
-                downloads: Arc::new(RwLock::new(Vec::new())),
+                downloads: Arc::new(RwLock::new(HashMap::new())),
+                next_download_id: 0,
                 unsupported_revision_warnings: HashSet::new(),
             })),
         }
@@ -547,25 +553,24 @@ impl RepodataReporter {
 
 impl RepodataReporterInner {
     pub fn clear(&mut self) {
-        let downloads = self.downloads.read();
+        let mut downloads = self.downloads.write();
         if downloads.is_empty() {
             return;
         }
 
-        // Downloads in flight hold an index into `downloads`, so dropping the
-        // entries under them would panic the next progress callback. Leave the
-        // bar up and let a later clear take care of it.
-        if downloads.iter().any(|download| download.finished.is_none()) {
-            drop(downloads);
-            self.update();
-            return;
-        }
+        // Forget downloads still in flight too: a clear comes at a phase
+        // boundary, and the bar must not draw over whatever runs next, such as
+        // the task of `pixi run`. A download cancelled by an aborted task can
+        // report completing after the clear, and the callbacks of forgotten
+        // downloads are ignored.
+        downloads.clear();
         drop(downloads);
-        self.downloads.write().clear();
 
         // A finished bar can never be shown again, so swap in a fresh hidden
-        // one and restore the title for whatever phase comes next.
-        self.title = Some(self.pb.prefix());
+        // one and restore the title for whatever phase comes next. The title
+        // is still pending if no download received any bytes.
+        let pb = &self.pb;
+        self.title.get_or_insert_with(|| pb.prefix());
         let new_pb = self
             .multi_progress
             .insert_after(&self.pb, ProgressBar::hidden());
@@ -588,19 +593,23 @@ impl RepodataReporterInner {
 
     pub fn update(&mut self) {
         let downloads = self.downloads.read();
-        if !downloads.iter().any(|d| d.bytes_downloaded > 0) {
+        if !downloads.values().any(|d| d.bytes_downloaded > 0) {
             // Dont do anything if no downloads have been started.
             return;
         }
 
-        let bytes_downloaded = downloads.iter().map(|d| d.bytes_downloaded).sum::<usize>();
+        let bytes_downloaded = downloads
+            .values()
+            .map(|d| d.bytes_downloaded)
+            .sum::<usize>();
         let total_bytes = downloads
-            .iter()
+            .values()
             .map(|d| d.total_bytes.unwrap_or(d.bytes_downloaded))
             .sum::<usize>();
         let pending_downloads = downloads
-            .iter()
+            .values()
             .any(|d| d.finished.is_none() && d.bytes_downloaded > 0);
+        drop(downloads);
 
         // Set the style of the progress bar.
         let verbose = tracing::event_enabled!(tracing::Level::INFO);
@@ -630,15 +639,17 @@ impl RepodataReporterInner {
     }
 
     fn on_download_start(&mut self, _url: &Url) -> usize {
-        let mut downloads = self.downloads.write();
-        let id = downloads.len();
-        downloads.push(TrackedDownload {
-            started: Instant::now(),
-            finished: None,
-            total_bytes: None,
-            bytes_downloaded: 0,
-        });
-        drop(downloads);
+        let id = self.next_download_id;
+        self.next_download_id += 1;
+        self.downloads.write().insert(
+            id,
+            TrackedDownload {
+                started: Instant::now(),
+                finished: None,
+                total_bytes: None,
+                bytes_downloaded: 0,
+            },
+        );
         self.update();
         id
     }
@@ -651,7 +662,10 @@ impl RepodataReporterInner {
         total_bytes: Option<usize>,
     ) {
         let mut downloads = self.downloads.write();
-        let dwnld = &mut downloads[index];
+        // Forgotten by a clear.
+        let Some(dwnld) = downloads.get_mut(&index) else {
+            return;
+        };
         if let Some(total_bytes) = total_bytes {
             dwnld.total_bytes.get_or_insert(total_bytes);
         }
@@ -662,7 +676,10 @@ impl RepodataReporterInner {
 
     fn on_download_complete(&mut self, _url: &Url, index: usize) {
         let mut downloads = self.downloads.write();
-        let dwnld = &mut downloads[index];
+        // Forgotten by a clear.
+        let Some(dwnld) = downloads.get_mut(&index) else {
+            return;
+        };
         dwnld.finished = Some(Instant::now());
         if let Some(total) = dwnld.total_bytes {
             dwnld.bytes_downloaded = dwnld.bytes_downloaded.max(total);
@@ -680,9 +697,9 @@ impl RepodataReporterInner {
 /// The function calculates the total active download time from a slice of
 /// `TrackedDownload` items, considering their start and finish times, and
 /// returns the result as a `Duration`.
-fn total_duration(items: &[TrackedDownload], now: Instant) -> Duration {
+fn total_duration(items: &HashMap<usize, TrackedDownload>, now: Instant) -> Duration {
     let mut intervals: Vec<(Instant, Instant)> = items
-        .iter()
+        .values()
         .filter(|d| d.bytes_downloaded > 0)
         .map(|item| (item.started, item.finished.unwrap_or(now)))
         .collect();
@@ -717,13 +734,13 @@ fn total_duration(items: &[TrackedDownload], now: Instant) -> Duration {
 /// while taking into account the total active time of all downloads.
 #[derive(Clone)]
 struct DurationTracker {
-    inner: Arc<RwLock<Vec<TrackedDownload>>>,
+    inner: Arc<RwLock<HashMap<usize, TrackedDownload>>>,
     duration: Duration,
     len: u64,
 }
 
 impl DurationTracker {
-    pub fn new(inner: Arc<RwLock<Vec<TrackedDownload>>>) -> Self {
+    pub fn new(inner: Arc<RwLock<HashMap<usize, TrackedDownload>>>) -> Self {
         Self {
             inner,
             duration: Duration::ZERO,
@@ -786,19 +803,166 @@ impl DownloadReporter for RepodataReporter {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
+    use indicatif::{MultiProgress, ProgressDrawTarget};
+    use itertools::Itertools;
     use jiff::Timestamp;
+    use pixi_progress::ProgressBarPlacement;
     use rattler_conda_types::{ChannelNotice, ChannelNoticeLevel, ChannelUrl};
-    use rattler_repodata_gateway::ChannelNoticeResult;
+    use rattler_repodata_gateway::{ChannelNoticeResult, DownloadReporter};
     use unicode_width::UnicodeWidthStr;
+    use url::Url;
 
     use super::{
-        MAX_MESSAGE_LINES, ViewedNotice, ViewedNotices, format_channel_notice,
+        MAX_MESSAGE_LINES, RepodataReporter, ViewedNotice, ViewedNotices, format_channel_notice,
         format_relative_time, notice_message_lines, prune_viewed_channel_notices,
         push_wrapped_notice_line, read_viewed_channel_notices_from, redact_channel_url,
         should_display, write_viewed_channel_notices_to,
     };
 
     const WIDTH: usize = 88;
+
+    fn repodata_reporter() -> RepodataReporter {
+        RepodataReporter::new(
+            MultiProgress::with_draw_target(ProgressDrawTarget::hidden()),
+            ProgressBarPlacement::Bottom,
+            "fetching repodata".to_owned(),
+        )
+    }
+
+    fn url() -> Url {
+        Url::parse("https://example.com/conda-forge/linux-64/repodata.json").unwrap()
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/7375>:
+    /// a download in flight at a clear, such as one whose task is aborted but
+    /// not yet torn down, must neither keep the bar up nor bring it back.
+    #[test]
+    fn clear_forgets_downloads_in_flight() {
+        let reporter = repodata_reporter();
+        let in_flight = reporter.on_download_start(&url());
+        reporter.on_download_progress(&url(), in_flight, 10, Some(100));
+        let old_pb = reporter.inner.read().pb.clone();
+
+        reporter.clear();
+        assert!(old_pb.is_finished());
+
+        reporter.on_download_progress(&url(), in_flight, 50, Some(100));
+        reporter.on_download_complete(&url(), in_flight);
+        let inner = reporter.inner.read();
+        assert!(inner.downloads.read().is_empty());
+        assert_eq!(inner.pb.position(), 0);
+        assert!(inner.pb.prefix().is_empty());
+    }
+
+    /// A download started after a clear gets a fresh id and renders on its
+    /// own, unaffected by late callbacks of downloads the clear forgot.
+    #[test]
+    fn download_after_clear_renders_alone() {
+        let reporter = repodata_reporter();
+        let forgotten = reporter.on_download_start(&url());
+        reporter.on_download_progress(&url(), forgotten, 10, Some(100));
+        reporter.clear();
+
+        let next = reporter.on_download_start(&url());
+        assert_ne!(next, forgotten);
+        reporter.on_download_progress(&url(), next, 3, Some(30));
+        reporter.on_download_progress(&url(), forgotten, 50, Some(100));
+        reporter.on_download_complete(&url(), forgotten);
+
+        let inner = reporter.inner.read();
+        assert_eq!(inner.pb.prefix(), "fetching repodata");
+        assert_eq!(inner.pb.position(), 3);
+        assert_eq!(inner.pb.length(), Some(30));
+        let downloads = inner.downloads.read();
+        let now = Instant::now();
+        assert_eq!(
+            super::total_duration(&downloads, now),
+            now.duration_since(downloads[&next].started)
+        );
+    }
+
+    /// A clear after downloads that never received bytes must keep the
+    /// title, which the bar has not been given yet.
+    #[test]
+    fn clear_before_first_byte_keeps_title() {
+        let reporter = repodata_reporter();
+        let download = reporter.on_download_start(&url());
+        reporter.on_download_complete(&url(), download);
+        reporter.clear();
+
+        let next = reporter.on_download_start(&url());
+        reporter.on_download_progress(&url(), next, 3, Some(30));
+        assert_eq!(reporter.inner.read().pb.prefix(), "fetching repodata");
+    }
+
+    /// For every interleaving of two downloads and every point at which a
+    /// clear can come between their events, the bar shows exactly the
+    /// downloads started after the clear, and a final clear leaves no bar
+    /// behind.
+    #[test]
+    fn interleaved_downloads_and_clear() {
+        // 0-2: first download started/progressed/completed, 3-5: the second.
+        let orders = (0..6u8).permutations(6).filter(|order| {
+            let pos = |event| order.iter().position(|e| *e == event).unwrap();
+            pos(0) < pos(1) && pos(1) < pos(2) && pos(3) < pos(4) && pos(4) < pos(5)
+        });
+        for order in orders {
+            for clear_after in 0..order.len() {
+                let reporter = repodata_reporter();
+                let mut ids = [None; 2];
+                // Bytes each download reports, if started after the clear.
+                let mut live_bytes = [None::<u64>; 2];
+                for (i, &event) in order.iter().enumerate() {
+                    let (download, step) = (usize::from(event / 3), event % 3);
+                    match step {
+                        0 => {
+                            ids[download] = Some(reporter.on_download_start(&url()));
+                            if i > clear_after {
+                                live_bytes[download] = Some(0);
+                            }
+                        }
+                        1 => {
+                            reporter.on_download_progress(
+                                &url(),
+                                ids[download].unwrap(),
+                                5,
+                                Some(10),
+                            );
+                            if let Some(bytes) = &mut live_bytes[download] {
+                                *bytes = 5;
+                            }
+                        }
+                        _ => {
+                            reporter.on_download_complete(&url(), ids[download].unwrap());
+                            if let Some(bytes) = &mut live_bytes[download] {
+                                *bytes = 10;
+                            }
+                        }
+                    }
+                    if i == clear_after {
+                        let pb = reporter.inner.read().pb.clone();
+                        reporter.clear();
+                        assert!(pb.is_finished(), "{order:?} cleared after {i}");
+                    }
+                }
+                let expected = live_bytes.iter().flatten().sum::<u64>();
+                assert_eq!(
+                    reporter.inner.read().pb.position(),
+                    expected,
+                    "{order:?} cleared after {clear_after}"
+                );
+
+                let pb = reporter.inner.read().pb.clone();
+                reporter.clear();
+                let inner = reporter.inner.read();
+                assert!(inner.downloads.read().is_empty());
+                assert!(pb.is_finished() || live_bytes.iter().all(Option::is_none));
+                assert_eq!(inner.title.as_deref(), Some("fetching repodata"));
+            }
+        }
+    }
 
     fn at(timestamp: &str) -> Timestamp {
         timestamp.parse().expect("valid timestamp")

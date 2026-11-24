@@ -425,9 +425,8 @@ impl InstantiateBackendKey {
         resolved_spec: &JsonRpcBackendSpec,
         env_spec: &EnvironmentSpec,
     ) -> Result<(Tool, PixiBuildApiVersion), Arc<InstantiateBackendError>> {
-        let ephemeral_spec = self.ephemeral_env_spec_for(env_spec);
         let installed = ctx
-            .compute(&EphemeralEnvKey::new(ephemeral_spec))
+            .compute(&ephemeral_env_key_for(env_spec, self.exclude_newer.clone()))
             .await
             .map_err(InstantiateBackendError::EphemeralEnv)?;
 
@@ -459,24 +458,16 @@ impl InstantiateBackendKey {
         ));
         Ok((tool, api))
     }
-
-    /// Build an [`EphemeralEnvSpec`] from the backend's
-    /// [`EnvironmentSpec`]: merge `requirement` into `dependencies`,
-    /// append the `PIXI_BUILD_API_VERSION` constraint so the solved
-    /// env surfaces the negotiated API version, and carry through the
-    /// key's exclude-newer cutoff.
-    fn ephemeral_env_spec_for(&self, env_spec: &EnvironmentSpec) -> EphemeralEnvSpec {
-        ephemeral_env_spec_for(env_spec, self.exclude_newer.clone())
-    }
 }
 
-/// Free-function form of `InstantiateBackendKey::ephemeral_env_spec_for`
-/// so the lightweight [`resolve_backend_identifier`] path can build the
-/// same `EphemeralEnvSpec` without owning an `InstantiateBackendKey`.
-fn ephemeral_env_spec_for(
+/// Build the [`EphemeralEnvKey`] for the backend's [`EnvironmentSpec`]:
+/// merge `requirement` into `dependencies`, append the
+/// `PIXI_BUILD_API_VERSION` constraint so the solved env surfaces the
+/// negotiated API version, and carry through the exclude-newer cutoff.
+fn ephemeral_env_key_for(
     env_spec: &EnvironmentSpec,
     exclude_newer: Option<ResolvedExcludeNewer>,
-) -> EphemeralEnvSpec {
+) -> EphemeralEnvKey {
     let mut dependencies: DependencyMap<PackageName, pixi_spec::PixiSpec> =
         env_spec.additional_requirements.clone();
     dependencies.insert(
@@ -490,14 +481,16 @@ fn ephemeral_env_spec_for(
         BinarySpec::Version(PIXI_BUILD_API_VERSION_SPEC.clone()),
     );
 
-    EphemeralEnvSpec {
+    let spec = EphemeralEnvSpec {
         dependencies,
         constraints,
         channels: env_spec.channels.clone(),
         exclude_newer,
         strategy: Default::default(),
         channel_priority: Default::default(),
-    }
+    };
+    let label = format!("build backend: {}", env_spec.requirement.0.as_source());
+    EphemeralEnvKey::new(spec, label)
 }
 
 /// Resolve the backend's identifier without spawning the JSON-RPC
@@ -554,9 +547,8 @@ pub async fn resolve_backend_identifier(
             .clone()
             .unwrap_or_else(|| resolved_spec.name.clone())),
         ResolvedBackendCommand::Spec(CommandSpec::EnvironmentSpec(env_spec)) => {
-            let ephemeral_spec = ephemeral_env_spec_for(env_spec, exclude_newer);
             let installed = ctx
-                .compute(&EphemeralEnvKey::new(ephemeral_spec))
+                .compute(&ephemeral_env_key_for(env_spec, exclude_newer))
                 .await
                 .map_err(InstantiateBackendError::EphemeralEnv)
                 .map_err(Arc::new)?;
@@ -592,10 +584,7 @@ pub(crate) async fn resolve_immutable_backend_identifier_from_spec(
     };
 
     let installed = ctx
-        .compute(&EphemeralEnvKey::new(ephemeral_env_spec_for(
-            env_spec,
-            exclude_newer,
-        )))
+        .compute(&ephemeral_env_key_for(env_spec, exclude_newer))
         .await
         .map_err(InstantiateBackendError::EphemeralEnv)
         .map_err(Arc::new)?;

@@ -10,6 +10,7 @@
 
 use std::path::Path;
 
+use miette::Diagnostic;
 use rattler_lock::{LockFile, LockedPackage, PackageHandle};
 use thiserror::Error;
 
@@ -198,7 +199,7 @@ fn format_cycle(
     names.join(" -> ")
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum LockFileResolverError {
     #[error(transparent)]
     Parse(#[from] ParseLockFileError),

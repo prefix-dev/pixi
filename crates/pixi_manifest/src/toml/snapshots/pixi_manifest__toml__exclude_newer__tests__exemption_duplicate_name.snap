@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × duplicate key: `Polars`
+   ╭─[pixi.toml:7:1]
+ 5 │ [exclude-newer.exemptions]
+ 6 │ polars = "1.0"
+   · ───┬──
+   ·    ╰── first defined here
+ 7 │ Polars = "2.0"
+   · ───┬──
+   ·    ╰── duplicate defined here
+   ╰────

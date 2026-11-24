@@ -4,6 +4,7 @@ mod channel;
 mod conda_pypi_map;
 mod document;
 mod environment;
+mod exclude_newer;
 mod feature;
 mod manifest;
 mod package;
@@ -25,6 +26,9 @@ pub use build_backend::{BackendSpec, TomlPackageBuild};
 pub use channel::TomlPrioritizedChannel;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};
+pub use exclude_newer::{
+    InvalidExemptionSpec, TomlExcludeNewer, TomlPypiExcludeNewer, validate_exemption_spec,
+};
 pub use feature::TomlFeature;
 use itertools::Itertools;
 pub use manifest::ExternalWorkspaceProperties;

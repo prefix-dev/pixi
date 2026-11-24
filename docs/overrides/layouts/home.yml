@@ -1,0 +1,19 @@
+# Shows the hand-made card in `docs/assets/social-card.png` as is
+tags:
+  og:type: website
+  og:title: "{{ config.site_name }}"
+  og:description: "{{ config.site_description }}"
+  og:image: "{{ image.url }}"
+  og:image:type: "{{ image.type }}"
+  og:image:width: "{{ image.width }}"
+  og:image:height: "{{ image.height }}"
+  og:url: "{{ page.canonical_url }}"
+  twitter:card: summary_large_image
+  twitter:title: "{{ config.site_name }}"
+  twitter:description: "{{ config.site_description }}"
+  twitter:image: "{{ image.url }}"
+
+size: {width: 1200, height: 630}
+layers:
+  - background:
+      image: docs/assets/social-card.png

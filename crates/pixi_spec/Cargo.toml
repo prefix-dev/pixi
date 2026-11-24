@@ -22,6 +22,7 @@ pixi_build_types = { workspace = true, optional = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_config = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
 rattler_lock = { workspace = true, optional = true }
 rattler_solve = { workspace = true }

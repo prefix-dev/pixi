@@ -11,7 +11,7 @@ use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{PackageName, Subdir, Version};
+use rattler_conda_types::{PackageName, Subdir, VersionWithSource};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -20,9 +20,9 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName, KnownPreviewFlag,
-    PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements, TargetSelector, Targets, Task,
-    TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    Activation, Environment, EnvironmentName, Environments, ExcludeNewerTableMigration, Feature,
+    FeatureName, KnownPreviewFlag, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
+    TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -369,7 +369,25 @@ impl TomlManifest {
             .environments
             .map(PixiSpanned::into_inner)
             .unwrap_or_default();
+        let check_pypi_options = |used_features: &[&Feature]| {
+            let feature_options = used_features
+                .iter()
+                .filter_map(|feature| feature.pypi_options())
+                .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))?;
+            workspace
+                .value
+                .pypi_options
+                .clone()
+                .unwrap_or_default()
+                .overlay(&feature_options)
+        };
         if !toml_environments.contains_key(&EnvironmentName::Default) {
+            if let Err(err) = check_pypi_options(&[features
+                .get(&FeatureName::Default)
+                .expect("default feature must exist")])
+            {
+                return Err(TomlError::from(GenericError::new(err.to_string())));
+            }
             environments.environments.push(Some(Environment::default()));
             environments
                 .by_name
@@ -504,14 +522,9 @@ impl TomlManifest {
             // Check that there are no conflicts in pypi options between features.
             // The workspace-level pypi-options act as an always-applied base
             // and are intentionally allowed to be overridden by feature-level
-            // options, so they are not part of this conflict check; we only
-            // verify that the features included in this environment do not
-            // disagree with each other on any single-assignment field.
-            if let Err(err) = used_features
-                .iter()
-                .filter_map(|feature| feature.pypi_options())
-                .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
-            {
+            // options on single-assignment fields, but not on the cutoff of
+            // an extra index.
+            if let Err(err) = check_pypi_options(&used_features) {
                 return Err(TomlError::from(
                     GenericError::new(err.to_string())
                         .with_opt_span(features_span.map(Into::into))
@@ -557,6 +570,7 @@ impl TomlManifest {
             .and_then(|p| p.value.name.as_ref())
             .and_then(|field| field.clone().value());
 
+        let table_prefix = external.table_prefix;
         let WithWarnings {
             warnings: mut workspace_warnings,
             value: mut workspace,
@@ -568,22 +582,72 @@ impl TomlManifest {
             root_directory,
         )?;
         warnings.append(&mut workspace_warnings);
-        workspace.exclude_newer_package_overrides = self
-            .exclude_newer
-            .map(PixiSpanned::into_inner)
-            .unwrap_or_default();
-        workspace.pypi_exclude_newer_package_overrides = self
-            .pypi_exclude_newer
-            .map(PixiSpanned::into_inner)
-            .unwrap_or_default();
+        if let Some(exclude_newer) = self.exclude_newer {
+            warnings.push(
+                Deprecation::exclude_newer_table(
+                    table_prefix,
+                    "exclude-newer",
+                    ExcludeNewerTableMigration::new(
+                        table_prefix,
+                        "exclude-newer",
+                        workspace.exclude_newer.cutoff,
+                        workspace
+                            .exclude_newer
+                            .exemptions
+                            .iter()
+                            .map(|(name, exemption)| (name.as_source(), exemption.to_toml_value())),
+                        workspace
+                            .channels
+                            .iter()
+                            .chain(features.values().flat_map(|f| f.channels.iter().flatten()))
+                            .any(|channel| channel.exclude_newer.is_some()),
+                        exclude_newer
+                            .value
+                            .iter()
+                            .map(|(name, cutoff)| (name.as_source(), cutoff)),
+                    ),
+                    exclude_newer.span.clone(),
+                )
+                .into(),
+            );
+            workspace.exclude_newer_package_overrides = exclude_newer.value;
+        }
+        if let Some(pypi_exclude_newer) = self.pypi_exclude_newer {
+            warnings.push(
+                Deprecation::exclude_newer_table(
+                    table_prefix,
+                    "pypi-exclude-newer",
+                    ExcludeNewerTableMigration::new(
+                        table_prefix,
+                        "pypi-exclude-newer",
+                        workspace.pypi_exclude_newer.cutoff,
+                        workspace
+                            .pypi_exclude_newer
+                            .exemptions
+                            .iter()
+                            .map(|(name, version)| (name.as_source(), version.to_string().into())),
+                        workspace.exclude_newer.cutoff.is_some(),
+                        pypi_exclude_newer
+                            .value
+                            .iter()
+                            .map(|(name, cutoff)| (name.as_source(), cutoff)),
+                    ),
+                    pypi_exclude_newer.span.clone(),
+                )
+                .into(),
+            );
+            workspace.pypi_exclude_newer_package_overrides = pypi_exclude_newer.value;
+        }
 
         migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
+        validate_task_environments(&features, &environments)?;
 
         let mut workspace_manifest = WorkspaceManifest {
             workspace,
             features,
             environments,
             solve_groups,
+            loaded_at: chrono::Utc::now(),
         };
         workspace_manifest.register_composed_platforms()?;
 
@@ -624,6 +688,56 @@ impl TomlManifest {
     }
 }
 
+/// Error if a task refers to an environment that is not defined, either
+/// through `default-environment` or the `environment` of a `depends-on` entry.
+fn validate_task_environments(
+    features: &IndexMap<FeatureName, Feature>,
+    environments: &Environments,
+) -> Result<(), TomlError> {
+    let unknown_environment = |message: String| {
+        let names = environments.by_name.keys().map(EnvironmentName::as_str);
+        TomlError::from(
+            GenericError::new(message)
+                .with_help(format!("defined environments: {}", names.format(", "))),
+        )
+    };
+    for feature in features.values() {
+        let in_feature = match feature.name {
+            FeatureName::Default => String::new(),
+            _ => format!(" in {}", feature.name.user_facing()),
+        };
+        for (target, selector) in feature.targets.iter() {
+            let in_feature = match selector {
+                Some(selector) => format!("{in_feature} for target '{selector}'"),
+                None => in_feature.clone(),
+            };
+            // Sort for a deterministic error when several tasks are invalid.
+            for (task_name, task) in target.tasks.iter().sorted_by_key(|(name, _)| *name) {
+                if let Some(env) = task.default_environment()
+                    && !environments.by_name.contains_key(env)
+                {
+                    return Err(unknown_environment(format!(
+                        "task '{}'{in_feature} has default-environment '{env}', which is not defined",
+                        task_name.as_str(),
+                    )));
+                }
+                for dependency in task.depends_on() {
+                    if let Some(env) = &dependency.environment
+                        && !environments.by_name.contains_key(env)
+                    {
+                        return Err(unknown_environment(format!(
+                            "task '{}'{in_feature} depends on task '{}' in environment '{env}', which is not defined",
+                            task_name.as_str(),
+                            dependency.task_name.as_str(),
+                        )));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Rebuild `workspace.platforms` so it owns one `PixiPlatform` per
 /// `(subdir, virtual_packages)` shape any feature actually references, and
 /// rewrite each feature's platforms list to name those entries instead of the
@@ -649,8 +763,8 @@ fn migrate_system_requirements_to_platforms(
     // of a non-subdir platform will commit the migration to pixi.toml.
     workspace.must_migrate = all_simple_subdir && has_any_sysreqs;
 
-    // Subdir-only declarations let environments combine the per-feature rich
-    // platforms by subdir; custom rich platforms are matched by name.
+    // Subdir-only declarations let environments combine the per-feature
+    // platforms by subdir; inline-table platform entries are matched by name.
     workspace.use_platform_composition = all_simple_subdir;
 
     if all_simple_subdir {
@@ -1040,7 +1154,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
 #[derive(Debug, Clone, Default)]
 pub struct ExternalWorkspaceProperties {
     pub name: Option<String>,
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
     pub description: Option<String>,
     pub authors: Option<Vec<String>>,
     pub license: Option<String>,
@@ -1050,6 +1164,9 @@ pub struct ExternalWorkspaceProperties {
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
     pub features: IndexMap<FeatureName, Feature>,
+    /// The prefix of the pixi tables in the manifest, `tool.pixi` for a
+    /// `pyproject.toml`, used to name tables in warnings.
+    pub table_prefix: Option<&'static str>,
 }
 
 #[cfg(test)]
@@ -1080,6 +1197,28 @@ mod test {
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
+    }
+
+    #[test]
+    fn test_workspace_platform_key_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+                r#"[workspace]
+name = "test"
+channels = []
+platforms = [{ platform = "linux-64", cuda = "12" }]
+"#,
+            ),
+            @r#"
+         ⚠ the `platform` field is deprecated; use `subdir` instead
+          ╭─[pixi.toml:4:16]
+        3 │ channels = []
+        4 │ platforms = [{ platform = "linux-64", cuda = "12" }]
+          ·                ────┬───
+          ·                    ╰── replace this with 'subdir'
+          ╰────
+        "#
+        );
     }
 
     #[test]
@@ -1323,7 +1462,7 @@ mod test {
     }
 
     #[test]
-    fn test_system_requirements_migration_rejects_rich_workspace_platform() {
+    fn test_system_requirements_migration_rejects_inline_table_workspace_platform() {
         let result = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
             [workspace]
@@ -1331,7 +1470,7 @@ mod test {
             channels = []
             platforms = [
               "linux-64",
-              { name = "gpu", platform = "linux-64", cuda = "12.0" },
+              { name = "gpu", subdir = "linux-64", cuda = "12.0" },
             ]
 
             [system-requirements]
@@ -1339,7 +1478,7 @@ mod test {
             "#,
             Path::new(""),
         );
-        let err = result.expect_err("rich platform + sysreqs must error");
+        let err = result.expect_err("inline-table platform entry + sysreqs must error");
         assert!(
             err.error
                 .to_string()
@@ -1349,22 +1488,22 @@ mod test {
     }
 
     #[test]
-    fn test_system_requirements_migration_rejects_rich_workspace_platform_same_name() {
-        // Regression: rich `name == platform` entries used to be silently
+    fn test_system_requirements_migration_rejects_inline_table_workspace_platform_same_name() {
+        // Regression: inline-table `name == platform` entries used to be silently
         // demoted to bare subdirs and lose their VPs to [system-requirements].
         let result = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
             [workspace]
             name = "test"
             channels = []
-            platforms = [{ name = "osx-arm64", platform = "osx-arm64", macos = "14" }]
+            platforms = [{ name = "osx-arm64", subdir = "osx-arm64", macos = "14" }]
 
             [system-requirements]
             macos = "13.3"
             "#,
             Path::new(""),
         );
-        let err = result.expect_err("rich platform + sysreqs must error");
+        let err = result.expect_err("inline-table platform entry + sysreqs must error");
         let msg = err.error.to_string();
         assert!(
             msg.contains("special subdir platform"),
@@ -1445,6 +1584,40 @@ mod test {
         platforms = []
 
         [feature.foobar.run-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_extra_index_with_conflicting_cutoffs() {
+        // Between features of an environment.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [pypi-options]
+        extra-index-urls = ["https://internal/simple"]
+
+        [feature.f.pypi-options]
+        extra-index-urls = [{ url = "https://internal/simple", exclude-newer = "0d" }]
+
+        [environments]
+        f = ["f"]
+        "#,
+        ));
+
+        // Between the workspace and the default environment.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        pypi-options = { extra-index-urls = ["https://internal/simple"] }
+
+        [pypi-options]
+        extra-index-urls = [{ url = "https://internal/simple", exclude-newer = "0d" }]
         "#,
         ));
     }
@@ -1556,6 +1729,189 @@ mod test {
         platforms = []
         "#,
         ));
+    }
+
+    #[test]
+    fn test_task_depends_on_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", environment = "oops" }]
+        "#,
+        ), @"
+          × task 'baz' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default
+        ");
+    }
+
+    #[test]
+    fn test_alias_invalid_environment_name() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", environment = "doesnt_exist" }]
+        "#,
+        ), @r#"
+          × Failed to parse environment name 'doesnt_exist', please use only lowercase letters, numbers and dashes
+           ╭─[pixi.toml:8:47]
+         7 │         foo = "bar"
+         8 │         baz = [{ task = "foo", environment = "doesnt_exist" }]
+           ·                                               ────────────
+         9 │
+           ╰────
+        "#);
+    }
+
+    // spellchecker:off
+    #[test]
+    fn test_alias_unknown_dependency_key() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", enviroment = "default" }]
+        "#,
+        ), @r#"
+          × Unexpected keys, expected only 'task', 'args', 'environment'
+           ╭─[pixi.toml:8:32]
+         7 │         foo = "bar"
+         8 │         baz = [{ task = "foo", enviroment = "default" }]
+           ·                                ─────┬────
+           ·                                     ╰── 'enviroment' was not expected here
+         9 │
+           ╰────
+          help: Did you mean 'environment'?
+        "#);
+    }
+
+    #[test]
+    fn test_deprecated_depends_on_unknown_dependency_key() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = { cmd = "qux", depends_on = [{ task = "foo", enviroment = "default" }] }
+        "#,
+        ), @r#"
+          × Unexpected keys, expected only 'task', 'args', 'environment'
+           ╭─[pixi.toml:8:60]
+         7 │         foo = "bar"
+         8 │         baz = { cmd = "qux", depends_on = [{ task = "foo", enviroment = "default" }] }
+           ·                                                            ─────┬────
+           ·                                                                 ╰── 'enviroment' was not expected here
+         9 │
+           ╰────
+          help: Did you mean 'environment'?
+        "#);
+    }
+    // spellchecker:on
+
+    #[test]
+    fn test_inline_environment_task_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+
+        [environments.dev.tasks]
+        baz = [{ task = "foo", environment = "oops" }]
+        "#,
+        ), @"
+          × task 'baz' in environment 'dev' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default, dev
+        ");
+    }
+
+    #[test]
+    fn test_task_unknown_default_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.test.dependencies]
+
+        [environments]
+        test = ["test"]
+
+        [feature.test.tasks]
+        foo = { cmd = "bar", default-environment = "tset" }
+        "#,
+        ), @"
+          × task 'foo' in feature 'test' has default-environment 'tset', which is not defined
+          help: defined environments: default, test
+        ");
+    }
+
+    #[test]
+    fn test_target_task_depends_on_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks]
+        foo = "bar"
+
+        [target.linux-64.tasks]
+        baz = { cmd = "qux", depends-on = [{ task = "foo", environment = "oops" }] }
+        "#,
+        ), @"
+          × task 'baz' for target 'linux-64' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default
+        ");
+    }
+
+    #[test]
+    fn test_task_known_environments() {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.test.dependencies]
+
+        [environments]
+        test = ["test"]
+
+        [tasks]
+        foo = { cmd = "bar", default-environment = "test" }
+        baz = [{ task = "foo", environment = "test" }, { task = "foo", environment = "default" }]
+        "#,
+        )
+        .expect("parse toml");
+        manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("known environments are accepted");
     }
 
     /// Parses a workspace manifest and returns both the workspace and (required)
@@ -2730,7 +3086,7 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", subdir = "linux-64", cuda = "12" }]
         "#
         );
     }
@@ -2797,7 +3153,7 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", subdir = "linux-64", cuda = "12" }]
         "#
         );
     }
@@ -2811,8 +3167,8 @@ mod test {
         name = "test"
         channels = []
         platforms = [
-            { name = "cpu-linux-64", platform = "linux-64" },
-            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+            { name = "cpu-linux-64", subdir = "linux-64" },
+            { name = "cuda-linux-64", subdir = "linux-64", cuda = "12" },
         ]
 
         [feature.gpu]
@@ -2832,7 +3188,7 @@ mod test {
         [workspace]
         name = "test"
         channels = []
-        platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+        platforms = ["linux-64", { subdir = "linux-64", cuda = "12.9" }]
 
         [feature.gpu]
         platforms = ["linux-64-cuda-13-0"]
@@ -2852,7 +3208,7 @@ mod test {
         name = "test"
         channels = []
         platforms = [
-            { name = "cpu-linux-64", platform = "linux-64" },
+            { name = "cpu-linux-64", subdir = "linux-64" },
         ]
 
         [feature.gpu]

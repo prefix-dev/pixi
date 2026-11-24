@@ -27,6 +27,8 @@ class TestPixiBuild:
     excluded_projects: ClassVar[set[str]] = {
         # Requires a ROS setup that is too heavy for this test
         "ros_ws",
+        # Requires linux-64 with an x86-64-v3 CPU
+        "mojo_accelerators",
     }
     # Expected stdout of the 'start' task per workspace directory name
     expected_outputs: ClassVar[dict[str, str]] = {
@@ -155,8 +157,8 @@ def test_pytorch_documentation_examples(
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(toml)
 
-    # These examples declare rich platforms (e.g. `linux-64-cuda-12-0`) whose
-    # subdir is the base platform. Only solve when the host subdir is among
+    # These examples declare platforms with custom virtual packages
+    # (e.g. `linux-64-cuda-12-0`). Only solve when the host conda subdir is among
     # the declared platforms; CUDA-only examples can't be solved on e.g. macOS.
     platform_ls = json.loads(
         verify_cli_command(

@@ -29,7 +29,9 @@ use pixi_spec::{
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_utils::variants::VariantConfig;
-use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, PackageName, Subdir, prefix::Prefix};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir, prefix::Prefix,
+};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
 
@@ -396,7 +398,6 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
     let channel_url = Url::from_directory_path(channel_dir).unwrap().into();
-    let allowed_cutoff = "2026-12-31T00:00:00Z".parse().unwrap();
 
     let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
@@ -408,11 +409,12 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
             exclude_newer: Some(
                 ResolvedExcludeNewer::from_datetime("2025-01-01T00:00:00Z".parse().unwrap())
-                    .with_package_cutoff(backend_name.clone(), allowed_cutoff)
-                    .with_package_cutoff(
-                        PackageName::new_unchecked("pixi-build-api-version"),
-                        allowed_cutoff,
-                    ),
+                    .with_exemption(MatchSpec::from(backend_name.clone()))
+                    .unwrap()
+                    .with_exemption(MatchSpec::from(PackageName::new_unchecked(
+                        "pixi-build-api-version",
+                    )))
+                    .unwrap(),
             ),
             ..InstantiateToolEnvironmentSpec::new(
                 backend_name,
@@ -757,6 +759,73 @@ pub async fn test_unsolvable_backend_names_package() {
 
     ╰─▶ Cannot solve the request because of: No candidates were found for missing-backend *.
     ");
+}
+
+/// The progress reporter only lets a pixi solve's direct conda child share
+/// the pixi solve's bar (<https://github.com/prefix-dev/pixi/issues/7369>),
+/// so the build-backend environment solve must be named and must not be a
+/// direct child, even though it runs on behalf of the pixi solve.
+#[tokio::test]
+pub async fn test_backend_environment_solve_is_not_a_direct_child() {
+    let (reporter, events, registry) = EventReporter::new();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("unsolvable-backend");
+    let tempdir = test_tempdir();
+    // A fresh build-backends dir so the backend environment is solved.
+    let dispatcher = reporter
+        .register_with(CommandDispatcher::builder())
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(
+            default_cache_dirs()
+                .with_workspace(to_abs_dir(tempdir.path()))
+                .with_override::<BuildBackendsDir>(to_abs_dir(
+                    tempdir.path().join("build-backends"),
+                )),
+        )
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .finish();
+
+    run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec {
+                    path: "package_a".into(),
+                }
+                .into(),
+            )]),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .expect_err("expected the backend instantiation to fail");
+
+    let events = events.take();
+    let pixi_solves = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::PixiSolveQueued { id, .. } => Some(*id),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let conda_solves = events
+        .iter()
+        .filter_map(|event| match event {
+            Event::CondaSolveQueued { id, spec } => Some((*id, spec.name.as_deref())),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let [pixi_solve] = pixi_solves[..] else {
+        panic!("expected one pixi solve: {events:#?}");
+    };
+    let [(backend_solve, name)] = conda_solves[..] else {
+        panic!("expected one conda solve: {events:#?}");
+    };
+    assert_eq!(name, Some("build backend: missing-backend"));
+    assert_ne!(registry.parent_of(backend_solve), Some(pixi_solve));
+    assert!(registry.ancestors(backend_solve).any(|id| id == pixi_solve));
 }
 
 /// Regression test for <https://github.com/prefix-dev/pixi/issues/6482>.
@@ -1352,7 +1421,7 @@ fn build_string(packages: &[pixi_record::UnresolvedPixiRecord], name: &str) -> S
         .unwrap_or_else(|| panic!("{name} should be a binary dependency"))
         .package_record
         .build
-        .clone()
+        .to_string()
 }
 
 /// A package can receive the same source dependency through two channels at
@@ -3602,7 +3671,7 @@ pub async fn test_prefix_platform_mismatch_is_reported_before_installing() {
     let mut smuggled = PackageRecord::new(
         PackageName::new_unchecked("libfoo"),
         "1.0.0".parse::<VersionWithSource>().unwrap(),
-        "h0".into(),
+        "h0".parse().unwrap(),
     );
     smuggled.subdir = tool_platform.to_string();
     let smuggled = RepoDataRecord {

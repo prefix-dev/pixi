@@ -4,18 +4,18 @@ use clap::Parser;
 use indexmap::IndexMap;
 use pixi_api::workspace::{DependencyOptions, RemoveError};
 use pixi_config::ConfigCli;
-use pixi_core::{DependencyType, WorkspaceLocator, environment::LockFileUsage};
+use pixi_core::{DependencyType, environment::LockFileUsage};
 use pixi_manifest::HasWorkspaceManifest;
 
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli_config::{DependencyConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::cli_context,
+    cli_interface::cli_workspace_context,
 };
 
 use error::DependencyRemovalError;
 
-/// Removes dependencies from the workspace.
+/// Remove dependencies from a workspace.
 ///
 ///  If the workspace manifest is a `pyproject.toml`, removing a pypi dependency
 /// with the `--pypi` flag will remove it from either
@@ -82,11 +82,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
     args.dependency_config.warn_deprecated_subdir();
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())
-        .locate()?;
+        .locate()
+        .await?;
 
     if workspace.is_conda_script() && !args.dependency_config.platforms.is_empty() {
         return Err(miette::miette!(
@@ -106,7 +107,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ),
     };
 
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     let dependency_type = args.dependency_config.dependency_type();
     let feature = args.dependency_config.feature_name();

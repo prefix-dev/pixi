@@ -13,13 +13,13 @@ use pixi_record::PixiRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_distribution_filename::SourceDistExtension;
 use uv_distribution_types::{
-    Dist, File, FileLocation, HashComparison, IndexUrl, PrioritizedDist, RegistrySourceDist,
-    SourceDist, SourceDistCompatibility, UrlString,
+    Dist, File, FileLocation, IndexUrl, RegistrySourceDist, SourceDist, UrlString,
 };
-use uv_redacted::DisplaySafeUrl;
+use uv_redacted::{SafeUrl, policy::Stripped};
 use uv_resolver::{
-    DefaultResolverProvider, FlatDistributions, MetadataResponse, ResolverProvider, VersionMap,
-    VersionsResponse, WheelMetadataResult,
+    DefaultResolverProvider, FlatDistributions, HashComparison, MetadataResponse, PrioritizedDist,
+    ResolverProvider, SourceDistCompatibility, VariantsJsonResponse, VersionMap, VersionsResponse,
+    WheelMetadataResult,
 };
 use uv_types::BuildContext;
 
@@ -66,7 +66,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 upload_time_utc_ms: None,
                 url: match repodata_record {
                     PixiRecord::Binary(repodata_record) => FileLocation::AbsoluteUrl(
-                        UrlString::from(DisplaySafeUrl::from_url(repodata_record.url.clone())),
+                        UrlString::from(SafeUrl::from_url(repodata_record.url.clone())),
                     ),
                     PixiRecord::Source(_source) => {
                         // TODO(baszalmstra): Does this matter??
@@ -82,7 +82,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 version: version.parse().expect("could not convert to pypi version"),
                 file: Box::new(file),
                 index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                    DisplaySafeUrl::from_url(consts::DEFAULT_PYPI_INDEX_URL.clone()),
+                    SafeUrl::from_url(consts::DEFAULT_PYPI_INDEX_URL.clone()).with_policy(Stripped),
                 ))),
                 wheels: vec![],
                 size_is_authoritative: false,
@@ -179,5 +179,14 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
         dist: &'io uv_distribution_types::InstalledDist,
     ) -> impl Future<Output = WheelMetadataResult> + 'io {
         self.fallback.get_installed_metadata(dist)
+    }
+
+    fn fetch_variants_json<'io>(
+        &'io self,
+        package_name: &'io uv_normalize::PackageName,
+        file: &'io File,
+        index: &'io IndexUrl,
+    ) -> impl Future<Output = Result<VariantsJsonResponse, uv_client::Error>> + 'io {
+        self.fallback.fetch_variants_json(package_name, file, index)
     }
 }

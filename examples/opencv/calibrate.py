@@ -30,8 +30,8 @@ img_counter = 0
 print("Press SPACE to capture an image for calibration.")
 print("Press ESC to calibrate the camera using the previously captured images.")
 
+gray = None
 while True:
-    gray = None
     ret, frame = cap.read()
     if not ret:
         break
@@ -75,7 +75,7 @@ while True:
 
 cv2.destroyAllWindows()
 
-if len(objpoints) > 0:
+if objpoints and gray is not None:
     # Perform camera calibration
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
         objpoints, imgpoints, gray.shape[::-1], None, None

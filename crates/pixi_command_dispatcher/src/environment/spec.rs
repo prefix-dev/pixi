@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 use pixi_spec::ResolvedExcludeNewer;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::ChannelUrl;
@@ -19,41 +17,11 @@ use crate::BuildEnvironment;
 /// are not carried here; they live on
 /// [`SolvePixiEnvironmentSpec`](crate::keys::SolvePixiEnvironmentSpec)
 /// because `PixiRecord` does not implement `Hash`.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct EnvironmentSpec {
     pub channels: Vec<ChannelUrl>,
     pub build_environment: BuildEnvironment,
     pub variants: VariantConfig,
     pub exclude_newer: Option<ResolvedExcludeNewer>,
     pub channel_priority: ChannelPriority,
-}
-
-// Manual `Hash` impl: `rattler_solve::ChannelPriority` doesn't implement
-// `Hash`, so we fold it down to its discriminant. We destructure `Self`
-// so that adding or renaming a field below triggers a compile error
-// here, forcing a deliberate decision about its hash contribution.
-// TODO: We can get rid of this once https://github.com/conda/rattler/pull/2373 is available.
-impl Hash for EnvironmentSpec {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let Self {
-            channels,
-            build_environment,
-            variants,
-            exclude_newer,
-            channel_priority,
-        } = self;
-        channels.hash(state);
-        build_environment.hash(state);
-        variants.hash(state);
-        exclude_newer.hash(state);
-        channel_priority_discriminant(channel_priority).hash(state);
-    }
-}
-
-fn channel_priority_discriminant(priority: &ChannelPriority) -> u8 {
-    match priority {
-        ChannelPriority::Strict => 0,
-        ChannelPriority::Disabled => 1,
-        ChannelPriority::Flexible => 2,
-    }
 }

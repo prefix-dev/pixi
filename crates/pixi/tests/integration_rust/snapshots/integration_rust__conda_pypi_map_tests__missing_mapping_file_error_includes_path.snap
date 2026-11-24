@@ -1,10 +1,9 @@
 ---
-source: crates/pixi/tests/integration_rust/solve_group_tests.rs
+source: crates/pixi/tests/integration_rust/conda_pypi_map_tests.rs
 expression: err
 ---
-Error {
-    msg: "failed to open file /this/path/does/not/exist/mapping.json",
-    source: DiagnosticError(
+ProjectDefined(
+    Io(
         Custom {
             kind: NotFound,
             error: Error {
@@ -18,4 +17,4 @@ Error {
             },
         },
     ),
-}
+)

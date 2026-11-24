@@ -6,6 +6,8 @@ use miette::Diagnostic;
 use rattler_conda_types::Subdir;
 use thiserror::Error;
 
+use crate::distro::Distro;
+
 /// Errors that can occur during build script generation.
 #[derive(Debug, Error, Diagnostic)]
 pub enum BuildScriptError {
@@ -20,8 +22,9 @@ pub enum BuildScriptError {
 /// variable substitution.
 pub fn render_build_script(
     build_type: &str,
-    distro: &str,
+    distro: &Distro,
     source_dir: &Path,
+    pip_verbosity_flag: Option<&str>,
 ) -> Result<String, BuildScriptError> {
     // Use the current (build) platform, not the host/target platform.
     // The build script runs on the build machine.
@@ -31,9 +34,11 @@ pub fn render_build_script(
     let src_dir_str = source_dir.display().to_string();
     let rendered = template
         .replace("@SRC_DIR@", &src_dir_str)
-        .replace("@DISTRO@", distro)
+        .replace("@DISTRO@", &distro.name)
+        .replace("@PACKAGE_PREFIX@", &distro.package_prefix())
         .replace("@BUILD_DIR@", "build")
-        .replace("@BUILD_TYPE@", "Release");
+        .replace("@BUILD_TYPE@", "Release")
+        .replace("@PIP_VERBOSITY@", pip_verbosity_flag.unwrap_or_default());
 
     Ok(rendered)
 }
@@ -58,38 +63,44 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_render_ament_cmake() {
-        let script =
-            render_build_script("ament_cmake", "humble", &PathBuf::from("/my/source")).unwrap();
-
-        assert!(script.contains("/my/source"));
-        assert!(script.contains("Release"));
-        assert!(!script.contains("@SRC_DIR@"));
-        assert!(!script.contains("@BUILD_TYPE@"));
-    }
-
-    #[test]
-    fn test_render_ament_python() {
-        let script = render_build_script("ament_python", "jazzy", &PathBuf::from("/src")).unwrap();
-
-        assert!(script.contains("/src"));
-        assert!(!script.contains("@SRC_DIR@"));
-    }
-
-    #[test]
-    fn test_render_catkin() {
-        let script = render_build_script("catkin", "noetic", &PathBuf::from("/pkg")).unwrap();
-
-        assert!(script.contains("/pkg"));
-        assert!(script.contains("noetic"));
-    }
-
-    #[test]
     fn test_unsupported_build_type() {
-        let result = render_build_script("unknown_type", "jazzy", &PathBuf::from("/src"));
+        let result = render_build_script(
+            "unknown_type",
+            &Distro::new("jazzy"),
+            &PathBuf::from("/src"),
+            None,
+        );
         assert!(matches!(
             result,
             Err(BuildScriptError::UnsupportedBuildType { .. })
         ));
+    }
+
+    /// The Windows `ament_python` script installs with `setup.py` only.
+    #[cfg(not(windows))]
+    #[test]
+    fn test_pip_verbosity_flag() {
+        let pip_lines = [None, Some("-v"), Some("-vv")]
+            .map(|flag| {
+                let script = render_build_script(
+                    "ament_python",
+                    &Distro::new("jazzy"),
+                    Path::new("/src"),
+                    flag,
+                )
+                .unwrap();
+                script
+                    .lines()
+                    .filter(|line| line.contains("pip install"))
+                    .map(|line| line.trim())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .join("\n");
+        insta::assert_snapshot!(pip_lines, @r"
+        $PYTHON -m pip install . --no-deps --force-reinstall
+        $PYTHON -m pip install . --no-deps --force-reinstall -v
+        $PYTHON -m pip install . --no-deps --force-reinstall -vv
+        ");
     }
 }

@@ -32,7 +32,7 @@ use pixi_build_types::{
 };
 use rattler_conda_types::{
     PackageName, Subdir, Version, VersionSpec,
-    package::{IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
+    package::{BuildString, IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
 };
 use serde::Deserialize;
 
@@ -169,7 +169,7 @@ impl InMemoryBackend for PassthroughBackend {
                         PackageName::try_from(name.as_str()).expect("invalid package name");
                 }
                 if let Some(version) = &self.project_model.version {
-                    modified_index_json.version = version.clone().into();
+                    modified_index_json.version = version.clone();
                 }
                 modified_index_json.license = self.project_model.license.clone();
 
@@ -226,7 +226,7 @@ impl InMemoryBackend for PassthroughBackend {
             input_glob_sets: None,
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
-            build: build_string,
+            build: build_string.to_string(),
             subdir,
         })
     }
@@ -492,19 +492,24 @@ fn generate_variant_combinations(
 /// the build string is augmented with a hash of the variant to ensure unique
 /// package identities.
 fn compute_build_string(
-    base_build: &str,
+    base_build: &BuildString,
     variant: &BTreeMap<String, VariantValue>,
     has_real_variants: bool,
-) -> String {
+) -> BuildString {
     if !has_real_variants {
-        base_build.to_string()
+        return base_build.clone();
+    }
+    let variant_hash = compute_variant_hash(variant);
+    if base_build.is_empty() {
+        variant_hash
+            .parse()
+            .expect("a hex hash is a valid build string")
     } else {
-        let variant_hash = compute_variant_hash(variant);
-        if base_build.is_empty() {
-            variant_hash
-        } else {
-            format!("{base_build}_{variant_hash}")
-        }
+        let mut build = base_build.clone();
+        build
+            .append(format!("_{variant_hash}"))
+            .expect("index.json build string with variant hash is a valid build string");
+        build
     }
 }
 
@@ -601,10 +606,8 @@ fn create_output(
 
     let output_version = project_model
         .version
-        .as_ref()
-        .or_else(|| Some(index_json.version.version()))
-        .cloned()
-        .unwrap_or_else(|| Version::major(0));
+        .clone()
+        .unwrap_or_else(|| index_json.version.clone());
     let output_build = compute_build_string(&index_json.build, &variant, has_real_variants);
 
     CondaOutput {
@@ -618,7 +621,7 @@ fn create_output(
         extra_dependencies,
         metadata: CondaOutputMetadata {
             name: name.clone(),
-            version: output_version.clone().into(),
+            version: output_version.clone(),
             build: output_build.clone(),
             build_number: index_json.build_number,
             subdir,
@@ -639,8 +642,11 @@ fn create_output(
         // source dependencies are emitted as source specs, mirroring real
         // backends' `local_source_packages` mapping.
         run_exports: {
-            let mut run_exports =
-                model_run_exports(&project_model.targets, &output_version, &output_build);
+            let mut run_exports = model_run_exports(
+                &project_model.targets,
+                &output_version,
+                output_build.as_str(),
+            );
             if let Some(extra) = package_run_exports
                 .or_else(|| run_exports_config.get(name.as_source()))
                 .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))
@@ -1102,7 +1108,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 // Create IndexJson from project model for on-the-fly package generation
                 let index_json = IndexJson {
                     arch: None,
-                    build: String::new(),
+                    build: BuildString::new_unchecked("0"),
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],
@@ -1125,8 +1131,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     version: project_model
                         .version
                         .clone()
-                        .unwrap_or_else(|| Version::major(0))
-                        .into(),
+                        .unwrap_or_else(|| Version::major(0).into()),
                     flags: vec![],
                     repodata_revision: None,
                 };

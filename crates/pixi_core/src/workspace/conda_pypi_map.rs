@@ -8,7 +8,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_manifest::{
     CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, WorkspaceManifest,
 };
@@ -16,15 +16,41 @@ use pypi_mapping::{
     ChannelName, MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMapping,
     ProjectDefinedMappingLocation, PurlDerivationMode, PypiNames, is_conda_forge_url,
 };
-use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl};
+use rattler_conda_types::{Channel, ChannelConfig, NamedChannelOrUrl, ParseChannelError};
 use rattler_lock::UrlOrPath;
+use thiserror::Error;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum CondaPypiMapError {
+    #[error(transparent)]
+    InvalidChannel(#[from] ParseChannelError),
+
+    #[error("channel '{0}' is configured more than once in `conda-pypi-map`")]
+    #[diagnostic(help("Keep a single entry per channel, e.g. not both by name and by URL."))]
+    DuplicateChannel(String),
+
+    #[error("channel '{channel}' in `conda-pypi-map` is not a workspace or feature channel")]
+    #[diagnostic(help("The channels are: {channels}"))]
+    UnusedChannel { channel: String, channels: String },
+
+    #[error("failed to parse mapping location `{location}`")]
+    InvalidLocation {
+        location: String,
+        #[source]
+        source: <UrlOrPath as FromStr>::Err,
+    },
+
+    #[error("unsupported scheme `{scheme}` in mapping location `{location}`")]
+    #[diagnostic(help("Only http(s) URLs and local paths are supported."))]
+    UnsupportedScheme { scheme: String, location: String },
+}
 
 /// Determine the [`PurlDerivationMode`] for a workspace from its
 /// `conda-pypi-map` configuration.
 pub(crate) fn build_pypi_name_derivation_mode(
     manifest: &WorkspaceManifest,
     channel_config: &ChannelConfig,
-) -> miette::Result<PurlDerivationMode> {
+) -> Result<PurlDerivationMode, CondaPypiMapError> {
     let map = match &manifest.workspace.conda_pypi_map {
         None => return Ok(PurlDerivationMode::Prefix),
         Some(CondaPypiMap::Disabled) => return Ok(PurlDerivationMode::Disabled),
@@ -52,17 +78,13 @@ pub(crate) fn build_pypi_name_derivation_mode(
     let mut channel_to_entry_map: HashMap<Channel, &CondaPypiMapEntry> =
         HashMap::with_capacity(map.len());
     for (key, value) in map {
-        let channel = key.clone().into_channel(channel_config).into_diagnostic()?;
+        let channel = key.clone().into_channel(channel_config)?;
         let channel_name = channel
             .name
             .clone()
             .unwrap_or_else(|| channel.base_url.to_string());
         if channel_to_entry_map.insert(channel, value).is_some() {
-            miette::bail!(
-                "the channel {} is configured more than once in `conda-pypi-map` \
-                 (e.g. both by name and by URL); keep a single entry per channel",
-                console::style(channel_name).bold(),
-            );
+            return Err(CondaPypiMapError::DuplicateChannel(channel_name));
         }
     }
 
@@ -76,17 +98,18 @@ pub(crate) fn build_pypi_name_derivation_mode(
                 convert_entry(entry, channel, channel_config)?,
             ))
         })
-        .collect::<miette::Result<HashMap<ChannelName, ProjectDefinedChannelMapping>>>()?;
+        .collect::<Result<HashMap<_, _>, CondaPypiMapError>>()?;
 
     Ok(PurlDerivationMode::ProjectDefined(
         ProjectDefinedMapping::new(mapping).into(),
     ))
 }
 
-fn conda_forge_channel_name(channel_config: &ChannelConfig) -> miette::Result<ChannelName> {
-    let channel = NamedChannelOrUrl::Name("conda-forge".to_string())
-        .into_channel(channel_config)
-        .into_diagnostic()?;
+fn conda_forge_channel_name(
+    channel_config: &ChannelConfig,
+) -> Result<ChannelName, ParseChannelError> {
+    let channel =
+        NamedChannelOrUrl::Name("conda-forge".to_string()).into_channel(channel_config)?;
     Ok(channel.canonical_name().trim_end_matches('/').into())
 }
 
@@ -96,22 +119,20 @@ fn validate_mapped_channels_are_used<'a>(
     manifest: &WorkspaceManifest,
     channel_config: &ChannelConfig,
     mapped_channels: impl Iterator<Item = &'a Channel>,
-) -> miette::Result<()> {
+) -> Result<(), CondaPypiMapError> {
     let project_channels: HashSet<_> = manifest
         .workspace
         .channels
         .iter()
         .map(|pc| pc.channel.clone().into_channel(channel_config))
-        .try_collect()
-        .into_diagnostic()?;
+        .try_collect()?;
 
     let feature_channels: HashSet<_> = manifest
         .all_features()
         .flat_map(|(_, feature)| feature.channels.iter())
         .flatten()
         .map(|pc| pc.channel.clone().into_channel(channel_config))
-        .try_collect()
-        .into_diagnostic()?;
+        .try_collect()?;
 
     let project_and_feature_channels: HashSet<_> =
         project_channels.union(&feature_channels).collect();
@@ -124,17 +145,13 @@ fn validate_mapped_channels_are_used<'a>(
                 .sorted()
                 .collect::<Vec<_>>()
                 .join(", ");
-            miette::bail!(
-                "conda-pypi-map is defined: the {} is missing from the channels array, which currently are: {}",
-                console::style(
-                    channel
-                        .name
-                        .clone()
-                        .unwrap_or_else(|| channel.base_url.to_string())
-                )
-                .bold(),
-                channels
-            );
+            return Err(CondaPypiMapError::UnusedChannel {
+                channel: channel
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| channel.base_url.to_string()),
+                channels,
+            });
         }
     }
     Ok(())
@@ -146,7 +163,7 @@ fn convert_entry(
     entry: &CondaPypiMapEntry,
     channel: &Channel,
     channel_config: &ChannelConfig,
-) -> miette::Result<ProjectDefinedChannelMapping> {
+) -> Result<ProjectDefinedChannelMapping, CondaPypiMapError> {
     match entry {
         CondaPypiMapEntry::Disabled => Ok(ProjectDefinedChannelMapping::disabled()),
         CondaPypiMapEntry::Map(CondaPypiMapSpec {
@@ -205,19 +222,20 @@ fn convert_mode(mode: CondaPypiMappingMode) -> MappingMode {
 fn parse_mapping_location(
     location: &str,
     channel_config: &ChannelConfig,
-) -> miette::Result<ProjectDefinedMappingLocation> {
-    let url_or_path = UrlOrPath::from_str(location)
-        .into_diagnostic()
-        .context(format!("Could not parse mapping location `{location}`"))?;
+) -> Result<ProjectDefinedMappingLocation, CondaPypiMapError> {
+    let url_or_path =
+        UrlOrPath::from_str(location).map_err(|source| CondaPypiMapError::InvalidLocation {
+            location: location.to_string(),
+            source,
+        })?;
 
     match url_or_path {
         UrlOrPath::Url(url) => {
             if !matches!(url.scheme(), "http" | "https") {
-                miette::bail!(
-                    "unsupported scheme `{}` in mapping location `{}`; only http(s) URLs and local paths are supported",
-                    url.scheme(),
-                    location
-                );
+                return Err(CondaPypiMapError::UnsupportedScheme {
+                    scheme: url.scheme().to_string(),
+                    location: location.to_string(),
+                });
             }
             // A plaintext mapping URL can be tampered with on the network,
             // and a tampered mapping changes which conda packages are
@@ -285,7 +303,7 @@ mod test {
     fn test_parse_mapping_location_rejects_unsupported_scheme() {
         let err =
             parse_mapping_location("ftp://example.com/m.json", &channel_config()).unwrap_err();
-        assert!(err.to_string().contains("unsupported scheme"));
+        assert!(matches!(err, CondaPypiMapError::UnsupportedScheme { .. }));
     }
 
     #[test]

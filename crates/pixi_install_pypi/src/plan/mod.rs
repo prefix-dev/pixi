@@ -46,7 +46,7 @@ mod validation;
 pub use cache::{CachedWheels, DistCacheError};
 pub(crate) use models::NeedReinstall;
 pub use models::PyPIInstallationPlan;
-pub use planner::InstallPlanner;
+pub use planner::{InstallPlanner, InstallPlannerError};
 pub use reasons::InstallReason;
 pub use required_dists::RequiredDists;
 

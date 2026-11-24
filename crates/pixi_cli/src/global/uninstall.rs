@@ -1,12 +1,9 @@
-use crate::global::{
-    EnvironmentAction, report_failed_environment, report_failed_environments,
-    revert_environment_after_error,
-};
+use crate::cli_interface::cli_global_context;
+use crate::global::{EnvironmentAction, report_failed_environment, report_failed_environments};
 use clap::Parser;
 use miette::Report;
+use pixi_api::global::{EnvironmentName, Project};
 use pixi_config::{Config, ConfigCli};
-use pixi_global::StateChanges;
-use pixi_global::{EnvironmentName, Project};
 
 /// Uninstalls environments from the global environment.
 ///
@@ -23,42 +20,21 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
-    let project_original = pixi_global::Project::discover_or_create()
+    let config = Config::try_with_cli_config(&args.config)?;
+    let project = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
-
-    async fn apply_changes(
-        env_name: &EnvironmentName,
-        project_modified: &mut Project,
-    ) -> miette::Result<StateChanges> {
-        let mut state_changes = StateChanges::new_with_env(env_name.clone());
-        state_changes |= project_modified.remove_environment(env_name).await?;
-
-        project_modified.manifest.save().await?;
-        Ok(state_changes)
-    }
+    let mut context = cli_global_context(project);
 
     let mut errors: Vec<(EnvironmentName, Report)> = Vec::new();
-    let mut last_updated_project = project_original;
     for env_name in &args.environment {
-        let mut project = last_updated_project.clone();
-        match apply_changes(env_name, &mut project).await {
+        match context.uninstall_environment(env_name).await {
             Ok(state_changes) => {
-                state_changes.report(&project).await;
-                // Only advance the project when successful
-                last_updated_project = project;
+                state_changes.report(context.project()).await;
             }
             Err(err) => {
-                // Revert any partial change for this environment, then continue
-                if let Err(revert_err) =
-                    revert_environment_after_error(env_name, &last_updated_project).await
-                {
-                    tracing::warn!("Reverting of the operation failed");
-                    tracing::info!("Reversion error: {:?}", revert_err);
-                }
                 report_failed_environment(env_name);
-                errors.push((env_name.clone(), err));
+                errors.push((env_name.clone(), err.into()));
             }
         }
     }

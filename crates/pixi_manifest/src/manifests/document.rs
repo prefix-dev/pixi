@@ -864,16 +864,31 @@ impl ManifestDocument {
             .get_or_insert_toml_array_mut(&table.as_keys(), "scripts")?;
 
         if prepend {
-            // Drop existing occurrences first so the scripts end up at the
-            // front in the given order.
-            pixi_toml_edit::retain_array_elements(array, |item| {
-                item.as_str()
-                    .map(|s| !scripts.iter().any(|script| script == s))
-                    .unwrap_or(true)
-            });
+            // Put the scripts at the front in the given order. Existing ones
+            // move there with their comments and spelling.
             for (index, script) in scripts.iter().enumerate() {
-                pixi_toml_edit::insert_array_element(array, index, script.as_str().into());
+                let existing = array
+                    .iter()
+                    .skip(index)
+                    .position(|item| item.as_str() == Some(script.as_str()));
+                match existing {
+                    Some(offset) => {
+                        pixi_toml_edit::move_array_element(array, index + offset, index)
+                    }
+                    None => {
+                        pixi_toml_edit::insert_array_element(array, index, script.as_str().into())
+                    }
+                }
             }
+            // Drop duplicates the manifest already had behind the front.
+            let mut index = 0;
+            pixi_toml_edit::retain_array_elements(array, |item| {
+                index += 1;
+                index <= scripts.len()
+                    || item
+                        .as_str()
+                        .is_none_or(|s| !scripts.iter().any(|script| script == s))
+            });
         } else {
             for script in scripts {
                 if !array
@@ -1263,6 +1278,32 @@ impl ManifestDocument {
         } else {
             table["workspace"]["version"] = value(version);
         }
+    }
+
+    /// Returns the entry under `key` of the `[workspace]` table (or
+    /// `[tool.pixi.workspace]` in a `pyproject.toml`) as written.
+    pub fn workspace_entry(&self, key: &str) -> Option<&Item> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        let mut item = self.manifest().as_item();
+        for table_key in table_name.as_keys() {
+            item = item.get(table_key)?;
+        }
+        item.get(key)
+    }
+
+    /// Returns the `[workspace]` table (or `[tool.pixi.workspace]` in a
+    /// `pyproject.toml`), which holds workspace-wide keys like
+    /// `exclude-newer`.
+    pub fn workspace_table_mut(&mut self) -> Result<&mut Table, TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        self.manifest_mut()
+            .get_or_insert_nested_item(&table_name.as_keys())?
+            .as_table_mut()
+            .ok_or_else(|| TomlError::table_error(table_name.to_string().as_str(), "manifest"))
     }
 
     /// Unsets/Sets the pixi version requirement of the project
@@ -2281,7 +2322,7 @@ test = ["test"]
     }
 
     /// Prepending moves already-present scripts to the front of the list
-    /// instead of duplicating them.
+    /// with their comments and spelling, instead of duplicating them.
     #[test]
     pub fn prepend_activation_scripts_moves_to_front() {
         let manifest_content = r#"[workspace]
@@ -2290,7 +2331,12 @@ name = "test"
 platforms = []
 
 [activation]
-scripts = ["a.sh", "b.sh"]
+scripts = [
+    "a.sh", # sets up a
+    # b needs a shell
+    'b.sh', # sets up b
+    "b.sh",
+]
 "#;
         let mut document = ManifestDocument::PixiToml(TomlDocument::new(
             DocumentMut::from_str(manifest_content).unwrap(),

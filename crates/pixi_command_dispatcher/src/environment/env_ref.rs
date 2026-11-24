@@ -305,7 +305,7 @@ impl fmt::Display for DerivedParent {
 mod tests {
     use std::sync::Arc;
 
-    use rattler_conda_types::{GenericVirtualPackage, Subdir};
+    use rattler_conda_types::{GenericVirtualPackage, Subdir, package::BuildString};
     use rattler_solve::ChannelPriority;
 
     use pixi_utils::variants::VariantConfig;
@@ -317,7 +317,7 @@ mod tests {
         GenericVirtualPackage {
             name: name.parse().unwrap(),
             version: "1".parse().unwrap(),
-            build_string: "0".into(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 

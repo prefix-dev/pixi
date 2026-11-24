@@ -179,7 +179,7 @@ The CMake backend follows this build process:
    - `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`: Export compile commands for tooling
    - `-DBUILD_SHARED_LIBS=ON`: Build shared libraries by default
    - `-DPython_EXECUTABLE=$PYTHON`: Added by a runtime check in the build script when a python interpreter is present in the host environment (e.g. through a `python` host dependency, conditional or not).
-3. **Build**: Executes `cmake --build` to compile the project
+3. **Build**: Executes `cmake --build` to compile the project, adding `--verbose` with `pixi -vv` or more
 4. **Install**: Installs the built artifacts to the conda package
 
 ## Input tracking

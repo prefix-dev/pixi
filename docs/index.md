@@ -1,6 +1,8 @@
 ---
 title: Home
 template: home.html
+social:
+  cards_layout: home
 ---
 # Pixi
 

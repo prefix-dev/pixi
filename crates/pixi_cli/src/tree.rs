@@ -1,10 +1,7 @@
 use crate::cli_config::{
     LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
 };
-use crate::shared::tree::{
-    Dependency, Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
-    print_inverted_dependency_tree,
-};
+use crate::shared::tree::{Dependency, Package, PackageSource, print_requested_tree};
 use ahash::HashSet;
 use clap::Parser;
 use console::Color;
@@ -12,11 +9,9 @@ use fancy_display::FancyDisplay;
 use miette::WrapErr;
 use pep508_rs::{ExtraName, MarkerEnvironment, Requirement};
 use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_core::lock_file::{UpdateLockFileOptions, resolve_lock_platform_for};
 use pixi_core::workspace::Environment;
-use pixi_core::{
-    WorkspaceLocator,
-    lock_file::{UpdateLockFileOptions, resolve_lock_platform_for},
-};
+use pixi_core::workspace::platform_selection::{PrefixPolicy, resolve_operational_platform};
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest as _, PixiPlatform, PixiPlatformName};
 use pixi_uv_conversions::to_marker_environment;
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -68,6 +63,10 @@ pub struct Args {
     /// Invert tree and show what depends on given package in the regex argument
     #[arg(short, long, requires = "regex")]
     pub invert: bool,
+
+    /// Output the dependency tree as JSON
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -78,10 +77,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ));
     }
 
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = crate::workspace_locator()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
     let environment = workspace
         .environment_from_name_or_env_var(args.environment)
@@ -111,36 +111,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_lock_file();
     drop(clear_progress);
 
-    let workspace_platforms = (&workspace)
-        .workspace_manifest()
-        .workspace
-        .platforms
-        .clone();
-    let platform = match args.platform {
-        Some(name) => resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
-            .into_iter()
-            .next()
-            .expect("resolve_platforms preserves length"),
-        None => environment
-            .best_declared_platform()
-            .cloned()
-            .ok_or_else(|| {
-                miette::miette!(
-                    "no platform supported by environment '{}' matches the current system",
-                    environment.name()
-                )
-            })?,
+    let workspace_platforms = &(&workspace).workspace_manifest().workspace.platforms;
+    let explicit_platform = args
+        .platform
+        .map(|name| resolve_platforms(workspace_platforms, std::slice::from_ref(&name)))
+        .transpose()?
+        .and_then(|platforms| platforms.into_iter().next());
+    if explicit_platform.is_none() && environment.installed_resolved_platform().is_none() {
+        workspace
+            .refresh_locked_environment_host(&environment, &lock_file)
+            .await?;
+    }
+    let selection;
+    let platform = match explicit_platform.as_ref() {
+        Some(platform) => platform,
+        None => {
+            selection =
+                resolve_operational_platform(&environment, &lock_file, None, PrefixPolicy::Reuse)?;
+            selection.platform()
+        }
     };
     let locked_deps = lock_file
         .environment(environment.name().as_str())
         .and_then(|env| {
-            let p = resolve_lock_platform_for(&lock_file, &platform)?;
+            let p = resolve_lock_platform_for(&lock_file, platform)?;
             env.packages(p).map(Vec::from_iter)
         })
         .unwrap_or_default();
 
-    let dep_map = DependencyMapBuilder::new(&environment, &platform, &locked_deps).build();
-    let direct_deps = direct_dependencies(&environment, &platform, &dep_map);
+    let dep_map = DependencyMapBuilder::new(&environment, platform, &locked_deps).build();
+    let direct_deps = direct_dependencies(&environment, platform, &dep_map);
 
     if !environment.is_default() {
         eprintln!("Environment: {}", environment.name().fancy_display());
@@ -149,21 +149,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         eprintln!("Installed for: {platform}");
     }
 
-    let stdout = std::io::stdout();
-    let mut handle = stdout.lock();
-    if args.invert {
-        print_inverted_dependency_tree(
-            &mut handle,
-            &build_reverse_dependency_map(&dep_map),
-            &direct_deps,
-            &args.regex,
-        )
-        .wrap_err("Couldn't print the inverted dependency tree")?;
-    } else {
-        print_dependency_tree(&mut handle, &dep_map, &direct_deps, &args.regex)
-            .wrap_err("Couldn't print the dependency tree")?;
-    }
-    Ok(())
+    print_requested_tree(
+        &dep_map,
+        &direct_deps,
+        args.regex.as_deref(),
+        args.invert,
+        args.json,
+    )
 }
 
 /// Per-package activated PyPI extras, propagated transitively from the
@@ -324,11 +316,8 @@ impl<'a> DependencyMapBuilder<'a> {
                 continue;
             };
             let version = match package {
-                LockedPackage::Conda(c) => c
-                    .record()
-                    .map(|r| r.version.to_string())
-                    .unwrap_or_default(),
-                LockedPackage::Pypi(p) => p.version_string(),
+                LockedPackage::Conda(c) => c.record().map(|r| r.version.to_string()),
+                LockedPackage::Pypi(p) => p.version().map(ToString::to_string),
             };
             let dependencies =
                 Self::merge_edges(edges.into_iter().filter(|e| !e.name.starts_with("__")));
@@ -456,15 +445,13 @@ pub fn direct_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::tree::{Tree, build_dependency_tree, print_tree, print_tree_json};
     use pixi_core::Workspace;
     use rattler_conda_types::Subdir;
     use rattler_lock::LockFile;
 
-    /// Render the PyPI subset of an example workspace through the production
-    /// printer into a buffer for snapshot comparison.
-    fn render_pypi_tree(manifest: &std::path::Path, platform: Subdir) -> String {
-        console::set_colors_enabled(false);
-
+    /// Build the tree of the PyPI subset of an example workspace.
+    fn build_pypi_tree(manifest: &std::path::Path, platform: Subdir) -> Tree {
         let workspace = Workspace::from_path(manifest).unwrap();
         let environment = workspace.default_environment();
         let pixi_platform = (&workspace)
@@ -492,8 +479,19 @@ mod tests {
         let mut direct_deps = direct_dependencies(&environment, pixi_platform, &dep_map);
         direct_deps.retain(|n| dep_map.contains_key(n));
 
+        build_dependency_tree(&dep_map, &direct_deps, None).unwrap()
+    }
+
+    fn render_pypi_tree(manifest: &std::path::Path, platform: Subdir) -> String {
+        console::set_colors_enabled(false);
         let mut buf: Vec<u8> = Vec::new();
-        print_dependency_tree(&mut buf, &dep_map, &direct_deps, &None).unwrap();
+        print_tree(&mut buf, &build_pypi_tree(manifest, platform)).unwrap();
+        String::from_utf8(buf).unwrap()
+    }
+
+    fn render_pypi_tree_json(manifest: &std::path::Path, platform: Subdir) -> String {
+        let mut buf: Vec<u8> = Vec::new();
+        print_tree_json(&mut buf, &build_pypi_tree(manifest, platform)).unwrap();
         String::from_utf8(buf).unwrap()
     }
 
@@ -506,5 +504,12 @@ mod tests {
                 insta::assert_snapshot!(render_pypi_tree(manifest, Subdir::Linux64));
             }
         );
+    }
+
+    #[test]
+    fn pypi_extras_tree_json_snapshot() {
+        let manifest = std::path::Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("examples/editable-with-extras/pixi.toml");
+        insta::assert_snapshot!(render_pypi_tree_json(&manifest, Subdir::Linux64));
     }
 }

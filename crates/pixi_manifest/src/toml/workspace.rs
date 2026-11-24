@@ -5,22 +5,24 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
+use pixi_spec::{TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{PackageName, Version, VersionSpec};
+use rattler_conda_types::{PackageName, VersionSpec, VersionWithSource};
 use std::str::FromStr;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
 
 use crate::{
-    KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    TomlError, WithWarnings, Workspace,
+    ExcludeNewerConfig, KnownPreviewFlag, PixiPlatform, PrioritizedChannel, PypiExcludeNewerConfig,
+    S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{
-        manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
+        TomlExcludeNewer, TomlPypiExcludeNewer, manifest::ExternalWorkspaceProperties,
+        platform::TomlPixiPlatform, preview::TomlPreview,
     },
     utils::PixiSpanned,
+    warning::Deprecation,
     workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
 };
 
@@ -98,13 +100,14 @@ pub struct TomlWorkspace {
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use
     // the name from the PyProject file.
     pub name: Option<String>,
-    pub version: Option<Version>,
+    pub version: Option<VersionWithSource>,
     pub description: Option<String>,
     pub authors: Option<Vec<String>>,
     pub channels: IndexSet<PrioritizedChannel>,
     pub channel_priority: Option<ChannelPriority>,
     pub solve_strategy: Option<SolveStrategy>,
     pub platforms: Spanned<IndexSet<PixiPlatform>>,
+    pub deprecated_platform_keys: Vec<Span>,
     pub license: Option<Spanned<String>>,
     pub license_file: Option<Spanned<PathBuf>>,
     pub readme: Option<Spanned<PathBuf>>,
@@ -119,7 +122,8 @@ pub struct TomlWorkspace {
     pub build_variants: Option<HashMap<String, Vec<String>>>,
     pub build_variant_files: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     pub requires_pixi: Option<VersionSpec>,
-    pub exclude_newer: Option<ExcludeNewer>,
+    pub exclude_newer: ExcludeNewerConfig,
+    pub pypi_exclude_newer: PypiExcludeNewerConfig,
 
     /// `[workspace.dependencies]` pool for `{ workspace = true }` inheritance.
     pub dependencies: Option<PixiSpanned<WorkspaceDependencyMap>>,
@@ -188,6 +192,11 @@ impl TomlWorkspace {
         } = self.preview.into_preview();
 
         let mut warnings = preview_warnings;
+        warnings.extend(
+            self.deprecated_platform_keys
+                .into_iter()
+                .map(|span| Deprecation::platform_key(span).into()),
+        );
 
         // An empty `conda-pypi-map = {}` is soft-deprecated. It preserves the
         // legacy no-network behavior while keeping the conda-forge same-name
@@ -263,6 +272,7 @@ impl TomlWorkspace {
             ),
             requires_pixi: self.requires_pixi,
             exclude_newer: self.exclude_newer,
+            pypi_exclude_newer: self.pypi_exclude_newer,
             exclude_newer_package_overrides: IndexMap::default(),
             pypi_exclude_newer_package_overrides: IndexMap::default(),
             dependencies,
@@ -335,6 +345,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let solve_strategy = th
             .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
             .map(TomlWith::into_inner);
+        let mut deprecated_platform_keys = Vec::new();
         // Reject repeated names: `PixiPlatform`'s `Eq`/`Hash` are by name only,
         // so duplicates would otherwise silently collapse to the first entry.
         let platforms = match th.optional::<Spanned<Vec<Spanned<TomlPixiPlatform>>>>("platforms") {
@@ -345,6 +356,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
                 let mut seen: IndexMap<String, Span> = IndexMap::new();
                 for entry in spanned.value {
                     let entry_span = entry.span;
+                    deprecated_platform_keys.extend(entry.value.deprecated_platform_key);
                     let platform = entry.value.into_inner();
                     let name = platform.name().to_string();
                     if let Some(first) = seen.get(&name) {
@@ -398,8 +410,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlVersionSpecStr>("requires-pixi")
             .map(TomlVersionSpecStr::into_inner);
         let exclude_newer = th
-            .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
-            .map(TomlWith::into_inner);
+            .optional::<TomlExcludeNewer>("exclude-newer")
+            .map(TomlExcludeNewer::into_inner)
+            .unwrap_or_default();
+        let pypi_exclude_newer = th
+            .optional::<TomlPypiExcludeNewer>("pypi-exclude-newer")
+            .map(TomlPypiExcludeNewer::into_inner)
+            .unwrap_or_default();
         let dependencies = th.optional("dependencies");
 
         th.finalize(None)?;
@@ -413,6 +430,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             channel_priority,
             solve_strategy,
             platforms: platforms.unwrap_or_default(),
+            deprecated_platform_keys,
             license,
             license_file,
             readme,
@@ -428,6 +446,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             build_variant_files,
             requires_pixi,
             exclude_newer,
+            pypi_exclude_newer,
             dependencies,
             span: value.span,
         })
@@ -450,6 +469,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
 
 #[cfg(test)]
 mod test {
+    use rattler_conda_types::package::BuildString;
     use std::path::Path;
 
     use crate::{
@@ -543,7 +563,7 @@ mod test {
         channels = []
         platforms = [
           "linux-64",
-          { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+          { name = "linux-64-cuda", subdir = "linux-64", cuda = "12.0" },
           { name = "osx-arm64" },
         ]
         "#;
@@ -568,21 +588,21 @@ mod test {
             "custom name should keep linux-64 as its subdir"
         );
         let declared: Vec<String> = cuda
-            .declared_virtual_packages()
+            .manifest_virtual_package_records()
             .iter()
-            .map(|vp| vp.to_string())
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(
             declared,
             vec![
                 "__cuda=12.0".to_string(),
-                "__unix=0=0".to_string(),
+                "__unix=0".to_string(),
                 "__linux=4.18".to_string(),
                 "__glibc=2.28".to_string(),
                 "__archspec=0=x86_64".to_string(),
             ],
-            "rich platforms materialise the subdir defaults alongside the declared __cuda; \
-             `__unix=0=0` reflects rattler's version=0, build_string=\"0\" shape",
+            "platforms materialise the subdir defaults alongside the declared __cuda; \
+             the default build `0` is omitted",
         );
 
         // Subdir entries (`linux-64`, `osx-arm64` with name == subdir)
@@ -615,8 +635,8 @@ mod test {
         channels = []
         platforms = [
           "linux-64",
-          { name = "gpu-linux", platform = "linux-64", cuda = "12.0" },
-          { name = "mac", platform = "osx-arm64" },
+          { name = "gpu-linux", subdir = "linux-64", cuda = "12.0" },
+          { name = "mac", subdir = "osx-arm64" },
         ]
         "#;
         let workspace = TomlWorkspace::from_toml_str(input)
@@ -645,7 +665,7 @@ mod test {
         let unsatisfied: Vec<String> = gpu
             .unsatisfied_virtual_packages
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(unsatisfied, vec!["__cuda=12.0".to_string()]);
 
@@ -661,7 +681,7 @@ mod test {
         let requirements: Vec<String> = workspace
             .unsatisfied_platform_requirements(Subdir::Linux64, &[], &env_platforms)
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(requirements, vec!["__cuda=12.0".to_string()]);
 
@@ -670,7 +690,7 @@ mod test {
         let host_cuda = GenericVirtualPackage {
             name: "__cuda".parse().unwrap(),
             version: "12.4".parse().unwrap(),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         };
         let diagnostics = workspace.platform_match_diagnostics(
             Subdir::Linux64,
@@ -685,6 +705,62 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_custom_declarations_do_not_filter_platforms() {
+        use rattler_conda_types::{GenericVirtualPackage, Subdir};
+
+        let input = r#"
+        channels = []
+        platforms = [
+          { name = "first", subdir = "linux-64", __username_length = "10" },
+          { name = "second", subdir = "linux-64", __username_length = "3" },
+          { name = "gpu", subdir = "linux-64", cuda = "12" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+        let env_platforms = workspace
+            .platforms
+            .iter()
+            .map(|platform| platform.name().clone())
+            .collect();
+
+        for host in [
+            vec![],
+            vec![GenericVirtualPackage {
+                name: "__username_length".parse().unwrap(),
+                version: "3".parse().unwrap(),
+                build_string: BuildString::new_unchecked("0"),
+            }],
+        ] {
+            let candidates = workspace.possible_pixi_platforms(Subdir::Linux64, &host);
+            assert_eq!(
+                candidates
+                    .iter()
+                    .map(|p| p.name().as_str())
+                    .collect::<Vec<_>>(),
+                ["first", "second"]
+            );
+            let diagnostics =
+                workspace.platform_match_diagnostics(Subdir::Linux64, &host, &env_platforms);
+            assert!(diagnostics[0].matches_host());
+            assert!(diagnostics[1].matches_host());
+            assert!(!diagnostics[2].matches_host());
+            let requirements =
+                workspace.unsatisfied_platform_requirements(Subdir::Linux64, &host, &env_platforms);
+            assert_eq!(
+                requirements
+                    .iter()
+                    .map(crate::platform::format_virtual_package)
+                    .collect::<Vec<_>>(),
+                ["__cuda=12"]
+            );
+        }
+    }
+
     /// Two platform entries that resolve to the same name must be rejected,
     /// not silently collapsed to the first (`PixiPlatform` is keyed by name).
     #[test]
@@ -694,8 +770,8 @@ mod test {
         [workspace]
         channels = []
         platforms = [
-          { name = "gpu", platform = "linux-64", cuda = "12.0" },
-          { name = "gpu", platform = "linux-64", cuda = "13.0" },
+          { name = "gpu", subdir = "linux-64", cuda = "12.0" },
+          { name = "gpu", subdir = "linux-64", cuda = "13.0" },
         ]
         "#,
         ));
@@ -713,7 +789,7 @@ mod test {
             .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), path))
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error), @r#"
-         × `date` is neither a valid duration, date (input contains invalid characters), nor timestamp (premature end of input)
+         × invalid cutoff `date`, expected an RFC 3339 timestamp, a date, or a duration (for example, 7d)
           ╭─[pixi.toml:4:26]
         3 │         platforms = []
         4 │         exclude-newer = "date"

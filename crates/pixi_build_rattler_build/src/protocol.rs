@@ -41,7 +41,9 @@ use rattler_build_recipe::{stage1::Source as RecipeSource, variant_render::Rende
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    RepodataRevision, Subdir, compression_level::CompressionLevel, package::CondaArchiveType,
+    RepodataRevision, Subdir,
+    compression_level::CompressionLevel,
+    package::{BuildString, CondaArchiveType},
 };
 use tracing::warn;
 pub struct RattlerBuildBackendInstantiator {
@@ -189,11 +191,23 @@ impl Protocol for RattlerBuildBackend {
             let noarch = build.noarch.unwrap_or(NoArchType::none());
             let python_site_packages_path = build.python.site_packages_path.clone();
 
+            let build_string = discovered_output
+                .build_string
+                .parse::<BuildString>()
+                .into_diagnostic()
+                .with_context(|| {
+                    format!(
+                        "invalid build string '{}' for output '{}'",
+                        discovered_output.build_string,
+                        recipe.package().name().as_source()
+                    )
+                })?;
+
             outputs.push(CondaOutput {
                 metadata: CondaOutputMetadata {
                     name: recipe.package().name().clone(),
                     version: recipe.package().version().clone(),
-                    build: discovered_output.build_string.clone(),
+                    build: build_string,
                     build_number,
                     subdir: discovered_output.target_platform,
                     license: recipe.about.license.clone().map(|l| l.to_string()),
@@ -489,7 +503,13 @@ impl Protocol for RattlerBuildBackend {
                 hash: discovered_output.hash,
                 variant: discovered_output.used_vars.clone(),
                 directories,
-                channels: vec![],
+                // TODO: pixi pre-solves the build and host prefixes of the
+                // final outputs, but the environments of staging outputs are
+                // still solved by rattler-build here, without pixi's virtual
+                // packages, exclude-newer, or channel priority. Remove this
+                // once pixi pre-solves and locks staging environments too.
+                // See https://github.com/prefix-dev/pixi/issues/7553.
+                channels: params.channels,
                 channel_priority: Default::default(),
                 solve_strategy: Default::default(),
                 timestamp: jiff::Timestamp::now(),

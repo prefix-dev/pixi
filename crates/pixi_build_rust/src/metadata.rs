@@ -7,7 +7,7 @@ use cargo_toml::{
 use miette::Diagnostic;
 use once_cell::unsync::OnceCell;
 use pixi_build_backend::generated_recipe::MetadataProvider;
-use rattler_conda_types::{ParseVersionError, Version};
+use rattler_conda_types::{ParseVersionError, VersionWithSource};
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum MetadataError {
@@ -206,8 +206,8 @@ impl MetadataProvider for CargoMetadataProvider {
     /// If `ignore_cargo_manifest` is true, returns `None`. Otherwise, extracts
     /// the version from the package section, handling workspace inheritance if
     /// needed. The version string is parsed into a
-    /// `rattler_conda_types::Version`.
-    fn version(&mut self) -> Result<Option<Version>, Self::Error> {
+    /// `rattler_conda_types::VersionWithSource`, keeping its original text.
+    fn version(&mut self) -> Result<Option<VersionWithSource>, Self::Error> {
         if self.ignore_cargo_manifest {
             return Ok(None);
         }
@@ -226,7 +226,8 @@ impl MetadataProvider for CargoMetadataProvider {
         };
         Ok(Some(
             // conversion via string for now, ref. https://github.com/conda/rattler/issues/2629
-            Version::from_str(&version.to_string()).map_err(MetadataError::ParseVersionError)?,
+            VersionWithSource::from_str(&version.to_string())
+                .map_err(MetadataError::ParseVersionError)?,
         ))
     }
 
@@ -445,7 +446,7 @@ mod tests {
 
     /// Helper function to assert workspace inheritance error for version
     fn assert_version_inheritance_error(
-        result: Result<Option<rattler_conda_types::Version>, MetadataError>,
+        result: Result<Option<rattler_conda_types::VersionWithSource>, MetadataError>,
         expected_field: &str,
     ) {
         assert!(result.is_err());
@@ -866,6 +867,21 @@ description = "Test description"
         assert_eq!(provider.documentation().unwrap(), None);
         assert_eq!(provider.license_files().unwrap(), None);
         assert_eq!(provider.summary().unwrap(), None);
+    }
+
+    #[test]
+    fn test_version_is_kept_verbatim() {
+        let cargo_toml_content = r#"
+[package]
+name = "test-package"
+version = "1.0.0+build.0123"
+"#;
+
+        let temp_dir = create_temp_cargo_project(cargo_toml_content);
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        let version = provider.version().unwrap().unwrap();
+        assert_eq!(version.as_str(), "1.0.0+build.0123");
     }
 
     #[test]

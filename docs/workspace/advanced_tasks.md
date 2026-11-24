@@ -113,7 +113,8 @@ pixi run style
 
 ### Environment specification for task dependencies
 
-You can specify the environment to use for a dependent task:
+You can specify the environment to use for a dependent task.
+The environment must be defined in the workspace, otherwise Pixi reports an error when it loads the manifest:
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
@@ -704,7 +705,7 @@ myproject = { path = ".", editable = true }
 Pixi will use your build system and reports an error:
 
 ```shell
-Error:   × Failed to update PyPI packages for environment 'default'
+Error:   × failed to update PyPI packages for environment 'default'
   ├─▶ Failed to prepare distributions
   ├─▶ Failed to build `proj1 @ file:///.../proj1`
   ├─▶ The build backend returned an error

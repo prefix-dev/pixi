@@ -1,6 +1,8 @@
 from pathlib import Path
 
 import pytest
+import tomli
+import tomli_w
 
 from .common import CURRENT_PLATFORM, ExitCode, copytree_with_local_backend, verify_cli_command
 
@@ -64,3 +66,23 @@ def test_available_packages(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
         [pixi, "run", "-v", "--manifest-path", tmp_pixi_workspace, "bizbar"],
         expected_exit_code=ExitCode.COMMAND_NOT_FOUND,
     )
+
+
+@pytest.mark.slow
+def test_install_output_pinning_variant_sibling(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    """An output that exactly pins a sibling is built against the sibling's variant."""
+    test_data = build_data.joinpath("multi-output-pinned-variant")
+    copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest = tomli.loads(manifest_path.read_text())
+    manifest["workspace"]["channels"].append(multiple_versions_channel_1)
+    manifest_path.write_text(tomli_w.dumps(manifest))
+
+    verify_cli_command([pixi, "install", "-v", "--manifest-path", manifest_path])
+
+    prefix = tmp_pixi_workspace.joinpath(".pixi", "envs", "default")
+    assert prefix.joinpath("libfoo.txt").is_file()
+    assert prefix.joinpath("foo-meta.txt").is_file()

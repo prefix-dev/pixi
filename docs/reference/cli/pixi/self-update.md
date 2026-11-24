@@ -30,6 +30,8 @@ pixi self-update [OPTIONS]
 <br>**default**: `false`
 - <a id="arg---from-url" href="#arg---from-url">`--from-url <FROM_URL>`</a>
 :  The github releases URL, useful when behind a proxy, or using custom Pixi release
+- <a id="arg---nightly" href="#arg---nightly">`--nightly`</a>
+:  Update to a development build of the `main` branch instead of a release
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
@@ -39,5 +41,10 @@ pixi self-update [OPTIONS]
 - <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
 :  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
 <br>**env**: `PIXI_CONFIG_FILE`
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
+- <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
+:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
+<br>**env**: `PIXI_TLS_ROOT_CERTS`
 
 --8<-- "docs/reference/cli/pixi/self-update_extender:example"
