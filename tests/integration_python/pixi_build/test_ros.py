@@ -27,15 +27,28 @@ def _prepare_ros_workspace(build_data: Path, tmp_pixi_workspace: Path) -> Path:
     return tmp_pixi_workspace
 
 
+def _ros2_artifact(output_dir: Path) -> Path:
+    """The `ros2-<name>` artifact of a published ROS 2 package.
+
+    The package's other artifact is RoboStack's `ros-<distro>-<name>`
+    compatibility alias, which contains no files.
+    """
+    built_packages = list(output_dir.glob("*.conda"))
+    ros2 = [p for p in built_packages if p.name.startswith("ros2-")]
+    aliases = [p for p in built_packages if p.name.startswith("ros-humble-")]
+    assert len(ros2) == 1 and len(aliases) == 1 and len(built_packages) == 2, (
+        f"expected a ros2- package and its ros-humble- alias, got {built_packages}"
+    )
+    return ros2[0]
+
+
 def _publish(pixi: Path, manifest_path: Path, output_dir: Path) -> Path:
-    """Publish the package and return its single artifact."""
+    """Publish the package and return its `ros2-<name>` artifact."""
     output_dir.mkdir(parents=True, exist_ok=True)
     verify_cli_command(
         [pixi, "publish", "--target-dir", str(output_dir), "--path", manifest_path],
     )
-    built_packages = list(output_dir.glob("*.conda"))
-    assert len(built_packages) == 1, f"expected a single artifact, got {built_packages}"
-    return built_packages[0]
+    return _ros2_artifact(output_dir)
 
 
 @pytest.mark.slow
@@ -64,7 +77,7 @@ def test_ros_packages_build(
             if CURRENT_PLATFORM == "win-64"
             else "lib/navigator_py/navigator"
         )
-        assert entrypoint in package_files(built_packages[0])
+        assert entrypoint in package_files(_ros2_artifact(output_dir))
 
 
 @pytest.mark.slow
@@ -210,7 +223,7 @@ def test_ros_python_package_cross_compiles(
         ],
     )
 
-    [package] = output_dir.glob("*.conda")
+    package = _ros2_artifact(output_dir)
     with tempfile.TemporaryDirectory() as temp_dir:
         extract(package, Path(temp_dir))
         index = json.loads(Path(temp_dir, "info", "index.json").read_text())
