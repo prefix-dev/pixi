@@ -19,11 +19,11 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerConfig,
-    ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform,
-    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
-    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
-    consts,
+    Activation, AddDependencyOutcome, CondaConstraints, DependencyOverwriteBehavior,
+    ExcludeNewerConfig, ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError,
+    KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
+    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
+    Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, GenericError, UnknownFeature},
@@ -61,6 +61,10 @@ pub struct WorkspaceManifest {
     /// The time relative `exclude-newer` cutoffs are resolved against, fixed
     /// at load so that every environment resolves them to the same time.
     pub loaded_at: DateTime<Utc>,
+
+    /// In-memory conda constraints for all environments, including those with
+    /// `no-default-feature = true`. Never written to the manifest.
+    pub extra_constraints: CondaConstraints,
 }
 
 impl Default for WorkspaceManifest {
@@ -71,6 +75,7 @@ impl Default for WorkspaceManifest {
             environments: Environments::default(),
             solve_groups: SolveGroups::default(),
             loaded_at: Utc::now(),
+            extra_constraints: CondaConstraints::default(),
         }
     }
 }

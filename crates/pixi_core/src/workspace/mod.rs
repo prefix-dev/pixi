@@ -48,10 +48,10 @@ use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::script::conda::CondaScriptManifest;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, FeaturesExt,
-    HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance, Manifests,
-    PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType, WithProvenance,
-    WithWarnings, WorkspaceManifest, script::ScriptManifest,
+    AssociateProvenance, BuildVariantSource, CondaConstraints, EnvironmentName, Environments,
+    FeaturesExt, HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance,
+    Manifests, PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType,
+    WithProvenance, WithWarnings, WorkspaceManifest, script::ScriptManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -998,6 +998,12 @@ impl Workspace {
         C: Into<Config>,
     {
         self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// Sets temporary conda constraints for all environments without editing the manifest file.
+    pub fn with_extra_constraints(mut self, constraints: CondaConstraints) -> Self {
+        self.workspace.value.extra_constraints = constraints;
         self
     }
 

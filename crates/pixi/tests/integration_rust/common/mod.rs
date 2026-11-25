@@ -898,6 +898,7 @@ impl PixiControl {
                 check: false,
                 json: false,
                 dry_run: false,
+                constraint_args: Default::default(),
             },
         }
     }
