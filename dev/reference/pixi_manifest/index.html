@@ -11511,6 +11511,16 @@ They also support the same inline MatchSpec fields, including <code>channel</cod
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="k">[constraints]</span>
 </span><span id="__span-53-2"><a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"conda-forge"</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"&gt;=3.0"</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">One-off constraints</p>
+<p>To apply a constraint for a single lock operation without editing the manifest, use
+<a href="../cli/pixi/lock/#arg---with-constraint"><code>pixi lock --with-constraint</code></a>, e.g.
+<code>pixi lock --with-constraint 'openssl&gt;=3.5.4'</code>.
+It applies to all environments, including
+those that set <code>no-default-feature = true</code>.
+Only environments whose locked packages violate the constraint are re-solved, and the other
+locked packages are kept as preferences.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Constraints do <strong>not</strong> cause a package to be installed. They only restrict which version is
