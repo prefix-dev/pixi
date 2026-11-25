@@ -1,0 +1,5 @@
+--8<-- [start:description]
+The script is written to standard output.
+See the [installation guide](../../../../installation.md#autocompletion) for
+instructions on how to activate autocompletion for your shell.
+--8<-- [end:description]
