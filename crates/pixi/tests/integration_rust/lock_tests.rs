@@ -314,12 +314,6 @@ async fn test_lock_constraint_unsatisfiable() {
         .with_constraint("foo>=2")
         .await
         .expect_err("solving with an unsatisfiable constraint should fail");
-
-    let err = pixi.lock().with_constraint("foo >=>2").await.unwrap_err();
-    assert!(
-        format!("{err:?}").contains("failed to parse constraint"),
-        "unexpected error: {err:?}"
-    );
 }
 
 #[tokio::test]

@@ -3,12 +3,13 @@
 use std::{collections::HashSet, str::FromStr};
 
 use clap::Parser;
+use itertools::Itertools;
 use pixi_core::Workspace;
 use pixi_manifest::CondaConstraints;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, PackageName, ParseMatchSpecError, ParseMatchSpecOptions,
-    RepodataRevision,
+    ChannelConfig, MatchSpec, PackageName, PackageNameMatcher, ParseMatchSpecError,
+    ParseMatchSpecOptions, RepodataRevision,
 };
 use rattler_lock::LockFile;
 
@@ -18,27 +19,32 @@ pub struct ConstraintArgs {
     /// Temporarily constrain a conda package to the given match spec, e.g.
     /// `--with-constraint 'openssl>=3.5.4'`.
     ///
-    /// Behaves like an additional `[constraints]` entry in every feature, so
-    /// it applies to all environments: it restricts the allowed versions of a
-    /// package without adding it as a dependency. Environments whose locked
-    /// packages violate the constraint are re-solved, keeping the other
-    /// locked packages as preferences. The constraint is not written to the
+    /// Applies to all environments, including those with `no-default-feature = true`.
+    /// Restricts the allowed versions of a package without adding it as a dependency.
+    /// Environments whose locked packages violate the constraint are re-solved,
+    /// keeping the other locked packages as preferences. The constraint is not written to the
     /// manifest. Can be specified multiple times.
-    #[clap(long = "with-constraint", value_name = "MATCHSPEC")]
-    pub constraints: Vec<String>,
+    #[clap(long = "with-constraint", value_name = "MATCHSPEC", value_parser = parse_constraint)]
+    pub constraints: Vec<MatchSpec>,
 }
 
 impl ConstraintArgs {
-    /// Injects the constraints into the in-memory workspace manifest. They
-    /// take part in both the lock-file satisfiability check and the solve,
-    /// but are never written to disk.
-    pub fn apply(&self, workspace: &mut Workspace) -> Result<(), ConstraintParseError> {
-        if self.constraints.is_empty() {
-            return Ok(());
+    pub fn into_constraints(
+        self,
+        channel_config: &ChannelConfig,
+    ) -> Result<CondaConstraints, ConstraintParseError> {
+        let mut constraints = CondaConstraints::default();
+        for spec in self.constraints {
+            let (name, nameless) = spec.into_nameless();
+            let PackageNameMatcher::Exact(name) = name else {
+                return Err(ConstraintParseError::MissingPackageName(name.to_string()));
+            };
+            constraints.insert(
+                name,
+                PixiSpec::from_nameless_matchspec(nameless, channel_config),
+            );
         }
-        let constraints = parse_constraints(&self.constraints, &workspace.channel_config())?;
-        workspace.workspace.value.extra_constraints = constraints;
-        Ok(())
+        Ok(constraints)
     }
 
     /// Prints the temporary constraints to stderr.
@@ -49,7 +55,7 @@ impl ConstraintArgs {
         eprintln!(
             "{}Applying temporary constraints: {}",
             console::style(console::Emoji("i ", "i ")).blue(),
-            self.constraints.join(", ")
+            self.constraints.iter().format(", ")
         );
     }
 }
@@ -70,9 +76,9 @@ pub fn warn_unmatched_constraints(workspace: &Workspace, lock_file: &LockFile) {
         for (_, packages) in environment.packages_by_platform() {
             for package in packages {
                 if let Some(conda) = package.as_conda() {
-                    conda_names.insert(conda.name().as_normalized().to_string());
+                    conda_names.insert(conda.name().as_normalized());
                 } else if let Some(pypi) = package.as_pypi() {
-                    pypi_names.insert(pypi.name().clone());
+                    pypi_names.insert(pypi.name());
                 }
             }
         }
@@ -85,8 +91,8 @@ pub fn warn_unmatched_constraints(workspace: &Workspace, lock_file: &LockFile) {
 
 fn unmatched_constraint_warnings<'a>(
     constraint_names: impl IntoIterator<Item = &'a PackageName>,
-    conda_names: &HashSet<String>,
-    pypi_names: &HashSet<pep508_rs::PackageName>,
+    conda_names: &HashSet<&str>,
+    pypi_names: &HashSet<&pep508_rs::PackageName>,
 ) -> Vec<String> {
     let mut warnings = Vec::new();
     for name in constraint_names {
@@ -121,30 +127,21 @@ pub enum ConstraintParseError {
     MissingPackageName(String),
 }
 
-fn parse_constraints(
-    constraints: &[String],
-    channel_config: &ChannelConfig,
-) -> Result<CondaConstraints, ConstraintParseError> {
-    let mut result = CondaConstraints::default();
-    for constraint in constraints {
-        let spec = MatchSpec::from_str(
-            constraint,
-            ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
-        )
-        .map_err(|source| ConstraintParseError::InvalidMatchSpec {
-            constraint: constraint.clone(),
-            source,
-        })?;
-        let Some(name) = spec.name.as_exact().cloned() else {
-            return Err(ConstraintParseError::MissingPackageName(constraint.clone()));
-        };
-        let (_, nameless) = spec.into_nameless();
-        result.insert(
-            name,
-            PixiSpec::from_nameless_matchspec(nameless, channel_config),
-        );
+fn parse_constraint(constraint: &str) -> Result<MatchSpec, ConstraintParseError> {
+    let spec = MatchSpec::from_str(
+        constraint,
+        ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+    )
+    .map_err(|source| ConstraintParseError::InvalidMatchSpec {
+        constraint: constraint.to_owned(),
+        source,
+    })?;
+    if spec.name.as_exact().is_none() {
+        return Err(ConstraintParseError::MissingPackageName(
+            constraint.to_owned(),
+        ));
     }
-    Ok(result)
+    Ok(spec)
 }
 
 #[cfg(test)]
@@ -152,12 +149,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn constraints_require_exact_package_names() {
+        for constraint in ["* >=2", "foo* >=2", "foo >=>2"] {
+            let err = ConstraintArgs::try_parse_from(["pixi", "--with-constraint", constraint])
+                .unwrap_err();
+            assert_eq!(err.kind(), clap::error::ErrorKind::ValueValidation);
+        }
+    }
+
+    #[test]
     fn unmatched_constraint_warnings_normalize_pypi_names() {
-        let conda_names = HashSet::from(["openssl".to_string()]);
-        let pypi_names = HashSet::from([
+        let conda_names = HashSet::from(["openssl"]);
+        let pypi_packages = [
             pep508_rs::PackageName::from_str("typing-extensions").unwrap(),
             pep508_rs::PackageName::from_str("zope.interface").unwrap(),
-        ]);
+        ];
+        let pypi_names = pypi_packages.iter().collect();
         let constraint_names = [
             "openssl",
             "typing_extensions",

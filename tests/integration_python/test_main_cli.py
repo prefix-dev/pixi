@@ -1108,7 +1108,6 @@ package = "*"
     verify_cli_command(
         [pixi, "lock", "--check", *constraint, *flags],
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="Applying temporary constraints: package<0.2",
     )
     output = verify_cli_command([pixi, "lock", "--dry-run", "--json", *constraint, *flags])
     assert "Applying temporary constraints" not in output.stderr

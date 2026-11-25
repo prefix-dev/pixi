@@ -89,9 +89,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace = workspace.with_backend_override(backend_override);
     }
 
-    args.constraint_args.apply(&mut workspace)?;
     if !args.json {
         args.constraint_args.print_applied();
+    }
+    if !args.constraint_args.constraints.is_empty() {
+        let constraints = args
+            .constraint_args
+            .into_constraints(&workspace.channel_config())?;
+        workspace = workspace.with_extra_constraints(constraints);
     }
 
     // Update the lock file, and extract it from the derived data to drop additional resources

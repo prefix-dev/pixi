@@ -45,7 +45,9 @@ use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
 use pixi_manifest::{CondaPypiMap, EnvironmentName, FeatureName, SpecType, task::Dependency};
-use rattler_conda_types::{NamedChannelOrUrl, RepoDataRecord, Subdir};
+use rattler_conda_types::{
+    MatchSpec, NamedChannelOrUrl, ParseMatchSpecOptions, RepoDataRecord, RepodataRevision, Subdir,
+};
 use url::Url;
 
 /// Strings from an iterator
@@ -676,11 +678,14 @@ impl LockBuilder {
         self.args.check = check;
         self
     }
-    pub fn with_constraint(mut self, constraint: impl Into<String>) -> Self {
-        self.args
-            .constraint_args
-            .constraints
-            .push(constraint.into());
+    pub fn with_constraint(mut self, constraint: impl AsRef<str>) -> Self {
+        self.args.constraint_args.constraints.push(
+            MatchSpec::from_str(
+                constraint.as_ref(),
+                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+            )
+            .unwrap(),
+        );
         self
     }
 }

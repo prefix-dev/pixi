@@ -134,40 +134,33 @@ pixi workspace exclude-newer exempt openssl==3.5.4
 pixi lock --with-constraint 'openssl>=3.5.4'
 ```
 
-- Step 2 only edits the manifest. Exemptions only relax the cutoff, so the existing lock file stays valid and nothing is re-solved yet.
-  Skip this step if the fixed release is already older than your `exclude-newer` cutoff.
-- Step 3 uses [`pixi lock --with-constraint`](reference/cli/pixi/lock.md#arg---with-constraint), which acts like a temporary [`[constraints]`](reference/pixi_manifest.md#constraints) entry in every feature that is not written to the manifest.
-  Unlike a `[constraints]` entry in the default feature, it also applies to environments that set `no-default-feature = true`.
-  Only environments whose locked `openssl` violates the constraint are re-solved, and their other locked packages are kept as preferences, so only `openssl` and whatever it requires move.
-  Environments that do not contain `openssl`, or are already on a fixed release, are left alone.
-  Add `--json` to get a machine-readable diff of the lock file changes, or `--dry-run` to preview them.
-- Use a lower bound such as `>=3.5.4` for the constraint rather than `==3.5.4`: an exact pin would also move environments that are already on a newer fixed release.
-  The exemption, on the other hand, should name the exact release you reviewed.
-  Within the constraint, an affected environment gets the newest release that the `exclude-newer` cutoff allows, not the oldest fixed one.
-  In this workflow, the exemption for exactly `3.5.4` keeps the upgrade small.
-  Without `exclude-newer`, add an upper bound such as `>=3.5.4,<3.6` if `openssl` should stay on its current release branch.
-- Keep the exemption in the manifest. The solve depends on it until the release is older than the cutoff, after which `pixi workspace exclude-newer prune` removes it.
+The exemption lets a reviewed release through `exclude-newer`; it does not update the lock file.
+Skip it if the release is already older than the cutoff.
+Keep the exemption until `pixi workspace exclude-newer prune` removes it.
 
-Compared with `pixi update openssl`, this does not unlock `openssl` in environments that are already on a fixed release.
-If you want the constraint to keep applying to future solves, add it to the [`[constraints]`](reference/pixi_manifest.md#constraints) table instead.
+[`pixi lock --with-constraint`](reference/cli/pixi/lock.md#arg---with-constraint) applies to all environments, including those with `no-default-feature = true`, without editing the manifest.
+Unlike `pixi update openssl`, it re-solves only environments whose locked `openssl` violates the constraint.
+Other locked packages remain preferences, but may change to satisfy the solve.
+Use `--dry-run` to preview the diff or `--json` for machine-readable output.
+For future solves, add a persistent [`[constraints]`](reference/pixi_manifest.md#constraints) entry instead.
+
+Use a lower bound such as `>=3.5.4` to avoid downgrading environments already on a newer fixed release.
+The solver selects the newest allowed release, not the oldest fixed one.
+The exemption above admits only `3.5.4`; without `exclude-newer`, add an upper bound such as `>=3.5.4,<3.6` to stay on the same release branch.
 
 !!! tip "Fixes released on several branches"
-    Some fixes are published for several release branches at once.
-    For example, the [eMudhra emSign CA certificate security incident](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576) required updating Python to `3.11.18`, `3.12.16`, `3.13.18`, `3.14.10` or `3.15.2`.
-    Combine the fixed releases with `|`, both in the exemption and in the constraint:
+    For fixes on several branches, combine the reviewed releases with `|` in a single exemption.
+    For example, the [eMudhra emSign CA certificate incident](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576) required these Python updates:
 
     ```shell
     pixi workspace exclude-newer exempt 'python==3.11.18|==3.12.16|==3.13.18|==3.14.10|==3.15.2'
     pixi lock --with-constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
     ```
 
-    A package has a single exemption, so all fixed releases go into one spec: `exempt` rejects several specs of the same package.
-    In the constraint, `,` binds tighter than `|`, so each `>=fix,<next-branch` pair allows the fixed releases of one branch.
-
-    An environment stays on its branch only if something keeps it there, typically a requirement like `python = "3.12.*"`.
-    The locked version violates the constraint, so it no longer acts as a preference.
-    With a looser requirement such as `python = ">=3.11"`, an environment locked on `3.12.15` can move to the newest allowed release, e.g. `3.15.2`.
-    Check the diff, or tighten the requirement first, if a minor version change is not acceptable.
+    In the constraint, `,` binds tighter than `|`: each `>=fix,<next-branch` pair allows fixed releases on one branch.
+    This does not pin an environment to its current branch.
+    A requirement such as `python = "3.12.*"` does; `python = ">=3.11"` can move from `3.12.15` to `3.15.2`.
+    Preview the diff or tighten the requirement if a minor version change is not acceptable.
 
 ## 4. Treat Package Hooks As Code Execution
 
