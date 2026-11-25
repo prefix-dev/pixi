@@ -3581,6 +3581,8 @@
       
         
       
+        
+      
     
     
     
@@ -3797,6 +3799,33 @@
     
   
   Virtual Package Detectors
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/distributed_clusters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Installation on distributed clusters
 
     
   </span>
@@ -9534,7 +9563,7 @@
   <h1>Installation</h1>
 
 <p>To install <code>pixi</code> you can run the following command in your terminal:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label><label for="__tabbed_1_3">Clusters with distributed filesystems</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://pixi.sh/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
@@ -9559,6 +9588,9 @@ This allows you to invoke <code>pixi</code> from anywhere.</p>
 <p>The above invocation will automatically download the latest version of <code>pixi</code>, extract it, and move the <code>pixi</code> binary to <code>%UserProfile%\.pixi\bin</code>.
 The command will also add <code>%UserProfile%\.pixi\bin</code> to your <code>PATH</code> environment variable, allowing you to invoke <code>pixi</code> from anywhere.</p>
 </details>
+</div>
+<div class="tabbed-block">
+<p>For cluster systems with distributed filesystems (mostly running Linux), it is beneficial (though not mandatory) to keep pixi and its deployments away from the shared filesystem and work on local storage instead. To do this, follow our instructions <a href="../advanced/distributed_clusters/">here</a>.</p>
 </div>
 </div>
 </div>
