@@ -29,6 +29,9 @@ To install `pixi` you can run the following command in your terminal:
         The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `%UserProfile%\.pixi\bin`.
         The command will also add `%UserProfile%\.pixi\bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
 
+=== "Clusters with distributed filesystems"
+    For cluster systems with distributed filesystems (mostly running Linux), it is beneficial (though not mandatory) to keep pixi and its deployments away from the shared filesystem and work on local storage instead. To do this, follow our instructions [here](advanced/distributed_clusters.md).
+
 Now restart your terminal or shell to make the installation take effect.
 
 ??? question "Don't trust our link? Check the script!"
