@@ -759,7 +759,7 @@ def test_channel_add_uses_new_effective_detector_scope_before_installing(
     sandbox.run(workspace, "lock")
     assert not marker.exists()
 
-    sandbox.run(workspace, "workspace", "channel", "add", "--prepend", detectors.url)
+    sandbox.run(workspace, "workspace", "channel", "prepend", detectors.url)
     assert marker.exists(), (
         "channel mutation must prepare the new host before the same command installs"
     )

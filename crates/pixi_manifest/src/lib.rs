@@ -138,6 +138,25 @@ pub enum AddDependencyOutcome {
     InheritsWorkspace,
 }
 
+/// Outcome of adding a single channel to the manifest.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum AddChannelOutcome {
+    /// The channel was not listed yet.
+    Added,
+
+    /// The channel was listed and moved to the front.
+    Moved,
+
+    /// The channel was listed and its metadata changed.
+    Updated,
+
+    /// The channel was listed, moved to the front and its metadata changed.
+    MovedAndUpdated,
+
+    /// The channel was already listed as requested.
+    Unchanged,
+}
+
 /// Internal behavior for handling duplicate dependencies.
 ///
 /// This enum is used internally by `WorkspaceTarget` and `PackageTarget` for

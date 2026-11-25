@@ -599,6 +599,21 @@ impl PixiControl {
         }
     }
 
+    fn channel_args(&self) -> workspace::channel::ChannelArgs {
+        workspace::channel::ChannelArgs {
+            channel: vec![],
+            no_install_config: NoInstallConfig { no_install: true },
+            lock_file_update_config: LockFileUpdateConfig {
+                no_lock_file_update: false,
+                lock_file_usage: LockFileUsageConfig::default(),
+            },
+            config: self.config_cli(),
+            feature: None,
+            environment: None,
+            priority: None,
+        }
+    }
+
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
@@ -609,17 +624,8 @@ impl PixiControl {
                 },
                 script: None,
             },
-            args: workspace::channel::AddRemoveArgs {
-                channel: vec![],
-                no_install_config: NoInstallConfig { no_install: true },
-                lock_file_update_config: LockFileUpdateConfig {
-                    no_lock_file_update: false,
-                    lock_file_usage: LockFileUsageConfig::default(),
-                },
-                config: self.config_cli(),
-                feature: None,
-                environment: None,
-                priority: None,
+            args: workspace::channel::AddArgs {
+                args: self.channel_args(),
                 prepend: false,
             },
         }
@@ -635,19 +641,7 @@ impl PixiControl {
                 },
                 script: None,
             },
-            args: workspace::channel::AddRemoveArgs {
-                channel: vec![],
-                no_install_config: NoInstallConfig { no_install: true },
-                lock_file_update_config: LockFileUpdateConfig {
-                    no_lock_file_update: false,
-                    lock_file_usage: LockFileUsageConfig::default(),
-                },
-                config: self.config_cli(),
-                feature: None,
-                environment: None,
-                priority: None,
-                prepend: false,
-            },
+            args: self.channel_args(),
         }
     }
 

@@ -2126,6 +2126,11 @@ dependencies:
             ["https://prefix.dev/bioconda"],
             "pixi workspace channel add",
         ),
+        (
+            ["workspace", "channel", "prepend"],
+            ["https://prefix.dev/bioconda"],
+            "pixi workspace channel prepend",
+        ),
     ]
     commands_to_test += [
         (["list"], [], "pixi list"),

@@ -281,13 +281,13 @@ impl<I: Interface> WorkspaceContext<I> {
         priority: Option<i32>,
         prepend: bool,
     ) -> Result<(), ChannelError> {
-        crate::workspace::workspace::channel::add(
+        Box::pin(crate::workspace::workspace::channel::add(
             &self.interface,
             self.workspace_mut()?,
             options,
             priority,
             prepend,
-        )
+        ))
         .await
     }
 

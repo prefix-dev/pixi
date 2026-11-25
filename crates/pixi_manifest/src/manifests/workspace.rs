@@ -19,11 +19,11 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerConfig,
-    ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform,
-    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
-    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
-    consts,
+    Activation, AddChannelOutcome, AddDependencyOutcome, DependencyOverwriteBehavior,
+    ExcludeNewerConfig, ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError,
+    KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
+    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
+    Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, GenericError, UnknownFeature},
@@ -1796,6 +1796,21 @@ impl WorkspaceManifestMut<'_> {
 
     /// Adds the specified channels to the manifest.
     ///
+    /// Channels are identified by their name, path or normalized URL, so a channel
+    /// that is already listed is never added a second time. Metadata given
+    /// for an existing channel overwrites its existing metadata, omitted
+    /// metadata is kept. A channel repeated in `channels` counts at its first
+    /// occurrence.
+    ///
+    /// Without `prepend`, new channels are appended in the given order and
+    /// existing channels keep their position. With `prepend`, the given
+    /// channels are placed at the front of the list in the given order,
+    /// moving the existing ones, while the other channels keep their relative
+    /// order.
+    ///
+    /// Returns what happened to each requested channel, in the given order
+    /// without repetitions.
+    ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn add_channels(
@@ -1803,13 +1818,16 @@ impl WorkspaceManifestMut<'_> {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
         prepend: bool,
-    ) -> Result<(), TomlError> {
+    ) -> Result<Vec<(NamedChannelOrUrl, AddChannelOutcome)>, TomlError> {
         self.ensure_inline_environment(feature_name)?;
 
-        // First collect all the new channels
-        let to_add: IndexSet<_> = channels.into_iter().collect();
+        let mut requested: IndexMap<NamedChannelOrUrl, PrioritizedChannel> = IndexMap::new();
+        for channel in channels {
+            requested
+                .entry(channel_identity(&channel.channel))
+                .or_insert(channel);
+        }
 
-        // Get the current channels and update them
         let current = if feature_name.is_default() {
             &mut self.workspace.workspace.channels
         } else {
@@ -1818,50 +1836,126 @@ impl WorkspaceManifestMut<'_> {
                 .channels_mut()
         };
 
-        let new: IndexSet<_> = to_add.difference(current).cloned().collect();
-        let new_channel_names: IndexSet<String> = new
+        let entries: Vec<(NamedChannelOrUrl, PrioritizedChannel)> = current
             .iter()
-            .map(|channel| channel.channel.to_string())
+            .map(|channel| {
+                let key = channel_identity(&channel.channel);
+                let channel = match requested.get(&key) {
+                    Some(requested) => merge_channel_metadata(channel, requested),
+                    None => channel.clone(),
+                };
+                (key, channel)
+            })
             .collect();
-
-        // Clear channels that are re-added with a modified priority. Compare
-        // display names so an entry that only differs in spelling (e.g. a URL
-        // with a trailing slash) is replaced instead of kept as a duplicate
-        // of the entry that ends up in the document.
-        current.retain(|c| !new_channel_names.contains(&c.channel.to_string()));
-
-        // Create the final channel list in the desired order
-        let final_channels = if prepend {
-            let mut new_set = new.clone();
-            new_set.extend(current.iter().cloned());
-            new_set
+        let existing: HashSet<&NamedChannelOrUrl> = entries.iter().map(|(key, _)| key).collect();
+        let new_channels: IndexSet<PrioritizedChannel> = if prepend {
+            let mut block = IndexSet::new();
+            for (key, channel) in &requested {
+                if existing.contains(key) {
+                    block.extend(
+                        entries
+                            .iter()
+                            .filter(|(entry_key, _)| entry_key == key)
+                            .map(|(_, entry)| entry.clone()),
+                    );
+                } else {
+                    block.insert(channel.clone());
+                }
+            }
+            block.extend(
+                entries
+                    .iter()
+                    .filter(|(key, _)| !requested.contains_key(key))
+                    .map(|(_, entry)| entry.clone()),
+            );
+            block
         } else {
-            let mut new_set = current.clone();
-            new_set.extend(new.clone());
-            new_set
+            entries
+                .iter()
+                .map(|(_, entry)| entry.clone())
+                .chain(
+                    requested
+                        .iter()
+                        .filter(|(key, _)| !existing.contains(key))
+                        .map(|(_, channel)| channel.clone()),
+                )
+                .collect()
         };
+        let outcomes = requested
+            .iter()
+            .map(|(key, channel)| {
+                let Some(old_index) = entries.iter().position(|(entry_key, _)| entry_key == key)
+                else {
+                    return (channel.channel.clone(), AddChannelOutcome::Added);
+                };
+                let updated = current.get_index(old_index) != Some(&entries[old_index].1);
+                let moved = prepend
+                    && new_channels
+                        .iter()
+                        .position(|entry| channel_identity(&entry.channel) == *key)
+                        != Some(old_index);
+                let outcome = match (moved, updated) {
+                    (false, false) => AddChannelOutcome::Unchanged,
+                    (true, false) => AddChannelOutcome::Moved,
+                    (false, true) => AddChannelOutcome::Updated,
+                    (true, true) => AddChannelOutcome::MovedAndUpdated,
+                };
+                (channel.channel.clone(), outcome)
+            })
+            .collect();
+        *current = new_channels;
 
-        // Update both the parsed channels and the TOML document
-        *current = final_channels.clone();
-
-        // Update the TOML document: drop the entries of channels that are
-        // re-added with a different priority, then insert the new entries, so
-        // the untouched entries keep their formatting.
-        let channels = self.document.get_array_mut("channels", feature_name)?;
-        pixi_toml_edit::retain_array_elements(channels, |item| {
-            channel_array_element_name(item)
-                .is_none_or(|name| !new_channel_names.contains(&normalized_channel_name(name)))
-        });
-        for (index, channel) in new.into_iter().enumerate() {
-            let value = Value::from(channel);
-            if prepend {
-                pixi_toml_edit::insert_array_element(channels, index, value);
-            } else {
-                pixi_toml_edit::push_array_element(channels, value);
+        // Mirror the edit in the TOML document. Existing entries are updated
+        // and moved rather than rebuilt so they keep their formatting and
+        // comments.
+        let array = self.document.get_array_mut("channels", feature_name)?;
+        let mut keys: Vec<Option<NamedChannelOrUrl>> = array
+            .iter()
+            .map(|item| {
+                channel_array_element_name(item)
+                    .and_then(|name| NamedChannelOrUrl::from_str(name).ok())
+                    .map(|channel| channel_identity(&channel))
+            })
+            .collect();
+        for (item, key) in array.iter_mut().zip(&keys) {
+            if let Some(requested) = key.as_ref().and_then(|key| requested.get(key)) {
+                update_channel_metadata(item, requested);
+            }
+        }
+        if prepend {
+            let mut position = 0;
+            for (key, channel) in &requested {
+                let mut found = false;
+                while let Some(index) = keys[position..]
+                    .iter()
+                    .position(|item_key| item_key.as_ref() == Some(key))
+                    .map(|offset| position + offset)
+                {
+                    pixi_toml_edit::move_array_element(array, index, position);
+                    let moved = keys.remove(index);
+                    keys.insert(position, moved);
+                    position += 1;
+                    found = true;
+                }
+                if !found {
+                    pixi_toml_edit::insert_array_element(
+                        array,
+                        position,
+                        Value::from(channel.clone()),
+                    );
+                    keys.insert(position, Some(key.clone()));
+                    position += 1;
+                }
+            }
+        } else {
+            for (key, channel) in &requested {
+                if !keys.iter().any(|item_key| item_key.as_ref() == Some(key)) {
+                    pixi_toml_edit::push_array_element(array, Value::from(channel.clone()));
+                }
             }
         }
 
-        Ok(())
+        Ok(outcomes)
     }
 
     /// Remove the specified channels to the manifest.
@@ -2112,6 +2206,64 @@ fn channel_array_element_name(item: &Value) -> Option<&str> {
         table.get("channel").and_then(|value| value.as_str())
     } else {
         None
+    }
+}
+
+/// Returns `existing` with the metadata that `requested` specifies, keeping
+/// the existing metadata that `requested` omits.
+fn merge_channel_metadata(
+    existing: &PrioritizedChannel,
+    requested: &PrioritizedChannel,
+) -> PrioritizedChannel {
+    PrioritizedChannel {
+        channel: existing.channel.clone(),
+        priority: requested.priority.or(existing.priority),
+        exclude_newer: requested.exclude_newer.or(existing.exclude_newer),
+    }
+}
+
+/// Writes the metadata that `requested` specifies into an existing `channels`
+/// array element, turning a bare string into an inline table if needed. The
+/// element keeps its spelling, decor and other keys.
+fn update_channel_metadata(item: &mut Value, requested: &PrioritizedChannel) {
+    if requested.priority.is_none() && requested.exclude_newer.is_none() {
+        return;
+    }
+    if item.is_str() {
+        let decor = item.decor().clone();
+        let mut channel = item.clone();
+        channel.decor_mut().clear();
+        let mut table = toml_edit::InlineTable::new();
+        table.insert("channel", channel);
+        *item = Value::InlineTable(table);
+        *item.decor_mut() = decor;
+    }
+    let Some(table) = item.as_inline_table_mut() else {
+        return;
+    };
+    if let Some(priority) = requested.priority {
+        pixi_toml_edit::upsert_inline_table_entry(table, "priority", i64::from(priority).into());
+    }
+    if let Some(exclude_newer) = requested.exclude_newer {
+        pixi_toml_edit::upsert_inline_table_entry(
+            table,
+            "exclude-newer",
+            exclude_newer.to_string().into(),
+        );
+    }
+}
+
+/// The identity of a channel when adding channels: URLs compare without a
+/// trailing slash, paths and names by equality.
+fn channel_identity(channel: &NamedChannelOrUrl) -> NamedChannelOrUrl {
+    match channel {
+        NamedChannelOrUrl::Url(url) => {
+            let mut url = url.clone();
+            let path = url.path().trim_end_matches('/').to_string();
+            url.set_path(&path);
+            NamedChannelOrUrl::Url(url)
+        }
+        _ => channel.clone(),
     }
 }
 
@@ -5080,9 +5232,9 @@ numpy = "*"
         "#);
     }
 
-    /// Re-adding a URL channel with a different priority replaces the
-    /// existing entry even when the manifest writes the URL with a trailing
-    /// slash, instead of leaving a duplicate behind.
+    /// Re-adding a URL channel with a different priority updates the
+    /// existing entry in place even when the manifest writes the URL with a
+    /// trailing slash, instead of leaving a duplicate behind.
     #[test]
     fn test_readd_url_channel_with_trailing_slash() {
         let file_contents = r#"[workspace]
@@ -5110,7 +5262,7 @@ platforms = ["linux-64"]
         assert_snapshot!(manifest.document.to_string(), @r#"
         [workspace]
         name = "foo"
-        channels = [{ channel = "https://repo.example.com/ch", priority = 10 }]
+        channels = [{ channel = "https://repo.example.com/ch/", priority = 10 }]
         platforms = ["linux-64"]
         "#);
     }
@@ -6438,6 +6590,257 @@ dependencies = { python = "*" }
             .map(|c| c.channel.to_string())
             .collect();
         assert_eq!(channels, vec!["pytorch", "conda-forge", "bioconda"]);
+    }
+
+    fn channel_names(manifest: &WorkspaceManifestMut<'_>) -> Vec<String> {
+        manifest
+            .workspace
+            .workspace
+            .channels
+            .iter()
+            .map(|c| c.channel.to_string())
+            .collect()
+    }
+
+    fn named_channels(names: &[&str]) -> Vec<PrioritizedChannel> {
+        names
+            .iter()
+            .map(|name| PrioritizedChannel::from(NamedChannelOrUrl::from_str(name).unwrap()))
+            .collect()
+    }
+
+    /// The parsed channels must match what the serialized document parses to.
+    fn assert_document_matches_model(manifest: &WorkspaceManifestMut<'_>) {
+        let reparsed = parse_pixi_toml(&manifest.document.to_string());
+        assert_eq!(
+            reparsed.manifest.workspace.channels,
+            manifest.workspace.workspace.channels
+        );
+    }
+
+    #[test]
+    fn test_add_and_prepend_channel_order() {
+        let contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["a", "b", "c"]
+            platforms = []
+        "#;
+        let cases: [(&[&str], bool, &[&str]); 4] = [
+            (&["b", "d"], false, &["a", "b", "c", "d"]),
+            (&["b", "d"], true, &["b", "d", "a", "c"]),
+            (&["c", "a", "c"], true, &["c", "a", "b"]),
+            (&["d", "a", "d"], false, &["a", "b", "c", "d"]),
+        ];
+        for (requested, prepend, expected) in cases {
+            let mut workspace = parse_pixi_toml(contents);
+            let mut manifest = workspace.editable();
+            for _ in 0..2 {
+                manifest
+                    .add_channels(named_channels(requested), &FeatureName::Default, prepend)
+                    .unwrap();
+                assert_eq!(
+                    channel_names(&manifest),
+                    expected,
+                    "requested {requested:?} with prepend={prepend}"
+                );
+                assert_document_matches_model(&manifest);
+            }
+        }
+    }
+
+    /// Adding or prepending an existing channel keeps its metadata unless it
+    /// is given explicitly, and never duplicates the entry.
+    #[test]
+    fn test_add_and_prepend_existing_channel_metadata() {
+        let contents = r#"[workspace]
+name = "foo"
+channels = [
+    "a",
+    # the mirror
+    { channel = "https://repo.example.com/b/", priority = 5, exclude-newer = "7d" }, # pinned
+    "c",
+]
+platforms = []
+"#;
+        let mut workspace = parse_pixi_toml(contents);
+        let mut manifest = workspace.editable();
+
+        let b = PrioritizedChannel::from(
+            NamedChannelOrUrl::from_str("https://repo.example.com/b").unwrap(),
+        );
+        manifest
+            .add_channels([b.clone()], &FeatureName::Default, false)
+            .unwrap();
+        assert_eq!(manifest.document.to_string(), contents);
+
+        manifest
+            .add_channels([b.clone()], &FeatureName::Default, true)
+            .unwrap();
+        assert_document_matches_model(&manifest);
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            # the mirror
+            { channel = "https://repo.example.com/b/", priority = 5, exclude-newer = "7d" }, # pinned
+            "a",
+            "c",
+        ]
+        platforms = []
+        "#);
+
+        manifest
+            .add_channels(
+                [
+                    PrioritizedChannel {
+                        priority: Some(10),
+                        ..b
+                    },
+                    PrioritizedChannel {
+                        channel: NamedChannelOrUrl::Name("c".to_string()),
+                        priority: Some(-1),
+                        exclude_newer: None,
+                    },
+                ],
+                &FeatureName::Default,
+                false,
+            )
+            .unwrap();
+        assert_document_matches_model(&manifest);
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            # the mirror
+            { channel = "https://repo.example.com/b/", priority = 10, exclude-newer = "7d" }, # pinned
+            "a",
+            { channel = "c", priority = -1 },
+        ]
+        platforms = []
+        "#);
+
+        manifest
+            .add_channels(
+                [PrioritizedChannel {
+                    channel: NamedChannelOrUrl::Name("c".to_string()),
+                    priority: Some(3),
+                    exclude_newer: None,
+                }],
+                &FeatureName::Default,
+                true,
+            )
+            .unwrap();
+        assert_document_matches_model(&manifest);
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            { channel = "c", priority = 3 },
+            # the mirror
+            { channel = "https://repo.example.com/b/", priority = 10, exclude-newer = "7d" }, # pinned
+            "a",
+        ]
+        platforms = []
+        "#);
+    }
+
+    #[test]
+    fn test_add_channels_outcomes() {
+        let contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["a", "b", "c"]
+            platforms = []
+        "#;
+        let mut workspace = parse_pixi_toml(contents);
+        let mut manifest = workspace.editable();
+        let with_priority = |name: &str| PrioritizedChannel {
+            channel: NamedChannelOrUrl::Name(name.to_string()),
+            priority: Some(10),
+            exclude_newer: None,
+        };
+        let mut edit = |channels: Vec<PrioritizedChannel>, prepend: bool| {
+            manifest
+                .add_channels(channels, &FeatureName::Default, prepend)
+                .unwrap()
+                .into_iter()
+                .map(|(channel, outcome)| format!("{channel}: {outcome:?}"))
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            edit(named_channels(&["b", "d", "b"]), false),
+            ["b: Unchanged", "d: Added"]
+        );
+        assert_eq!(
+            edit(named_channels(&["c", "a"]), true),
+            ["c: Moved", "a: Moved"]
+        );
+        assert_eq!(edit(named_channels(&["c"]), true), ["c: Unchanged"]);
+        assert_eq!(edit(vec![with_priority("b")], false), ["b: Updated"]);
+        assert_eq!(edit(vec![with_priority("b")], true), ["b: Moved"]);
+        assert_eq!(edit(vec![with_priority("d")], true), ["d: MovedAndUpdated"]);
+    }
+
+    /// Path channels spelled with a trailing slash are the same channel.
+    #[test]
+    fn test_add_and_prepend_path_channel_spelling() {
+        let contents = r#"[workspace]
+name = "foo"
+channels = ["z", "./local"]
+platforms = []
+"#;
+        let mut workspace = parse_pixi_toml(contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(named_channels(&["./local/"]), &FeatureName::Default, false)
+            .unwrap();
+        assert_eq!(manifest.document.to_string(), contents);
+
+        manifest
+            .add_channels(named_channels(&["./local/"]), &FeatureName::Default, true)
+            .unwrap();
+        assert_document_matches_model(&manifest);
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = ["./local", "z"]
+        platforms = []
+        "#);
+    }
+
+    /// Prepending writes to the selected feature's channel list only.
+    #[test]
+    fn test_prepend_feature_channels() {
+        let contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["a", "b"]
+            platforms = []
+
+            [feature.extra]
+            channels = ["b", "c"]
+        "#;
+        let mut workspace = parse_pixi_toml(contents);
+        let mut manifest = workspace.editable();
+        let feature = FeatureName::from("extra");
+        manifest
+            .add_channels(named_channels(&["c", "a"]), &feature, true)
+            .unwrap();
+
+        assert_eq!(channel_names(&manifest), ["a", "b"]);
+        let feature_channels: Vec<String> = manifest
+            .workspace
+            .feature(&feature)
+            .unwrap()
+            .channels
+            .iter()
+            .flatten()
+            .map(|c| c.channel.to_string())
+            .collect();
+        assert_eq!(feature_channels, ["c", "a", "b"]);
+        assert_document_matches_model(&manifest);
     }
 
     #[test]

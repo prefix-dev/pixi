@@ -10,6 +10,7 @@
 //! - inserting into a single-line inline table or array stays on one line
 //! - removing an entry removes its whole line while the surviving entries
 //!   keep their formatting
+//! - moving an array element takes its comments along
 //!
 //! Containers are never converted between single-line and multiline style.
 
