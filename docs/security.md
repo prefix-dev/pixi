@@ -134,19 +134,8 @@ pixi workspace exclude-newer exempt openssl==3.5.4
 pixi lock --with-constraint 'openssl>=3.5.4'
 ```
 
-The exemption lets a reviewed release through `exclude-newer`; it does not update the lock file.
-Skip it if the release is already older than the cutoff.
-Keep the exemption until `pixi workspace exclude-newer prune` removes it.
-
-[`pixi lock --with-constraint`](reference/cli/pixi/lock.md#arg---with-constraint) applies to all environments, including those with `no-default-feature = true`, without editing the manifest.
-Unlike `pixi update openssl`, it re-solves only environments whose locked `openssl` violates the constraint.
-Other locked packages remain preferences, but may change to satisfy the solve.
+[`pixi lock --with-constraint`](reference/cli/pixi/lock.md#arg---with-constraint) applies to all environments without editing the manifest.
 Use `--dry-run` to preview the diff or `--json` for machine-readable output.
-For future solves, add a persistent [`[constraints]`](reference/pixi_manifest.md#constraints) entry instead.
-
-Use a lower bound such as `>=3.5.4` to avoid downgrading environments already on a newer fixed release.
-The solver selects the newest allowed release, not the oldest fixed one.
-The exemption above admits only `3.5.4`; without `exclude-newer`, add an upper bound such as `>=3.5.4,<3.6` to stay on the same release branch.
 
 !!! tip "Fixes released on several branches"
     For fixes on several branches, combine the reviewed releases with `|` in a single exemption.
@@ -156,11 +145,6 @@ The exemption above admits only `3.5.4`; without `exclude-newer`, add an upper b
     pixi workspace exclude-newer exempt 'python==3.11.18|==3.12.16|==3.13.18|==3.14.10|==3.15.2'
     pixi lock --with-constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
     ```
-
-    In the constraint, `,` binds tighter than `|`: each `>=fix,<next-branch` pair allows fixed releases on one branch.
-    This does not pin an environment to its current branch.
-    A requirement such as `python = "3.12.*"` does; `python = ">=3.11"` can move from `3.12.15` to `3.15.2`.
-    Preview the diff or tighten the requirement if a minor version change is not acceptable.
 
 ## 4. Treat Package Hooks As Code Execution
 
