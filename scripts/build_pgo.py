@@ -258,13 +258,15 @@ def train(binary: Path, profile_dir: Path, working_dir: Path) -> None:
             "PIXI_COLOR": "never",
         }
     )
-    manifest = str(TRAINING_MANIFEST)
+    training_manifest = working_dir / "pixi.toml"
+    shutil.copyfile(TRAINING_MANIFEST, training_manifest)
+    manifest = str(training_manifest)
     workloads: list[list[str]] = [
         ["--version"],
         ["--help"],
         ["task", "list", "-m", manifest],
         ["workspace", "environment", "list", "-m", manifest],
-        ["lock", "--dry-run", "-m", manifest],
+        ["lock", "--no-install", "-m", manifest],
         ["shell-hook", "--as-is", "-m", manifest],
         ["global", "list"],
     ]
