@@ -28,6 +28,17 @@ fn matchspec_item(
     Ok(Item::Value(Value::new_concrete(spec.parse()?, None)))
 }
 
+/// The compiler for a language on Windows: conda-forge's MinGW compilers for
+/// C, C++ and Fortran, which R builds with there, and the others as they are.
+fn windows_compiler(compiler: &str) -> &str {
+    match compiler {
+        "c" => "m2w64_c",
+        "cxx" => "m2w64_cxx",
+        "fortran" => "m2w64_fortran",
+        other => other,
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct RGenerator {}
 
@@ -104,13 +115,35 @@ impl GenerateRecipe for RGenerator {
             None => Self::auto_detect_compilers(&manifest_root, &metadata_provider)?,
         };
 
+        // On Windows, R builds compiled code with MinGW's gcc, g++ and
+        // gfortran, which r-base depends on there. Use conda-forge's MinGW
+        // compilers for these languages, as its R recipes do, rather than the
+        // default Visual Studio and flang: flang's activation adds an
+        // MSVC-style flag to LDFLAGS, which MinGW's linker rejects when a
+        // package's configure script passes LDFLAGS on.
+        let compilers: Vec<String> = if host_platform.is_windows() {
+            compilers
+                .iter()
+                .map(|compiler| windows_compiler(compiler).to_string())
+                .collect()
+        } else {
+            compilers
+        };
+
         // Add compilers to build requirements
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
         );
+        // The MinGW compilers bring their own runtime, so `stdlib('c')`,
+        // which on Windows is Visual Studio's, isn't added for them
+        let stdlib_compilers: Vec<String> = compilers
+            .iter()
+            .filter(|compiler| !compiler.starts_with("m2w64_"))
+            .cloned()
+            .collect();
         pixi_build_backend::compilers::add_stdlib_to_requirements(
-            &compilers,
+            &stdlib_compilers,
             &mut requirements.build,
             variants,
         );
@@ -300,11 +333,21 @@ impl GenerateRecipe for RGenerator {
 
     fn default_variants(
         &self,
-        _host_platform: Subdir,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        // R packages don't typically need special default variants
-        // Compiler variants are handled by rattler-build defaults
-        Ok(BTreeMap::new())
+        // On Windows, the MinGW compilers R builds with (see
+        // `windows_compiler`), as conda-forge's pinning names them
+        let mut variants = BTreeMap::new();
+        if host_platform.is_windows() {
+            for (key, compiler) in [
+                ("m2w64_c_compiler", "gcc"),
+                ("m2w64_cxx_compiler", "gxx"),
+                ("m2w64_fortran_compiler", "gfortran"),
+            ] {
+                variants.insert(NormalizedKey::from(key), vec![compiler.into()]);
+            }
+        }
+        Ok(variants)
     }
 }
 
@@ -841,6 +884,116 @@ SystemRequirements: Cargo (Rust's package manager), rustc
                 .iter()
                 .any(|req| req == "rust-std-x86_64-pc-windows-gnu"),
             "Should have the GNU target's standard library on Windows, got {windows:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_windows_builds_with_mingw_compilers() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\n",
+        )
+        .await
+        .unwrap();
+        fs::create_dir(temp_dir.path().join("src")).await.unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        // The compiler templates in the build requirements
+        let compilers = |platform: Subdir, config: RBackendConfig| {
+            let project_model = project_model.clone();
+            let path = temp_dir.path().to_path_buf();
+            async move {
+                RGenerator::default()
+                    .generate_recipe(
+                        &project_model,
+                        &config,
+                        path,
+                        platform,
+                        None,
+                        &HashSet::new(),
+                        vec![],
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    .await
+                    .expect("Failed to generate recipe")
+                    .recipe
+                    .requirements
+                    .build
+                    .iter()
+                    .filter_map(|item| match item {
+                        Item::Value(v) => v.as_template().map(|t| t.to_string()),
+                        _ => None,
+                    })
+                    .collect::<Vec<String>>()
+            }
+        };
+
+        let windows = compilers(Subdir::Win64, RBackendConfig::default()).await;
+        assert_eq!(
+            windows,
+            vec![
+                "${{ compiler('m2w64_c') }}",
+                "${{ compiler('m2w64_cxx') }}",
+                "${{ compiler('m2w64_fortran') }}",
+            ],
+            "Windows builds should use the MinGW compilers"
+        );
+
+        let linux = compilers(Subdir::Linux64, RBackendConfig::default()).await;
+        assert_eq!(
+            linux,
+            vec![
+                "${{ compiler('c') }}",
+                "${{ compiler('cxx') }}",
+                "${{ compiler('fortran') }}",
+            ],
+            "Other platforms keep the default compilers"
+        );
+
+        // Compilers set in the config get the MinGW ones on Windows too
+        let config = RBackendConfig {
+            compilers: Some(vec!["c".to_string(), "cxx".to_string()]),
+            ..Default::default()
+        };
+        let windows = compilers(Subdir::Win64, config).await;
+        assert_eq!(
+            windows,
+            vec!["${{ compiler('m2w64_c') }}", "${{ compiler('m2w64_cxx') }}"]
+        );
+    }
+
+    #[test]
+    fn test_default_variants_name_the_mingw_compilers_on_windows() {
+        let windows = RGenerator::default()
+            .default_variants(Subdir::Win64)
+            .unwrap();
+        for (key, compiler) in [
+            ("m2w64_c_compiler", "gcc"),
+            ("m2w64_cxx_compiler", "gxx"),
+            ("m2w64_fortran_compiler", "gfortran"),
+        ] {
+            assert_eq!(
+                windows.get(&NormalizedKey::from(key)),
+                Some(&vec![Variable::from(compiler)]),
+                "{key}"
+            );
+        }
+        assert!(
+            RGenerator::default()
+                .default_variants(Subdir::Linux64)
+                .unwrap()
+                .is_empty()
         );
     }
 
