@@ -41,8 +41,7 @@ impl ConstraintArgs {
         Ok(())
     }
 
-    /// Tells the user which temporary constraints are applied, so that the
-    /// resulting lock file changes can be traced back to them.
+    /// Prints the temporary constraints to stderr.
     pub fn print_applied(&self) {
         if self.constraints.is_empty() {
             return;
@@ -55,11 +54,10 @@ impl ConstraintArgs {
     }
 }
 
-/// Warns about temporary constraints whose conda package is absent from the
-/// resulting lock file. The constraint may still have shaped the solve (e.g.
-/// by moving a dependent to a version that no longer needs the package), but
-/// a misspelled name or a package that comes from PyPI is the more common
-/// cause.
+/// Warns about constrained packages absent from the resulting lock file.
+///
+/// Absence does not imply the constraint had no effect: the solver may have
+/// selected a dependent version that no longer needs the package.
 pub fn warn_unmatched_constraints(workspace: &Workspace, lock_file: &LockFile) {
     let constraints = &workspace.workspace.value.extra_constraints;
     if constraints.is_empty() {
@@ -85,8 +83,6 @@ pub fn warn_unmatched_constraints(workspace: &Workspace, lock_file: &LockFile) {
     }
 }
 
-/// Builds a warning for every constrained conda package that is absent from
-/// the resulting lock file.
 fn unmatched_constraint_warnings<'a>(
     constraint_names: impl IntoIterator<Item = &'a PackageName>,
     conda_names: &HashSet<String>,
@@ -113,7 +109,6 @@ fn unmatched_constraint_warnings<'a>(
     warnings
 }
 
-/// An error that occurs when parsing a `--with-constraint` argument.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum ConstraintParseError {
     #[error("failed to parse constraint '{constraint}'")]
@@ -126,7 +121,6 @@ pub enum ConstraintParseError {
     MissingPackageName(String),
 }
 
-/// Parses the `--with-constraint` arguments into conda constraints.
 fn parse_constraints(
     constraints: &[String],
     channel_config: &ChannelConfig,

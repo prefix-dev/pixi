@@ -62,12 +62,8 @@ pub struct WorkspaceManifest {
     /// at load so that every environment resolves them to the same time.
     pub loaded_at: DateTime<Utc>,
 
-    /// Additional conda constraints that are not part of the manifest on
-    /// disk but were injected for a single invocation, e.g. through
-    /// `pixi lock --with-constraint`. They behave like a `[constraints]` entry
-    /// in every feature, so they apply to every environment (including
-    /// environments that opt out of the default feature), and are never
-    /// written back to the manifest.
+    /// In-memory conda constraints for all environments, including those with
+    /// `no-default-feature = true`. Never written to the manifest.
     pub extra_constraints: CondaConstraints,
 }
 

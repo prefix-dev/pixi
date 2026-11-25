@@ -1110,23 +1110,18 @@ package = "*"
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="Applying temporary constraints: package<0.2",
     )
-    # The JSON output only contains the diff
     output = verify_cli_command([pixi, "lock", "--dry-run", "--json", *constraint, *flags])
     assert "Applying temporary constraints" not in output.stderr
     assert json.loads(output.stdout)["environment"]["default"]
 
     verify_cli_command([pixi, "lock", *constraint, *flags])
     verify_cli_command([pixi, "list", *flags], stdout_contains="0.1.0", stdout_excludes="0.2.0")
-    # The constraint is not written to the manifest
     assert manifest_path.read_text() == manifest
 
-    # A constraint whose package is absent from the resulting lock file is reported
-    # spellchecker:off
     verify_cli_command(
-        [pixi, "lock", "--check", "--with-constraint", "pakage<0.2", *flags],
-        stderr_contains="the conda package 'pakage' is absent from the resulting lock file",
+        [pixi, "lock", "--check", "--with-constraint", "missing-package<0.2", *flags],
+        stderr_contains="the conda package 'missing-package' is absent from the resulting lock file",
     )
-    # spellchecker:on
 
 
 @pytest.mark.extra_slow

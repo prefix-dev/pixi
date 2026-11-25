@@ -89,8 +89,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace = workspace.with_backend_override(backend_override);
     }
 
-    // Inject the temporary constraints. They only live in memory and take part
-    // in both the satisfiability check and the solve.
     args.constraint_args.apply(&mut workspace)?;
     if !args.json {
         args.constraint_args.print_applied();
@@ -124,8 +122,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?;
     drop(clear_progress);
 
-    // Point out constraints whose package is absent from the resulting lock
-    // file, which usually means a misspelled name or a PyPI package.
     warn_unmatched_constraints(&workspace, &lock_file);
 
     // Determine the diff between the old and new lock file.

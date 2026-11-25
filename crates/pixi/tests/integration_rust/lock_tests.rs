@@ -201,9 +201,6 @@ async fn test_lock_check_does_not_create_missing_lock_file() {
     );
 }
 
-/// `pixi lock --with-constraint` re-solves only the environments whose locked
-/// packages violate the constraint, keeps the other locked packages as
-/// preferences, and never writes the constraint to the manifest.
 #[tokio::test]
 async fn test_lock_constraint_minimal_update() {
     let mut package_database = MockRepoData::default();
@@ -242,7 +239,6 @@ async fn test_lock_constraint_minimal_update() {
     let pixi = PixiControl::from_manifest(&manifest).unwrap();
     pixi.lock().await.unwrap();
 
-    // Publish newer versions. The fixed `foo` needs a newer `baz`.
     package_database.add_package(
         Package::build("foo", "2")
             .with_dependency("baz >=2")
@@ -256,11 +252,8 @@ async fn test_lock_constraint_minimal_update() {
         .await
         .unwrap();
 
-    // Without the constraint the lock file is up to date.
     pixi.lock().with_check(true).await.unwrap();
 
-    // With the constraint the lock file is out of date, but `--check` must not
-    // write anything.
     let err = pixi
         .lock()
         .with_check(true)
@@ -282,21 +275,15 @@ async fn test_lock_constraint_minimal_update() {
     pixi.lock().with_constraint("foo>=2,<3").await.unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    // The constrained package moved to the newest allowed version.
     assert!(lock.contains_match_spec("a", platform, "foo ==2"));
-    // Its dependency was allowed to move, because locked packages are only
-    // preferences.
+    // Locked versions are preferences, so dependencies can move with `foo`.
     assert!(lock.contains_match_spec("a", platform, "baz ==2"));
-    // Unrelated packages keep their locked version.
     assert!(lock.contains_match_spec("a", platform, "bar ==1"));
-    // Environments without the package are untouched.
     assert!(lock.contains_match_spec("b", platform, "bar ==1"));
     assert!(!lock.contains_conda_package("b", platform, "foo"));
 
-    // The constraint is not persisted in the manifest.
     assert_eq!(pixi.manifest_contents().unwrap(), manifest);
 
-    // The updated lock file still satisfies the manifest and the constraint.
     pixi.lock().with_check(true).await.unwrap();
     pixi.lock()
         .with_check(true)
@@ -305,7 +292,6 @@ async fn test_lock_constraint_minimal_update() {
         .unwrap();
 }
 
-/// A constraint that cannot be satisfied results in a solve error.
 #[tokio::test]
 async fn test_lock_constraint_unsatisfiable() {
     let mut package_database = MockRepoData::default();
@@ -329,7 +315,6 @@ async fn test_lock_constraint_unsatisfiable() {
         .await
         .expect_err("solving with an unsatisfiable constraint should fail");
 
-    // Invalid match specs are rejected.
     let err = pixi.lock().with_constraint("foo >=>2").await.unwrap_err();
     assert!(
         format!("{err:?}").contains("failed to parse constraint"),
@@ -337,10 +322,6 @@ async fn test_lock_constraint_unsatisfiable() {
     );
 }
 
-/// A fix that is released on several branches at once can be expressed with
-/// `|` in both the exemption and the constraint. Each environment moves to
-/// the fixed release of its own branch, as long as its manifest keeps it on
-/// that branch.
 #[tokio::test]
 async fn test_lock_constraint_multiple_branches() {
     let old: chrono::DateTime<chrono::Utc> = "2010-01-01T00:00:00Z".parse().unwrap();
@@ -388,14 +369,12 @@ async fn test_lock_constraint_multiple_branches() {
         )
     };
     let cutoff = r#""2015-01-01T00:00:00Z""#;
-    // Lock `loose` on the 3.12 branch, then loosen its requirement. The lock
-    // file stays valid, so `loose` remains on 3.12.
+    // A valid lock keeps `loose` on 3.12 even after its requirement is relaxed.
     let pixi = PixiControl::from_manifest(&manifest(cutoff, "3.12.*")).unwrap();
     pixi.lock().await.unwrap();
     pixi.update_manifest(&manifest(cutoff, ">=3.11")).unwrap();
     pixi.lock().with_check(true).await.unwrap();
 
-    // The fix is published on all branches, after the exclude-newer cutoff.
     for version in ["3.11.2", "3.12.2", "3.13.2"] {
         package_database.add_package(
             Package::build("python", version)
@@ -408,9 +387,6 @@ async fn test_lock_constraint_multiple_branches() {
         .await
         .unwrap();
 
-    // Exempt the fixed releases. This is what
-    // `pixi workspace exclude-newer exempt 'python==3.11.2|==3.12.2|==3.13.2'`
-    // writes.
     pixi.update_manifest(&manifest(
         r#"{ cutoff = "2015-01-01T00:00:00Z", exemptions = { python = "==3.11.2|==3.12.2|==3.13.2" } }"#,
         ">=3.11",
@@ -427,8 +403,6 @@ async fn test_lock_constraint_multiple_branches() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec("py311", platform, "python ==3.11.2"));
     assert!(lock.contains_match_spec("py312", platform, "python ==3.12.2"));
-    // The locked `python 3.12.1` violates the constraint, so it is no longer
-    // a usable preference. Nothing in the manifest keeps `loose` on the 3.12
-    // branch, so the solver picks the highest allowed version.
+    // The constraint invalidates the locked preference; `loose` has no branch pin.
     assert!(lock.contains_match_spec("loose", platform, "python ==3.13.2"));
 }
