@@ -1,11 +1,10 @@
+import runpy
 from pathlib import Path
 
 import pytest
 from rattler.lock import LockFile
 
-from scripts import build_pgo
-
-from .common import CURRENT_PLATFORM, default_env_path
+from .common import CURRENT_PLATFORM, default_env_path, repo_root
 
 
 def test_train_locks_without_installing(
@@ -33,11 +32,12 @@ training = "echo training"
     working_dir.mkdir()
     profile_dir = tmp_path / "profiles"
     profile_dir.mkdir()
-    monkeypatch.setattr(build_pgo, "TRAINING_MANIFEST", manifest)
+    train = runpy.run_path(str(repo_root() / "scripts" / "build_pgo.py"))["train"]
+    monkeypatch.setitem(train.__globals__, "TRAINING_MANIFEST", manifest)
     monkeypatch.chdir(tmp_path)
 
     # Exercise every workload with the real CLI, including its argument parser.
-    build_pgo.train(pixi, profile_dir, working_dir)
+    train(pixi, profile_dir, working_dir)
 
     lock = LockFile.from_path(working_dir / "pixi.lock")
     environment = lock.default_environment()
