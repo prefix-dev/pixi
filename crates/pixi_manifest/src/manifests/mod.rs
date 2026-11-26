@@ -24,8 +24,8 @@ pub use provenance::{
 pub use source::ManifestSource;
 pub use workspace::{
     ActivationEditError, ActivationLocation, ActivationScriptsChange, AddDependencyError,
-    EnvironmentEditError, FeatureNotFoundError, InvalidVersionError, MissingTargetError,
-    PlatformAddOutcome, PlatformEditError, RemoveChannelsError, RemoveDependencyError,
-    SetRequiresPixiError, TaskEditError, WorkspaceManifest, WorkspaceManifestMut,
-    format_platform_definition,
+    AuditIgnoreEditError, AuditIgnoreOutcome, EnvironmentEditError, FeatureNotFoundError,
+    InvalidVersionError, MissingTargetError, PlatformAddOutcome, PlatformEditError,
+    RemoveChannelsError, RemoveDependencyError, SetRequiresPixiError, TaskEditError,
+    WorkspaceManifest, WorkspaceManifestMut, format_platform_definition,
 };

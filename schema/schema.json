@@ -354,6 +354,179 @@
         }
       }
     },
+    "Audit": {
+      "title": "Audit",
+      "description": "The policy of `pixi audit`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fail-on": {
+          "title": "Fail-On",
+          "description": "Fail only for vulnerability matches at or above this severity rating. Matches with unknown severity always fail.",
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "ignore": {
+          "title": "Ignore",
+          "description": "Advisory ids or aliases, or rules, to ignore.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/AuditIgnoreTable"
+              }
+            ]
+          },
+          "examples": [
+            [
+              "CVE-2023-0464",
+              {
+                "package": "vendored-thing",
+                "reason": "data files only"
+              }
+            ]
+          ]
+        },
+        "ignore-until-fixed": {
+          "title": "Ignore-Until-Fixed",
+          "description": "Advisory ids or aliases, or rules naming one, to ignore while no fixed release newer than the locked version is reported in the package's own ecosystem. A fix reported only upstream, in another ecosystem, or for an older release branch does not end the exception.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/AuditUntilFixedTable"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "AuditIgnoreTable": {
+      "title": "AuditIgnoreTable",
+      "description": "A rule that ignores an advisory, optionally only in one package, ecosystem, or version, or every advisory of a package.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ecosystem": {
+          "title": "Ecosystem",
+          "description": "The ecosystem of the package: `conda-forge` or `PyPI`, case-insensitive.",
+          "type": "string",
+          "pattern": "^(?i:conda-forge|pypi)$"
+        },
+        "expired-at": {
+          "title": "Expired-At",
+          "description": "A date in `YYYY-MM-DD` format.",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "id": {
+          "title": "Id",
+          "description": "The advisory id or alias to ignore.",
+          "type": "string",
+          "minLength": 1
+        },
+        "package": {
+          "title": "Package",
+          "description": "Only ignore advisories of this package.",
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "title": "Reason",
+          "description": "Why the advisory is ignored.",
+          "type": "string"
+        },
+        "up-to-version": {
+          "title": "Up-To-Version",
+          "description": "Only ignore locked versions up to and including this one.",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "title": "Version",
+          "description": "Only ignore this locked version.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "id"
+          ]
+        },
+        {
+          "required": [
+            "package"
+          ]
+        }
+      ]
+    },
+    "AuditUntilFixedTable": {
+      "title": "AuditUntilFixedTable",
+      "description": "A rule that ignores an advisory while no fixed release newer than the locked version is reported in the package's own ecosystem.",
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ecosystem": {
+          "title": "Ecosystem",
+          "description": "The ecosystem of the package: `conda-forge` or `PyPI`, case-insensitive.",
+          "type": "string",
+          "pattern": "^(?i:conda-forge|pypi)$"
+        },
+        "expired-at": {
+          "title": "Expired-At",
+          "description": "A date in `YYYY-MM-DD` format.",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "id": {
+          "title": "Id",
+          "description": "The advisory id or alias to ignore.",
+          "type": "string",
+          "minLength": 1
+        },
+        "package": {
+          "title": "Package",
+          "description": "Only ignore the advisory in this package.",
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "title": "Reason",
+          "description": "Why the advisory is ignored.",
+          "type": "string"
+        },
+        "up-to-version": {
+          "title": "Up-To-Version",
+          "description": "Only ignore locked versions up to and including this one.",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "title": "Version",
+          "description": "Only ignore this locked version.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "Build": {
       "title": "Build",
       "type": "object",
@@ -3993,6 +4166,10 @@
       ],
       "additionalProperties": false,
       "properties": {
+        "audit": {
+          "$ref": "#/$defs/Audit",
+          "description": "The policy of `pixi audit`"
+        },
         "authors": {
           "title": "Authors",
           "description": "The authors of the project",

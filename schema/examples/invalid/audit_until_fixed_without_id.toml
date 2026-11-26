@@ -1,0 +1,9 @@
+#:schema ./../../schema.json
+
+[workspace]
+channels = ["conda-forge"]
+name = "audit-example"
+platforms = ["linux-64"]
+
+[workspace.audit]
+ignore-until-fixed = [{ package = "openssl" }]

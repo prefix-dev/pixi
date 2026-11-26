@@ -1,4 +1,5 @@
 mod activation;
+mod audit;
 mod build_system;
 pub(crate) mod channel;
 mod dependencies;
@@ -32,6 +33,10 @@ pub mod utils;
 mod warning;
 mod workspace;
 pub use activation::Activation;
+pub use audit::{
+    AuditEcosystem, AuditIgnoreList, AuditIgnoreRule, AuditPolicy, AuditSeverity,
+    InvalidAuditIgnoreRule,
+};
 pub use build_system::BuildBackend;
 pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
@@ -58,11 +63,11 @@ pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
     ActivationEditError, ActivationLocation, ActivationScriptsChange, AddDependencyError,
-    AssociateProvenance, EnvironmentEditError, FeatureNotFoundError, InvalidVersionError,
-    ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError, PackageManifest,
-    PlatformAddOutcome, PlatformEditError, ProvenanceError, RemoveChannelsError,
-    RemoveDependencyError, SetRequiresPixiError, TaskEditError, WithProvenance, WorkspaceManifest,
-    WorkspaceManifestMut, format_platform_definition,
+    AssociateProvenance, AuditIgnoreEditError, AuditIgnoreOutcome, EnvironmentEditError,
+    FeatureNotFoundError, InvalidVersionError, ManifestKind, ManifestProvenance, ManifestSource,
+    MissingTargetError, PackageManifest, PlatformAddOutcome, PlatformEditError, ProvenanceError,
+    RemoveChannelsError, RemoveDependencyError, SetRequiresPixiError, TaskEditError,
+    WithProvenance, WorkspaceManifest, WorkspaceManifestMut, format_platform_definition,
 };
 use miette::Diagnostic;
 pub use package::Package;

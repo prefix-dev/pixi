@@ -1,0 +1,15 @@
+#:schema ./../../schema.json
+
+[workspace]
+channels = ["conda-forge"]
+name = "audit-example"
+platforms = ["linux-64"]
+
+[workspace.audit]
+fail-on = "high"
+ignore = [
+  "CVE-2023-0464",
+  { id = "CVE-2026-1234", package = "openssl", ecosystem = "conda-forge", up-to-version = "3.1.0", reason = "Not reachable", expired-at = "2026-12-01" },
+  { package = "vendored-thing", reason = "Only used for its data files" },
+]
+ignore-until-fixed = ["CVE-2026-7777", { id = "GHSA-xxxx-yyyy-zzzz", package = "requests", ecosystem = "PyPI" }]

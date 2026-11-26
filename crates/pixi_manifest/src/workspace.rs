@@ -122,6 +122,9 @@ pub struct Workspace {
     /// deprecated top-level `[pypi-exclude-newer]` table.
     pub pypi_exclude_newer_package_overrides: IndexMap<PypiPackageName, ExcludeNewer>,
 
+    /// The `[workspace.audit]` policy of `pixi audit`.
+    pub audit: crate::AuditPolicy,
+
     /// `[workspace.dependencies]` pool. Path specs remain relative to
     /// `root_directory`; members re-base them at inheritance time.
     pub dependencies: IndexMap<PackageName, TomlSpec>,
