@@ -607,6 +607,28 @@ file that defines build variants.
 If the file is called `conda_build_config.yaml`, it will attempt to parse it with a subset of [`conda-build`'s variant syntax](https://docs.conda.io/projects/conda-build/en/stable/resources/variants.html#using-variants-with-the-conda-build-api).
 Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-build documentation](https://rattler.build/latest/variants/#variant-configuration).
 
+### `audit` (optional)
+
+The policy of [`pixi audit`](cli/pixi/audit/index.md).
+
+```toml
+[workspace.audit]
+fail-on = "high"
+ignore = [
+  "CVE-2023-0464",
+  { id = "CVE-2026-1234", package = "openssl", ecosystem = "conda-forge", up-to-version = "3.1.0", reason = "not reachable", expired-at = "2026-12-01" },
+  { package = "vendored-thing", reason = "only used for its data files" },
+]
+ignore-until-fixed = ["CVE-2026-7777"]
+```
+
+- `fail-on`: fail only for matches at or above `low`, `medium`, `high`, or `critical`. Matches with unknown severity always fail.
+- `ignore`: advisory ids or aliases, or tables with an `id` and/or `package`, optionally limited by `ecosystem` (`conda-forge` or `PyPI`), `version`, or `up-to-version`.
+- `ignore-until-fixed`: like `ignore`, but each entry must name an `id`, and it stops applying once a fixed release newer than the locked version is reported in the package's own ecosystem.
+- `reason` documents a rule, and `expired-at` (`YYYY-MM-DD`) is the last day, in UTC, on which it applies.
+
+See [Auditing for vulnerabilities](../security.md#auditing-for-vulnerabilities).
+
 ### `dependencies` (optional)
 
 A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`.

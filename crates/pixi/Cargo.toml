@@ -33,6 +33,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["http1", "tokio"] }
 chrono = { workspace = true }
+clap = { workspace = true }
 dunce = { workspace = true }
 fs-err = { workspace = true }
 fs_extra = { workspace = true }
@@ -50,6 +51,8 @@ insta = { workspace = true, features = [
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
+pixi_audit = { workspace = true }
+pixi_audit_test_support = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_config = { workspace = true }

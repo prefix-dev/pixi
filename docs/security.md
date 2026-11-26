@@ -10,12 +10,12 @@ Typical risks include:
 - known-vulnerable dependencies that stay in your environment because nothing forces an update;
 - poor visibility into what actually changed between one environment revision and the next.
 
-Pixi does not eliminate these risks, and it does not include a vulnerability scanner or advisory notification system for conda environments. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong.
+Pixi does not eliminate these risks, and it does not include an advisory notification system. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong, including an [audit of the lock file](#auditing-for-vulnerabilities) against vulnerability databases.
 
 These risks fall into two broad categories, each requiring a different response:
 
 - **A newly published package is malicious or broken.** The threat arrives with a future install. Steps like `exclude-newer` (step 2) and lock file review (step 1) help you avoid pulling it in.
-- **A package you already depend on is found to be vulnerable.** The threat is already in your environment. You can detect this by scanning your installed environment on a recurring schedule (step 5) and then respond by constraining or overriding dependencies (step 3). GitHub Dependabot already [supports conda as an ecosystem](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#supported-ecosystems-maintained-by-github), though lock file based update support is not yet available.
+- **A package you already depend on is found to be vulnerable.** The threat is already in your environment. You can detect this by [auditing the lock file](#auditing-for-vulnerabilities) or scanning your installed environment on a recurring schedule (step 5), and then respond by constraining or overriding dependencies (step 3). GitHub Dependabot already [supports conda as an ecosystem](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#supported-ecosystems-maintained-by-github), though lock file based update support is not yet available.
 
 This is the security model we recommend, step by step:
 
@@ -273,6 +273,90 @@ One example of a channel that already uses package signing extensively is the [g
 !!! tip "Serving Sigstore Attestations in Conda Channels"
     This is part of the broader conda ecosystem work to standardize attestation and signing. The current attestation work is captured in [CEP 27](https://conda.org/learn/ceps/cep-0027/), and broader package signing and Sigstore-serving work is still evolving in the ecosystem. We are also working on a proposal for serving this information on prefix.dev in [conda/ceps#142](https://github.com/conda/ceps/pull/142).
 
+## Auditing For Vulnerabilities
+
+[`pixi audit`](reference/cli/pixi/audit/index.md) checks every package in the workspace lock file against known vulnerabilities: conda-forge packages with [Basilisk](https://basilisk.prefix.dev) and PyPI packages with [OSV](https://osv.dev).
+It reads the existing `pixi.lock` and never solves or installs; without a lock file it fails.
+
+```shell
+pixi audit
+pixi audit --environment prod --platform linux-64
+pixi audit --format sarif > pixi-audit.sarif
+```
+
+The report goes to stdout as a table, grouped by package (`--format by-package`), as JSON, or as SARIF for GitHub code scanning. Diagnostics and progress go to stderr; on GitHub Actions, findings are also printed there as workflow annotations.
+`pixi audit` exits with 1 when a vulnerability match fails the policy or when the audit cannot complete.
+
+Matches are ordered by a risk score that combines severity with the [EPSS](https://www.first.org/epss/) exploitation probability and the [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) catalog. Risk only orders the report; it does not decide the exit code. If the EPSS or KEV feed is unavailable, the audit continues with a warning.
+
+### Coverage
+
+Only packages whose public identity is known are audited: conda packages from conda-forge on `conda.anaconda.org` or `prefix.dev`, and PyPI wheels from `files.pythonhosted.org`.
+Other channels, private mirrors and indexes, and Git or path dependencies are listed as not audited. They do not fail the audit, but they are not known to be safe either.
+
+Every vulnerability lookup must succeed, including fetching each referenced advisory; otherwise the audit fails instead of reporting a partial result. Withdrawn advisories are skipped. Offline, the vulnerability databases cannot be queried, so an audit of packages that need a lookup fails without contacting the network.
+A passing audit means the policy passes against the available advisory data, not that the packages are free of unknown vulnerabilities.
+
+### Policy
+
+The policy lives in `[workspace.audit]` of `pixi.toml`, or `[tool.pixi.workspace.audit]` of `pyproject.toml`:
+
+```toml
+[workspace.audit]
+fail-on = "high"
+ignore = [
+  "CVE-2023-0464",
+  { id = "CVE-2026-1234", package = "openssl", reason = "not reachable", expired-at = "2026-12-01" },
+  { package = "vendored-thing", reason = "only used for its data files" },
+]
+ignore-until-fixed = ["CVE-2026-7777"]
+```
+
+- `fail-on` fails the audit only for matches at or above `low`, `medium`, `high`, or `critical`. Matches with unknown severity always fail.
+- `ignore` entries name an advisory id or alias, optionally limited by `package`, `ecosystem` (`conda-forge` or `PyPI`), `version`, or `up-to-version`, or name a `package` alone to ignore all of its advisories.
+- `ignore-until-fixed` entries must name an advisory. They stop applying as soon as a fixed release newer than the locked version is reported in the package's own ecosystem; a release only upstream, in another ecosystem, or on an older release branch does not end them.
+- `expired-at` is the last day, in UTC, on which a rule applies. Expired rules and rules that match nothing produce warnings.
+
+Record rules with [`pixi audit ignore`](reference/cli/pixi/audit/ignore.md). On the command line, `--ignore` and `--ignore-until-fixed` add to the manifest's rules, `--fail-on` replaces its threshold, and `--warn-only-ecosystem` reports an ecosystem without failing on it.
+
+### Fixing vulnerabilities
+
+`pixi audit --fix` derives temporary constraints that exclude the affected versions of every package with a policy-failing match, solves once with them like [`pixi lock --with-constraint`](reference/cli/pixi/lock.md), and audits the complete result.
+The lock file is replaced only when every match of the result passes the policy and no package lost audit coverage, for example by moving to an unsupported source.
+
+- The manifest is never edited, and nothing is installed. Locked packages remain preferences, so environments that already satisfy the constraints only change when their solve group requires it.
+- Constraints start at a fixed release newer than the locked version, reported in the package's own ecosystem, and keep every other version an advisory affects excluded. The manifest's own requirements, channels, and `exclude-newer` still apply.
+- If any failing match has no usable fix, the solve fails, or the result does not pass, nothing is written and the report describes the unchanged lock file.
+- A passing audit is left alone.
+- The constraints are not saved. A later unconstrained solve can select an affected release again, so add lasting `[constraints]` or `[pypi-constraints]` where needed.
+
+The pre-commit check detects changes to the manifest or lock file made while `--fix` runs, but it cannot stop another process from writing between that check and the replacement.
+
+### Authentication and endpoints
+
+Basilisk accepts an API token from `PIXI_AUDIT_TOKEN` or stored for its host in the authentication store, or, for `api.basilisk.prefix.dev`, your `pixi auth login` session.
+Credentials are only sent to the exact Basilisk origin over HTTPS (or plain HTTP to localhost), redirects are not followed, and OSV and the threat feeds never receive them.
+
+| Variable | Default |
+| --- | --- |
+| `PIXI_AUDIT_BASILISK_URL` | `https://api.basilisk.prefix.dev` |
+| `PIXI_AUDIT_OSV_URL` | `https://api.osv.dev` |
+| `PIXI_AUDIT_EPSS_BASE_URL` | `https://api.first.org` |
+| `PIXI_AUDIT_KEV_URL` | `https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json` |
+
+EPSS and KEV responses are cached in the [`audit` cache](reference/pixi_configuration.md#cache-kinds).
+
+### Migrating from the `pixi-audit` extension
+
+`pixi audit` replaces the standalone `pixi-audit` extension. Remove the extension, for example with `pixi global uninstall pixi-audit`, and adjust the following:
+
+- Move `[tool.pixi-audit]` to `[workspace.audit]`. Unknown keys are rejected.
+- `ignore-unfixed` and `--ignore-unfixed` are gone. List each accepted advisory in `ignore-until-fixed` instead; package-only until-fixed rules are not supported.
+- Until-fixed rules now only end when a fixed release newer than the locked version is reported in the package's own ecosystem.
+- `pixi audit` audits the workspace lock file; it no longer accepts a lock file path. Select the workspace with `--manifest-path`.
+- `--fix` no longer edits the manifest or runs `pixi update`, and it no longer accepts `--environment` or `--platform`.
+- Errors exit with 1 instead of 2, and the JSON and SARIF output changed shape.
+
 ## Current Gaps And Practical Recommendation
 
 Cross-ecosystem vulnerability matching for conda packages is still improving.
@@ -286,7 +370,7 @@ If you want a conservative default posture, we recommend:
 - commit and review `pixi.lock`;
 - use `exclude-newer` for public channels;
 - selectively bypass the delay only for trusted or urgent fixes;
-- update or override dependencies when advisories land;
+- run `pixi audit` in CI and update or override dependencies when advisories land;
 - scan the installed environment with Syft and your vulnerability scanner;
 - generate attestations for packages you publish;
 - use `layout pixi` if you activate environments automatically with `direnv`.

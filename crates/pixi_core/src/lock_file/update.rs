@@ -307,8 +307,11 @@ impl Workspace {
 
     /// Updates a caller-provided lock file without writing it.
     ///
-    /// The caller is responsible for persisting the returned lock file.
-    pub(crate) async fn update_lock_file_from_lock_file(
+    /// Unlike [`Self::update_lock_file`], the lock file is not reloaded from
+    /// disk, so callers that inspected a lock file can derive a candidate from
+    /// exactly that snapshot. The caller is responsible for persisting the
+    /// returned lock file.
+    pub async fn update_lock_file_from_lock_file(
         &self,
         progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
         options: UpdateLockFileOptions,
