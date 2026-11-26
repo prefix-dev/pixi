@@ -1,0 +1,19 @@
+---8<--- [start:description]
+
+--8<-- [end:description]
+
+---8<--- [start:example]
+
+## Examples
+
+```shell
+pixi audit ignore CVE-2023-0464 --reason "not reachable in this deployment"
+pixi audit ignore CVE-2026-7777 --until-fixed # (1)!
+pixi audit ignore CVE-2023-0464 --package openssl --ecosystem conda-forge --up-to-version 3.1.0
+pixi audit ignore --package vendored-thing --expired-at 2026-12-31 # (2)!
+```
+
+1. Ignore the advisory while no fixed release newer than the locked version is reported in the package's own ecosystem.
+2. Ignore every advisory of the package through the end of 2026, in UTC.
+
+--8<-- [end:example]

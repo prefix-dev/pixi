@@ -320,6 +320,79 @@ class PypiExcludeNewerTable(StrictBaseModel):
     )
 
 
+AuditEcosystem = Annotated[
+    str,
+    StringConstraints(pattern=r"^(?i:conda-forge|pypi)$"),
+    Field(description="The ecosystem of the package: `conda-forge` or `PyPI`, case-insensitive."),
+]
+AuditDate = Annotated[
+    str,
+    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    Field(description="A date in `YYYY-MM-DD` format."),
+]
+
+
+class AuditIgnoreTable(StrictBaseModel):
+    """A rule that ignores an advisory, optionally only in one package, ecosystem, or version, or every advisory of a package."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid",
+        alias_generator=hyphenize,
+        json_schema_extra={"anyOf": [{"required": ["id"]}, {"required": ["package"]}]},
+    )
+
+    id: NonEmptyStr | None = Field(None, description="The advisory id or alias to ignore.")
+    package: NonEmptyStr | None = Field(None, description="Only ignore advisories of this package.")
+    ecosystem: AuditEcosystem | None = Field(
+        None, description="Only ignore advisories in this ecosystem."
+    )
+    version: NonEmptyStr | None = Field(None, description="Only ignore this locked version.")
+    up_to_version: NonEmptyStr | None = Field(
+        None, description="Only ignore locked versions up to and including this one."
+    )
+    reason: str | None = Field(None, description="Why the advisory is ignored.")
+    expired_at: AuditDate | None = Field(
+        None,
+        description="The last day, in UTC, on which the rule applies. Afterwards the audit reports the advisory again and warns about the expired rule.",
+    )
+
+
+class AuditUntilFixedTable(StrictBaseModel):
+    """A rule that ignores an advisory while no fixed release newer than the locked version is reported in the package's own ecosystem."""
+
+    id: NonEmptyStr = Field(description="The advisory id or alias to ignore.")
+    package: NonEmptyStr | None = Field(None, description="Only ignore the advisory in this package.")
+    ecosystem: AuditEcosystem | None = Field(
+        None, description="Only ignore the advisory in this ecosystem."
+    )
+    version: NonEmptyStr | None = Field(None, description="Only ignore this locked version.")
+    up_to_version: NonEmptyStr | None = Field(
+        None, description="Only ignore locked versions up to and including this one."
+    )
+    reason: str | None = Field(None, description="Why the advisory is ignored.")
+    expired_at: AuditDate | None = Field(
+        None, description="The last day, in UTC, on which the rule applies."
+    )
+
+
+class Audit(StrictBaseModel):
+    """The policy of `pixi audit`."""
+
+    fail_on: Literal["low", "medium", "high", "critical"] | None = Field(
+        None,
+        description="Fail only for vulnerability matches at or above this severity rating. Matches with unknown severity always fail.",
+    )
+    ignore: list[NonEmptyStr | AuditIgnoreTable] | None = Field(
+        None,
+        description="Advisory ids or aliases, or rules, to ignore.",
+        examples=[["CVE-2023-0464", {"package": "vendored-thing", "reason": "data files only"}]],
+    )
+    ignore_until_fixed: list[NonEmptyStr | AuditUntilFixedTable] | None = Field(
+        None,
+        description="Advisory ids or aliases, or rules naming one, to ignore while no fixed release newer than the locked version is reported in the package's own ecosystem. A fix reported only upstream, in another ecosystem, or for an older release branch does not end the exception.",
+    )
+
+
 class Workspace(StrictBaseModel):
     """The project's metadata information."""
 
@@ -418,6 +491,7 @@ class Workspace(StrictBaseModel):
         None,
         description="Ordered list of variant definition files.",
     )
+    audit: Audit | None = Field(None, description="The policy of `pixi audit`")
     build_variants: dict[NonEmptyStr, list[str]] | None = Field(
         None, description="The build variants of the project"
     )

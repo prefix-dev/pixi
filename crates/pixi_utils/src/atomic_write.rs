@@ -107,6 +107,22 @@ pub fn atomic_write_sync(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Re
     Ok(())
 }
 
+/// Replaces the file at `path` with `contents` atomically, or fails.
+///
+/// Unlike [`atomic_write_sync`], there is no direct-write fallback: either a
+/// sibling temporary file is completely written and renamed over `path`, or
+/// `path` keeps its previous contents. The rename makes the replacement
+/// atomic, not durable across a crash. On Unix the permissions of the
+/// existing file are preserved.
+pub fn replace_atomically(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+    let perms = original_permissions(path)?;
+    let mut temp_file = temp_file_for(path, perms)?;
+    std::io::Write::write_all(&mut temp_file, contents.as_ref())?;
+    temp_file.as_file().sync_all()?;
+    temp_file.persist(path).map_err(|e| e.error)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,6 +201,44 @@ mod tests {
 
         // Reset permissions for clean up
         fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_replace_atomically_never_falls_back_to_a_direct_write() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("pixi.lock");
+        fs_err::write(&target, b"original").unwrap();
+        fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let result = replace_atomically(&target, b"replacement");
+        fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        // Root ignores directory permissions, so only check the outcome
+        // where the sandbox enforces them.
+        if let Err(err) = result {
+            assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+            assert_eq!(fs_err::read(&target).unwrap(), b"original");
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_replace_atomically_preserves_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("pixi.lock");
+        fs_err::write(&target, b"original").unwrap();
+        fs_err::set_permissions(&target, std::fs::Permissions::from_mode(0o640)).unwrap();
+
+        replace_atomically(&target, b"replacement").unwrap();
+
+        assert_eq!(fs_err::read(&target).unwrap(), b"replacement");
+        let mode = fs_err::metadata(&target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o640);
     }
 
     /// `atomic_write` must not change the mode of an existing file.

@@ -28,6 +28,8 @@ pixi clean cache [OPTIONS]
 :  Clean only the virtual package detector environments and their cached reports
 - <a id="arg---notices" href="#arg---notices">`--notices`</a>
 :  Clean only the viewed channel notices cache
+- <a id="arg---audit" href="#arg---audit">`--audit`</a>
+:  Clean only the threat-feed cache of `pixi audit`
 - <a id="arg---build-backends" href="#arg---build-backends">`--build-backends`</a>
 :  Clean only the build backends environments cache
 - <a id="arg---build" href="#arg---build">`--build`</a>

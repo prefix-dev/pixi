@@ -500,6 +500,7 @@ The fields under `[cache]` map one-to-one to the caches pixi maintains:
 | `pypi-mapping` | conda↔PyPI name mapping | Redirect to node-local |
 | `exec-environments` | Cached `pixi exec` envs | Redirect to node-local |
 | `virtual-package-detectors` | Environments and cached reports of [virtual package detectors](../workspace/multi_platform_configuration.md#virtual-package-detectors) | Redirect to node-local |
+| `audit` | EPSS and KEV responses of [`pixi audit`](../security.md#auditing-for-vulnerabilities) | Redirect to node-local |
 | `build-tool-environments` | Cached build-tool envs | Redirect to node-local |
 | `detached-environments` | Workspace envs when [`detached-environments`](#detached-environments) is `true` | Redirect to node-local |
 
@@ -557,6 +558,7 @@ that kind and uses the path verbatim.
 | `PIXI_CACHE_PYPI_MAPPING_DIR` | `cache.pypi-mapping` |
 | `PIXI_CACHE_EXEC_ENVIRONMENTS_DIR` | `cache.exec-environments` |
 | `PIXI_CACHE_VIRTUAL_PACKAGE_DETECTORS_DIR` | `cache.virtual-package-detectors` |
+| `PIXI_CACHE_AUDIT_DIR` | `cache.audit` |
 | `PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR` | `cache.build-tool-environments` |
 | `PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR` | `cache.detached-environments` |
 

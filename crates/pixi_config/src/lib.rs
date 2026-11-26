@@ -422,6 +422,8 @@ pub enum CacheKind {
     /// Environments and results of channel-registered virtual package
     /// detectors.
     VirtualPackageDetectors,
+    /// Threat-feed responses of `pixi audit`.
+    Audit,
 }
 
 impl CacheKind {
@@ -436,6 +438,7 @@ impl CacheKind {
             CacheKind::BuildToolEnvironments => consts::CACHED_BUILD_TOOL_ENVS_DIR,
             CacheKind::DetachedEnvironments => consts::ENVIRONMENTS_DIR,
             CacheKind::VirtualPackageDetectors => consts::VIRTUAL_PACKAGE_DETECTORS_CACHE_DIR,
+            CacheKind::Audit => consts::AUDIT_CACHE_DIR,
         }
     }
 
@@ -454,6 +457,7 @@ impl CacheKind {
             CacheKind::BuildToolEnvironments => "build-tool-environments",
             CacheKind::DetachedEnvironments => "detached-environments",
             CacheKind::VirtualPackageDetectors => "virtual-package-detectors",
+            CacheKind::Audit => "audit",
         }
     }
 
@@ -501,6 +505,9 @@ pub struct CacheConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub virtual_package_detectors: Option<PathBuf>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit: Option<PathBuf>,
+
     /// How to handle a cache that lives on a network filesystem.
     #[serde(default, skip_serializing_if = "NetfsRedirect::is_default")]
     pub netfs_redirect: NetfsRedirect,
@@ -522,6 +529,7 @@ impl CacheConfig {
             CacheKind::BuildToolEnvironments => &self.build_tool_environments,
             CacheKind::DetachedEnvironments => &self.detached_environments,
             CacheKind::VirtualPackageDetectors => &self.virtual_package_detectors,
+            CacheKind::Audit => &self.audit,
         };
         p.as_deref()
     }
@@ -542,6 +550,7 @@ impl CacheConfig {
             virtual_package_detectors: other
                 .virtual_package_detectors
                 .or(self.virtual_package_detectors),
+            audit: other.audit.or(self.audit),
             netfs_redirect: if other.netfs_redirect == NetfsRedirect::default() {
                 self.netfs_redirect
             } else {
@@ -572,6 +581,7 @@ impl CacheConfig {
                 "cache.virtual-package-detectors",
                 &mut self.virtual_package_detectors,
             ),
+            ("cache.audit", &mut self.audit),
         ]
         .into_iter()
         .filter_map(|(name, opt)| opt.as_mut().map(|p| (name, p)))
@@ -601,7 +611,7 @@ impl CacheConfig {
     pub fn validate(&self) -> Result<(), ConfigPathError> {
         // iter_paths_mut takes &mut, so reuse the field list locally rather
         // than cloning. Keep this in sync with `iter_paths_mut`.
-        let entries: [(&str, Option<&PathBuf>); 9] = [
+        let entries: [(&str, Option<&PathBuf>); 10] = [
             ("cache.root", self.root.as_ref()),
             ("cache.conda-packages", self.conda_packages.as_ref()),
             ("cache.repodata", self.repodata.as_ref()),
@@ -620,6 +630,7 @@ impl CacheConfig {
                 "cache.virtual-package-detectors",
                 self.virtual_package_detectors.as_ref(),
             ),
+            ("cache.audit", self.audit.as_ref()),
         ];
         for (name, path) in entries.into_iter().filter_map(|(n, p)| p.map(|p| (n, p))) {
             if !path.is_absolute() {
@@ -673,6 +684,7 @@ fn env_var_for(kind: CacheKind) -> &'static str {
         CacheKind::BuildToolEnvironments => "PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR",
         CacheKind::DetachedEnvironments => "PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR",
         CacheKind::VirtualPackageDetectors => "PIXI_CACHE_VIRTUAL_PACKAGE_DETECTORS_DIR",
+        CacheKind::Audit => "PIXI_CACHE_AUDIT_DIR",
     }
 }
 
@@ -2217,6 +2229,7 @@ impl Config {
         &[
             "authentication-override-file",
             "cache",
+            "cache.audit",
             "cache.build-tool-environments",
             "cache.conda-packages",
             "cache.detached-environments",
@@ -2918,6 +2931,7 @@ impl Config {
                     "virtual-package-detectors" => {
                         self.cache.virtual_package_detectors = value.map(PathBuf::from)
                     }
+                    "audit" => self.cache.audit = value.map(PathBuf::from),
                     "netfs-redirect" => {
                         self.cache.netfs_redirect = value
                             .map(|v| NetfsRedirect::from_str(&v))
@@ -5064,6 +5078,7 @@ UNUSED = "unused"
             CacheKind::BuildToolEnvironments,
             CacheKind::DetachedEnvironments,
             CacheKind::VirtualPackageDetectors,
+            CacheKind::Audit,
         ];
         for kind in kinds {
             let toml = format!("{} = \"/abs/path\"\n", kind.config_key());

@@ -412,6 +412,24 @@ impl Display for ActivationLocation {
     }
 }
 
+/// Which ignore rules [`WorkspaceManifestMut::add_audit_ignore_rules`]
+/// recorded and which were already listed.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct AuditIgnoreOutcome {
+    pub added: Vec<crate::AuditIgnoreRule>,
+    pub existing: Vec<crate::AuditIgnoreRule>,
+}
+
+/// An error while recording audit ignore rules.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum AuditIgnoreEditError {
+    #[error(transparent)]
+    InvalidRule(#[from] crate::InvalidAuditIgnoreRule),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
 /// A mutable context that allows modifying the workspace manifest both in
 /// memory and on disk.
 pub struct WorkspaceManifestMut<'a> {
@@ -2047,6 +2065,65 @@ impl WorkspaceManifestMut<'_> {
             value,
             config,
         )
+    }
+
+    /// Appends `rules` to the `list` of `[workspace.audit]`, creating the
+    /// table and list as needed. A rule that ignores the same thing as a
+    /// listed one is left alone, even when its reason or expiry differs, and
+    /// is returned in [`AuditIgnoreOutcome::existing`].
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn add_audit_ignore_rules(
+        &mut self,
+        list: crate::AuditIgnoreList,
+        rules: Vec<crate::AuditIgnoreRule>,
+    ) -> Result<AuditIgnoreOutcome, AuditIgnoreEditError> {
+        for rule in &rules {
+            rule.validate(list)?;
+        }
+        let mut outcome = AuditIgnoreOutcome::default();
+        let listed = self.workspace.workspace.audit.rules_mut(list);
+        let mut new_rules = Vec::new();
+        for rule in rules {
+            if listed
+                .iter()
+                .chain(&new_rules)
+                .any(|existing: &crate::AuditIgnoreRule| existing.same_target(&rule))
+            {
+                outcome.existing.push(rule);
+            } else {
+                new_rules.push(rule);
+            }
+        }
+        if new_rules.is_empty() {
+            return Ok(outcome);
+        }
+
+        let audit = self
+            .document
+            .workspace_table_mut()?
+            .entry("audit")
+            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
+            .as_table_like_mut()
+            .ok_or_else(|| TomlError::table_error("audit", "workspace"))?;
+        let array = audit
+            .entry(list.key())
+            .or_insert(toml_edit::Item::Value(
+                Value::Array(toml_edit::Array::new()),
+            ))
+            .as_array_mut()
+            .ok_or_else(|| TomlError::table_error(list.key(), "workspace.audit"))?;
+        for rule in &new_rules {
+            array.push(rule.to_toml_value());
+        }
+        self.workspace
+            .workspace
+            .audit
+            .rules_mut(list)
+            .extend(new_rules.iter().cloned());
+        outcome.added = new_rules;
+        Ok(outcome)
     }
 
     /// Exempts the releases of `name` that match the spec of `exemption`
@@ -6830,6 +6907,97 @@ full = ["extra"]
         fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
             std::iter::once(self.0.default_feature())
         }
+    }
+
+    #[test]
+    fn test_add_audit_ignore_rules() {
+        use crate::{AuditEcosystem, AuditIgnoreList, AuditIgnoreRule};
+
+        let mut pixi = parse_pixi_toml(
+            r#"
+            [workspace]
+            channels = []
+            platforms = []
+
+            [workspace.audit]
+            ignore = ["CVE-1"]
+            "#,
+        );
+        let scoped = AuditIgnoreRule {
+            id: Some("CVE-2".to_string()),
+            package: Some("openssl".to_string()),
+            ecosystem: Some(AuditEcosystem::CondaForge),
+            reason: Some("not reachable".to_string()),
+            ..AuditIgnoreRule::default()
+        };
+        let outcome = pixi
+            .editable()
+            .add_audit_ignore_rules(
+                AuditIgnoreList::Ignore,
+                vec![
+                    AuditIgnoreRule {
+                        reason: Some("a new reason does not replace the rule".to_string()),
+                        ..AuditIgnoreRule::from_id("cve-1")
+                    },
+                    scoped.clone(),
+                    scoped.clone(),
+                ],
+            )
+            .unwrap();
+        assert_eq!(outcome.added, vec![scoped]);
+        assert_eq!(outcome.existing.len(), 2);
+        assert_eq!(pixi.manifest.workspace.audit.ignore.len(), 2);
+        assert_snapshot!(pixi.document.to_string(), @r#"
+
+        [workspace]
+        channels = []
+        platforms = []
+
+        [workspace.audit]
+        ignore = ["CVE-1", { id = "CVE-2", package = "openssl", ecosystem = "conda-forge", reason = "not reachable" }]
+        "#);
+
+        let err = pixi
+            .editable()
+            .add_audit_ignore_rules(
+                AuditIgnoreList::IgnoreUntilFixed,
+                vec![AuditIgnoreRule {
+                    package: Some("openssl".to_string()),
+                    ..AuditIgnoreRule::default()
+                }],
+            )
+            .unwrap_err();
+        assert_snapshot!(err, @"an `ignore-until-fixed` rule needs an advisory `id`");
+
+        let mut pyproject = parse_pyproject_toml(PYPROJECT_BOILERPLATE);
+        pyproject
+            .editable()
+            .add_audit_ignore_rules(
+                AuditIgnoreList::IgnoreUntilFixed,
+                vec![AuditIgnoreRule::from_id("CVE-3")],
+            )
+            .unwrap();
+        assert_snapshot!(pyproject.document.to_string(), @r#"
+
+        [project]
+        name = "flask-hello-world-pyproject"
+        version = "0.1.0"
+        description = "Example how to get started with flask in a pixi environment."
+        license = "MIT OR Apache-2.0"
+        readme = "README.md"
+        requires-python = ">=3.11"
+        dependencies = ["flask==2.*"]
+
+        [tool.pixi.project]
+        channels = ["https://prefix.dev/conda-forge"]
+        platforms = ["linux-64"]
+
+        [tool.pixi.project.audit]
+        ignore-until-fixed = ["CVE-3"]
+
+        [tool.pixi.tasks]
+        start = "python -m flask run --port=5050"
+        "#);
     }
 
     #[test]

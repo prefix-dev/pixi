@@ -128,6 +128,9 @@ pub struct TomlWorkspace {
     /// `[workspace.dependencies]` pool for `{ workspace = true }` inheritance.
     pub dependencies: Option<PixiSpanned<WorkspaceDependencyMap>>,
 
+    /// `[workspace.audit]` policy.
+    pub audit: Option<crate::AuditPolicy>,
+
     pub span: Span,
 }
 
@@ -276,6 +279,7 @@ impl TomlWorkspace {
             exclude_newer_package_overrides: IndexMap::default(),
             pypi_exclude_newer_package_overrides: IndexMap::default(),
             dependencies,
+            audit: self.audit.unwrap_or_default(),
             root_directory: root_directory.to_path_buf(),
             must_migrate: false,
             use_platform_composition: false,
@@ -418,6 +422,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .map(TomlPypiExcludeNewer::into_inner)
             .unwrap_or_default();
         let dependencies = th.optional("dependencies");
+        let audit = th.optional("audit");
 
         th.finalize(None)?;
 
@@ -448,6 +453,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             exclude_newer,
             pypi_exclude_newer,
             dependencies,
+            audit,
             span: value.span,
         })
     }

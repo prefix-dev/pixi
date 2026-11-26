@@ -1,0 +1,23 @@
+---8<--- [start:description]
+
+--8<-- [end:description]
+
+---8<--- [start:example]
+
+## Examples
+
+```shell
+pixi audit
+pixi audit --environment prod --platform linux-64
+pixi audit --fail-on high # (1)!
+pixi audit --format sarif > pixi-audit.sarif # (2)!
+pixi audit --fix # (3)!
+```
+
+1. Only vulnerability matches rated high or critical fail the audit. Matches with unknown severity always fail.
+2. Upload the report to GitHub code scanning. Ignored matches are included as suppressions.
+3. Solve once with temporary constraints and replace the lock file only when every vulnerability match then passes the policy. The manifest is never edited.
+
+See [Auditing for vulnerabilities](../../security.md#auditing-for-vulnerabilities) for the policy, coverage, and remediation details.
+
+--8<-- [end:example]

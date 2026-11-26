@@ -100,6 +100,10 @@ pub struct CacheArgs {
     #[arg(long)]
     pub notices: bool,
 
+    /// Clean only the threat-feed cache of `pixi audit`.
+    #[arg(long)]
+    pub audit: bool,
+
     /// Clean only the build backends environments cache.
     #[arg(long)]
     pub build_backends: bool,
@@ -251,6 +255,9 @@ async fn clean_cache(args: CacheArgs, config: &pixi_config::Config) -> miette::R
     }
     if args.virtual_package_detectors {
         dirs.push(config.cache_dir_for(pixi_config::CacheKind::VirtualPackageDetectors)?);
+    }
+    if args.audit {
+        dirs.push(config.cache_dir_for(pixi_config::CacheKind::Audit)?);
     }
     if args.build_backends {
         let cache_dirs = CacheDirs::new(
