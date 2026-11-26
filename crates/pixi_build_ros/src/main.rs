@@ -5,17 +5,21 @@ use std::sync::Arc;
 use fs_err as fs;
 use miette::IntoDiagnostic;
 use pixi_build_backend::compilers::default_compiler_variants;
-use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams};
+use pixi_build_backend::generated_recipe::{
+    GenerateRecipe, GeneratedRecipe, IntoRecipe, PythonParams,
+};
 use pixi_build_backend::intermediate_backend::IntermediateBackendInstantiator;
+use pixi_build_backend::specs_conversion::pin_subpackage_exact;
 use pixi_build_backend::tools::BackendIdentifier;
 use pixi_build_ros::config::RosBackendConfig;
 use rattler_build_jinja::{JinjaTemplate, Variable};
 use rattler_build_recipe::stage0::{
-    Conditional, Item, JinjaExpression, NestedItemList, Script, SerializableMatchSpec,
-    SingleOutputRecipe, Value,
+    About, Build, Conditional, ConditionalList, Inherit, Item, JinjaExpression, MultiOutputRecipe,
+    NestedItemList, Output, PackageMetadata, PackageOutput, Recipe, RecipeMetadata, Requirements,
+    Script, SerializableMatchSpec, SingleOutputRecipe, Value,
 };
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Subdir};
+use rattler_conda_types::{ChannelUrl, PackageName, Subdir};
 
 use pixi_build_backend::cli::build_tool_verbosity_flag;
 use pixi_build_ros::build_script::render_build_script;
@@ -31,11 +35,9 @@ use pixi_build_ros::{package_map, workspace_discovery};
 #[derive(Default, Clone)]
 pub struct RosGenerator {}
 
-#[async_trait::async_trait]
-impl GenerateRecipe for RosGenerator {
-    type Config = RosBackendConfig;
-    type Recipe = SingleOutputRecipe;
-
+impl RosGenerator {
+    /// The recipe of the package `ros2-<name>` (or `ros-<distro>-<name>` for
+    /// ROS 1) that the package.xml describes, without the compatibility alias.
     #[tracing::instrument(
         name = "ros_generate_recipe",
         skip_all,
@@ -44,10 +46,11 @@ impl GenerateRecipe for RosGenerator {
             workspace = workspace_directory.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "<none>".to_string()),
         ),
     )]
-    async fn generate_recipe(
+    #[allow(clippy::too_many_arguments)]
+    async fn generate_package_recipe(
         &self,
         model: &pixi_build_types::ProjectModel,
-        config: &Self::Config,
+        config: &RosBackendConfig,
         manifest_path: PathBuf,
         host_platform: Subdir,
         _python_params: Option<PythonParams>,
@@ -73,21 +76,7 @@ impl GenerateRecipe for RosGenerator {
             manifest_path.clone()
         };
 
-        // Resolve distro from config or channels
-        let distro_name = config
-            .distro
-            .clone()
-            .or_else(|| extract_distro_from_channels_list(&channels))
-            .ok_or_else(|| {
-                miette::miette!(
-                    "ROS distro must be either explicitly configured or \
-                     auto-detected from robostack channels. \
-                     A 'robostack-<distro>' channel (e.g. 'robostack-kilted') was not \
-                     found in the provided channels."
-                )
-            })?;
-
-        let distro = Distro::new(distro_name);
+        let distro = resolve_distro(config, &channels)?;
 
         // Parse package.xml
         let package_xml_path = manifest_root.join("package.xml");
@@ -353,6 +342,67 @@ impl GenerateRecipe for RosGenerator {
 
         Ok(generated_recipe)
     }
+}
+
+#[async_trait::async_trait]
+impl GenerateRecipe for RosGenerator {
+    type Config = RosBackendConfig;
+    type Recipe = Recipe;
+
+    async fn generate_recipe(
+        &self,
+        model: &pixi_build_types::ProjectModel,
+        config: &Self::Config,
+        manifest_path: PathBuf,
+        host_platform: Subdir,
+        python_params: Option<PythonParams>,
+        variants: &HashSet<NormalizedKey>,
+        channels: Vec<ChannelUrl>,
+        cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
+        workspace_directory: Option<PathBuf>,
+        checkout_root: Option<PathBuf>,
+    ) -> miette::Result<GeneratedRecipe<Recipe>> {
+        let distro = resolve_distro(config, &channels)?;
+        let generated = self
+            .generate_package_recipe(
+                model,
+                config,
+                manifest_path,
+                host_platform,
+                python_params,
+                variants,
+                channels,
+                cache_dir,
+                workspace_scratch_directory,
+                workspace_directory,
+                checkout_root,
+            )
+            .await?;
+
+        let name = generated
+            .recipe
+            .package
+            .name
+            .as_concrete()
+            .map(|name| name.to_string());
+        let Some((name, alias)) =
+            name.and_then(|name| distro.compat_alias(&name).map(|alias| (name, alias)))
+        else {
+            return Ok(generated.map_recipe(IntoRecipe::into_recipe));
+        };
+        let pin = pin_subpackage_exact(&name)?;
+        Ok(generated.map_recipe(|recipe| with_compat_alias(recipe, pin, &alias, &distro)))
+    }
+
+    /// Outputs refer to each other through the manifest: a directory with
+    /// only a package.xml is not discoverable, so point at the file itself.
+    fn self_source_path(&self, manifest_path: &Path) -> String {
+        match manifest_path.file_name().and_then(|name| name.to_str()) {
+            Some("package.xml") => "package.xml".to_string(),
+            _ => ".".to_string(),
+        }
+    }
 
     fn extract_input_globs_from_build(
         &self,
@@ -399,6 +449,82 @@ impl GenerateRecipe for RosGenerator {
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
+}
+
+/// The distribution from the config, or else from a `robostack-<distro>`
+/// channel.
+fn resolve_distro(config: &RosBackendConfig, channels: &[ChannelUrl]) -> miette::Result<Distro> {
+    let distro_name = config
+        .distro
+        .clone()
+        .or_else(|| extract_distro_from_channels_list(channels))
+        .ok_or_else(|| {
+            miette::miette!(
+                "ROS distro must be either explicitly configured or \
+                 auto-detected from robostack channels. \
+                 A 'robostack-<distro>' channel (e.g. 'robostack-kilted') was not \
+                 found in the provided channels."
+            )
+        })?;
+    Ok(Distro::new(distro_name))
+}
+
+/// Turns the recipe of a ROS 2 package into a multi-output recipe that also
+/// builds RoboStack's compatibility alias `alias` (`ros-<distro>-<name>`): an
+/// empty package that depends on exactly this build of the package (`pin`)
+/// and on the distro mutex, as RoboStack publishes it.
+fn with_compat_alias(
+    recipe: SingleOutputRecipe,
+    pin: Item<SerializableMatchSpec>,
+    alias: &str,
+    distro: &Distro,
+) -> Recipe {
+    let output = |name, requirements, build| {
+        Output::Package(Box::new(PackageOutput {
+            package: PackageMetadata {
+                name,
+                version: None,
+            },
+            inherit: Inherit::TopLevel,
+            source: ConditionalList::default(),
+            requirements,
+            build,
+            about: About::default(),
+            tests: ConditionalList::default(),
+        }))
+    };
+    let alias_output = output(
+        Value::new_concrete(PackageName::new_unchecked(alias).into(), None),
+        Requirements {
+            run: ConditionalList::new(vec![
+                pin,
+                Item::Value(Value::new_concrete(
+                    SerializableMatchSpec::from(distro.mutex_spec().as_str()),
+                    None,
+                )),
+            ]),
+            ..Requirements::default()
+        },
+        Build::default(),
+    );
+
+    Recipe::MultiOutput(Box::new(MultiOutputRecipe {
+        schema_version: recipe.schema_version,
+        context: recipe.context,
+        recipe: RecipeMetadata {
+            name: None,
+            version: Some(recipe.package.version),
+        },
+        source: recipe.source,
+        build: Build::default(),
+        about: recipe.about,
+        extra: recipe.extra,
+        tests: ConditionalList::default(),
+        outputs: vec![
+            output(recipe.package.name, recipe.requirements, recipe.build),
+            alias_output,
+        ],
+    }))
 }
 
 /// `cross-python` for the target platform, only when cross-compiling.
@@ -592,7 +718,7 @@ mod tests {
 
         let generator = RosGenerator::default();
         let generated_recipe = generator
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 temp_path.to_path_buf(),
@@ -705,6 +831,72 @@ mod tests {
         "#);
     }
 
+    /// ROS 2 packages also build RoboStack's `ros-<distro>-<name>` alias, an
+    /// empty package pinning the `ros2-<name>` build and the distro.
+    #[tokio::test]
+    async fn test_generate_recipe_builds_compat_alias() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs::copy(
+            package_xmls_dir().join("demo_nodes_cpp.xml"),
+            temp_dir.path().join("package.xml"),
+        )
+        .unwrap();
+        let model = project_fixture!({ "targets": { "defaultTarget": {} } });
+        let generate = |distro: &str| {
+            let config = RosBackendConfig {
+                distro: Some(distro.to_string()),
+                ..Default::default()
+            };
+            let model = model.clone();
+            let path = temp_dir.path().to_path_buf();
+            async move {
+                RosGenerator::default()
+                    .generate_recipe(
+                        &model,
+                        &config,
+                        path,
+                        Subdir::Linux64,
+                        None,
+                        &HashSet::new(),
+                        vec![],
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    .await
+                    .unwrap()
+                    .recipe
+            }
+        };
+
+        let Recipe::MultiOutput(recipe) = generate("humble").await else {
+            panic!("expected a multi-output recipe for a ROS 2 distro");
+        };
+        let outputs: Vec<_> = recipe
+            .outputs
+            .iter()
+            .map(|output| match output {
+                Output::Package(output) => (
+                    output.package.name.as_concrete().unwrap().to_string(),
+                    output.requirements.run.clone(),
+                ),
+                Output::Staging(_) => panic!("unexpected staging output"),
+            })
+            .collect();
+        assert_eq!(outputs[0].0, "ros2-demo-nodes-cpp");
+        assert_eq!(outputs[1].0, "ros-humble-demo-nodes-cpp");
+        insta::assert_yaml_snapshot!(outputs[1].1, @r#"
+        - "${{ pin_subpackage(\"ros2-demo-nodes-cpp\", exact=True) }}"
+        - ros2-distro-mutex * humble_*
+        "#);
+
+        assert!(
+            matches!(generate("noetic").await, Recipe::SingleOutput(_)),
+            "ROS 1 packages already have RoboStack's ros-<distro>- name"
+        );
+    }
+
     /// Helper to generate a recipe from a package.xml fixture.
     async fn generate_recipe_for_fixture(
         package_xml_name: &str,
@@ -726,7 +918,7 @@ mod tests {
         };
 
         RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 model,
                 &config,
                 temp_path.to_path_buf(),
@@ -817,7 +1009,7 @@ mod tests {
         };
 
         RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 temp_path.to_path_buf(),
@@ -1043,7 +1235,7 @@ mod tests {
         };
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 dest.clone(),
@@ -1080,7 +1272,7 @@ mod tests {
         let config = RosBackendConfig::default();
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 temp_path.to_path_buf(),
@@ -1128,7 +1320,7 @@ mod tests {
         };
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 temp_path.to_path_buf(),
@@ -1173,7 +1365,7 @@ mod tests {
         let config = RosBackendConfig::default();
 
         let result = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 temp_path.to_path_buf(),
@@ -1214,7 +1406,7 @@ mod tests {
         let config = RosBackendConfig::default();
 
         let result = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 temp_path.to_path_buf(),
@@ -1513,7 +1705,7 @@ mod tests {
         };
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 pkg_a_manifest.clone(),
@@ -1559,7 +1751,7 @@ mod tests {
         };
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
@@ -1608,7 +1800,7 @@ mod tests {
         };
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
@@ -1654,7 +1846,7 @@ mod tests {
         };
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 workspace_root.join("src").join("pkg_a"),
@@ -1717,7 +1909,7 @@ mod tests {
         };
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
@@ -1754,7 +1946,7 @@ mod tests {
         };
 
         let generated = RosGenerator::default()
-            .generate_recipe(
+            .generate_package_recipe(
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),

@@ -72,8 +72,9 @@ ros2-my-ros-package = { path = "." }
 Note that you need to specify the `ros2-` prefix (`ros-<distro>-` for ROS 1) when you use a distro configuration.
 
 !!! note "Migrating from `ros-<distro>-` names"
-    Earlier versions of the backend named ROS 2 packages `ros-<distro>-<name>`, as RoboStack's compatibility aliases are named.
-    Rename such entries in your `pixi.toml`, e.g. `ros-jazzy-my-ros-package` becomes `ros2-my-ros-package`.
+    Earlier versions of the backend named ROS 2 packages `ros-<distro>-<name>`.
+    Like RoboStack, the backend still builds a `ros-<distro>-<name>` compatibility package next to `ros2-<name>`, which only depends on it, so such entries in your `pixi.toml` keep working.
+    New entries should use `ros2-<name>`, e.g. `ros2-my-ros-package` instead of `ros-jazzy-my-ros-package`.
     RoboStack builds its ROS 2 packages for macOS 14 or newer, so on macOS add `[system-requirements]` with `macos = "14.0"` to your workspace.
 
 

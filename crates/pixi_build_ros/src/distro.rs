@@ -96,6 +96,18 @@ impl Distro {
         format!("{}-{}", self.package_prefix(), ros_name.replace('_', "-"))
     }
 
+    /// The name of the compatibility alias RoboStack publishes next to the ROS 2
+    /// package `conda_name`: `ros2-<name>` has the alias `ros-<distro>-<name>`.
+    /// ROS 1 packages, and packages named otherwise, have none.
+    pub fn compat_alias(&self, conda_name: &str) -> Option<String> {
+        match self.version {
+            RosVersion::Ros1 => None,
+            RosVersion::Ros2 => conda_name
+                .strip_prefix("ros2-")
+                .map(|name| format!("ros-{}-{name}", self.name)),
+        }
+    }
+
     /// The distro mutex pinned to this distribution: RoboStack builds the mutex
     /// of a distribution with the build string `<distribution>_<build number>`.
     pub fn mutex_spec(&self) -> String {
@@ -166,6 +178,17 @@ mod tests {
             Distro::new("noetic").conda_name("roscpp"),
             "ros-noetic-roscpp"
         );
+        assert_eq!(
+            Distro::new("humble")
+                .compat_alias("ros2-demo-nodes-cpp")
+                .as_deref(),
+            Some("ros-humble-demo-nodes-cpp")
+        );
+        assert_eq!(
+            Distro::new("noetic").compat_alias("ros-noetic-roscpp"),
+            None
+        );
+        assert_eq!(Distro::new("jazzy").compat_alias("my-package"), None);
         assert_eq!(
             Distro::new("jazzy").mutex_spec(),
             "ros2-distro-mutex * jazzy_*"
