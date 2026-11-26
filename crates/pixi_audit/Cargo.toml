@@ -1,0 +1,32 @@
+[package]
+name = "pixi_audit"
+description = "Vulnerability auditing of locked packages against Basilisk and OSV"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+cvss = { workspace = true }
+futures = { workspace = true }
+osv_client = { workspace = true }
+osv_protocol = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_lock = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+reqwest-middleware = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+threat_feeds = { workspace = true }
+url = { workspace = true }
+uv-normalize = { workspace = true }
+uv-pep440 = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true, features = ["http1", "tokio", "json"] }
+pixi_audit_test_support = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
