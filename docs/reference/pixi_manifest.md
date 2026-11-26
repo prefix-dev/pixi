@@ -1052,11 +1052,10 @@ environment's PyPI dependencies; otherwise it is ignored.
 
 ```toml
 [pypi-dependencies]
-# urllib3 is pulled in transitively; this constraint
-# ensures we never end up with a vulnerable release.
 requests = ">=2.32"
 
 [pypi-constraints]
+# Keep the transitive urllib3 dependency of requests off vulnerable releases
 urllib3 = ">=2.2.2"
 ```
 
@@ -1074,10 +1073,14 @@ supported. Use [`pypi-dependencies`](#pypi-dependencies) to choose where a packa
 PyPI constraints can be made platform-specific with the [`[target]`](#the-target-table) table and
 scoped to a [feature](#the-feature-table), with the same merging rules as [`constraints`](#constraints).
 
-!!! note
-    PyPI constraints don't apply to conda packages, even if they provide the same Python package.
-    If a conda package violates a PyPI constraint, the PyPI solve fails.
-    Use [`constraints`](#constraints) to restrict conda packages.
+PyPI constraints also apply when a Python dependency is supplied by conda. They do not
+unlock conda packages: a conflicting provider fails the PyPI solve. Use
+[`constraints`](#constraints) to change the conda provider's version.
+
+Local and editable dependencies must satisfy the same version bounds. Pixi re-checks an
+existing lock against the constraints only if it can read the source version statically.
+If the version is dynamic, for example with `hatch-vcs`, pixi trusts the version the
+solve chose. Run `pixi update <package>` after changing a constraint on such a package.
 
 !!! tip "One-off PyPI constraints"
     To apply a PyPI constraint for a single lock operation without editing the manifest, use
@@ -1085,10 +1088,9 @@ scoped to a [feature](#the-feature-table), with the same merging rules as [`cons
     `pixi lock --with-pypi-constraint 'urllib3>=2.2.2'`.
 
 !!! tip "PyPI constraints vs dependency overrides"
-    [`pypi-options.dependency-overrides`](../advanced/override.md) replace the requirements of all
-    packages on the overridden package, so they can force a version that a package's metadata
-    excludes. PyPI constraints add an extra bound instead, so the solve fails if they cannot be
-    satisfied together with the other requirements.
+    PyPI constraints add an extra bound, so the solve fails if they conflict with other
+    requirements. To replace a requirement instead, use
+    [`pypi-options.dependency-overrides`](../advanced/override.md).
 
 ### `pypi-dependencies`
 

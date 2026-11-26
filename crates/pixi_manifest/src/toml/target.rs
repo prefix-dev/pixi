@@ -236,13 +236,6 @@ impl TomlTarget {
     }
 }
 
-/// Validates the `[pypi-constraints]` table and converts it into a
-/// [`PyPiConstraints`] map.
-///
-/// A constraint only restricts which versions of a package are acceptable, so
-/// it has to be a plain version requirement, optionally with environment
-/// markers. Extras, indexes and git, path or url sources would change what is
-/// installed rather than restrict it, so they are rejected.
 fn into_pypi_constraints(
     table: PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>,
 ) -> Result<PyPiConstraints, TomlError> {

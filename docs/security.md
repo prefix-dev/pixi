@@ -108,6 +108,7 @@ When an advisory lands, update to the fixed version first. If the fix is fresh, 
 
 To rule out the vulnerable releases of a transitive dependency without adding it as a dependency, add a lower bound to [`[constraints]`](reference/pixi_manifest.md#constraints) for conda packages or to [`[pypi-constraints]`](reference/pixi_manifest.md#pypi-constraints) for PyPI packages, e.g. `urllib3 = ">=2.2.2"`.
 Unlike overrides, constraints never relax other requirements, so the solve fails instead of silently picking an incompatible version.
+A platform-specific constraint for the same package in the same feature replaces the generic one, so repeat the lower bound there, e.g. `[target.linux-64.pypi-constraints] urllib3 = ">=2.2.2,<3"`.
 
 This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, `exclude-newer` exemptions, and overrides help you respond once a vulnerable version is already known.
 

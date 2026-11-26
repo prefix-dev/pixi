@@ -599,8 +599,6 @@ pub async fn resolve_pypi(
         .transpose()?
         .unwrap_or_default();
 
-    // The `[pypi-constraints]` of the environment restrict the versions of
-    // PyPI packages without requiring them.
     let pypi_constraints = pypi_constraints
         .iter_specs()
         .map(|(name, spec)| {

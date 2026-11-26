@@ -346,18 +346,8 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         )
     }
 
-    /// Returns the combined PyPI version constraints for this collection.
-    ///
-    /// Constraints from all features are combined. If multiple features define
-    /// a constraint for the same package, all constraints are retained and the
-    /// solver must satisfy all of them simultaneously.
-    ///
-    /// If the `platform` is `None`, no platform specific constraints are taken
-    /// into consideration.
-    ///
-    /// Constraints injected at runtime through
-    /// [`crate::WorkspaceManifest::extra_pypi_constraints`] are always
-    /// included.
+    /// Intersects constraints across features and includes runtime constraints
+    /// even in environments without the default feature.
     fn combined_pypi_constraints<'a>(
         &'a self,
         platform: Option<&'a PixiPlatform>,

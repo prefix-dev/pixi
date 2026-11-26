@@ -21,14 +21,15 @@ use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
     platform::VirtualPackageRecords,
 };
-use pixi_pypi_spec::PypiPackageName;
+use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
 use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    as_uv_req, pep508_requirement_to_uv_requirement, to_normalize, to_uv_specifiers, to_uv_version,
+    as_uv_req, pep508_requirement_to_uv_requirement, to_normalize, to_uv_marker_tree,
+    to_uv_normalize, to_uv_specifiers, to_uv_version,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
@@ -609,52 +610,35 @@ async fn resolve_single_dev_dependency(
     Ok(dependencies)
 }
 
-/// Verifies that the locked pypi packages satisfy the `[pypi-constraints]` of
-/// the environment.
-///
-/// Constraints whose markers do not apply to the platform are skipped, and so
-/// are packages locked from a local source tree: their version may be
-/// dynamic, and they are controlled by their path rather than by a version
-/// constraint.
-fn verify_pypi_constraints(
+fn verify_pypi_constraints<'a>(
     ctx: &VerifySatisfiabilityContext<'_>,
     pixi_platform: Option<&PixiPlatform>,
     marker_environment: Option<&uv_pep508::MarkerEnvironment>,
-    locked_pypi_records: &LockedPypiRecordsByName,
+    version_by_name: impl Fn(
+        &PypiPackageName,
+    ) -> Result<Option<&'a pep440_rs::Version>, Box<PlatformUnsat>>,
 ) -> Result<(), Box<PlatformUnsat>> {
-    for (name, spec) in ctx
-        .environment
-        .combined_pypi_constraints(pixi_platform)
-        .iter_specs()
-    {
-        let constraint = as_uv_req(spec, name.as_source(), ctx.project_root).map_err(|e| {
-            Box::new(PlatformUnsat::AsPep508Error(
-                name.as_normalized().clone(),
-                e,
-            ))
-        })?;
-        if !constraint.evaluate_markers(marker_environment, &[]) {
-            continue;
-        }
-        let RequirementSource::Registry { specifier, .. } = &constraint.source else {
+    let constraints = match ctx.environment.solve_group() {
+        Some(group) => group.combined_pypi_constraints(pixi_platform),
+        None => ctx.environment.combined_pypi_constraints(pixi_platform),
+    };
+    for (name, spec) in constraints.iter_specs() {
+        let Some(VersionOrStar::Version(specifier)) = spec.source.as_version() else {
             continue;
         };
-        let Some(idx) = locked_pypi_records.index_by_name(name.as_normalized()) else {
-            continue;
-        };
-        let record = &locked_pypi_records.records[idx];
-        if record.data.as_source().is_some()
-            && matches!(&**record.data.location(), UrlOrPath::Path(_))
+        if !to_uv_marker_tree(&spec.env_markers)
+            .map_err(|err| PlatformUnsat::from(ConversionError::from(err)))?
+            .evaluate_optional_environment(marker_environment, &[])
         {
             continue;
         }
-        let locked_version = record.locked_version.to_string();
-        let version =
-            uv_pep440::Version::from_str(&locked_version).expect("could not parse version");
-        if !specifier.contains(&version) {
+        let Some(version) = version_by_name(name)? else {
+            continue;
+        };
+        if !specifier.contains(version) {
             return Err(Box::new(PlatformUnsat::PypiConstraintViolated {
                 package: name.as_source().to_string(),
-                locked_version,
+                locked_version: version.to_string(),
                 constraint: specifier.to_string(),
             }));
         }
@@ -875,16 +859,6 @@ async fn verify_package_platform_satisfiability(
     );
     let (resolved_dev_dependencies, locked_pypi_records) =
         futures::try_join!(resolve_dev_dependencies_future, lock_pypi_packages_future)?;
-
-    // Check that all locked pypi packages satisfy the current pypi constraints.
-    // If a constraint is violated, the lock file needs to be re-solved.
-    verify_pypi_constraints(
-        ctx,
-        pixi_platform,
-        marker_environment.as_ref(),
-        &locked_pypi_records,
-    )
-    .map_err(CommandDispatcherError::Failed)?;
 
     if (environment_dependencies.is_empty() && resolved_dev_dependencies.is_empty())
         && !locked_pixi_records.is_empty()
@@ -1396,6 +1370,35 @@ async fn verify_package_platform_satisfiability(
             ),
         )));
     }
+
+    verify_pypi_constraints(ctx, pixi_platform, marker_environment.as_ref(), |name| {
+        if let Some(record) = locked_pypi_records.by_name(name.as_normalized()) {
+            if record.data.version().is_none() {
+                let known = match &**record.data.location() {
+                    UrlOrPath::Path(path) => {
+                        let path = ctx.project_root.join(path.as_str());
+                        ctx.static_metadata_cache
+                            .get(&path)
+                            .is_some_and(|metadata| metadata.version.is_some())
+                    }
+                    UrlOrPath::Url(_) => false,
+                };
+                // The solve enforced the constraint, and a dynamic version
+                // cannot be re-checked without building the package.
+                if !known {
+                    return Ok(None);
+                }
+            }
+            return Ok(Some(&record.locked_version));
+        }
+        let uv_name = to_uv_normalize(name.as_normalized())
+            .map_err(|err| PlatformUnsat::from(ConversionError::from(err)))?;
+        Ok(locked_conda_pypi_packages
+            .get(&uv_name)
+            .filter(|(_, _, record)| conda_packages_used_by_pypi.contains(record.name()))
+            .map(|(identifier, _, _)| &identifier.version))
+    })
+    .map_err(CommandDispatcherError::Failed)?;
 
     // Note: Editability is NOT checked here. The lock file always stores
     // editable=false (which is omitted from serialization). Editability is

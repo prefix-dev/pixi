@@ -66,11 +66,8 @@ pub struct WorkspaceManifest {
     /// `no-default-feature = true`. Never written to the manifest.
     pub extra_constraints: CondaConstraints,
 
-    /// Additional PyPI constraints that are injected for a single invocation,
-    /// e.g. through `pixi lock --with-pypi-constraint`. Like
-    /// [`Self::extra_constraints`], they behave like entries in the workspace
-    /// `[pypi-constraints]` table that apply to every environment and are
-    /// never written back to the manifest.
+    /// In-memory PyPI constraints for all environments, including those with
+    /// `no-default-feature = true`. Never written to the manifest.
     pub extra_pypi_constraints: PyPiConstraints,
 }
 
