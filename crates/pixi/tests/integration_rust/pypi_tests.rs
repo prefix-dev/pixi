@@ -3510,3 +3510,57 @@ async fn test_pypi_constraint_local_source_versions() {
         );
     }
 }
+
+/// Several environments and platforms resolve the same Git source, one of
+/// them only through a platform-specific dependency. This is the shape of a
+/// reported distribution-cache lock timeout while solving a Git dependency:
+/// source dependencies limit PyPI solves to one at a time, and that limit
+/// must cover each resolution and detect platform-specific sources.
+#[tokio::test]
+async fn git_source_shared_across_environments_and_platforms() {
+    setup_tracing();
+    let platforms = [Subdir::Linux64, Subdir::OsxArm64, Subdir::Win64];
+    let mut packages = MockRepoData::default();
+    for platform in platforms {
+        packages.add_package(
+            Package::build("python", "3.12.0")
+                .with_subdir(platform)
+                .finish(),
+        );
+    }
+    let channel = packages.into_channel().await.unwrap();
+    let fixture = pixi_test_utils::GitRepoFixture::new("minimal-pypi-package");
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        channels = ["{channel}"]
+        platforms = ["linux-64", "osx-arm64", "win-64"]
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [feature.docs.target.osx-arm64.pypi-dependencies]
+        minimal-package = {{ git = "{git}" }}
+
+        [feature.other.pypi-dependencies]
+        minimal-package = {{ git = "{git}" }}
+
+        [environments]
+        docs = ["docs"]
+        other = ["other"]
+        "#,
+        channel = channel.url(),
+        git = fixture.url,
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pypi_package("docs", Subdir::OsxArm64, "minimal-package"));
+    assert!(!lock.contains_pypi_package("docs", Subdir::Linux64, "minimal-package"));
+    for platform in platforms {
+        assert!(lock.contains_pypi_package("other", platform, "minimal-package"));
+    }
+}

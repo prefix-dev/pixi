@@ -2070,23 +2070,67 @@ impl<'p> UpdateContext<'p> {
     }
 }
 
-/// If the project has any source dependencies, like `git` or `path`
-/// dependencies. for pypi dependencies, we need to limit the solve to 1,
-/// because of uv internals
+/// Limits concurrent PyPI solves to one when any environment has a PyPI source
+/// dependency (`git`, `path`, ...), because uv's shared build state does not
+/// support concurrent source builds.
 fn determine_pypi_solve_permits(project: &Workspace) -> usize {
-    // Get all environments
-    let environments = project.environments();
-    for environment in environments {
-        for (_, req) in environment.pypi_dependencies(None).iter() {
-            for dep in req {
-                if dep.is_source_dependency() {
-                    return 1;
-                }
-            }
+    if has_pypi_source_dependencies(project) {
+        1
+    } else {
+        project.config().max_concurrent_solves()
+    }
+}
+
+/// Whether any environment declares a PyPI source dependency, including ones
+/// declared only for specific platforms.
+fn has_pypi_source_dependencies(project: &Workspace) -> bool {
+    let workspace = &project.workspace_manifest().workspace;
+    project.environments().iter().any(|environment| {
+        let platforms = environment
+            .platforms()
+            .into_iter()
+            .filter_map(|name| workspace.platform_by_name(&name).cloned())
+            .collect_vec();
+        std::iter::once(None)
+            .chain(platforms.iter().map(Some))
+            .any(|platform| {
+                environment
+                    .pypi_dependencies(platform)
+                    .iter()
+                    .flat_map(|(_, requirements)| requirements)
+                    .any(|requirement| requirement.is_source_dependency())
+            })
+    })
+}
+
+/// Waits for the conda records a PyPI solve needs together with a solve permit.
+///
+/// The returned permit must be held for the whole resolution, so that the
+/// limit from [`determine_pypi_solve_permits`] applies to the solve itself.
+async fn wait_for_pypi_solve_inputs<S, B, E>(
+    solve_records: impl Future<Output = S>,
+    building_records: Result<impl Future<Output = B>, E>,
+    semaphore: Arc<Semaphore>,
+) -> (S, Result<B, E>, tokio::sync::OwnedSemaphorePermit) {
+    match building_records {
+        Ok(building_records) => {
+            let (solve_records, building_records, permit) =
+                tokio::join!(solve_records, building_records, semaphore.acquire_owned());
+            (
+                solve_records,
+                Ok(building_records),
+                permit.expect("the pypi solve semaphore is never closed"),
+            )
+        }
+        Err(err) => {
+            let (solve_records, permit) = tokio::join!(solve_records, semaphore.acquire_owned());
+            (
+                solve_records,
+                Err(err),
+                permit.expect("the pypi solve semaphore is never closed"),
+            )
         }
     }
-    // If no source dependencies are found, we can use the default concurrency
-    project.config().max_concurrent_solves()
 }
 
 pub struct UpdateContextBuilder<'p> {
@@ -3734,22 +3778,14 @@ async fn spawn_solve_pypi_task<'p>(
 
     let exclude_newer = to_exclude_newer(&grouped_environment.pypi_exclude_newer_config_resolved());
 
-    // Wait until the conda records and prefix are available.
-    let (repodata_records, repodata_building_records) = match repodata_building_records {
-        Ok(repodata_building_records) => {
-            let (repodata_records, repodata_building_records, _guard) = tokio::join!(
-                repodata_solve_records,
-                repodata_building_records,
-                semaphore.acquire_owned()
-            );
-            (repodata_records, Ok(repodata_building_records))
-        }
-        Err(err) => {
-            let (repodata_records, _guard) =
-                tokio::join!(repodata_solve_records, semaphore.acquire_owned());
-            (repodata_records, Err(err.into()))
-        }
-    };
+    // Wait until the conda records and prefix are available. The permit is
+    // held until this function returns, so it covers the resolution below.
+    let (repodata_records, repodata_building_records, _solve_permit) = wait_for_pypi_solve_inputs(
+        repodata_solve_records,
+        repodata_building_records.map_err(|err| Box::new(err) as Box<dyn Diagnostic + Send + Sync>),
+        semaphore,
+    )
+    .await;
 
     let environment_name = grouped_environment.name().clone();
     let solve_strategy = grouped_environment.solve_strategy();
@@ -3946,6 +3982,56 @@ mod tests {
         assert!(err.diagnostic_source().is_none());
         let help = err.help().expect("help is forwarded").to_string();
         assert!(help.contains("CONDA_OVERRIDE_OSX"), "{help}");
+    }
+
+    #[tokio::test]
+    async fn pypi_solve_permit_outlives_waiting_for_inputs() {
+        let semaphore = Arc::new(Semaphore::new(1));
+        for building in [Ok(async {}), Err(())] {
+            let (_, _, permit) =
+                wait_for_pypi_solve_inputs(async {}, building, semaphore.clone()).await;
+            assert_eq!(semaphore.available_permits(), 0);
+            drop(permit);
+            assert_eq!(semaphore.available_permits(), 1);
+        }
+    }
+
+    #[test]
+    fn platform_specific_pypi_source_dependencies_limit_concurrency() {
+        let manifest = |dependencies: &str| {
+            format!(
+                r#"
+                [workspace]
+                channels = []
+                platforms = ["linux-64", "osx-64"]
+                {dependencies}
+                "#
+            )
+        };
+        for (dependencies, expected) in [
+            ("[pypi-dependencies]\nfoo = \">=1\"", false),
+            (
+                "[pypi-dependencies]\nfoo = { git = \"https://example.com/foo\" }",
+                true,
+            ),
+            (
+                "[target.osx-64.pypi-dependencies]\nfoo = { git = \"https://example.com/foo\" }",
+                true,
+            ),
+            (
+                "[feature.docs.target.osx-64.pypi-dependencies]\nfoo = { path = \"./foo\" }\n[environments]\ndocs = [\"docs\"]",
+                true,
+            ),
+        ] {
+            let workspace =
+                Workspace::from_str(std::path::Path::new("pixi.toml"), &manifest(dependencies))
+                    .unwrap();
+            assert_eq!(
+                has_pypi_source_dependencies(&workspace),
+                expected,
+                "{dependencies}"
+            );
+        }
     }
 
     #[test]
