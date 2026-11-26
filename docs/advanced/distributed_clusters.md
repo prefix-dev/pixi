@@ -64,6 +64,6 @@ Pixi/rattler will ensure that concurrent writes to all configured locations will
 
 ## Caveat: global installs become machine-local
 
-An important caveat with above setup is that any installs via `pixi global` are machine-local.
+An important caveat with both versions of above setup is that any installs via `pixi global` are machine-local.
 In other words, users will have to repeat them on each machine before using the respective tools.
 In contrast, any pixi workspaces within the distributed filesystem will transparently self-deploy to the respective machine-local folders when used with `pixi run` or `pixi shell`.
