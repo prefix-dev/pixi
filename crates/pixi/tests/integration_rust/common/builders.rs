@@ -688,6 +688,13 @@ impl LockBuilder {
         );
         self
     }
+    pub fn with_pypi_constraint(mut self, constraint: impl AsRef<str>) -> Self {
+        self.args
+            .constraint_args
+            .pypi_constraints
+            .push(constraint.as_ref().parse().unwrap());
+        self
+    }
 }
 
 impl IntoFuture for LockBuilder {

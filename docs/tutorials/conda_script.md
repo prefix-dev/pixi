@@ -195,7 +195,7 @@ Pixi reads `[tool.pixi]` the same way as in a `pyproject.toml`, restricted to wh
 
 - `[tool.pixi.dependencies]` holds conda specs in pixi's native syntax, including [source dependencies](../build/dependency_types.md), which need the `pixi-build` preview declared under `[tool.pixi.workspace]`.
 - `[tool.pixi.pypi-dependencies]` holds PyPI packages.
-- `[tool.pixi.constraints]`, `[tool.pixi.activation]` and `[tool.pixi.target.<platform>]` hold constraints, activation settings and platform-specific dependencies.
+- `[tool.pixi.constraints]`, `[tool.pixi.pypi-constraints]`, `[tool.pixi.activation]` and `[tool.pixi.target.<platform>]` hold constraints, activation settings and platform-specific dependencies.
 - `[tool.pixi.workspace]` holds resolver options: `platforms`, `channel-priority`, `solve-strategy`, `exclude-newer`, `pypi-exclude-newer`, `conda-pypi-map`, `pypi-options`, `preview` and `requires-pixi`.
   Channels stay in the block's `channels`, so `tool.pixi.workspace.channels` is rejected.
 

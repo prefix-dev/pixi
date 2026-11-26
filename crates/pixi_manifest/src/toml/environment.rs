@@ -47,6 +47,7 @@ pub struct TomlEnvironmentInline {
     pub dev_dependencies:
         Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
     pub constraints: Option<PixiSpanned<InheritablePackageMap>>,
+    pub pypi_constraints: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
     pub activation: Option<Activation>,
     pub tasks: HashMap<TaskName, Task>,
     pub pypi_options: Option<PypiOptions>,
@@ -67,6 +68,7 @@ impl TomlEnvironmentInline {
             pypi_dependencies,
             dev_dependencies,
             constraints,
+            pypi_constraints,
             activation,
             tasks,
             pypi_options,
@@ -81,6 +83,7 @@ impl TomlEnvironmentInline {
             && pypi_dependencies.is_none()
             && dev_dependencies.is_none()
             && constraints.is_none()
+            && pypi_constraints.is_none()
             && activation.is_none()
             && tasks.is_empty()
             && pypi_options.is_none()
@@ -106,6 +109,7 @@ impl TomlEnvironmentInline {
             pypi_dependencies,
             dev_dependencies,
             constraints,
+            pypi_constraints,
             activation,
             tasks,
             pypi_options,
@@ -124,6 +128,7 @@ impl TomlEnvironmentInline {
             pypi_dependencies,
             dev: dev_dependencies,
             constraints,
+            pypi_constraints,
             activation,
             tasks,
             pypi_options,
@@ -180,6 +185,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
             .optional::<TomlIndexMap<_, _>>("dev")
             .map(TomlIndexMap::into_inner);
         let constraints = th.optional("constraints");
+        let pypi_constraints = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-constraints")
+            .map(TomlWith::into_inner);
         let activation = th.optional("activation");
         let tasks = th
             .optional::<TomlHashMap<_, TomlTask>>("tasks")
@@ -209,6 +217,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
             pypi_dependencies,
             dev_dependencies,
             constraints,
+            pypi_constraints,
             activation,
             tasks,
             pypi_options,

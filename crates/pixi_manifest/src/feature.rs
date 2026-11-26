@@ -1,7 +1,7 @@
 use crate::{
-    CondaConstraints, EnvironmentName, SpecType, WorkspaceTarget, channel::PrioritizedChannel,
-    consts, pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
-    workspace::SolveStrategy,
+    CondaConstraints, EnvironmentName, PyPiConstraints, SpecType, WorkspaceTarget,
+    channel::PrioritizedChannel, consts, pypi::pypi_options::PypiOptions, target::Targets,
+    workspace::ChannelPriority, workspace::SolveStrategy,
 };
 use crate::{InlinePackageManifest, PixiPlatform, PixiPlatformName};
 use indexmap::{IndexMap, IndexSet};
@@ -541,6 +541,24 @@ impl Feature {
                     // More specific targets (processed later) overwrite less specific ones
                     Some(Cow::Owned(acc.as_ref().overwrite(constraints)))
                 }
+            })
+    }
+
+    /// Returns PyPI constraints, with platform-specific entries overriding generic ones.
+    /// `None` selects only the generic target.
+    pub fn pypi_constraints<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> Option<Cow<'a, PyPiConstraints>> {
+        self.targets
+            .resolve(platform)
+            // Apply more specific targets last.
+            .rev()
+            .filter_map(|t| t.pypi_constraints.as_ref())
+            .filter(|constraints| !constraints.is_empty())
+            .fold(None, |acc, constraints| match acc {
+                None => Some(Cow::Borrowed(constraints)),
+                Some(acc) => Some(Cow::Owned(acc.as_ref().overwrite(constraints))),
             })
     }
 }

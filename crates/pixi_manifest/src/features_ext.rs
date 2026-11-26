@@ -11,7 +11,7 @@ use rattler_conda_types::{
 
 use crate::{
     CondaConstraints, CondaDependencies, Feature, PixiPlatform, PixiPlatformName,
-    PrioritizedChannel, PyPiDependencies, SpecType,
+    PrioritizedChannel, PyPiConstraints, PyPiDependencies, SpecType,
     dependencies::CondaDevDependencies,
     exclude_newer::{ExcludeNewerError, resolve_exclude_newer, resolve_pypi_exclude_newer},
     has_features_iter::HasFeaturesIter,
@@ -342,6 +342,27 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
                 .map(|d| d.as_ref())
                 .chain(std::iter::once(
                     &self.workspace_manifest().extra_constraints,
+                )),
+        )
+    }
+
+    /// Intersects constraints across features and includes runtime constraints
+    /// even in environments without the default feature.
+    fn combined_pypi_constraints<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
+    ) -> PyPiConstraints {
+        let constraints: Vec<_> = self
+            .features()
+            .filter(|f| self.feature_supports_platform(f, platform))
+            .filter_map(|f| f.pypi_constraints(platform))
+            .collect();
+        DependencyMap::merge_all(
+            constraints
+                .iter()
+                .map(|d| d.as_ref())
+                .chain(std::iter::once(
+                    &self.workspace_manifest().extra_pypi_constraints,
                 )),
         )
     }

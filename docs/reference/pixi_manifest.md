@@ -1042,6 +1042,56 @@ environment must satisfy all of them simultaneously.
 
 The above example will produce an environment with `mkdocs` and `python` installed, but the solver will make sure that the Python version is at least 3.14.0 and that `click` is not version 8.1.7.
 
+### `pypi-constraints`
+
+The `pypi-constraints` table is the PyPI counterpart of [`constraints`](#constraints).
+It restricts the versions of PyPI packages that *may* be installed without explicitly requiring them,
+and is passed to uv as [constraints](https://docs.astral.sh/uv/reference/settings/#constraint-dependencies).
+Like conda constraints, a PyPI constraint is only enforced when the package is part of the
+environment's PyPI dependencies; otherwise it is ignored.
+
+```toml
+[pypi-dependencies]
+requests = ">=2.32"
+
+[pypi-constraints]
+# Keep the transitive urllib3 dependency of requests off vulnerable releases
+urllib3 = ">=2.2.2"
+```
+
+A constraint is a [PEP 440](https://peps.python.org/pep-0440/) version specifier, optionally with
+[environment markers](https://peps.python.org/pep-0508/#environment-markers) that decide whether it applies:
+
+```toml
+[pypi-constraints]
+numpy = { version = "<2", env-markers = "python_version < '3.10'" }
+```
+
+Constraints only restrict versions, so extras, `index` and `git`, `path` or `url` sources are not
+supported. Use [`pypi-dependencies`](#pypi-dependencies) to choose where a package comes from.
+
+PyPI constraints can be made platform-specific with the [`[target]`](#the-target-table) table and
+scoped to a [feature](#the-feature-table), with the same merging rules as [`constraints`](#constraints).
+
+PyPI constraints also apply when a Python dependency is supplied by conda. They do not
+unlock conda packages: a conflicting provider fails the PyPI solve. Use
+[`constraints`](#constraints) to change the conda provider's version.
+
+Local and editable dependencies must satisfy the same version bounds. Pixi re-checks an
+existing lock against the constraints only if it can read the source version statically.
+If the version is dynamic, for example with `hatch-vcs`, pixi trusts the version the
+solve chose. Run `pixi update <package>` after changing a constraint on such a package.
+
+!!! tip "One-off PyPI constraints"
+    To apply a PyPI constraint for a single lock operation without editing the manifest, use
+    [`pixi lock --with-pypi-constraint`](cli/pixi/lock.md#arg---with-pypi-constraint), e.g.
+    `pixi lock --with-pypi-constraint 'urllib3>=2.2.2'`.
+
+!!! tip "PyPI constraints vs dependency overrides"
+    PyPI constraints add an extra bound, so the solve fails if they conflict with other
+    requirements. To replace a requirement instead, use
+    [`pypi-options.dependency-overrides`](../advanced/override.md).
+
 ### `pypi-dependencies`
 
 ??? info "Details regarding the PyPI integration"
