@@ -9,9 +9,11 @@
 #![deny(clippy::dbg_macro, clippy::unwrap_used)]
 
 use clap::builder::styling::{AnsiColor, Color, Style};
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::parser::ValueSource;
+use clap::{ArgMatches, CommandFactory, FromArgMatches, Parser, ValueEnum};
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
+use pixi_config::{UntrustedCodeExecOrigin, UntrustedCodeExecOverride};
 use pixi_consts::consts;
 use pixi_core::environment::LockFileUsage;
 use pixi_progress::global_multi_progress;
@@ -128,6 +130,23 @@ pub struct GlobalOptions {
     /// Hide all progress bars, always turned on if stderr is not a terminal.
     #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     no_progress: bool,
+
+    /// Disable untrusted code execution: pixi only runs code from packages
+    /// listed in `security.trusted-packages` and refuses to install
+    /// environments, build source packages, or run tasks and activation
+    /// scripts. Pass `--no-untrusted-code-exec=false` to override
+    /// `untrusted-code-exec = false` from the configuration.
+    #[clap(
+        long,
+        env = "PIXI_NO_UNTRUSTED_CODE_EXEC",
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        value_parser = clap::builder::BoolishValueParser::new(),
+        global = true,
+        help_heading = consts::CLAP_GLOBAL_OPTIONS
+    )]
+    no_untrusted_code_exec: Option<bool>,
 }
 
 impl Args {
@@ -157,6 +176,25 @@ impl Args {
 }
 
 impl GlobalOptions {
+    /// The `untrusted-code-exec` switch of this invocation, if the flag or
+    /// its environment variable was given. `matches` must be the matches the
+    /// options were parsed from: only they know whether the value came from
+    /// the command line or the environment.
+    fn untrusted_code_exec_override(
+        &self,
+        matches: &ArgMatches,
+    ) -> Option<UntrustedCodeExecOverride> {
+        let origin = match matches.value_source("no_untrusted_code_exec")? {
+            ValueSource::CommandLine => UntrustedCodeExecOrigin::Cli,
+            ValueSource::EnvVariable => UntrustedCodeExecOrigin::Env,
+            _ => return None,
+        };
+        Some(UntrustedCodeExecOverride {
+            untrusted_code_exec: !self.no_untrusted_code_exec?,
+            origin,
+        })
+    }
+
     /// How much of the reports of `pixi global` is shown. This rides along with
     /// the logging flags rather than having a knob of its own.
     fn report_verbosity(&self) -> pixi_global::report::Verbosity {
@@ -252,9 +290,24 @@ impl LockFileUsageConfig {
     }
 }
 
+/// Parses `argv` like [`Args::try_parse_from`], but also returns the
+/// [`ArgMatches`], which know where each value came from.
+fn parse_args_from<I, T>(argv: I) -> Result<(Args, ArgMatches), clap::Error>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString> + Clone,
+{
+    let matches = Args::command().try_get_matches_from(argv)?;
+    // Not `from_arg_matches_mut`: that moves the values out of `matches`,
+    // and their sources with them.
+    let args =
+        Args::from_arg_matches(&matches).map_err(|error| error.format(&mut Args::command()))?;
+    Ok((args, matches))
+}
+
 pub async fn execute() -> miette::Result<ExitCode> {
-    let args = match Args::try_parse() {
-        Ok(args) => args,
+    let (args, matches) = match parse_args_from(env::args_os()) {
+        Ok(parsed) => parsed,
         Err(error) => {
             set_console_colors(None);
             let exit_code = process_exit::exit_code_from_code(error.exit_code());
@@ -262,6 +315,14 @@ pub async fn execute() -> miette::Result<ExitCode> {
             return Ok(exit_code);
         }
     };
+
+    // Must stay before anything that loads a config: every `Config` applies
+    // this switch on top of its files, and a config loaded earlier would miss
+    // it.
+    if let Some(switch) = args.global_options.untrusted_code_exec_override(&matches) {
+        pixi_config::set_untrusted_code_exec_override(switch)
+            .expect("the untrusted-code-exec switch is stored once, here");
+    }
 
     let no_progress = args.no_progress();
     set_console_colors(Some(&args.global_options.color));
@@ -812,5 +873,116 @@ mod tests {
                 ));
             },
         );
+    }
+
+    /// The switch of this invocation, as `execute` would store it.
+    fn untrusted_code_exec_switch(argv: &[&str]) -> Option<UntrustedCodeExecOverride> {
+        let (args, matches) = parse_args_from(argv).unwrap();
+        args.global_options.untrusted_code_exec_override(&matches)
+    }
+
+    #[test]
+    fn no_untrusted_code_exec_flag_is_accepted_anywhere() {
+        let disabled_by_flag = Some(UntrustedCodeExecOverride {
+            untrusted_code_exec: false,
+            origin: UntrustedCodeExecOrigin::Cli,
+        });
+        temp_env::with_var_unset("PIXI_NO_UNTRUSTED_CODE_EXEC", || {
+            // Not given: nothing to store, the config files decide.
+            assert_eq!(untrusted_code_exec_switch(&["pixi", "run", "x"]), None);
+            assert_eq!(untrusted_code_exec_switch(&["pixi", "info"]), None);
+
+            // Before or after the subcommand, also for nested subcommands.
+            assert_eq!(
+                untrusted_code_exec_switch(&["pixi", "--no-untrusted-code-exec", "run", "x"]),
+                disabled_by_flag
+            );
+            assert_eq!(
+                untrusted_code_exec_switch(&["pixi", "run", "--no-untrusted-code-exec", "x"]),
+                disabled_by_flag
+            );
+            assert_eq!(
+                untrusted_code_exec_switch(&[
+                    "pixi",
+                    "global",
+                    "install",
+                    "--no-untrusted-code-exec",
+                    "x"
+                ]),
+                disabled_by_flag
+            );
+
+            // `=false` turns the restriction off again, e.g. to override a
+            // config file.
+            assert_eq!(
+                untrusted_code_exec_switch(&["pixi", "info", "--no-untrusted-code-exec=false"]),
+                Some(UntrustedCodeExecOverride {
+                    untrusted_code_exec: true,
+                    origin: UntrustedCodeExecOrigin::Cli,
+                })
+            );
+
+            // The value must be attached with `=`, so the flag never swallows
+            // a positional argument.
+            assert_eq!(
+                untrusted_code_exec_switch(&["pixi", "run", "--no-untrusted-code-exec", "false"]),
+                disabled_by_flag
+            );
+        });
+    }
+
+    #[test]
+    fn no_untrusted_code_exec_env_var() {
+        // Boolish values are accepted and attributed to the environment.
+        for (value, untrusted_code_exec) in [
+            ("1", false),
+            ("true", false),
+            ("yes", false),
+            ("on", false),
+            ("0", true),
+            ("false", true),
+            ("no", true),
+            ("off", true),
+        ] {
+            temp_env::with_var("PIXI_NO_UNTRUSTED_CODE_EXEC", Some(value), || {
+                assert_eq!(
+                    untrusted_code_exec_switch(&["pixi", "run", "x"]),
+                    Some(UntrustedCodeExecOverride {
+                        untrusted_code_exec,
+                        origin: UntrustedCodeExecOrigin::Env,
+                    }),
+                    "PIXI_NO_UNTRUSTED_CODE_EXEC={value}"
+                );
+            });
+        }
+
+        // The flag wins over the environment variable, and the origin says so.
+        temp_env::with_var("PIXI_NO_UNTRUSTED_CODE_EXEC", Some("1"), || {
+            assert_eq!(
+                untrusted_code_exec_switch(&["pixi", "run", "--no-untrusted-code-exec=false", "x"]),
+                Some(UntrustedCodeExecOverride {
+                    untrusted_code_exec: true,
+                    origin: UntrustedCodeExecOrigin::Cli,
+                })
+            );
+        });
+
+        // Any other value, including an empty one, is a hard error (like
+        // `PIXI_OFFLINE`), so a typo cannot silently leave untrusted code
+        // execution enabled.
+        for value in ["maybe", ""] {
+            temp_env::with_var("PIXI_NO_UNTRUSTED_CODE_EXEC", Some(value), || {
+                let error = parse_args_from(["pixi", "run", "x"]).unwrap_err();
+                assert_eq!(
+                    error.kind(),
+                    clap::error::ErrorKind::ValueValidation,
+                    "PIXI_NO_UNTRUSTED_CODE_EXEC={value:?}: {error}"
+                );
+                assert!(
+                    error.to_string().contains("--no-untrusted-code-exec"),
+                    "{error}"
+                );
+            });
+        }
     }
 }

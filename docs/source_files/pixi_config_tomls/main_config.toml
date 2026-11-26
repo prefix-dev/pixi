@@ -156,6 +156,31 @@ conda-script = true
 ]
 # --8<-- [end:mirrors]
 
+# --8<-- [start:security]
+[security]
+# Do not run code from the repository, only trusted build backends
+untrusted-code-exec = false
+
+# The environment of pixi-build-python on linux-64, osx-arm64 and win-64
+[[security.trusted-packages]]
+channel = "https://prefix.dev/conda-forge"
+# Only trust packages that have been public for a week
+reject-newer = "7d"
+packages = [
+  { name = "pixi-build-python", version = ">=0.8.6,<0.9" },
+  { name = "pixi-build-api-version", version = "*" },
+  { name = "openssl", version = "*" },
+  { name = "ca-certificates", version = "*" },
+  { name = "libgcc", version = "*" },
+  { name = "libgomp", version = "*" },
+  { name = "_openmp_mutex", version = "*" },
+  { name = "ucrt", version = "*" },
+  { name = "vc", version = "*" },
+  { name = "vc14_runtime", version = "*" },
+  { name = "vcomp14", version = "*" },
+]
+# --8<-- [end:security]
+
 # --8<-- [start:proxy-config]
 [proxy-config]
 http = "http://proxy.example.com:8080/"

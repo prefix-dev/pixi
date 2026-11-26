@@ -92,6 +92,7 @@ nav = [
           { "R" = "build/backends/pixi-build-r.md" },
           { "Rust" = "build/backends/pixi-build-rust.md" },
           { "Mojo" = "build/backends/pixi-build-mojo.md" },
+          { "Hardened Backends" = "build/hardened_backends.md" },
         ]
       },
       {
@@ -155,6 +156,7 @@ nav = [
   {
     "Advanced" = [
       { "Security" = "security.md" },
+      { "Untrusted Repositories" = "advanced/untrusted_repositories.md" },
       { "Channel Logic" = "advanced/channel_logic.md" },
       { "Info Command" = "advanced/explain_info_command.md" },
       { "Dependency Overrides" = "advanced/override.md" },
