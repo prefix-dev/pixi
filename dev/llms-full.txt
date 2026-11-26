@@ -1824,8 +1824,8 @@ Pixi reads those fields and extends them with a focused subset of
 - `tool.pixi.dependencies` lists Conda packages.
 - `tool.pixi.pypi-dependencies` represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.
-- `tool.pixi.constraints` and `tool.pixi.activation` hold constraints and
-  activation settings.
+- `tool.pixi.constraints`, `tool.pixi.pypi-constraints` and
+  `tool.pixi.activation` hold constraints and activation settings.
 - `tool.pixi.target.<platform>` holds platform-specific dependencies,
   constraints, and activation settings.
 
@@ -2766,7 +2766,7 @@ Pixi reads `[tool.pixi]` the same way as in a `pyproject.toml`, restricted to wh
 
 - `[tool.pixi.dependencies]` holds conda specs in pixi's native syntax, including [source dependencies](../build/dependency_types.md), which need the `pixi-build` preview declared under `[tool.pixi.workspace]`.
 - `[tool.pixi.pypi-dependencies]` holds PyPI packages.
-- `[tool.pixi.constraints]`, `[tool.pixi.activation]` and `[tool.pixi.target.<platform>]` hold constraints, activation settings and platform-specific dependencies.
+- `[tool.pixi.constraints]`, `[tool.pixi.pypi-constraints]`, `[tool.pixi.activation]` and `[tool.pixi.target.<platform>]` hold constraints, activation settings and platform-specific dependencies.
 - `[tool.pixi.workspace]` holds resolver options: `platforms`, `channel-priority`, `solve-strategy`, `exclude-newer`, `pypi-exclude-newer`, `conda-pypi-map`, `pypi-options`, `preview` and `requires-pixi`.
   Channels stay in the block's `channels`, so `tool.pixi.workspace.channels` is rejected.
 
@@ -6805,13 +6805,14 @@ conda-forge = { location = "https://raw.githubusercontent.com/prefix-dev/parselm
 !!! note
     Use the `raw.githubusercontent.com` URL. The regular `github.com/.../blob/...` page serves HTML, not JSON.
 
-### PyPI overrides vs conda constraints
+### PyPI overrides vs constraints
 
 PyPI's [`pypi-options.dependency-overrides`](../advanced/override.md)
-fills a similar role to conda [`constraints`](../reference/pixi_manifest.md#constraints): both can
+fills a similar role to conda [`constraints`](../reference/pixi_manifest.md#constraints) and
+[`pypi-constraints`](../reference/pixi_manifest.md#pypi-constraints): all of them can
 steer transitive dependencies without adding a new direct dependency.
 
-The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
+The difference is that constraints add an extra bound, while PyPI dependency overrides replace
 the requirement used for that package during PyPI resolution.
 
 Package-specific `exclude-newer` exemptions are configured separately from both mechanisms:
@@ -15308,6 +15309,56 @@ environment must satisfy all of them simultaneously.
 ```
 
 The above example will produce an environment with `mkdocs` and `python` installed, but the solver will make sure that the Python version is at least 3.14.0 and that `click` is not version 8.1.7.
+
+### `pypi-constraints`
+
+The `pypi-constraints` table is the PyPI counterpart of [`constraints`](#constraints).
+It restricts the versions of PyPI packages that *may* be installed without explicitly requiring them,
+and is passed to uv as [constraints](https://docs.astral.sh/uv/reference/settings/#constraint-dependencies).
+Like conda constraints, a PyPI constraint is only enforced when the package is part of the
+environment's PyPI dependencies; otherwise it is ignored.
+
+```toml
+[pypi-dependencies]
+requests = ">=2.32"
+
+[pypi-constraints]
+# Keep the transitive urllib3 dependency of requests off vulnerable releases
+urllib3 = ">=2.2.2"
+```
+
+A constraint is a [PEP 440](https://peps.python.org/pep-0440/) version specifier, optionally with
+[environment markers](https://peps.python.org/pep-0508/#environment-markers) that decide whether it applies:
+
+```toml
+[pypi-constraints]
+numpy = { version = "<2", env-markers = "python_version < '3.10'" }
+```
+
+Constraints only restrict versions, so extras, `index` and `git`, `path` or `url` sources are not
+supported. Use [`pypi-dependencies`](#pypi-dependencies) to choose where a package comes from.
+
+PyPI constraints can be made platform-specific with the [`[target]`](#the-target-table) table and
+scoped to a [feature](#the-feature-table), with the same merging rules as [`constraints`](#constraints).
+
+PyPI constraints also apply when a Python dependency is supplied by conda. They do not
+unlock conda packages: a conflicting provider fails the PyPI solve. Use
+[`constraints`](#constraints) to change the conda provider's version.
+
+Local and editable dependencies must satisfy the same version bounds. Pixi re-checks an
+existing lock against the constraints only if it can read the source version statically.
+If the version is dynamic, for example with `hatch-vcs`, pixi trusts the version the
+solve chose. Run `pixi update <package>` after changing a constraint on such a package.
+
+!!! tip "One-off PyPI constraints"
+    To apply a PyPI constraint for a single lock operation without editing the manifest, use
+    [`pixi lock --with-pypi-constraint`](cli/pixi/lock.md#arg---with-pypi-constraint), e.g.
+    `pixi lock --with-pypi-constraint 'urllib3>=2.2.2'`.
+
+!!! tip "PyPI constraints vs dependency overrides"
+    PyPI constraints add an extra bound, so the solve fails if they conflict with other
+    requirements. To replace a requirement instead, use
+    [`pypi-options.dependency-overrides`](../advanced/override.md).
 
 ### `pypi-dependencies`
 

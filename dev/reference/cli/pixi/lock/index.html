@@ -9479,6 +9479,13 @@
 <br>May be provided more than once.</dd>
 </dl>
 </li>
+<li>
+<dl>
+<dt><a id="arg---with-pypi-constraint" href="#arg---with-pypi-constraint"><code>--with-pypi-constraint &lt;REQUIREMENT&gt;</code></a></dt>
+<dd>Temporarily constrain a PyPI package to the given PEP 508 requirement, e.g. <code>--with-pypi-constraint 'urllib3&gt;=2.2.2'</code>
+<br>May be provided more than once.</dd>
+</dl>
+</li>
 </ul>
 <h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
 <ul>
@@ -9622,10 +9629,12 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pixi<span class="w"> </span>lock<span class="w"> </span>--check
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>pixi<span class="w"> </span>lock<span class="w"> </span>--with-constraint<span class="w"> </span><span class="s1">'openssl&gt;=3.5.4'</span><span class="w"> </span><span class="c1"># (1)!</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>pixi<span class="w"> </span>lock<span class="w"> </span>--check<span class="w"> </span>--with-constraint<span class="w"> </span><span class="s1">'openssl&gt;=3.5.4'</span><span class="w"> </span><span class="c1"># (2)!</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>pixi<span class="w"> </span>lock<span class="w"> </span>--with-pypi-constraint<span class="w"> </span><span class="s1">'urllib3&gt;=2.5.0'</span><span class="w"> </span><span class="c1"># (3)!</span>
 </span></code></pre></div>
 <ol>
 <li>Re-lock only the environments whose locked <code>openssl</code> is older than <code>3.5.4</code>, keeping all other locked packages as preferences. The constraint is not written to the manifest.</li>
 <li>Exit with a non-zero code if any environment has a locked <code>openssl</code> older than <code>3.5.4</code>.</li>
+<li>Like <code>--with-constraint</code>, but for the PyPI package <code>urllib3</code>. The constraint is a PEP 508 requirement, optionally with environment markers.</li>
 </ol>
 
 

@@ -666,6 +666,25 @@
             ]
           }
         },
+        "pypi-constraints": {
+          "title": "Pypi-Constraints",
+          "description": "The PyPI version constraints. These constrain the versions of PyPI packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIConstraintTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "pypi-dependencies": {
           "title": "Pypi-Dependencies",
           "description": "The PyPI dependencies of this environment",
@@ -1095,6 +1114,25 @@
                 "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
               }
             ]
+          }
+        },
+        "pypi-constraints": {
+          "title": "Pypi-Constraints",
+          "description": "The PyPI version constraints. These constrain the versions of PyPI packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIConstraintTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "pypi-dependencies": {
@@ -2131,6 +2169,28 @@
         "zos-z"
       ]
     },
+    "PyPIConstraintTable": {
+      "title": "PyPIConstraintTable",
+      "type": "object",
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "env-markers": {
+          "title": "Env-Markers",
+          "description": "The [PEP 508 environment markers](https://peps.python.org/pep-0508/#environment-markers) that decide whether the constraint applies",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "title": "Version",
+          "description": "The allowed versions of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "PyPIGitBranchRequirement": {
       "title": "PyPIGitBranchRequirement",
       "type": "object",
@@ -2692,6 +2752,25 @@
         "project": {
           "$ref": "#/$defs/Workspace",
           "description": "The project's metadata information"
+        },
+        "pypi_constraints": {
+          "title": "Pypi Constraints",
+          "description": "The PyPI version constraints. These constrain the versions of PyPI packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIConstraintTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         },
         "pypi_dependencies": {
           "title": "Pypi Dependencies",
@@ -3460,6 +3539,25 @@
               "python": ">=3.8"
             }
           ]
+        },
+        "pypi-constraints": {
+          "title": "Pypi-Constraints",
+          "description": "The PyPI version constraints. These constrain the versions of PyPI packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIConstraintTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         },
         "pypi-dependencies": {
           "title": "Pypi-Dependencies",

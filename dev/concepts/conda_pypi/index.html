@@ -1423,10 +1423,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pypi-overrides-vs-conda-constraints" class="md-nav__link">
+  <a href="#pypi-overrides-vs-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        PyPI overrides vs conda constraints
+        PyPI overrides vs constraints
       </span>
     </span>
   </a>
@@ -9443,10 +9443,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pypi-overrides-vs-conda-constraints" class="md-nav__link">
+  <a href="#pypi-overrides-vs-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        PyPI overrides vs conda constraints
+        PyPI overrides vs constraints
       </span>
     </span>
   </a>
@@ -9654,11 +9654,12 @@ If that host is unreachable in your environment, you have several options:</p>
 <p class="admonition-title">Note</p>
 <p>Use the <code>raw.githubusercontent.com</code> URL. The regular <code>github.com/.../blob/...</code> page serves HTML, not JSON.</p>
 </div>
-<h3 id="pypi-overrides-vs-conda-constraints">PyPI overrides vs conda constraints<a class="headerlink" href="#pypi-overrides-vs-conda-constraints" title="Permanent link">#</a></h3>
+<h3 id="pypi-overrides-vs-constraints">PyPI overrides vs constraints<a class="headerlink" href="#pypi-overrides-vs-constraints" title="Permanent link">#</a></h3>
 <p>PyPI's <a href="../../advanced/override/"><code>pypi-options.dependency-overrides</code></a>
-fills a similar role to conda <a href="../../reference/pixi_manifest/#constraints"><code>constraints</code></a>: both can
+fills a similar role to conda <a href="../../reference/pixi_manifest/#constraints"><code>constraints</code></a> and
+<a href="../../reference/pixi_manifest/#pypi-constraints"><code>pypi-constraints</code></a>: all of them can
 steer transitive dependencies without adding a new direct dependency.</p>
-<p>The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
+<p>The difference is that constraints add an extra bound, while PyPI dependency overrides replace
 the requirement used for that package during PyPI resolution.</p>
 <p>Package-specific <code>exclude-newer</code> exemptions are configured separately from both mechanisms:</p>
 <ul>

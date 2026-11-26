@@ -3562,6 +3562,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#recommended-workflow-for-a-pypi-package-cve" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Recommended Workflow For A PyPI Package CVE
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9426,6 +9437,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#recommended-workflow-for-a-pypi-package-cve" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Recommended Workflow For A PyPI Package CVE
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9588,6 +9610,9 @@ Once this CEP is implemented, Pixi will switch the behavior of <code>exclude-new
 </div>
 <h2 id="3-respond-to-advisories-with-constraints-and-overrides">3. Respond To Advisories With Constraints And Overrides<a class="headerlink" href="#3-respond-to-advisories-with-constraints-and-overrides" title="Permanent link">#</a></h2>
 <p>When an advisory lands, update to the fixed version first. If the fix is fresh, <a href="../reference/pixi_manifest/#exemptions">exempt</a> the fixed release from <code>exclude-newer</code> after reviewing it, as shown above, so you can adopt it immediately without relaxing the cutoff for anything else. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports <a href="../advanced/override/"><code>dependency-overrides</code></a> for PyPI packages.</p>
+<p>To rule out the vulnerable releases of a transitive dependency without adding it as a dependency, add a lower bound to <a href="../reference/pixi_manifest/#constraints"><code>[constraints]</code></a> for conda packages or to <a href="../reference/pixi_manifest/#pypi-constraints"><code>[pypi-constraints]</code></a> for PyPI packages, e.g. <code>urllib3 = "&gt;=2.2.2"</code>.
+Unlike overrides, constraints never relax other requirements, so the solve fails instead of silently picking an incompatible version.
+A platform-specific constraint for the same package in the same feature replaces the generic one, so repeat the lower bound there, e.g. <code>[target.linux-64.pypi-constraints] urllib3 = "&gt;=2.2.2,&lt;3"</code>.</p>
 <p>This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to <code>exclude-newer</code>: <code>exclude-newer</code> reduces exposure to newly uploaded artifacts, while constraints, <code>exclude-newer</code> exemptions, and overrides help you respond once a vulnerable version is already known.</p>
 <div class="admonition note">
 <p class="admonition-title">PyPI-only for now</p>
@@ -9619,6 +9644,20 @@ For example, the <a href="https://discuss.python.org/t/information-for-python-us
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pixi<span class="w"> </span>lock<span class="w"> </span>--with-constraint<span class="w"> </span><span class="s1">'python&gt;=3.11.18,&lt;3.12|&gt;=3.12.16,&lt;3.13|&gt;=3.13.18,&lt;3.14|&gt;=3.14.10,&lt;3.15|&gt;=3.15.2'</span>
 </span></code></pre></div>
 </div>
+<h3 id="recommended-workflow-for-a-pypi-package-cve">Recommended Workflow For A PyPI Package CVE<a class="headerlink" href="#recommended-workflow-for-a-pypi-package-cve" title="Permanent link">#</a></h3>
+<p>The same workflow works for PyPI packages with <a href="../reference/cli/pixi/lock/#arg---with-pypi-constraint"><code>--with-pypi-constraint</code></a>, which takes a <a href="https://peps.python.org/pep-0508/">PEP 508</a> requirement and acts like a temporary <a href="../reference/pixi_manifest/#pypi-constraints"><code>[pypi-constraints]</code></a> entry.
+Suppose <code>urllib3</code> releases before <code>2.5.0</code> are affected:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># 1. Check which environments are affected.</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>lock<span class="w"> </span>--check<span class="w"> </span>--with-pypi-constraint<span class="w"> </span><span class="s1">'urllib3&gt;=2.5.0'</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># 2. After reviewing the fixed release, let it through the pypi-exclude-newer cutoff.</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>exempt<span class="w"> </span>--pypi<span class="w"> </span>urllib3
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># 3. Move the affected environments to a fixed release with the smallest possible lock file change.</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>pixi<span class="w"> </span>lock<span class="w"> </span>--with-pypi-constraint<span class="w"> </span><span class="s1">'urllib3&gt;=2.5.0'</span>
+</span></code></pre></div>
+<p>PyPI exemptions only take package names and have no cutoff, so they let every release of the package through, including ones published later.
+Remove the exemption with <code>pixi workspace exclude-newer unexempt --pypi urllib3</code> once the fixed release is older than your <code>pypi-exclude-newer</code> cutoff.</p>
 <h2 id="4-treat-package-hooks-as-code-execution">4. Treat Package Hooks As Code Execution<a class="headerlink" href="#4-treat-package-hooks-as-code-execution" title="Permanent link">#</a></h2>
 <p>Treat <code>pixi shell</code>, <code>pixi run</code>, <code>pixi shell-hook</code>, and any automation around them as code execution boundaries, not just environment setup commands. Conda packages can carry executable hooks in addition to files and metadata. Two especially relevant cases are:</p>
 <ul>
@@ -9637,19 +9676,19 @@ For example, the <a href="https://discuss.python.org/t/information-for-python-us
 </div>
 <p>Keep <code>post-link</code> scripts disabled unless you have a concrete package that requires them and you have reviewed that behavior.</p>
 <p>If you use <code>direnv</code>, use <a href="../integration/third_party/direnv/"><code>layout pixi</code></a>. It guards the manifest and <code>pixi.lock</code> with <a href="https://direnv.net/man/direnv-stdlib.1.html#coderequireallowed-ltpathgt-ltpathgt-code"><code>require_allowed</code></a>, so any change to them requires a fresh <code>direnv allow</code> before the environment is activated again. Review the diff before you approve it. If your manifest references activation scripts from your repository, guard them as well:</p>
-<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>require_allowed<span class="w"> </span>scripts/activate.sh
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>layout<span class="w"> </span>pixi
+<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>require_allowed<span class="w"> </span>scripts/activate.sh
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>layout<span class="w"> </span>pixi
 </span></code></pre></div>
 <h2 id="5-scan-the-installed-environment-directly">5. Scan The Installed Environment Directly<a class="headerlink" href="#5-scan-the-installed-environment-directly" title="Permanent link">#</a></h2>
 <p>For CVE analysis today, our preferred workflow is to scan the installed Pixi-managed environment directly with <a href="https://github.com/anchore/syft">Syft</a> and a vulnerability scanner such as <a href="https://github.com/anchore/grype">Grype</a>. The goal here is narrow: find known-vulnerable software that is actually present in the environment you built, including transitive dependencies and ecosystem-specific packages that may never appear clearly in <code>pixi.toml</code>. This improves visibility into what is really on disk, which is what your security tooling ultimately needs to analyze.</p>
 <p>This does not protect against every supply-chain problem. It does not stop a malicious package from being installed, verify package provenance, or catch issues that are not yet in the scanner's advisory data. It is also limited by ecosystem matching quality. That matters for conda in particular, because cross-ecosystem CVE matching is still improving. Today, scanning the installed filesystem is often the most practical workaround: instead of asking "what did I intend to install?", you ask "what ended up in this environment?"</p>
 <p>In practice, that means scanning the concrete environment directory, usually in CI or as part of release review, and generating a portable SBOM only when you need to archive or share the inventory. We recommend enabling the conda and auditable Rust catalogers explicitly so the behavior stays consistent across different scan targets:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>syft<span class="w"> </span>.pixi/envs/default<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--select-catalogers<span class="o">=</span>+conda-meta-cataloger,+cargo-auditable-binary-cataloger<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--output<span class="w"> </span>syft-json<span class="o">=</span>syft-output.json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>syft<span class="w"> </span>.pixi/envs/default<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--select-catalogers<span class="o">=</span>+conda-meta-cataloger,+cargo-auditable-binary-cataloger<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--output<span class="w"> </span>syft-json<span class="o">=</span>syft-output.json
 </span></code></pre></div>
 <p>That output can then be fed to Grype for CVE scanning:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>grype<span class="w"> </span>syft-output.json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>grype<span class="w"> </span>syft-output.json
 </span></code></pre></div>
 <p>Syft will detect conda packages from <code>conda-meta</code> when scanning a filesystem location like <code>.pixi/envs/default</code>, but it does not always do so by default when scanning a container image that contains a conda environment. Passing the catalogers explicitly avoids that surprise.</p>
 <p>If you want to continue straight into vulnerability analysis, prefer feeding Syft's own output into your scanner instead of converting through CycloneDX first. In practice, format conversion can lose information, and scanning a CycloneDX export can produce different results from scanning Syft's native output directly.</p>
@@ -9664,21 +9703,21 @@ For example, the <a href="https://discuss.python.org/t/information-for-python-us
 <p>You can generate attestations directly during publish or upload an existing attestation in CI.</p>
 <p>For more background on Sigstore attestations in the conda ecosystem, see the <a href="https://rattler-build.prefix.dev/latest/sigstore/">Rattler-Build Sigstore documentation</a>.</p>
 <p>For example:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;<span class="w"> </span>--generate-attestation
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;<span class="w"> </span>--generate-attestation
 </span></code></pre></div>
 <p>When using the lower-level upload command for prefix.dev, Pixi can also upload an existing attestation or generate one during CI:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>upload<span class="w"> </span>prefix<span class="w"> </span>--channel<span class="w"> </span>&lt;channel-name&gt;<span class="w"> </span>--generate-attestation<span class="w"> </span>dist/*.conda
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>upload<span class="w"> </span>prefix<span class="w"> </span>--channel<span class="w"> </span>&lt;channel-name&gt;<span class="w"> </span>--generate-attestation<span class="w"> </span>dist/*.conda
 </span></code></pre></div>
 <p>Consumers can then validate those attestations with Sigstore tooling. For example, with the GitHub CLI:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>my-package-0.1.0-h123_0.conda<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>--owner<span class="w"> </span>my-org<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--predicate-type<span class="w"> </span><span class="s2">"https://schemas.conda.org/attestations-publish-1.schema.json"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>my-package-0.1.0-h123_0.conda<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--owner<span class="w"> </span>my-org<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--predicate-type<span class="w"> </span><span class="s2">"https://schemas.conda.org/attestations-publish-1.schema.json"</span>
 </span></code></pre></div>
 <p>Or with <code>cosign</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">"https://github.com/my-org/.*"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>my-package-0.1.0-h123_0.conda
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">"https://github.com/my-org/.*"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>my-package-0.1.0-h123_0.conda
 </span></code></pre></div>
 <p>One example of a channel that already uses package signing extensively is the <a href="https://prefix.dev/channels/github-releases">github-releases</a> channel on prefix.dev (GitHub: <a href="https://github.com/hunger/octoconda">hunger/octoconda</a>).</p>
 <div class="admonition note">
