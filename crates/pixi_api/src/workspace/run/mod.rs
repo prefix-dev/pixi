@@ -42,6 +42,10 @@ use tracing::Level;
 
 use crate::interface::Interface;
 
+mod background;
+
+use background::BackgroundTasks;
+
 #[derive(Default, Serialize, Deserialize)]
 pub struct RunOptions {
     /// The pixi task or a task shell command to run.
@@ -144,6 +148,20 @@ pub async fn run<'p, I: Interface>(
     workspace: &'p Workspace,
     options: RunOptions,
     progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
+) -> Result<RunOutcome<'p>, RunError> {
+    // Background tasks are stopped on every way out of the run.
+    let mut background = BackgroundTasks::default();
+    let result = run_tasks(interface, workspace, options, progress, &mut background).await;
+    background.stop().await;
+    result
+}
+
+async fn run_tasks<'p, I: Interface>(
+    interface: &I,
+    workspace: &'p Workspace,
+    options: RunOptions,
+    progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
+    background: &mut BackgroundTasks,
 ) -> Result<RunOutcome<'p>, RunError> {
     // Fail before resolving the lock file, there is nothing to run
     if options.task.iter().all(|arg| arg.trim().is_empty()) {
@@ -295,6 +313,8 @@ pub async fn run<'p, I: Interface>(
             .map_err(RunError::CheckCache)?
         {
             CanSkip::No(cache) => cache,
+            // Background tasks never use the cache.
+            CanSkip::Yes if task_graph[task_id].background => None,
             CanSkip::Yes => {
                 let args_text = if !executable_task.args().is_empty() {
                     format!(
@@ -378,15 +398,31 @@ pub async fn run<'p, I: Interface>(
             .map(|(k, v)| (OsString::from(k), OsString::from(v)))
             .collect();
 
+        // Background tasks are started without waiting for them. They are stopped
+        // when the run ends and never touch the cache.
+        if task_graph[task_id].background {
+            background
+                .spawn(
+                    &executable_task,
+                    &task_env,
+                    &signal,
+                    &options.custom_commands,
+                )
+                .await?;
+            task_idx += 1;
+            continue;
+        }
+
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we return the same code.
-        let code = execute_task(
-            &executable_task,
-            &task_env,
-            signal.clone(),
-            &options.custom_commands,
-        )
-        .await?;
+        let code = background
+            .run_until(execute_task(
+                &executable_task,
+                &task_env,
+                signal.clone(),
+                &options.custom_commands,
+            ))
+            .await?;
         if code != 0 {
             return Ok(RunOutcome {
                 exit_code: code,

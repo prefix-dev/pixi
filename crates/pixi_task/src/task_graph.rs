@@ -100,6 +100,10 @@ pub struct TaskNode<'p> {
 
     /// The id's of the task that this task depends on.
     pub dependencies: Vec<GraphDependency>,
+
+    /// Whether the task is started in the background and stopped when the run
+    /// ends.
+    pub background: bool,
 }
 
 impl fmt::Display for TaskNode<'_> {
@@ -351,6 +355,7 @@ impl<'p> TaskGraph<'p> {
                                 run_environment: run_env,
                                 args: arg_values,
                                 dependencies: vec![],
+                                background: false,
                             }],
                         });
                     }
@@ -364,6 +369,7 @@ impl<'p> TaskGraph<'p> {
                             run_environment: run_env,
                             args: arg_values,
                             dependencies: vec![],
+                            background: false,
                         },
                         Some(
                             args.iter()
@@ -417,6 +423,7 @@ impl<'p> TaskGraph<'p> {
                 run_environment,
                 args: Some(ArgValues::FreeFormArgs(additional_args)),
                 dependencies: vec![],
+                background: false,
             },
             None,
         )
@@ -454,7 +461,8 @@ impl<'p> TaskGraph<'p> {
             let dependencies = Vec::from_iter(node.task.depends_on().iter().cloned());
 
             // Collect all dependency data before modifying nodes
-            let mut deps_to_process: Vec<(TypedDependency, Environment<'p>, &Task)> = Vec::new();
+            let mut deps_to_process: Vec<(TypedDependency, Environment<'p>, &Task, bool)> =
+                Vec::new();
 
             // Iterate over all the dependencies of the node and add them to the graph.
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
@@ -466,9 +474,15 @@ impl<'p> TaskGraph<'p> {
                     args: node.args.as_ref(),
                     init_cwd: None,
                 };
+                let background = dependency.background;
                 let dependency = TypedDependency::from_dependency(&dependency, &context)?;
                 // Check if we visited this node before already.
                 if let Some(&task_id) = task_name_with_args_to_node.get(&dependency) {
+                    if nodes[task_id.0].background != background {
+                        return Err(TaskGraphError::ConflictingBackground(
+                            dependency.task_name.to_string(),
+                        ));
+                    }
                     node_dependencies.push(GraphDependency(
                         task_id,
                         dependency.args.clone(),
@@ -518,11 +532,11 @@ impl<'p> TaskGraph<'p> {
                 };
 
                 // Store the dependency data for processing later
-                deps_to_process.push((dependency, task_env, task_dependency));
+                deps_to_process.push((dependency, task_env, task_dependency, background));
             }
 
             // Process all dependencies after collecting them
-            for (dependency, task_env, task_dependency) in deps_to_process {
+            for (dependency, task_env, task_dependency, background) in deps_to_process {
                 // Add the node to the graph
                 let task_id = TaskId(nodes.len());
                 nodes.push(TaskNode {
@@ -535,6 +549,7 @@ impl<'p> TaskGraph<'p> {
                         dependency.args.as_ref(),
                     )?),
                     dependencies: Vec::new(),
+                    background,
                 });
 
                 // Store the task id in the map to be able to look up the name later
@@ -735,6 +750,10 @@ pub enum TaskGraphError {
     #[error("could not split task, assuming non valid task")]
     InvalidTask,
 
+    #[error("task '{0}' is a dependency both in the background and in the foreground")]
+    #[diagnostic(help("use the same `background` setting everywhere the task is a dependency"))]
+    ConflictingBackground(String),
+
     #[error("task '{0}' received more arguments than expected")]
     #[diagnostic(help("use `--` to separate task arguments from extra passthrough arguments"))]
     TooManyArguments(String),
@@ -830,6 +849,16 @@ mod test {
         }
 
         async fn build_graph(&self) -> Result<(Workspace, Vec<String>), TaskGraphError> {
+            let (project, commands) = self.build_graph_with_background().await?;
+            Ok((
+                project,
+                commands.into_iter().map(|(command, _)| command).collect(),
+            ))
+        }
+
+        async fn build_graph_with_background(
+            &self,
+        ) -> Result<(Workspace, Vec<(String, bool)>), TaskGraphError> {
             let project = Workspace::from_str(Path::new("pixi.toml"), self.workspace_str).unwrap();
             let environment = self
                 .environment_name
@@ -872,7 +901,10 @@ mod test {
                         args: task.args.as_ref(),
                         init_cwd: None,
                     };
-                    task.full_command(&context).ok().flatten()
+                    task.full_command(&context)
+                        .ok()
+                        .flatten()
+                        .map(|command| (command, task.background))
                 })
                 .collect();
             drop(search_envs);
@@ -882,6 +914,12 @@ mod test {
 
         async fn commands_in_order(&self) -> Vec<String> {
             self.build_graph().await.unwrap().1
+        }
+
+        /// The commands in execution order, with whether each runs in the
+        /// background.
+        async fn background_in_order(&self) -> Vec<(String, bool)> {
+            self.build_graph_with_background().await.unwrap().1
         }
 
         async fn expect_error(&self) -> TaskGraphError {
@@ -974,6 +1012,54 @@ mod test {
             commands,
             vec!["echo root", "echo task1", "echo task2", "echo top '--test'"]
         );
+    }
+
+    #[tokio::test]
+    async fn test_background_dependencies_keep_order() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [tasks]
+        sim = "echo sim"
+        wait = "echo wait"
+        main = { cmd = "echo main", depends-on = [{ task = "sim", background = true }, "wait"] }
+    "#;
+        let commands = TaskGraphTest::new(workspace_str, &["main"])
+            .background_in_order()
+            .await;
+        assert_eq!(
+            commands,
+            vec![
+                ("echo sim".to_string(), true),
+                ("echo wait".to_string(), false),
+                ("echo main".to_string(), false),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_conflicting_background_dependencies() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [tasks]
+        sim = "echo sim"
+        a = { cmd = "echo a", depends-on = [{ task = "sim", background = true }] }
+        b = { cmd = "echo b", depends-on = ["sim"] }
+        main = { cmd = "echo main", depends-on = ["a", "b"] }
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["main"])
+            .expect_error()
+            .await;
+        assert_matches!(err, TaskGraphError::ConflictingBackground(name) => {
+            assert_eq!(name, "sim");
+        });
     }
 
     #[tokio::test]

@@ -1,6 +1,7 @@
 import platform
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -1391,6 +1392,64 @@ def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None
 
     assert output1.stdout == output2.stdout
     assert output1.stderr == output2.stderr
+
+
+def test_background_task_dependency(
+    pixi: Path, tmp_pixi_workspace: Path, doc_pixi_workspaces: Path
+) -> None:
+    """Test that the docs example starts the simulator in the background and stops it."""
+    example = doc_pixi_workspaces.joinpath("background_tasks")
+    for script in ("simulator.py", "wait_for_simulator.py", "controller.py"):
+        shutil.copy(example.joinpath(script), tmp_pixi_workspace)
+
+    # Use `python` of the test environment instead of installing it.
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = tomli.loads(example.joinpath("pixi.toml").read_text())["tasks"]
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+
+    # The simulator shares the output of pixi, so this only returns once the
+    # simulator has exited. A simulator that is left running hangs the test.
+    output = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "control-in-sim"],
+        env={"SIMULATOR_PORT": str(port)},
+        stdout_contains=[
+            f"simulator: ready on port {port}",
+            "controller: robot at x=0.5",
+            "controller: robot at x=1.0",
+            "controller: robot at x=1.5",
+        ],
+    )
+    # Windows terminates the simulator without running its signal handler.
+    if sys.platform != "win32":
+        assert "simulator: stopped" in output.stdout
+
+
+def test_background_task_dependency_stopped_when_foreground_fails(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Test that a failing foreground dependency stops the background task."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "sleeper": "sleep 3600",
+        "fail": "exit 1",
+        "main": {
+            "cmd": "echo foreground-ran",
+            "depends-on": [{"task": "sleeper", "background": True}, "fail"],
+        },
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    output = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "main"],
+        expected_exit_code=ExitCode.FAILURE,
+    )
+    assert "foreground-ran" not in output.stdout + output.stderr
 
 
 def test_task_minijinja_title_filter(pixi: Path, tmp_pixi_workspace: Path) -> None:
