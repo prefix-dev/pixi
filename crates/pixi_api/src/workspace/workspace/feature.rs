@@ -183,8 +183,8 @@ mod tests {
                 name = "feature-task-selection"
                 channels = []
                 platforms = [
-                    {{ name = "fancy", platform = "{current}", cuda = "99" }},
-                    {{ name = "plain", platform = "{current}", cuda = "99" }},
+                    {{ name = "fancy", subdir = "{current}", cuda = "99" }},
+                    {{ name = "plain", subdir = "{current}", cuda = "99" }},
                 ]
 
                 [dependencies]

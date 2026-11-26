@@ -229,8 +229,8 @@ channels = ["conda-forge"]
 platforms = [
     "osx-arm64",
     "osx-64",
-    { platform = "linux-64", cuda = "11.0" },
-    { platform = "win-64", cuda = "11.0" },
+    { subdir = "linux-64", cuda = "11.0" },
+    { subdir = "win-64", cuda = "11.0" },
 ]
 
 [tool.pixi.dependencies]

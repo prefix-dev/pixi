@@ -244,7 +244,7 @@ async fn upgrade_command_keeps_specs_in_declared_target() {
         r#"
         [workspace]
         channels = ["{channel}"]
-        platforms = [{{ name = "my-linux", platform = "linux-64", cuda = "12" }}]
+        platforms = [{{ name = "my-linux", subdir = "linux-64", cuda = "12" }}]
         exclude-newer = "2025-05-19"
 
         [target.linux.dependencies]

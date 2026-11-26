@@ -797,8 +797,8 @@ mod tests {
         name = "pixi"
         channels = []
         platforms = [
-            {{ name = "generic", platform = "{current}" }},
-            {{ name = "local", platform = "{current}", cuda = "12" }},
+            {{ name = "generic", subdir = "{current}" }},
+            {{ name = "local", subdir = "{current}", cuda = "12" }},
         ]
 
         [target.local.activation.env]

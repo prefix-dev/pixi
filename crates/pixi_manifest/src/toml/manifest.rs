@@ -648,6 +648,7 @@ impl TomlManifest {
             environments,
             solve_groups,
             loaded_at: chrono::Utc::now(),
+            extra_constraints: Default::default(),
         };
         workspace_manifest.register_composed_platforms()?;
 
@@ -1200,6 +1201,28 @@ mod test {
     }
 
     #[test]
+    fn test_workspace_platform_key_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+                r#"[workspace]
+name = "test"
+channels = []
+platforms = [{ platform = "linux-64", cuda = "12" }]
+"#,
+            ),
+            @r#"
+         ⚠ the `platform` field is deprecated; use `subdir` instead
+          ╭─[pixi.toml:4:16]
+        3 │ channels = []
+        4 │ platforms = [{ platform = "linux-64", cuda = "12" }]
+          ·                ────┬───
+          ·                    ╰── replace this with 'subdir'
+          ╰────
+        "#
+        );
+    }
+
+    #[test]
     fn test_pin_in_workspace_dependencies_is_rejected() {
         // Pins only make sense while building a package; the workspace
         // dependency tables reject them at parse time.
@@ -1448,7 +1471,7 @@ mod test {
             channels = []
             platforms = [
               "linux-64",
-              { name = "gpu", platform = "linux-64", cuda = "12.0" },
+              { name = "gpu", subdir = "linux-64", cuda = "12.0" },
             ]
 
             [system-requirements]
@@ -1474,7 +1497,7 @@ mod test {
             [workspace]
             name = "test"
             channels = []
-            platforms = [{ name = "osx-arm64", platform = "osx-arm64", macos = "14" }]
+            platforms = [{ name = "osx-arm64", subdir = "osx-arm64", macos = "14" }]
 
             [system-requirements]
             macos = "13.3"
@@ -3064,7 +3087,7 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", subdir = "linux-64", cuda = "12" }]
         "#
         );
     }
@@ -3131,7 +3154,7 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", subdir = "linux-64", cuda = "12" }]
         "#
         );
     }
@@ -3145,8 +3168,8 @@ mod test {
         name = "test"
         channels = []
         platforms = [
-            { name = "cpu-linux-64", platform = "linux-64" },
-            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+            { name = "cpu-linux-64", subdir = "linux-64" },
+            { name = "cuda-linux-64", subdir = "linux-64", cuda = "12" },
         ]
 
         [feature.gpu]
@@ -3166,7 +3189,7 @@ mod test {
         [workspace]
         name = "test"
         channels = []
-        platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+        platforms = ["linux-64", { subdir = "linux-64", cuda = "12.9" }]
 
         [feature.gpu]
         platforms = ["linux-64-cuda-13-0"]
@@ -3186,7 +3209,7 @@ mod test {
         name = "test"
         channels = []
         platforms = [
-            { name = "cpu-linux-64", platform = "linux-64" },
+            { name = "cpu-linux-64", subdir = "linux-64" },
         ]
 
         [feature.gpu]

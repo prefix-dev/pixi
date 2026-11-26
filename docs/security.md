@@ -119,6 +119,33 @@ urllib3 = ">=2.2.2"
 
 Do not trust overrides blindly. In the best case, maintainers publish a patch release on the same minor version you are already using, so the compatibility risk stays small. In practice, the available fix can sometimes be in a newer major version, and forcing that version through an override can break compatibility with other packages. Treat overrides as a short-term mitigation: apply the smallest possible change, test the affected environment, and remove the override once upstream metadata or upstream releases make it unnecessary.
 
+### Recommended Workflow For A Conda Package CVE
+
+Suppose an advisory says that `openssl` releases before `3.5.4` are affected, and `3.5.4` was published yesterday.
+
+```shell
+# 1. Check which environments are affected. Exits non-zero if any locked openssl is older than 3.5.4.
+pixi lock --check --with-constraint 'openssl>=3.5.4'
+
+# 2. After reviewing the fixed release, let it through the exclude-newer cutoff.
+pixi workspace exclude-newer exempt openssl==3.5.4
+
+# 3. Move the affected environments to a fixed release, changing as few other packages as possible.
+pixi lock --with-constraint 'openssl>=3.5.4'
+```
+
+[`pixi lock --with-constraint`](reference/cli/pixi/lock.md#arg---with-constraint) applies to all environments without editing the manifest.
+Use `--dry-run` to preview the diff or `--json` for machine-readable output.
+
+!!! tip "Fixes released on several branches"
+    For fixes on several branches, combine the reviewed releases with `|` in a single exemption.
+    For example, the [eMudhra emSign CA certificate incident](https://discuss.python.org/t/information-for-python-users-regarding-emudhra-emsign-ca-certificate-security-incident/109576) required these Python updates:
+
+    ```shell
+    pixi workspace exclude-newer exempt 'python==3.11.18|==3.12.16|==3.13.18|==3.14.10|==3.15.2'
+    pixi lock --with-constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
+    ```
+
 ## 4. Treat Package Hooks As Code Execution
 
 Treat `pixi shell`, `pixi run`, `pixi shell-hook`, and any automation around them as code execution boundaries, not just environment setup commands. Conda packages can carry executable hooks in addition to files and metadata. Two especially relevant cases are:

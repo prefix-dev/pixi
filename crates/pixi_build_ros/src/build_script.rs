@@ -96,6 +96,8 @@ pub struct ScriptVars<'a> {
     pub distro: &'a str,
     /// Extra CMake arguments, in the script's shell syntax
     pub cmake_args: &'a str,
+    /// pip's verbosity flag for packages it installs (e.g. `-v`, or empty)
+    pub pip_verbosity: &'a str,
 }
 
 /// The file name of the build script, e.g. `build_ament_cmake.sh`.
@@ -174,6 +176,7 @@ pub fn render_build_script(
         .replace("@(package_prefix)", vars.package_prefix)
         .replace("@(distro)", vars.distro)
         .replace("@(cmake_args)", vars.cmake_args)
+        .replace("@(pip_verbosity)", vars.pip_verbosity)
 }
 
 #[cfg(test)]
@@ -186,6 +189,7 @@ mod tests {
         package_prefix: "ros2",
         distro: "jazzy",
         cmake_args: "-DFOO=ON",
+        pip_verbosity: "",
     };
 
     fn xml(body: &str) -> PackageXml {
@@ -220,6 +224,29 @@ mod tests {
             BuildType::of(&xml(unknown), &jazzy),
             Err(BuildScriptError::UnsupportedBuildType { .. })
         ));
+    }
+
+    #[test]
+    fn test_pip_verbosity_flag() {
+        let pip_lines = ["", "-v", "-vv"]
+            .map(|flag| {
+                let vars = ScriptVars {
+                    pip_verbosity: flag,
+                    ..VARS
+                };
+                render_build_script(BuildType::AmentPython, false, BuildMode::Incremental, &vars)
+                    .lines()
+                    .filter(|line| line.contains("pip install"))
+                    .map(|line| line.trim())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .join("\n");
+        insta::assert_snapshot!(pip_lines, @r#"
+        "$PYTHON" -m pip install . --no-deps --force-reinstall
+        "$PYTHON" -m pip install . --no-deps --force-reinstall -v
+        "$PYTHON" -m pip install . --no-deps --force-reinstall -vv
+        "#);
     }
 
     #[test]

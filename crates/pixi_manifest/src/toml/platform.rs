@@ -188,20 +188,21 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 ///
 /// # Inline-table form: a conda subdir plus declared virtual packages.
 /// platforms = [
-///   { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
-///   { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
-///   { name = "jetson", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8.2a" },
-///   { name = "rocm", platform = "linux-64", amdgpu = "gfx90a" },
+///   { subdir = "linux-64", cuda = "12.0", glibc = "2.28" },
+///   { name = "gpu", subdir = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
+///   { name = "jetson", subdir = "linux-aarch64", cuda = "12.8", archspec = "armv8.2a" },
+///   { name = "rocm", subdir = "linux-64", amdgpu = "gfx90a" },
 /// ]
 /// ```
 ///
 /// In the inline-table form:
 ///
-/// * `platform` carries the conda subdir. It can be omitted when `name` is
+/// * `subdir` carries the conda subdir. It can be omitted when `name` is
 ///   itself a valid conda subdir.
+///   `platform` is a deprecated alias; the two keys cannot be used together.
 /// * `name` is the workspace-scoped label features and the lockfile reference
 ///   the entry by. It's optional; when omitted, it's auto-derived from
-///   `platform` and the declared virtual packages so the entry still has a
+///   `subdir` and the declared virtual packages so the entry still has a
 ///   stable identifier.
 /// * Each remaining key is a virtual-package shortcut: `cuda`, `amdgpu`,
 ///   `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Their
@@ -213,11 +214,23 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 ///   declares `__amdgpu` plus the coupled `__amdgpu_arch` (AMDGPU ISA version).
 /// * Other keys must start with `__` and declare raw virtual packages with
 ///   `"version"` or `"version=build_string"` values.
-pub struct TomlPixiPlatform(pub PixiPlatform);
+pub struct TomlPixiPlatform {
+    pub platform: PixiPlatform,
+    pub deprecated_platform_key: Option<Span>,
+}
 
 impl TomlPixiPlatform {
     pub fn into_inner(self) -> PixiPlatform {
-        self.0
+        self.platform
+    }
+}
+
+impl From<PixiPlatform> for TomlPixiPlatform {
+    fn from(platform: PixiPlatform) -> Self {
+        Self {
+            platform,
+            deprecated_platform_key: None,
+        }
     }
 }
 
@@ -230,14 +243,32 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                     span: value.span,
                     line_info: None,
                 })?;
-                Ok(TomlPixiPlatform(PixiPlatform::from_subdir(subdir)))
+                Ok(PixiPlatform::from_subdir(subdir).into())
             }
             inner @ ValueInner::Table(_) => {
                 let table_span = value.span;
                 let mut th = TableHelper::new(&mut Value::with_span(inner, table_span))?;
 
                 let name_value: Option<Spanned<String>> = th.optional("name");
-                let platform_value: Option<Spanned<String>> = th.optional("platform");
+                let subdir_key = th.table.get_key_value("subdir").map(|(key, _)| key.span);
+                let deprecated_platform_key =
+                    th.table.get_key_value("platform").map(|(key, _)| key.span);
+                if let (Some(first), Some(span)) = (subdir_key, deprecated_platform_key) {
+                    return Err(Error {
+                        kind: ErrorKind::DuplicateKey {
+                            key: "subdir".to_string(),
+                            first,
+                        },
+                        span,
+                        line_info: None,
+                    }
+                    .into());
+                }
+                let subdir_value: Option<Spanned<String>> = if subdir_key.is_some() {
+                    th.optional("subdir")
+                } else {
+                    th.optional("platform")
+                };
 
                 let mut declared: Vec<GenericVirtualPackage> = Vec::new();
                 // `cuda` and `amdgpu` are the friendly keys with non-version
@@ -292,7 +323,7 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                 th.finalize(None)?;
 
                 let subdir =
-                    resolve_subdir(platform_value.as_ref(), name_value.as_ref(), table_span)?;
+                    resolve_subdir(subdir_value.as_ref(), name_value.as_ref(), table_span)?;
 
                 let name = match name_value {
                     Some(n) => parse_pixi_platform_name(&n)?,
@@ -316,7 +347,10 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                             line_info: None,
                         }
                     })?;
-                Ok(TomlPixiPlatform(platform))
+                Ok(TomlPixiPlatform {
+                    platform,
+                    deprecated_platform_key,
+                })
             }
             other => Err(expected("a string or table", other, value.span).into()),
         }
@@ -331,7 +365,7 @@ impl<'de> pixi_toml::DeserializeAs<'de, PixiPlatform> for TomlPixiPlatform {
 
 impl Serialize for TomlPixiPlatform {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let platform = &self.0;
+        let platform = &self.platform;
         let name = platform.name().as_str();
         let subdir_str = platform.subdir().to_string();
         let declared = platform.manifest_virtual_package_records();
@@ -356,7 +390,7 @@ impl Serialize for TomlPixiPlatform {
         if emit_name {
             map.serialize_entry("name", name)?;
         }
-        map.serialize_entry("platform", &subdir_str)?;
+        map.serialize_entry("subdir", &subdir_str)?;
         for entry in &entries {
             match entry {
                 InlinePlatformEntry::Scalar { key, value, .. } => {
@@ -647,11 +681,11 @@ fn parse_custom_virtual_package(
 }
 
 fn resolve_subdir(
-    platform_value: Option<&Spanned<String>>,
+    subdir_value: Option<&Spanned<String>>,
     name_value: Option<&Spanned<String>>,
     table_span: Span,
 ) -> Result<Subdir, DeserError> {
-    if let Some(p) = platform_value {
+    if let Some(p) = subdir_value {
         return Subdir::from_str(&p.value).map_err(|e| {
             Error {
                 kind: ErrorKind::Custom(e.to_string().into()),
@@ -666,7 +700,7 @@ fn resolve_subdir(
             Error {
                 kind: ErrorKind::Custom(
                     format!(
-                        "'{}' is not a conda subdir; set 'platform' explicitly when using a custom name",
+                        "'{}' is not a conda subdir; set 'subdir' explicitly when using a custom name",
                         n.value,
                     )
                     .into(),
@@ -679,7 +713,7 @@ fn resolve_subdir(
     }
     Err(Error {
         kind: ErrorKind::Custom(
-            "a platform entry must set at least one of 'name' or 'platform'".into(),
+            "a platform entry must set at least one of 'name' or 'subdir'".into(),
         ),
         span: table_span,
         line_info: None,
@@ -1092,7 +1126,7 @@ fn suggested_platform_entry(candidates: &[GenericVirtualPackage], subdir: Subdir
     // Without an explicit name, a requirement equal to the subdir default
     // collapses the name back to the bare subdir, which is then rejected as
     // `IsSubdirPlatform`.
-    format!("{{ name = \"my-{subdir}\", platform = \"{subdir}\", {pairs} }}")
+    format!("{{ name = \"my-{subdir}\", subdir = \"{subdir}\", {pairs} }}")
 }
 
 /// Render a [`PixiPlatform`] as a [`toml_edit::Value`] using the same
@@ -1116,7 +1150,7 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
     if !platform.has_name_derived_from(&declared) {
         table.insert("name", name.into());
     }
-    table.insert("platform", subdir_str.into());
+    table.insert("subdir", subdir_str.into());
     for entry in entries {
         match entry {
             InlinePlatformEntry::Scalar { key, value, .. } => {
@@ -1217,20 +1251,42 @@ mod test {
         );
     }
 
-    /// `platform` alone: subdir taken from the value, name auto-derived to the
+    /// `subdir` alone: subdir taken from the value, name auto-derived to the
     /// same string, no VPs.
     #[test]
-    fn test_workspace_platform_only_platform_key() {
-        let parsed = TopLevel::from_toml_str(r#"platform = { platform = "linux-64" }"#).unwrap();
+    fn test_workspace_platform_only_subdir_key() {
+        let parsed = TopLevel::from_toml_str(r#"platform = { subdir = "linux-64" }"#).unwrap();
         assert_eq!(parsed.platform.name().as_str(), "linux-64");
         assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
         assert!(parsed.platform.is_subdir_platform());
     }
 
     #[test]
+    fn test_workspace_platform_legacy_alias_preserves_identity() {
+        for fields in [
+            r#"subdir = "linux-64""#,
+            r#"subdir = "linux-64", cuda = "12.0""#,
+            r#"name = "gpu", subdir = "linux-64", cuda = "12.0""#,
+        ] {
+            let canonical = TopLevel::from_toml_str(&format!("platform = {{ {fields} }}")).unwrap();
+            let legacy = TopLevel::from_toml_str(&format!(
+                "platform = {{ {} }}",
+                fields.replace("subdir =", "platform =")
+            ))
+            .unwrap();
+            assert_eq!(canonical.platform.name(), legacy.platform.name());
+            assert!(canonical.platform.has_same_definition(&legacy.platform));
+            assert_eq!(
+                serde_json::to_value(TomlPixiPlatform::from(canonical.platform)).unwrap(),
+                serde_json::to_value(TomlPixiPlatform::from(legacy.platform)).unwrap(),
+            );
+        }
+    }
+
+    #[test]
     fn test_workspace_platform_friendly_virtual_packages_auto_name() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", cuda = "12.0", glibc = "2.28" }"#,
+            r#"platform = { subdir = "linux-64", cuda = "12.0", glibc = "2.28" }"#,
         )
         .unwrap();
         assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
@@ -1252,7 +1308,7 @@ mod test {
     #[test]
     fn test_workspace_platform_arbitrary_virtual_packages_need_no_client_support() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "detected", platform = "linux-64", __amdgpu = "0", __site_service = "2=h1" }"#,
+            r#"platform = { name = "detected", subdir = "linux-64", __amdgpu = "0", __site_service = "2=h1" }"#,
         )
         .unwrap();
         let custom: Vec<String> = virtual_package_specs(&parsed.platform)
@@ -1262,12 +1318,12 @@ mod test {
             })
             .collect();
         assert_eq!(custom, ["__amdgpu=0", "__site_service=2=h1"]);
-        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(parsed.platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
                 "name": "detected",
-                "platform": "linux-64",
+                "subdir": "linux-64",
                 "amdgpu": true,
                 "__site_service": "2=h1",
             }),
@@ -1277,10 +1333,10 @@ mod test {
     #[test]
     fn raw_names_and_values_round_trip() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "custom", platform = "linux-64", windows = "10", macos = "14", __name = "1=h1", __platform = "2=h2", __windows = "3=h3", __macos = "4=h4", __site_service = "2=h1", __amdgpu = "0=h1", __amdgpu_arch = "9.0.16", __cuda = "12.0=h1", __cuda_arch = "8.6=h2", __archspec = "5=zen2" }"#,
+            r#"platform = { name = "custom", subdir = "linux-64", windows = "10", macos = "14", __name = "1=h1", __platform = "2=h2", __windows = "3=h3", __macos = "4=h4", __site_service = "2=h1", __amdgpu = "0=h1", __amdgpu_arch = "9.0.16", __cuda = "12.0=h1", __cuda_arch = "8.6=h2", __archspec = "5=zen2" }"#,
         )
         .unwrap();
-        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform.clone())).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(parsed.platform.clone())).unwrap();
         for (key, value) in [
             ("__name", "1=h1"),
             ("__platform", "2=h2"),
@@ -1327,9 +1383,8 @@ mod test {
             r#"cuda = "12", __cuda = "13""#,
             r#"windows = "10", __win = "11""#,
         ] {
-            let input = format!(
-                r#"platform = {{ name = "custom", platform = "linux-64", {declarations} }}"#
-            );
+            let input =
+                format!(r#"platform = {{ name = "custom", subdir = "linux-64", {declarations} }}"#);
             assert!(TopLevel::from_toml_str(&input).is_err());
         }
     }
@@ -1338,7 +1393,7 @@ mod test {
     fn unprefixed_custom_names_and_builtin_typos_are_rejected() {
         for key in ["cud", "cdua", "site_service", "cuda_arch"] {
             let input =
-                format!(r#"platform = {{ name = "custom", platform = "linux-64", {key} = "12" }}"#);
+                format!(r#"platform = {{ name = "custom", subdir = "linux-64", {key} = "12" }}"#);
             let mut value = toml_span::parse(&input).unwrap();
             let error = TopLevel::deserialize(&mut value).unwrap_err();
             assert!(error.errors.iter().any(|error| matches!(
@@ -1353,7 +1408,7 @@ mod test {
     #[test]
     fn test_workspace_platform_archspec_goes_to_build_string() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", archspec = "x86_64_v3" }"#,
+            r#"platform = { subdir = "linux-64", archspec = "x86_64_v3" }"#,
         )
         .unwrap();
         let records = parsed.platform.manifest_virtual_package_records();
@@ -1371,13 +1426,13 @@ mod test {
     #[test]
     fn test_workspace_platform_archspec_rejects_unknown_names() {
         // The dashed spelling of a known microarchitecture gets a hint.
-        let input = r#"platform = { platform = "linux-64", archspec = "x86-64-v3" }"#;
+        let input = r#"platform = { subdir = "linux-64", archspec = "x86-64-v3" }"#;
         let rendered = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
         assert!(
             rendered.contains("did you mean 'x86_64_v3'"),
             "expected a did-you-mean hint, got: {rendered}",
         );
-        let input = r#"platform = { platform = "linux-aarch64", archspec = "armv8-a" }"#;
+        let input = r#"platform = { subdir = "linux-aarch64", archspec = "armv8-a" }"#;
         let rendered = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
         assert!(
             rendered.contains("'armv8-a' is not a known archspec microarchitecture"),
@@ -1390,11 +1445,11 @@ mod test {
     #[test]
     fn test_workspace_platform_friendly_virtual_packages_order_independent() {
         let a = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", cuda = "12.0", glibc = "2.28" }"#,
+            r#"platform = { subdir = "linux-64", cuda = "12.0", glibc = "2.28" }"#,
         )
         .unwrap();
         let b = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", glibc = "2.28", cuda = "12.0" }"#,
+            r#"platform = { subdir = "linux-64", glibc = "2.28", cuda = "12.0" }"#,
         )
         .unwrap();
         assert_eq!(a.platform.name(), b.platform.name());
@@ -1407,7 +1462,7 @@ mod test {
     #[test]
     fn test_workspace_platform_explicit_name_overrides_auto() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" }"#,
+            r#"platform = { name = "jetson-nano", subdir = "linux-aarch64", cuda = "12.8" }"#,
         )
         .unwrap();
         assert_eq!(parsed.platform.name().as_str(), "jetson-nano");
@@ -1429,27 +1484,27 @@ mod test {
     #[test]
     fn test_workspace_platform_osx_alias_for_macos() {
         let via_osx =
-            TopLevel::from_toml_str(r#"platform = { platform = "osx-arm64", osx = "13.5" }"#)
+            TopLevel::from_toml_str(r#"platform = { subdir = "osx-arm64", osx = "13.5" }"#)
                 .unwrap();
         let via_macos =
-            TopLevel::from_toml_str(r#"platform = { platform = "osx-arm64", macos = "13.5" }"#)
+            TopLevel::from_toml_str(r#"platform = { subdir = "osx-arm64", macos = "13.5" }"#)
                 .unwrap();
         assert_eq!(via_osx.platform.name(), via_macos.platform.name());
         assert_eq!(
             virtual_package_specs(&via_osx.platform),
             virtual_package_specs(&via_macos.platform),
         );
-        let json = serde_json::to_value(TomlPixiPlatform(via_osx.platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(via_osx.platform)).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({ "platform": "osx-arm64", "macos": "13.5" }),
+            serde_json::json!({ "subdir": "osx-arm64", "macos": "13.5" }),
         );
     }
 
     /// Declaring both `macos` and its `osx` alias on one entry is rejected.
     #[test]
     fn test_workspace_platform_osx_and_macos_conflict() {
-        let input = r#"platform = { platform = "osx-arm64", macos = "13.5", osx = "14.0" }"#;
+        let input = r#"platform = { subdir = "osx-arm64", macos = "13.5", osx = "14.0" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1462,7 +1517,7 @@ mod test {
     fn test_workspace_platform_cuda_table_parses() {
         // The `cuda` table expands to `__cuda` + `__cuda_arch`.
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } }"#,
+            r#"platform = { subdir = "linux-64", cuda = { driver = "12.0", arch = "8.6" } }"#,
         )
         .unwrap();
         assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
@@ -1487,10 +1542,10 @@ mod test {
     #[test]
     fn test_workspace_platform_cuda_table_driver_only_equals_scalar() {
         let scalar =
-            TopLevel::from_toml_str(r#"platform = { platform = "linux-64", cuda = "12.0" }"#)
+            TopLevel::from_toml_str(r#"platform = { subdir = "linux-64", cuda = "12.0" }"#)
                 .unwrap();
         let table = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", cuda = { driver = "12.0" } }"#,
+            r#"platform = { subdir = "linux-64", cuda = { driver = "12.0" } }"#,
         )
         .unwrap();
         assert_eq!(scalar.platform.name(), table.platform.name());
@@ -1503,7 +1558,7 @@ mod test {
     /// `arch` without `driver` violates the CEP coupling and is rejected.
     #[test]
     fn test_workspace_platform_cuda_arch_without_driver_rejected() {
-        let input = r#"platform = { platform = "linux-64", cuda = { arch = "8.6" } }"#;
+        let input = r#"platform = { subdir = "linux-64", cuda = { arch = "8.6" } }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1515,7 +1570,7 @@ mod test {
     /// A lone `__cuda_arch` (no `cuda` anywhere) is rejected by the model.
     #[test]
     fn test_workspace_platform_cuda_arch_without_cuda_rejected() {
-        let input = r#"platform = { name = "gpu", platform = "linux-64", __cuda_arch = "8.6" }"#;
+        let input = r#"platform = { name = "gpu", subdir = "linux-64", __cuda_arch = "8.6" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1527,7 +1582,7 @@ mod test {
     #[test]
     fn test_workspace_platform_cuda_table_unknown_key_rejected() {
         let input =
-            r#"platform = { platform = "linux-64", cuda = { driver = "12.0", drivers = "x" } }"#;
+            r#"platform = { subdir = "linux-64", cuda = { driver = "12.0", drivers = "x" } }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1538,7 +1593,7 @@ mod test {
 
     #[test]
     fn test_workspace_platform_cuda_table_empty_rejected() {
-        let input = r#"platform = { platform = "linux-64", cuda = {} }"#;
+        let input = r#"platform = { subdir = "linux-64", cuda = {} }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1549,12 +1604,12 @@ mod test {
 
     #[test]
     fn test_workspace_platform_invalid_name() {
-        let input = r#"platform = { name = "bad name", platform = "linux-64" }"#;
+        let input = r#"platform = { name = "bad name", subdir = "linux-64" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         assert_snapshot!(format_parse_error(input, error), @r#"
          × 'bad name' is not a valid platform name (allowed: alphanumeric, '-')
           ╭─[pixi.toml:1:22]
-        1 │ platform = { name = "bad name", platform = "linux-64" }
+        1 │ platform = { name = "bad name", subdir = "linux-64" }
           ·                      ────────
           ╰────
         "#);
@@ -1565,7 +1620,7 @@ mod test {
         let input = r#"platform = { name = "linux-64-cuda" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         assert_snapshot!(format_parse_error(input, error), @r#"
-         × 'linux-64-cuda' is not a conda subdir; set 'platform' explicitly when using a custom name
+         × 'linux-64-cuda' is not a conda subdir; set 'subdir' explicitly when using a custom name
           ╭─[pixi.toml:1:22]
         1 │ platform = { name = "linux-64-cuda" }
           ·                      ─────────────
@@ -1579,7 +1634,7 @@ mod test {
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
-            rendered.contains("must set at least one of 'name' or 'platform'"),
+            rendered.contains("must set at least one of 'name' or 'subdir'"),
             "expected error to mention required keys, got: {rendered}",
         );
     }
@@ -1597,7 +1652,7 @@ mod test {
 
     #[test]
     fn test_workspace_platform_arbitrary_key_uses_detector_name_rules() {
-        let input = r#"platform = { platform = "linux-64", __AMDGPU = "0" }"#;
+        let input = r#"platform = { subdir = "linux-64", __AMDGPU = "0" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1608,7 +1663,7 @@ mod test {
 
     #[test]
     fn test_workspace_platform_archspec_requires_value() {
-        let input = r#"platform = { platform = "linux-64", archspec = "" }"#;
+        let input = r#"platform = { subdir = "linux-64", archspec = "" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1623,7 +1678,7 @@ mod test {
     /// characters that the version grammar genuinely rejects.
     #[test]
     fn test_workspace_platform_friendly_key_invalid_version_rejected() {
-        let input = r#"platform = { platform = "linux-64", cuda = "@@@" }"#;
+        let input = r#"platform = { subdir = "linux-64", cuda = "@@@" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1670,7 +1725,7 @@ mod test {
     #[test]
     fn test_serialize_bare_string() {
         let platform = platform_with_packages("linux-64", Subdir::Linux64, Vec::new());
-        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(platform)).unwrap();
         assert_eq!(json, serde_json::Value::String("linux-64".into()));
     }
 
@@ -1681,11 +1736,11 @@ mod test {
             Subdir::Linux64,
             vec![version_virtual_package("__cuda", "12.0")],
         );
-        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "platform": "linux-64",
+                "subdir": "linux-64",
                 "cuda": "12.0",
             }),
         );
@@ -1698,12 +1753,12 @@ mod test {
             Subdir::LinuxAarch64,
             vec![version_virtual_package("__cuda", "12.8")],
         );
-        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
                 "name": "jetson-nano",
-                "platform": "linux-aarch64",
+                "subdir": "linux-aarch64",
                 "cuda": "12.8",
             }),
         );
@@ -1716,11 +1771,11 @@ mod test {
             Subdir::Linux64,
             vec![archspec_virtual_package("x86_64_v3")],
         );
-        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "platform": "linux-64",
+                "subdir": "linux-64",
                 "archspec": "x86_64_v3",
             }),
         );
@@ -1758,7 +1813,7 @@ mod test {
             declared.solver_virtual_package_records().into_owned(),
         )
         .unwrap();
-        let json = serde_json::to_value(TomlPixiPlatform(detected.clone())).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(detected.clone())).unwrap();
         assert!(json.get("name").is_none());
         assert_eq!(json["archspec"], "zen2");
         assert_eq!(json["cuda"], "12.4");
@@ -1788,11 +1843,11 @@ mod test {
                 version_virtual_package("__cuda_arch", "8.6"),
             ],
         );
-        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "platform": "linux-64",
+                "subdir": "linux-64",
                 "cuda": { "driver": "12.0", "arch": "8.6" },
             }),
         );
@@ -1806,21 +1861,21 @@ mod test {
             Subdir::Linux64,
             vec![version_virtual_package("__cuda", "12.0")],
         );
-        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(platform)).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({ "platform": "linux-64", "cuda": "12.0" }),
+            serde_json::json!({ "subdir": "linux-64", "cuda": "12.0" }),
         );
     }
 
     #[test]
     fn test_roundtrip_builtin_package_with_build_string() {
-        let input = r#"platform = { platform = "linux-64", cuda = "12.0=h1" }"#;
+        let input = r#"platform = { subdir = "linux-64", cuda = "12.0=h1" }"#;
         let parsed = TopLevel::from_toml_str(input).unwrap();
-        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(parsed.platform)).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({ "platform": "linux-64", "__cuda": "12.0=h1" })
+            serde_json::json!({ "subdir": "linux-64", "__cuda": "12.0=h1" })
         );
     }
 
@@ -1849,7 +1904,7 @@ mod test {
     #[test]
     fn unknown_archspec_build_round_trips() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "unknown-arch", platform = "linux-64", __archspec = "1=0" }"#,
+            r#"platform = { name = "unknown-arch", subdir = "linux-64", __archspec = "1=0" }"#,
         )
         .unwrap();
         let encoded = format!(
@@ -1867,13 +1922,13 @@ mod test {
     #[test]
     fn test_roundtrip_cuda_table() {
         let original =
-            r#"platform = { platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } }"#;
+            r#"platform = { subdir = "linux-64", cuda = { driver = "12.0", arch = "8.6" } }"#;
         let parsed = TopLevel::from_toml_str(original).unwrap();
-        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(parsed.platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "platform": "linux-64",
+                "subdir": "linux-64",
                 "cuda": { "driver": "12.0", "arch": "8.6" },
             }),
         );
@@ -1884,13 +1939,13 @@ mod test {
         // `glibc = "2.28"` is exactly the linux-64 default, so it's elided
         // from the serialised shape (the next parse will re-materialise it
         // from defaults). `cuda` has no default and survives the round-trip.
-        let original = r#"platform = { platform = "linux-64", cuda = "12.0", glibc = "2.28" }"#;
+        let original = r#"platform = { subdir = "linux-64", cuda = "12.0", glibc = "2.28" }"#;
         let parsed = TopLevel::from_toml_str(original).unwrap();
-        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(parsed.platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "platform": "linux-64",
+                "subdir": "linux-64",
                 "cuda": "12.0",
             }),
         );
@@ -1898,15 +1953,14 @@ mod test {
 
     #[test]
     fn test_roundtrip_named_table() {
-        let original =
-            r#"platform = { name = "jetson", platform = "linux-aarch64", cuda = "12.8" }"#;
+        let original = r#"platform = { name = "jetson", subdir = "linux-aarch64", cuda = "12.8" }"#;
         let parsed = TopLevel::from_toml_str(original).unwrap();
-        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(parsed.platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
                 "name": "jetson",
-                "platform": "linux-aarch64",
+                "subdir": "linux-aarch64",
                 "cuda": "12.8",
             }),
         );
@@ -1915,7 +1969,7 @@ mod test {
     #[test]
     fn test_roundtrip_bare_string() {
         let parsed = TopLevel::from_toml_str(r#"platform = "linux-64""#).unwrap();
-        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform::from(parsed.platform)).unwrap();
         assert_eq!(json, serde_json::Value::String("linux-64".into()));
     }
 
@@ -1925,7 +1979,7 @@ mod test {
         // version it stands for, and is identical to declaring them via raw
         // keys, auto-name included.
         let parsed =
-            TopLevel::from_toml_str(r#"platform = { platform = "linux-64", amdgpu = "gfx90a" }"#)
+            TopLevel::from_toml_str(r#"platform = { subdir = "linux-64", amdgpu = "gfx90a" }"#)
                 .unwrap();
         assert_eq!(
             virtual_package_specs(&parsed.platform),
@@ -1944,7 +1998,7 @@ mod test {
         );
 
         let raw = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }"#,
+            r#"platform = { subdir = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }"#,
         )
         .unwrap();
         assert_eq!(raw.platform.name(), parsed.platform.name());
@@ -1957,7 +2011,7 @@ mod test {
     #[test]
     fn test_workspace_platform_amdgpu_true_parses() {
         let parsed =
-            TopLevel::from_toml_str(r#"platform = { platform = "linux-64", amdgpu = true }"#)
+            TopLevel::from_toml_str(r#"platform = { subdir = "linux-64", amdgpu = true }"#)
                 .unwrap();
         assert_eq!(
             virtual_package_specs(&parsed.platform)[0],
@@ -1973,13 +2027,13 @@ mod test {
 
     #[test]
     fn test_workspace_platform_amdgpu_isa_version_suggests_target_name() {
-        let input = r#"platform = { platform = "linux-64", amdgpu = "9.0.10" }"#;
+        let input = r#"platform = { subdir = "linux-64", amdgpu = "9.0.10" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         assert_snapshot!(format_parse_error(input, error), @r#"
          × '9.0.10' is not an AMDGPU target name, write it as 'gfx90a'
-          ╭─[pixi.toml:1:47]
-        1 │ platform = { platform = "linux-64", amdgpu = "9.0.10" }
-          ·                                               ──────
+          ╭─[pixi.toml:1:45]
+        1 │ platform = { subdir = "linux-64", amdgpu = "9.0.10" }
+          ·                                             ──────
           ╰────
         "#);
     }
@@ -1990,31 +2044,31 @@ mod test {
     fn test_workspace_platform_amdgpu_invalid_shapes_rejected() {
         for (input, expected) in [
             (
-                r#"platform = { platform = "linux-64", amdgpu = false }"#,
+                r#"platform = { subdir = "linux-64", amdgpu = false }"#,
                 "`amdgpu = false` declares nothing",
             ),
             (
-                r#"platform = { platform = "linux-64", amdgpu = "gfx90a:xnack-" }"#,
+                r#"platform = { subdir = "linux-64", amdgpu = "gfx90a:xnack-" }"#,
                 "'gfx90a:xnack-' is not an AMDGPU target name",
             ),
             (
-                r#"platform = { platform = "linux-64", amdgpu = "mi250" }"#,
+                r#"platform = { subdir = "linux-64", amdgpu = "mi250" }"#,
                 "expected something like 'gfx90a' or 'gfx1100'",
             ),
             (
-                r#"platform = { platform = "linux-64", amdgpu = { arch = "gfx90a" } }"#,
+                r#"platform = { subdir = "linux-64", amdgpu = { arch = "gfx90a" } }"#,
                 "expected `true` or an AMDGPU target name",
             ),
             (
-                r#"platform = { name = "gpu", platform = "linux-64", __amdgpu_arch = "9.0.10" }"#,
+                r#"platform = { name = "gpu", subdir = "linux-64", __amdgpu_arch = "9.0.10" }"#,
                 "`__amdgpu_arch` requires `__amdgpu`",
             ),
             (
-                r#"platform = { name = "gpu", platform = "linux-64", __amdgpu = "1" }"#,
+                r#"platform = { name = "gpu", subdir = "linux-64", __amdgpu = "1" }"#,
                 "its version is always '0'",
             ),
             (
-                r#"platform = { platform = "linux-64", amdgpu = true, __amdgpu = "0" }"#,
+                r#"platform = { subdir = "linux-64", amdgpu = true, __amdgpu = "0" }"#,
                 "is declared more than once",
             ),
         ] {

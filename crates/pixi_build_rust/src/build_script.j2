@@ -34,7 +34,7 @@ if exist "%PREFIX%\Library\include\openssl" {{ export("OPENSSL_DIR", env("PREFIX
 {{ export("RUSTC", bin_path ~ "rustc") }}
 {{ export("RUSTDOC", bin_path ~ "rustdoc") }}
 
-{{ (bin_path ~ "cargo")|tojson }} install --locked --root "{{ env("PREFIX") }}" --path "{{ source_dir }}" --target-dir target --no-track {{ extra_args | join(" ") }} --force
+{{ (bin_path ~ "cargo")|tojson }} install {% if verbosity_flag %}{{ verbosity_flag }} {% endif %}--locked --root "{{ env("PREFIX") }}" --path "{{ source_dir }}" --target-dir target --no-track {{ extra_args | join(" ") }} --force
 
 {%- if not is_bash %}
 if errorlevel 1 exit 1

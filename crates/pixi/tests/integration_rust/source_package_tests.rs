@@ -3474,7 +3474,7 @@ build-globs = ["*.cu"]
             r#"
 [workspace]
 channels = []
-platforms = [{{ name = "gpu", platform = "{}", linux = "4.18" }}]
+platforms = [{{ name = "gpu", subdir = "{}", linux = "4.18" }}]
 preview = ["pixi-build"]
 
 [dependencies]

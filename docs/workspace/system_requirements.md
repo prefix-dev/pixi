@@ -43,7 +43,7 @@ Putting the constraints on the platform makes the data flow obvious:
     ```toml title="After"
     [workspace]
     platforms = [
-      { platform = "linux-64", cuda = "12" },
+      { subdir = "linux-64", cuda = "12" },
     ]
     ```
 
@@ -60,8 +60,8 @@ Putting the constraints on the platform makes the data flow obvious:
     ```toml title="After"
     [workspace]
     platforms = [
-      { platform = "linux-64", glibc = "2.28" },
-      { platform = "osx-arm64", macos = "13.0" },
+      { subdir = "linux-64", glibc = "2.28" },
+      { subdir = "osx-arm64", macos = "13.0" },
     ]
     ```
 
@@ -81,7 +81,7 @@ Putting the constraints on the platform makes the data flow obvious:
     [workspace]
     platforms = [
       "linux-64",
-      { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+      { name = "linux-64-cuda", subdir = "linux-64", cuda = "12" },
     ]
 
     [feature.gpu]

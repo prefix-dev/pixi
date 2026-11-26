@@ -60,8 +60,9 @@ pub use manifests::{
     ActivationEditError, ActivationLocation, ActivationScriptsChange, AddDependencyError,
     AssociateProvenance, EnvironmentEditError, FeatureNotFoundError, InvalidVersionError,
     ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError, PackageManifest,
-    PlatformEditError, ProvenanceError, RemoveChannelsError, RemoveDependencyError,
-    SetRequiresPixiError, TaskEditError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
+    PlatformAddOutcome, PlatformEditError, ProvenanceError, RemoveChannelsError,
+    RemoveDependencyError, SetRequiresPixiError, TaskEditError, WithProvenance, WorkspaceManifest,
+    WorkspaceManifestMut, format_platform_definition,
 };
 use miette::Diagnostic;
 pub use package::Package;

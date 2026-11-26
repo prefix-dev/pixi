@@ -3,8 +3,8 @@
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
 platforms = [
-  { platform = "linux-64", cuda = "12.0" },
-  { platform = "win-64", cuda = "12.0" },
+  { subdir = "linux-64", cuda = "12.0" },
+  { subdir = "win-64", cuda = "12.0" },
 ]
 
 # --8<-- [start:cuda-version]

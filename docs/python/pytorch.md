@@ -13,7 +13,7 @@ CUDA builds of PyTorch depend on the `__cuda` [virtual package](../conda_ecosyst
 ```toml title="pixi.toml"
 [workspace]
 platforms = [
-  { platform = "linux-64", cuda = "12.0" },
+  { subdir = "linux-64", cuda = "12.0" },
 ]
 ```
 
@@ -219,7 +219,7 @@ To summarize:
 #### GPU version of `pytorch` not installing:
 
 1. Using [conda-Forge](#installing-from-conda-forge)
-   - Ensure the target platform declares CUDA via `workspace.platforms` (e.g. `{ platform = "linux-64", cuda = "12.0" }`) so Pixi installs CUDA-enabled packages.
+   - Ensure the target platform declares CUDA via `workspace.platforms` (e.g. `{ subdir = "linux-64", cuda = "12.0" }`) so Pixi installs CUDA-enabled packages.
    - Use the `cuda-version` package to pin the desired CUDA version.
 2. Using [PyPI](#installing-from-pypi)
    - Use the appropriate PyPI index to fetch the correct CUDA-enabled wheels.
