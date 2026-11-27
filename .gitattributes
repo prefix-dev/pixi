@@ -1,2 +1,5 @@
 pixi.lock merge=binary linguist-language=YAML linguist-generated=true
 Cargo.lock merge=binary linguist-generated=true
+# Build script templates are embedded with include_str! and run by bash/brush,
+# which reject CRLF line endings (e.g. from a Windows checkout with autocrlf)
+crates/pixi_build_ros/templates/*.sh text eol=lf
