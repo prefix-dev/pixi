@@ -480,6 +480,70 @@ platforms = ["{other_platform}"]
         ExitCode.FAILURE,
         stderr_contains=[other_platform, CURRENT_PLATFORM],
     )
+    assert not (tmp_pixi_workspace / ".pixi" / "envs" / "default").exists()
+
+
+@pytest.mark.parametrize("all_environments", [False, True])
+def test_install_explicit_unsupported_platform(
+    pixi: Path, tmp_pixi_workspace: Path, all_environments: bool
+) -> None:
+    """An explicit target permits installation even when the host cannot run it."""
+    other_platform = get_other_platform()
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{other_platform}"]
+""")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest,
+            "--platform",
+            other_platform,
+            *(["--all"] if all_environments else []),
+        ],
+        stderr_contains="environment has been installed",
+        stderr_excludes="Skipping environment(s)",
+    )
+
+
+@pytest.mark.parametrize("include_supported", [False, True])
+def test_install_all_skips_unsupported_platform_without_dependencies(
+    pixi: Path, tmp_pixi_workspace: Path, include_supported: bool
+) -> None:
+    """Host-only task environments are skipped, not reported as installed."""
+    other_platform = get_other_platform()
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    contents = f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{other_platform}", "{CURRENT_PLATFORM}"]
+
+[environments]
+default = {{ features = [], platforms = ["{other_platform}"] }}
+"""
+    if include_supported:
+        contents += f'host = {{ features = [], platforms = ["{CURRENT_PLATFORM}"] }}\n'
+    manifest.write_text(contents)
+
+    verify_cli_command(
+        [pixi, "install", "--all", "--manifest-path", manifest],
+        stderr_contains=[
+            "Skipping environment(s) that do not support the current platform: default",
+            *(["The host environment has been installed"] if include_supported else []),
+        ],
+        stderr_excludes=[
+            "The default environment has been installed",
+            "The following environments have been installed",
+        ],
+    )
+    assert not (tmp_pixi_workspace / ".pixi" / "envs" / "default").exists()
 
 
 def test_run_fails_on_unsupported_platform_with_dependency(

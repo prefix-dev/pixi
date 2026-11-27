@@ -9,6 +9,15 @@ homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 
+[features]
+default = ["rustls"]
+native-tls = [
+  "pixi_auth/native-tls",
+  "rattler_networking/native-tls",
+  "reqwest/native-tls",
+]
+rustls = ["pixi_auth/rustls", "rattler_networking/rustls", "reqwest/rustls"]
+
 [dependencies]
 async-fd-lock = { workspace = true }
 filetime = { workspace = true }
@@ -58,12 +67,3 @@ insta = { workspace = true }
 rstest = { workspace = true }
 temp-env = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
-
-[features]
-default = ["rustls"]
-native-tls = [
-  "pixi_auth/native-tls",
-  "rattler_networking/native-tls",
-  "reqwest/native-tls",
-]
-rustls = ["pixi_auth/rustls", "rattler_networking/rustls", "reqwest/rustls"]

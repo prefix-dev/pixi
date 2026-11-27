@@ -15,24 +15,21 @@ use miette::Diagnostic;
 use pixi_core::{
     Workspace,
     activation::ActivationError,
-    environment::{
-        LockFileUsage, PlatformNotInEnvironmentError, SanityCheckError, sanity_check_workspace,
-    },
-    host::HostProbeError,
+    environment::{LockFileUsage, SanityCheckError, sanity_check_workspace},
     lock_file::{
-        ReinstallPackages, UpdateLockFileError, UpdateLockFileOptions, UpdateMode,
-        UpdatePrefixError,
+        LockFileDerivedData, ReinstallPackages, UpdateLockFileError, UpdateLockFileOptions,
+        UpdateMode, UpdatePrefixError,
     },
     workspace::{
         Environment, EnvironmentFromNameError,
-        errors::UnsupportedPlatformError,
+        platform_selection::{PrefixPolicy, ResolvedPlatform},
         virtual_packages::{
-            EnvironmentRunnability, RunPlatformUnsupportedError, VerifyCurrentPlatformError,
-            classify_environment_runnability, verify_current_platform_can_run_environment,
+            RunPlatformUnsupportedError, environment_has_dependencies_for_platform,
+            verify_resolved_platform,
         },
     },
 };
-use pixi_manifest::{EnvironmentName, HasWorkspaceManifest, PixiPlatformName};
+use pixi_manifest::{EnvironmentName, PixiPlatformName};
 use pixi_task::{
     AmbiguousTask, CacheUpdateError, CanSkip, DisambiguationSource, ExecutableTask,
     FailedToParseShellScript, InputHashesError, InvalidWorkingDirectory, PreferExecutable,
@@ -82,6 +79,12 @@ pub struct RunOptions {
     /// Shown instead of the task's command in the task header.
     pub display_command: Option<String>,
 }
+/// The result of a run and the authoritative selections used by task lookup and execution.
+#[derive(Debug)]
+pub struct RunOutcome<'p> {
+    pub exit_code: i32,
+    pub platforms: HashMap<EnvironmentName, ResolvedPlatform<'p>>,
+}
 
 /// An error that can occur while running a task or command.
 #[derive(Debug, Error, Diagnostic)]
@@ -99,27 +102,11 @@ pub enum RunError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    HostProbe(#[from] HostProbeError),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    PlatformNotInEnvironment(#[from] PlatformNotInEnvironmentError),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
     UpdateLockFile(#[from] UpdateLockFileError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
     TaskGraph(#[from] TaskGraphError),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    VerifyCurrentPlatform(#[from] VerifyCurrentPlatformError),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    UnsupportedPlatform(#[from] Box<UnsupportedPlatformError>),
 
     #[error(transparent)]
     CheckCache(std::io::Error),
@@ -152,12 +139,12 @@ pub enum RunError {
     CacheUpdate(#[from] CacheUpdateError),
 }
 
-pub async fn run<I: Interface>(
+pub async fn run<'p, I: Interface>(
     interface: &I,
-    workspace: &Workspace,
+    workspace: &'p Workspace,
     options: RunOptions,
     progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
-) -> Result<i32, RunError> {
+) -> Result<RunOutcome<'p>, RunError> {
     // Fail before resolving the lock file, there is nothing to run
     if options.task.iter().all(|arg| arg.trim().is_empty()) {
         return Err(RunError::NoTask);
@@ -172,48 +159,12 @@ pub async fn run<I: Interface>(
                 .ok_or_else(|| EnvironmentFromNameError::Unknown(name.clone()))
         })
         .transpose()?;
-    let environment = explicit_environment
-        .clone()
-        .unwrap_or_else(|| workspace.default_environment());
     let allow_installs = !options.no_install;
 
     // Sanity check of prefix location
     sanity_check_workspace(workspace).await?;
 
-    // Detect the host, the virtual packages this machine provides, only for the
-    // environment this command targets. Other environments are detected when a
-    // task runs in them.
-    workspace
-        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
-        .await?;
-
-    // `--platform` pins which declared platform the environment is installed
-    // and activated for. Without it we auto-upgrade to the platform the
-    // environment was last installed for (so users need not repeat
-    // `--platform`), falling back to the host-aware best match when the
-    // environment isn't installed yet.
     let user_platform = options.platform.clone();
-    let run_platform = user_platform
-        .clone()
-        .or_else(|| environment.installed_resolved_platform_name());
-    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
-
-    // A `--platform` the environment doesn't list is a membership error. With
-    // no platform requested, defer to the install path's minimum fallback.
-    if allow_installs
-        && best_declared_platform.is_none()
-        && let Some(name) = user_platform.as_ref()
-    {
-        return Err(PlatformNotInEnvironmentError {
-            platform: name.clone(),
-            environment: environment.name().clone(),
-        }
-        .into());
-    }
-
-    if allow_installs {
-        environment.emit_emulation_warning();
-    }
 
     // Top-level progress, kept here so we can clear it between phases.
     let progress = progress.cloned();
@@ -232,9 +183,9 @@ pub async fn run<I: Interface>(
         .await?
         .0;
 
-    // Only an explicit `--platform` pins the global target; the implicit
-    // auto-upgrade is resolved per-environment in the loop below, since a
-    // global pin broke sibling environments with a different platform.
+    // Only an explicit `--platform` pins the global target. Task graph
+    // construction detects each relevant environment's host before selecting
+    // its platform and resolving platform-specific task definitions.
     lock_file.set_explicit_target_platform(user_platform.clone());
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
@@ -245,7 +196,14 @@ pub async fn run<I: Interface>(
     });
 
     // Construct a task graph from the input arguments.
-    let task_graph = build_task_graph(interface, workspace, explicit_environment, &options).await?;
+    let (task_graph, platforms) = build_task_graph(
+        interface,
+        workspace,
+        explicit_environment,
+        &options,
+        &lock_file,
+    )
+    .await?;
     tracing::debug!("Task graph: {}", task_graph);
 
     if options.dry_run {
@@ -268,47 +226,20 @@ pub async fn run<I: Interface>(
 
     let init_cwd = std::env::current_dir().ok();
     for task_id in task_graph.topological_order() {
-        let executable_task =
-            ExecutableTask::from_task_graph(&task_graph, task_id, init_cwd.clone());
+        let resolved = platforms
+            .get(task_graph[task_id].run_environment.name())
+            .expect("task graph environments have a resolved platform");
+        let executable_task = ExecutableTask::from_task_graph(
+            &task_graph,
+            task_id,
+            init_cwd.clone(),
+            resolved.platform(),
+        );
 
         // If the task is not executable (e.g. an alias), we skip it. This ensures we
         // don't instantiate a prefix for an alias.
         if !executable_task.task().is_executable() {
             continue;
-        }
-
-        if allow_installs {
-            workspace
-                .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(
-                    &executable_task.run_environment,
-                ))
-                .await?;
-        }
-
-        // Classify how this machine runs the task's environment. A `--platform`
-        // override means the user vouches for the machine, so skip the check.
-        let runnability = (allow_installs && user_platform.is_none()).then(|| {
-            classify_environment_runnability(
-                &executable_task.run_environment,
-                Some(lock_file.as_lock_file()),
-            )
-        });
-
-        // Fail before announcing a task whose environment can't run here at
-        // all; by-accident environments proceed and `--platform` overrides.
-        if runnability == Some(EnvironmentRunnability::Unsupported) {
-            return Err(
-                match verify_current_platform_can_run_environment(
-                    &executable_task.run_environment,
-                    Some(lock_file.as_lock_file()),
-                ) {
-                    Err(err) => err.into(),
-                    Ok(()) => {
-                        Box::new(executable_task.run_environment.unsupported_platform_error())
-                            .into()
-                    }
-                },
-            );
         }
 
         // Showing which command is being run if the level and type allows it.
@@ -386,7 +317,7 @@ pub async fn run<I: Interface>(
         // If we don't have a command environment yet, we need to compute it. We lazily
         // compute the task environment because we only need the environment if
         // a task is actually executed.
-        let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
+        let task_env: &_ = match task_envs.entry(executable_task.run_environment.name().clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
                 // Report the platform per environment: a bare `pixi run` may
@@ -397,39 +328,30 @@ pub async fn run<I: Interface>(
                     executable_task.platform.name(),
                 );
 
-                // A dependency-less environment installs nothing that could
-                // require a virtual package the machine lacks, so skip the
-                // prefix build and platform validation -- its tasks run
-                // anywhere, relying only on the host environment.
-                if allow_installs && runnability != Some(EnvironmentRunnability::NoDependencies) {
-                    // No `--platform`: pin to the platform this environment was
-                    // last installed for, not a sibling's bare subdir.
-                    if user_platform.is_none() {
-                        lock_file.set_installed_target_platform(
-                            executable_task
-                                .run_environment
-                                .installed_resolved_platform_name(),
-                        );
-                    }
-
-                    // Ensure there is a valid prefix
+                if allow_installs
+                    && (executable_task
+                        .run_environment
+                        .installed_resolved_platform()
+                        .is_some()
+                        || environment_has_dependencies_for_platform(
+                            &executable_task.run_environment,
+                            resolved.platform(),
+                        ))
+                {
                     lock_file
                         .prefix(
                             &executable_task.run_environment,
+                            resolved,
                             UpdateMode::QuickValidate,
                             &ReinstallPackages::default(),
                             &pixi_core::environment::InstallFilter::default(),
                         )
                         .await?;
-
-                    // Validate that the auto-detected machine (or explicit
-                    // `--platform`) can run what was installed, comparing
-                    // against the resolved/minimum platforms in conda-meta/pixi.
-                    pixi_core::workspace::virtual_packages::verify_run_platform(
-                        &executable_task.run_environment,
-                        user_platform.as_ref(),
-                    )?;
                 }
+                verify_resolved_platform(&executable_task.run_environment, resolved)?;
+                executable_task
+                    .run_environment
+                    .emit_emulation_warning(resolved.platform());
 
                 if let Some(progress) = &progress {
                     progress.on_clear();
@@ -440,7 +362,7 @@ pub async fn run<I: Interface>(
 
                 let command_env = get_task_env(
                     &executable_task.run_environment,
-                    &executable_task.platform,
+                    resolved.platform(),
                     options.clean_env || executable_task.task().clean_env(),
                     Some(lock_file.as_lock_file()),
                     workspace.config().force_activate(),
@@ -466,7 +388,10 @@ pub async fn run<I: Interface>(
         )
         .await?;
         if code != 0 {
-            return Ok(code);
+            return Ok(RunOutcome {
+                exit_code: code,
+                platforms,
+            });
         }
         task_idx += 1;
 
@@ -480,7 +405,10 @@ pub async fn run<I: Interface>(
         executable_task.save_cache(post_hash).await?;
     }
 
-    Ok(0)
+    Ok(RunOutcome {
+        exit_code: 0,
+        platforms,
+    })
 }
 
 async fn build_task_graph<'p, I: Interface>(
@@ -488,28 +416,39 @@ async fn build_task_graph<'p, I: Interface>(
     workspace: &'p Workspace,
     explicit_environment: Option<Environment<'p>>,
     options: &RunOptions,
-) -> Result<TaskGraph<'p>, TaskGraphError> {
-    // Pin the search only to an explicit `--platform`; otherwise each
-    // environment resolves its own platform, so foreign-platform tasks are found.
-    let search_platform = if !options.no_install {
-        options.platform.as_ref().and_then(|name| {
-            workspace
-                .workspace_manifest()
-                .workspace
-                .platform_by_name(name)
-        })
-    } else {
-        None
-    };
-    let search_environment =
-        SearchEnvironments::from_opt_env(workspace, explicit_environment, search_platform)
-            .with_disambiguate_fn(async |problem: &AmbiguousTask<'p>| {
-                disambiguate_task_interactive(interface, problem).await
-            });
-
-    TaskGraph::from_cmd_args(
+    lock_file: &LockFileDerivedData<'p>,
+) -> Result<
+    (
+        TaskGraph<'p>,
+        HashMap<EnvironmentName, ResolvedPlatform<'p>>,
+    ),
+    TaskGraphError,
+> {
+    let mut search_environment = SearchEnvironments::from_opt_env(
         workspace,
-        &search_environment,
+        explicit_environment,
+        options.platform.clone(),
+        async |environment: &Environment<'p>| {
+            lock_file
+                .resolve_platform(
+                    environment,
+                    if options.no_install {
+                        PrefixPolicy::Reuse
+                    } else {
+                        PrefixPolicy::Replace
+                    },
+                    UpdateMode::QuickValidate,
+                )
+                .await
+        },
+    )
+    .with_disambiguate_fn(async |problem: &AmbiguousTask<'p>| {
+        disambiguate_task_interactive(interface, problem).await
+    });
+
+    let graph = TaskGraph::from_cmd_args(
+        workspace,
+        &mut search_environment,
         options.task.clone(),
         options.skip_deps,
         if options.executable {
@@ -519,12 +458,13 @@ async fn build_task_graph<'p, I: Interface>(
         },
         options.templated,
     )
-    .await
+    .await?;
+    Ok((graph, search_environment.into_platforms()))
 }
 
 /// Called to execute a single command. Returns its exit code.
 async fn execute_task(
-    task: &ExecutableTask<'_>,
+    task: &ExecutableTask<'_, '_>,
     command_env: &HashMap<OsString, OsString>,
     kill_signal: KillSignal,
     custom_commands: &HashMap<String, Rc<dyn ShellCommand>>,

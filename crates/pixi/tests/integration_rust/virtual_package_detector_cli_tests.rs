@@ -91,7 +91,7 @@ impl Sandbox {
     fn workspace(&self, declares_test_good: bool) -> PathBuf {
         let subdir = Subdir::current().unwrap();
         let platform = if declares_test_good {
-            format!(r#"{{ platform = "{subdir}", __test_good = "1.0" }}"#)
+            format!(r#"{{ subdir = "{subdir}", __test_good = "1.0" }}"#)
         } else {
             format!(r#""{subdir}""#)
         };
@@ -717,7 +717,7 @@ async fn a_platform_override_does_not_execute_native_detectors() {
 [workspace]
 name = "detectors"
 channels = ["{}"]
-platforms = [{{ platform = "{foreign}", __test_good = "1.0" }}]
+platforms = [{{ subdir = "{foreign}", __test_good = "1.0" }}]
 "#,
             sandbox.channel
         ),
@@ -1201,7 +1201,7 @@ async fn direct_manifest_keys_match_canonical_detector_names_and_exact_builds() 
 [workspace]
 name = "site-service"
 channels = ["{}"]
-platforms = [{{ name = "site", platform = "{}", __site_service = "2=h1" }}]
+platforms = [{{ name = "site", subdir = "{}", __site_service = "2=h1" }}]
 
 [target.site.tasks]
 check = "echo site service available"

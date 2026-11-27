@@ -98,9 +98,19 @@ async fn revalidate_locked_prefix(workspace: &Workspace, lock_file: &LockFile) {
         )
         .await
         .unwrap();
+    let environment = workspace.default_environment();
+    let selection = derived
+        .resolve_platform(
+            &environment,
+            pixi_core::workspace::platform_selection::PrefixPolicy::Replace,
+            UpdateMode::Revalidate,
+        )
+        .await
+        .unwrap();
     derived
         .prefix(
-            &workspace.default_environment(),
+            &environment,
+            &selection,
             UpdateMode::Revalidate,
             &ReinstallPackages::default(),
             &InstallFilter::default(),
@@ -239,7 +249,7 @@ async fn project_allow_with_user_decision(global_decision: Option<&str>, authori
         r#"[workspace]
 name = "repository-consent"
 channels = ["{channel}"]
-platforms = [{{ platform = "{subdir}", __test_good = "1" }}]
+platforms = [{{ subdir = "{subdir}", __test_good = "1" }}]
 "#
     ))
     .unwrap();
@@ -617,7 +627,7 @@ async fn unused_high_priority_feature_cannot_shadow_active_detector() {
         r#"[workspace]
 name = "scoped-detector"
 channels = ["{low_url}"]
-platforms = [{{ name = "custom", platform = "{subdir}", __test_good = "1" }}]
+platforms = [{{ name = "custom", subdir = "{subdir}", __test_good = "1" }}]
 
 [dependencies]
 needs-good = "*"
@@ -679,7 +689,7 @@ async fn environment_channel_order_controls_ownership_and_equal_scopes_share_hos
         r#"[workspace]
 name = "ordered-detectors"
 channels = []
-platforms = [{{ name = "custom", platform = "{subdir}", __test_good = "1" }}]
+platforms = [{{ name = "custom", subdir = "{subdir}", __test_good = "1" }}]
 
 [feature.allowed]
 channels = ["{low_url}"]
@@ -724,9 +734,9 @@ group-allowed = {{ features = ["allowed"], no-default-feature = true, solve-grou
         .environment(&EnvironmentName::Named("group-allowed".into()))
         .unwrap();
     assert!(allowed.best_declared_platform().is_some());
-    assert!(reversed.best_declared_platform().is_none());
-    assert!(group_denied.best_declared_platform().is_none());
-    assert!(group_allowed.best_declared_platform().is_none());
+    assert!(reversed.best_declared_platform().is_some());
+    assert!(group_denied.best_declared_platform().is_some());
+    assert!(group_allowed.best_declared_platform().is_some());
     assert!(Arc::ptr_eq(&allowed.host(), &twin.host()));
     assert!(Arc::ptr_eq(&group_denied.host(), &group_allowed.host()));
     assert_eq!(
@@ -747,7 +757,7 @@ async fn source_only_dependencies_still_detect_declared_custom_capabilities() {
         r#"[workspace]
 name = "source-detector"
 channels = ["{url}"]
-platforms = [{{ platform = "{subdir}", __test_good = "1" }}]
+platforms = [{{ subdir = "{subdir}", __test_good = "1" }}]
 preview = ["pixi-build"]
 
 [dependencies]

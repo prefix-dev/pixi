@@ -482,7 +482,7 @@ The Python backend follows this build process:
 3. **Package Installation**: Executes the selected installer with the following options:
    - `--no-deps`: Don't install dependencies (handled by conda)
    - `--no-build-isolation`: Use the conda environment for building
-   - `-vv`: Verbose output for debugging
+   - Verbosity follows the build log level: no flag by default, `-v` with `pixi -vv`, and `-vv` with `pixi -vvv` or more
 4. **Package Creation**: Creates either a noarch or platform-specific conda package
 
 ## Installer Selection

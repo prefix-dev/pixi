@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_build_ros/src/main.rs
-assertion_line: 1000
 expression: generated.recipe
 ---
 schema_version: 1
@@ -54,6 +53,7 @@ requirements:
       then: "cross-python_${{ target_platform }}"
     - if: build_platform != target_platform
       then: numpy
+    - ros-distro-mutex * noetic_*
   host:
     - asio <10.0.0
     - libgl-devel

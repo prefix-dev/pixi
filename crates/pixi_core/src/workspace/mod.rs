@@ -4,6 +4,7 @@ mod environment;
 pub mod errors;
 pub mod grouped_environment;
 mod has_project_ref;
+pub mod platform_selection;
 pub mod registry;
 mod repodata;
 mod solve_group;
@@ -34,7 +35,7 @@ pub use conda_pypi_map::CondaPypiMapError;
 pub use discovery::{
     DiscoveryStart, LocatorWarnings, WarningHandler, WorkspaceLocator, WorkspaceLocatorError,
 };
-pub use environment::Environment;
+pub use environment::{Environment, PlatformSelection};
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::{Equivalent, IndexSet};
 use miette::Diagnostic;
@@ -47,10 +48,10 @@ use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::script::conda::CondaScriptManifest;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, FeaturesExt,
-    HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance, Manifests,
-    PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType, WithProvenance,
-    WithWarnings, WorkspaceManifest, script::ScriptManifest,
+    AssociateProvenance, BuildVariantSource, CondaConstraints, EnvironmentName, Environments,
+    FeaturesExt, HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance,
+    Manifests, PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType,
+    WithProvenance, WithWarnings, WorkspaceManifest, script::ScriptManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -299,7 +300,7 @@ pub enum ScriptWorkspaceError {
 /// `use_platform_composition` is decided while parsing, and a script without
 /// `platforms` parses with an empty set, which reads as "every platform is a
 /// bare subdir". Composition would then resolve an environment's
-/// platform by *subdir name* and never find the rich platform injected here, so
+/// platform by *subdir name* and never find the platform injected here, so
 /// the flag is recomputed for the platforms actually installed.
 fn set_implicit_script_platforms(
     workspace: &mut pixi_manifest::Workspace,
@@ -997,6 +998,12 @@ impl Workspace {
         C: Into<Config>,
     {
         self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// Sets temporary conda constraints for all environments without editing the manifest file.
+    pub fn with_extra_constraints(mut self, constraints: CondaConstraints) -> Self {
+        self.workspace.value.extra_constraints = constraints;
         self
     }
 
@@ -2362,7 +2369,7 @@ packages: []
             [workspace]
             name = "foo"
             channels = ["conda-forge"]
-            platforms = [{ platform = "linux-64", glibc = "2.34" }]
+            platforms = [{ subdir = "linux-64", glibc = "2.34" }]
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 

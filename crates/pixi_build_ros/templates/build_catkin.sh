@@ -102,6 +102,7 @@ cmake ${CMAKE_ARGS} --compile-no-warning-as-error \
     -DCMAKE_OSX_DEPLOYMENT_TARGET=$OSX_DEPLOYMENT_TARGET \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     $EXTRA_CMAKE_ARGS \
+    @(cmake_args) \
     -G "$GENERATOR" \
     "@(source_dir)"
 

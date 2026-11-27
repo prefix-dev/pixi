@@ -16,7 +16,7 @@ use rattler_build_recipe::stage0::{
     Conditional, ConditionalList, Item, JinjaExpression, NestedItemList, SerializableMatchSpec,
     Value,
 };
-use rattler_conda_types::{MatchSpec, ParseStrictness, Subdir};
+use rattler_conda_types::{MatchSpec, ParseStrictness, StringMatcher, Subdir};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -302,6 +302,8 @@ fn resolve_rosdep_to_conda_package_spec(
         }
     }
 
+    let gl_packages = take_gl_markers(&mut conda_packages, host_platform);
+
     // A version specifier applies to the mapping's first package; the others are
     // its companions (e.g. libgl-devel for Qt on Linux).
     if let (Some(spec), Some(first)) = (&spec_str, conda_packages.first_mut()) {
@@ -314,7 +316,40 @@ fn resolve_rosdep_to_conda_package_spec(
         first.push_str(spec);
     }
 
+    for package in gl_packages {
+        if !conda_packages.iter().any(|p| p == package) {
+            conda_packages.push(package.to_string());
+        }
+    }
     Ok(conda_packages)
+}
+
+/// Remove the `REQUIRE_GL` / `REQUIRE_OPENGL` markers of older mappings
+/// (RoboStack's no longer use them, user mappings may) and return the packages
+/// they stand for on `platform`.
+fn take_gl_markers(packages: &mut Vec<String>, platform: Subdir) -> Vec<&'static str> {
+    let os = platform.only_platform();
+    let (linux, osx) = (os == Some("linux"), os == Some("osx"));
+    let mut gl_packages = Vec::new();
+    packages.retain(|package| match package.as_str() {
+        "REQUIRE_GL" => {
+            if linux {
+                gl_packages.push("libgl-devel");
+            }
+            false
+        }
+        "REQUIRE_OPENGL" => {
+            if linux {
+                gl_packages.extend(["libgl-devel", "libopengl-devel"]);
+            }
+            if linux || osx {
+                gl_packages.extend(["xorg-libx11", "xorg-libxext"]);
+            }
+            false
+        }
+        _ => true,
+    });
+    gl_packages
 }
 
 /// Format version constraints from a package.xml dependency to a nameless
@@ -412,6 +447,10 @@ pub fn package_xml_to_conda_requirements(
         rosdep_to_conda_package_spec(dep, &rules.distro, rules.platform, package_map_data)
     })?;
     rules.finish(&mut requirements);
+    // pixi solves the build environment on its own: pin the distribution there too
+    if let Some(mutex) = &rules.mutex {
+        requirements.build.spec(mutex);
+    }
     Ok(ConditionalRequirements {
         build: conditional_list(&requirements.build),
         host: conditional_list(&requirements.host),
@@ -522,10 +561,43 @@ fn merge_specs(
     spec2: Option<&str>,
     package_name: &str,
 ) -> Result<String, PackageMapError> {
+    // A name-only requirement adds no constraint. Keep the other spec intact,
+    // including its channel and bracket selectors.
+    let unconstrained = |spec: Option<&str>| {
+        spec.is_none_or(|spec| {
+            let rest = spec.strip_prefix(package_name).unwrap_or(spec).trim();
+            rest.is_empty() || rest == "*"
+        })
+    };
+    if unconstrained(spec1) {
+        return Ok(spec2.unwrap_or("").to_string());
+    }
+    if unconstrained(spec2) {
+        return Ok(spec1.unwrap_or("").to_string());
+    }
+
     let (v1, b1) = version_and_build(spec1, package_name)?;
     let (v2, b2) = version_and_build(spec2, package_name)?;
 
     let build = match (b1, b2) {
+        (Some(b1), Some(b2)) if b1 == "*" => Some(b2),
+        (Some(b1), Some(b2)) if b2 == "*" => Some(b1),
+        (Some(b1), Some(b2))
+            if matches!(b1.parse::<StringMatcher>(), Ok(StringMatcher::Exact(_)))
+                && b2
+                    .parse::<StringMatcher>()
+                    .is_ok_and(|matcher| matcher.matches(&b1)) =>
+        {
+            Some(b1)
+        }
+        (Some(b1), Some(b2))
+            if matches!(b2.parse::<StringMatcher>(), Ok(StringMatcher::Exact(_)))
+                && b1
+                    .parse::<StringMatcher>()
+                    .is_ok_and(|matcher| matcher.matches(&b2)) =>
+        {
+            Some(b2)
+        }
         (Some(b1), Some(b2)) if b1 != b2 => {
             return Err(PackageMapError::ConflictingBuildStrings {
                 dep_name: package_name.to_string(),
@@ -710,7 +782,7 @@ mod tests {
         let osx = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Osx64, &package_map).unwrap();
         let win = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Win64, &package_map).unwrap();
 
-        assert_eq!(linux, vec!["libusb", "libudev"]);
+        assert_eq!(linux, vec!["libudev", "libusb"]);
         assert_eq!(osx, vec!["libusb"]);
         assert_eq!(win, vec!["libusb"]);
 
@@ -894,6 +966,62 @@ mod tests {
     }
 
     #[test]
+    fn test_bundled_spec_applies_to_the_named_package() {
+        let package_map = bundled_package_map("jazzy").unwrap();
+        let dep = Dependency {
+            version_gte: Some("1.12".to_string()),
+            ..Dependency::from("python3-pygraphviz")
+        };
+        let result =
+            rosdep_to_conda_package_spec(&dep, &jazzy_distro(), Subdir::Linux64, &package_map)
+                .unwrap();
+        assert_eq!(result, ["pygraphviz >=1.12", "graphviz"]);
+    }
+
+    #[test]
+    fn test_gl_markers_in_user_mappings() {
+        let distro = jazzy_distro();
+        let package_map: HashMap<String, PackageMapEntry> = serde_yaml::from_str(
+            "custom_gl: {conda: [REQUIRE_OPENGL]}\n\
+             custom_glu: {conda: [glu, REQUIRE_GL, REQUIRE_OPENGL]}",
+        )
+        .unwrap();
+        let resolve = |name: &str, platform| {
+            let dep = Dependency {
+                version_gte: Some("9.0".to_string()),
+                ..Dependency::from(name)
+            };
+            rosdep_to_conda_package_spec(&dep, &distro, platform, &package_map).unwrap()
+        };
+
+        assert_eq!(
+            resolve("custom_gl", Subdir::Linux64),
+            [
+                "libgl-devel",
+                "libopengl-devel",
+                "xorg-libx11",
+                "xorg-libxext"
+            ]
+        );
+        assert_eq!(
+            resolve("custom_gl", Subdir::OsxArm64),
+            ["xorg-libx11", "xorg-libxext"]
+        );
+        assert!(resolve("custom_gl", Subdir::Win64).is_empty());
+        // the version applies to the mapped package, not to what a marker adds
+        assert_eq!(
+            resolve("custom_glu", Subdir::LinuxAarch64),
+            [
+                "glu >=9.0",
+                "libgl-devel",
+                "libopengl-devel",
+                "xorg-libx11",
+                "xorg-libxext"
+            ]
+        );
+    }
+
+    #[test]
     fn test_conflicting_version_specs() {
         let dep = Dependency {
             version_gt: Some("18.0.0".to_string()),
@@ -1072,6 +1200,53 @@ mod tests {
             result,
             Err(PackageMapError::ConflictingBuildStrings { .. })
         ));
+    }
+
+    #[test]
+    fn test_merge_unconstrained_preserves_selectors() {
+        for qualified in [
+            "conda-forge::python",
+            "conda-forge::python >=3.10",
+            "python[build_number='>=2']",
+        ] {
+            let spec = SerializableMatchSpec::from(qualified);
+            let qualified = vec![Item::Value(Value::new_concrete(spec.clone(), None))];
+            let unconstrained = vec![Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from("python"),
+                None,
+            ))];
+            for (first, second) in [(&qualified, &unconstrained), (&unconstrained, &qualified)] {
+                let merged = merge_unique_items_vec(first, second).unwrap();
+                assert_eq!(
+                    merged,
+                    vec![Item::Value(Value::new_concrete(spec.clone(), None))]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_compatible_mutex_builds() {
+        for (build, expected) in [("*", "jazzy_*"), ("jazzy_0", "jazzy_0")] {
+            let explicit = format!("ros2-distro-mutex >=0.5 {build}");
+            let distro = "ros2-distro-mutex * jazzy_*";
+            for (first, second) in [(explicit.as_str(), distro), (distro, explicit.as_str())] {
+                let merged = merge_specs(Some(first), Some(second), "ros2-distro-mutex").unwrap();
+                assert_eq!(merged, format!("ros2-distro-mutex >=0.5 {expected}"));
+            }
+        }
+
+        for build in ["humble_0", "*_0"] {
+            let explicit = format!("ros2-distro-mutex >=0.5 {build}");
+            assert!(matches!(
+                merge_specs(
+                    Some(&explicit),
+                    Some("ros2-distro-mutex * jazzy_*"),
+                    "ros2-distro-mutex",
+                ),
+                Err(PackageMapError::ConflictingBuildStrings { .. })
+            ));
+        }
     }
 
     #[test]

@@ -298,18 +298,19 @@ pixi workspace platform list --script analysis.py
 pixi workspace platform remove --script analysis.py osx-arm64
 ```
 
-The platform command also supports rich platform definitions and the `edit`
-and `move` operations. Platform order determines selection priority. Declared
+The platform command also supports declaring [virtual packages](../conda_ecosystem.md#virtual-packages-describing-the-host-system) and the `edit`
+and `move` operations. Platform order determines selection priority among
+platforms of the same [subdir](../conda_ecosystem.md#subdirs-how-conda-targets-platforms). Declared
 platforms are also the platforms consumed by `pixi lock --script`; the lock
 command does not take a separate platform override.
 
 ### Scripts without declared platforms
 
 A script does not have to declare `platforms`.
-When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) it detects there: your CUDA driver, your glibc version, your macOS version.
-A script that needs a glibc newer than Pixi's [default](../workspace/system_requirements.md#default-declared-virtual-packages) resolves without you writing anything down.
+When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declared-detected-and-required-virtual-packages) it detects there: e.g. your CUDA driver, your glibc version, your macOS version.
+A script that needs a glibc newer than Pixi's [default](../workspace/multi_platform_configuration.md#default-declared-virtual-packages) resolves without you writing anything down.
 
-To resolve for a fixed target instead:
+To resolve for a fixed target matching the current host machine instead:
 
 ```console
 pixi workspace platform add --script analysis.py --auto-detect

@@ -17,7 +17,10 @@ This backend automatically generates conda packages from Mojo projects.
 
 The generated packages can be installed into local envs for development, or packaged for distribution.
 
-On macOS, executable packages include an exact runtime dependency on `mojo-compiler`, which also supplies `libKGENCompilerRTShared.dylib`.
+Precompiled libraries (`.mojoc`, or `.mojopkg` with older compilers) require the compiler that produced them; executables also need its shared runtime.
+Declare `mojo-compiler` in `[package.build-dependencies]`; the backend aligns the host compiler with it and adds an exact runtime pin, including the build string.
+Packages that declare the compiler only in `[package.host-dependencies]` receive an exact runtime pin to that compiler instead.
+Builds use the host compiler when available, matching the runtime pin; otherwise they use the build compiler.
 
 !!! warning "Cross-compilation"
     Cross-compiling between conda platforms is not supported by `pixi-build-mojo`.
@@ -347,7 +350,7 @@ Build CPU and AMD GPU variants with `mojo_accelerator`:
 
 ```toml
 [workspace]
-platforms = [{ platform = "linux-64", glibc = "2.34", archspec = "x86_64_v3" }]
+platforms = [{ subdir = "linux-64", glibc = "2.34", archspec = "x86_64_v3" }]
 preview = ["pixi-build"]
 
 [workspace.build-variants]
@@ -383,18 +386,22 @@ Keep binary `extra-args` consistent with the selected target and package require
 
 The backend supplies C/C++ compilers, `patchelf`, and a sysroot matching the declared glibc version.
 No manual compiler paths or sysroot pins are needed.
-Pin `mojo-compiler >=1.2` in `[package.build-dependencies]` to select the compiler version.
-Host and runtime requirements follow that selection.
+It also adds `mojo-compiler >=1.2` automatically.
+Optionally constrain `mojo-compiler` in `[package.build-dependencies]` to select a compiler version.
 
 ### Runtime and selection
 
-Both builds require glibc 2.34 or newer, x86-64-v3, and matching `mojo-compiler` and `max-core >=26.7` runtimes.
+Both builds require glibc 2.34 or newer and x86-64-v3.
+The backend automatically adds `max-core >=26.7` and exact runtime pins for `mojo-compiler` and `max-core`, matching the versions used during the build.
+Consumers do not need to add these runtime dependencies manually.
 AMD builds also require `__amdgpu` and an exact `__amdgpu_arch` match for the selected target.
 For example, `gfx1103` requires `__amdgpu_arch ==11.0.3`, not that architecture or newer.
 The minimum `hip-runtime-amd` version is 7.0 for `gfx950` and 6.3.3 for all other supported AMD targets.
 
-The AMD build is preferred when its requirements are met, with CPU as the fallback.
-Use [rich platforms](../../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) to define AMD and CPU solve targets, with AMD first for automatic selection.
+To enable GPU selection with CPU fallback during installation, declare both AMD and CPU platforms in the consumer workspace's [`workspace.platforms`](../../reference/pixi_manifest.md#inline-table-entries-per-platform-virtual-packages), with AMD first.
+When installing that workspace, Pixi tries the AMD GPU platform first when its built-in declarations match the host.
+If its locked requirements, including the exact ISA dependency, don't fit, Pixi tries the CPU platform.
+See [Which platform gets installed?](../../workspace/multi_platform_configuration.md#which-platform-gets-installed) for the selection rules.
 
 See [Building Mojo CPU and AMD Packages](../mojo_accelerators.md) for a complete example.
 

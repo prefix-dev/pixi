@@ -7,7 +7,7 @@ import sys
 from copy import deepcopy
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast, override
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, override
 
 import tomli
 from pydantic import (
@@ -156,8 +156,10 @@ class WorkspacePlatform(BaseModel):
             "propertyNames": {"maxLength": 64},
             "anyOf": [
                 {"required": ["name"]},
+                {"required": ["subdir"]},
                 {"required": ["platform"]},
             ],
+            "not": {"required": ["subdir", "platform"]},
         },
     )
 
@@ -166,11 +168,16 @@ class WorkspacePlatform(BaseModel):
         pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$",
         max_length=64,
         json_schema_extra=NotReservedPlatformName,
-        description="The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
+        description="The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `subdir` plus the declared virtual packages when omitted.",
+    )
+    subdir: Platform | None = Field(
+        None,
+        description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
     )
     platform: Platform | None = Field(
         None,
-        description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
+        deprecated=True,
+        description="Deprecated alias for `subdir`. Cannot be combined with `subdir`.",
     )
     cuda: NonEmptyStr | CudaTable | None = Field(
         None,
@@ -1671,7 +1678,7 @@ class SchemaJsonEncoder(json.JSONEncoder):
     def encode(self, o: object):
         """Overload the default ``encode`` behavior."""
         if isinstance(o, dict):
-            o = self.normalize_schema(cast("dict[str, Any]", deepcopy(o)))
+            o = self.normalize_schema(deepcopy(o))
 
         return super().encode(o)
 

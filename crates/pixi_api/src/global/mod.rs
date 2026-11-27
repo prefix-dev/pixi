@@ -4,7 +4,9 @@ pub(crate) mod install;
 pub use install::{InstallError, InstallOptions};
 
 pub(crate) mod list;
-pub use list::{GlobalDependency, GlobalEnvironment, GlobalExposedMapping, ListError};
+pub use list::{
+    GlobalChannel, GlobalDependency, GlobalEnvironment, GlobalExposedMapping, ListError,
+};
 
 pub(crate) mod uninstall;
 pub use uninstall::UninstallError;

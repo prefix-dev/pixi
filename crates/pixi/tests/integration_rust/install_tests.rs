@@ -803,20 +803,17 @@ async fn test_v6_local_archive_path_upgrade() {
         &pixi_config::GlobalConfigSource::None,
     )
     .unwrap();
-    pixi_core::environment::get_update_lock_file_and_prefix(
-        &project.default_environment(),
-        None,
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
-            no_install: true,
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
-    )
-    .await
-    .unwrap();
+    project
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Update,
+                no_install: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
 
     // After re-resolve, foo.tar.gz should be a Source package.
     let new_lock = rattler_lock::LockFile::from_path(&test_dir.join("pixi.lock")).unwrap();
@@ -833,20 +830,17 @@ async fn test_v6_local_archive_path_upgrade() {
 
     // Round-trip: a second revalidate should not change the lock file.
     let lock_str = fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap();
-    pixi_core::environment::get_update_lock_file_and_prefix(
-        &project.default_environment(),
-        None,
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
-            no_install: true,
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
-    )
-    .await
-    .unwrap();
+    project
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Update,
+                no_install: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
     assert_eq!(
         lock_str,
         fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap(),
@@ -2289,9 +2283,18 @@ no-deps = "*"
         .await
         .unwrap()
         .0;
+    let selection = lock_file
+        .resolve_platform(
+            &environment,
+            pixi_core::workspace::platform_selection::PrefixPolicy::Replace,
+            UpdateMode::QuickValidate,
+        )
+        .await
+        .unwrap();
     lock_file
         .prefix(
             &environment,
+            &selection,
             UpdateMode::QuickValidate,
             &ReinstallPackages::default(),
             &InstallFilter::default(),
@@ -2348,9 +2351,9 @@ async fn cuda_arch_selects_matching_build() {
 name = "cuda-arch-routing"
 channels = ["{channel_url}"]
 platforms = [
-    {{ name = "arch9", platform = "linux-64", cuda = "13", __cuda_arch = "9" }},
-    {{ name = "arch10", platform = "linux-64", cuda = {{ driver = "13", arch = "10" }} }},
-    {{ name = "arch12", platform = "linux-64", cuda = {{ driver = "13", arch = "12" }} }},
+    {{ name = "arch9", subdir = "linux-64", cuda = "13", __cuda_arch = "9" }},
+    {{ name = "arch10", subdir = "linux-64", cuda = {{ driver = "13", arch = "10" }} }},
+    {{ name = "arch12", subdir = "linux-64", cuda = {{ driver = "13", arch = "12" }} }},
 ]
 
 [dependencies]
@@ -2405,8 +2408,8 @@ async fn amdgpu_arch_selects_matching_build() {
 name = "amdgpu-arch-routing"
 channels = ["{channel_url}"]
 platforms = [
-    {{ name = "mi250", platform = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }},
-    {{ name = "rdna3", platform = "linux-64", amdgpu = "gfx1100" }},
+    {{ name = "mi250", subdir = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }},
+    {{ name = "rdna3", subdir = "linux-64", amdgpu = "gfx1100" }},
 ]
 
 [dependencies]

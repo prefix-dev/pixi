@@ -1,15 +1,13 @@
-use std::{
-    collections::{HashMap, HashSet},
-    error::Error,
-};
+use std::collections::HashMap;
 
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
 use pixi_core::{
     Workspace,
     workspace::{
-        Environment, EnvironmentFromNameError, WorkspaceMut,
-        virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
+        EnvironmentFromNameError, WorkspaceMut,
+        platform_selection::DiagnosticSelector,
+        virtual_packages::{EnvironmentRunnability, classify_resolved_platform_runnability},
     },
 };
 use pixi_manifest::{
@@ -101,63 +99,30 @@ pub async fn list_tasks<I: Interface>(
     environment: Option<EnvironmentName>,
 ) -> Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>, TaskError>
 {
-    let explicit_environment = environment
-        .map(|n| {
+    let environments = match environment {
+        Some(name) => vec![
             workspace
-                .environment(&n)
-                .ok_or(EnvironmentFromNameError::Unknown(n))
-        })
-        .transpose()?;
-
-    // The lock file only refines the runnability of environments the machine
-    // doesn't declare, so a broken one shouldn't stop the listing.
-    let lock_file = match workspace.load_lock_file().await {
-        Ok(result) => Some(result.into_lock_file_or_empty_with_warning()),
-        Err(err) => {
-            let mut message = err.to_string();
-            let mut source = err.source();
-            while let Some(cause) = source {
-                message.push_str(&format!(": {cause}"));
-                source = cause.source();
-            }
-            interface.warning(&message).await;
-            None
-        }
+                .environment(&name)
+                .ok_or(EnvironmentFromNameError::Unknown(name))?,
+        ],
+        None => workspace.environments(),
     };
+    let mut selector = DiagnosticSelector::new(workspace);
+    let selections = selector.select_all(&environments).await;
+    if let Some(error) = selector.lock_error() {
+        interface.warning(&error.warning()).await;
+    }
 
-    let env_task_map: HashMap<Environment, (EnvironmentRunnability, HashSet<TaskName>)> =
-        if let Some(explicit_environment) = explicit_environment {
-            let runnability =
-                classify_environment_runnability(&explicit_environment, lock_file.as_ref());
-            HashMap::from([(
-                explicit_environment.clone(),
-                (runnability, explicit_environment.get_filtered_tasks()),
-            )])
-        } else {
-            workspace
-                .environments()
-                .iter()
-                .map(|env| {
-                    let runnability = classify_environment_runnability(env, lock_file.as_ref());
-                    (env.clone(), (runnability, env.get_filtered_tasks()))
-                })
-                .collect()
-        };
-
-    Ok(env_task_map
-        .into_iter()
-        .map(|(env, (runnability, task_names))| {
-            let env_name = env.name().clone();
-            let best_declared_platform = env.best_declared_platform();
-            let task_map = task_names
-                .into_iter()
-                .flat_map(|task_name| {
-                    env.task(&task_name, best_declared_platform)
-                        .ok()
-                        .map(|task| (task_name, task.clone()))
-                })
+    Ok(environments
+        .iter()
+        .zip(&selections)
+        .map(|(env, selection)| {
+            let runnability = classify_resolved_platform_runnability(env, selection.as_ref());
+            let tasks = env
+                .visible_tasks(selection.as_ref().map(|selection| selection.platform()))
+                .map(|(name, task)| (name.clone(), task.clone()))
                 .collect();
-            (env_name, (runnability, task_map))
+            (env.name().clone(), (runnability, tasks))
         })
         .collect())
 }

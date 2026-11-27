@@ -11,6 +11,8 @@ pub struct BuildScriptContext {
     pub editable: bool,
     pub extra_args: Vec<String>,
     pub manifest_root: PathBuf,
+    /// Verbosity flag to pass to the installer, if any.
+    pub verbosity_flag: Option<&'static str>,
 }
 
 /// The tool used to install the built wheel into the prefix.
@@ -49,5 +51,63 @@ impl BuildScriptContext {
             .unwrap()
             .trim()
             .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render(installer: Installer, verbosity_flag: Option<&'static str>) -> String {
+        BuildScriptContext {
+            installer,
+            build_platform: BuildPlatform::Unix,
+            editable: false,
+            extra_args: vec![],
+            manifest_root: "/src".into(),
+            verbosity_flag,
+        }
+        .render()
+    }
+
+    #[test]
+    fn installer_verbosity_flags() {
+        let scripts = [Installer::Uv, Installer::Pip]
+            .into_iter()
+            .flat_map(|installer| {
+                [None, Some("-v"), Some("-vv")]
+                    .map(|verbosity_flag| render(installer.clone(), verbosity_flag))
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        insta::assert_snapshot!(scripts, @r#"
+        uv pip install --python "$PYTHON" --reinstall --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        uv pip install --python "$PYTHON" --reinstall -v \
+                --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        uv pip install --python "$PYTHON" --reinstall -vv \
+                --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        "$PYTHON" -m pip install --force-reinstall --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        "$PYTHON" -m pip install --force-reinstall -v \
+                --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+
+        "$PYTHON" -m pip install --force-reinstall -vv \
+                --no-deps \
+                --no-build-isolation \
+                --no-index "/src"
+        "#);
     }
 }

@@ -82,7 +82,7 @@ pub type PlatformSatisfiabilityResult = Result<
 >;
 
 /// Look up the lock entry for `platform`, falling back to the bare conda subdir
-/// when the lock keys the row by subdir (`osx-arm64`) rather than the rich
+/// when the lock keys the row by subdir (`osx-arm64`) rather than the
 /// workspace name (`osx-arm64-macos-12-0`) -- as every pre-v7 lock does, since
 /// they never tracked per-platform virtual packages. A subdir row with no
 /// recorded VPs is trusted; one that records them must cover `platform`'s
@@ -1638,7 +1638,7 @@ mod tests {
             .platforms
             .iter()
             .find(|p| p.name().as_str() == "osx-arm64-macos-12-0")
-            .expect("macos system-requirement migrates osx-arm64 into a rich platform")
+            .expect("macos system-requirement adds custom virtual packages to osx-arm64")
             .clone()
     }
 

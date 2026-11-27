@@ -138,11 +138,13 @@ This does not work with the `robostack-staging` channel, as it contains packages
 Because the definition of a dependency in a `package.xml` file is not similar to a conda package name, the backend needs to map ROS dependencies to conda packages.
 
 - **Workspace siblings**: Other ROS packages in the same workspace are discovered automatically and resolved as **source** dependencies, built from their sibling directory. See [Workspace Source Discovery](#workspace-source-discovery).
-- **Known dependencies**: Mapped using RoboStack's [shared mappings](https://github.com/RoboStack/robostack/blob/main/shared/robostack.yaml), with distribution-specific overrides bundled in the backend.
+- **Known dependencies**: Mapped using RoboStack's [shared mappings](https://github.com/RoboStack/robostack/blob/main/shared/robostack.yaml), with the distribution-specific overrides of the distributions RoboStack builds (e.g. Qt5 for `humble`, `jazzy`, `kilted` and `noetic`) bundled in the backend. Other distributions get the shared mappings only, which follow the newest distributions (e.g. Qt6); add [`extra-package-mappings`](#extra-package-mappings) to change that.
 - **Custom mappings**: You can provide additional mappings in your `pixi.toml` under [`[package.build.config.extra-package-mappings]`](#extra-package-mappings)
 - **Other packages**: Mapped to RoboStack's names: `ros2-<package-name>` for ROS 2 and `ros-<distro>-<package-name>` for ROS 1.
 
-ROS 2 names don't include the distribution: the generated recipe pins the distro mutex (`ros2-distro-mutex * <distro>_*`) to the `distro` configuration instead.
+ROS 2 names don't include the distribution: the generated recipe pins the distro mutex (`ros2-distro-mutex * <distro>_*`) to the `distro` configuration in the build, host, and run environments.
+An explicit mutex build constraint can be `*`, the same distro pattern, or an exact build matching that pattern (for example, `jazzy_0`).
+Merging different non-exact build patterns is not supported.
 
 ### Workspace Source Discovery
 
@@ -178,7 +180,7 @@ If set the package name will be prefixed with `ros2-` (`ros-<distro>-` for ROS 1
 
 ```toml
 [package.build.config]
-distro = "jazzy"  # or "humble", "noetic", "iron", etc.
+distro = "jazzy"  # or "humble", "kilted", "noetic", etc.
 ```
 
 ### `env`
@@ -258,7 +260,7 @@ ignore-workspace-sources = true
 Additional dependency mappings to apply to the dependency mapping process.
 These mappings are used to extend the usage of the dependencies in the `package.xml` file.
 The first source containing a dependency key wins, ahead of the bundled distribution-specific and shared mappings.
-File paths are relative to the package directory. Unreadable or malformed files are errors.
+A relative file path is looked up in the package directory first and then at the workspace root, so one workspace-level mapping file can serve packages at any depth. Missing, unreadable or malformed files are errors.
 
 ```toml title="pixi.toml"
 [package.build.config]
@@ -307,7 +309,7 @@ An exact subdir entry takes precedence over the OS entry, including an empty or 
 A missing platform entry, `[]`, or YAML `null` means no dependency for that platform; it does not trigger the ROS-name fallback.
 Package templates such as `cuda-nvcc-dev_${{ target_platform }}` are rendered for the requested target before validating the conda spec.
 For a conda mapping with several packages, a `package.xml` version constraint applies only to the first package. A pre-existing constraint on that package remains an error.
-The old `REQUIRE_GL` and `REQUIRE_OPENGL` markers are not supported; use explicit platform-specific conda packages instead.
+The older `REQUIRE_GL` (`libgl-devel` on Linux) and `REQUIRE_OPENGL` (`libgl-devel` and `libopengl-devel` on Linux, `xorg-libx11` and `xorg-libxext` on Linux and macOS) markers still work in conda mappings; RoboStack's own mappings list these packages explicitly per platform instead.
 
 
 ## Default Variants
@@ -357,6 +359,8 @@ For Python packages using ament build system:
   <build_type>ament_python</build_type>
 </export>
 ```
+
+Packages whose `setup.cfg` does not set `install_scripts` are installed with pip. Its verbosity follows the build log level: no flag by default, `-v` with `pixi -vv`, and `-vv` with `pixi -vvv` or more.
 
 ### catkin (ROS1)
 For ROS1 packages using catkin build system:

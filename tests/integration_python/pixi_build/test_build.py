@@ -113,6 +113,43 @@ def test_publish_honors_exclude_newer(
 
 
 @pytest.mark.slow
+def test_publish_resolves_staging_output_from_workspace_channels(
+    pixi: Path,
+    simple_workspace: Workspace,
+    dummy_channel_1: str,
+) -> None:
+    """The build environment of a `staging` output is solved by the backend
+    rather than by pixi, so it must get the workspace channels too."""
+    name = simple_workspace.recipe["package"]["name"]
+    simple_workspace.recipe = {
+        "recipe": {"name": name, "version": "1.0.0"},
+        "outputs": [
+            {
+                "staging": {"name": f"{name}-staging"},
+                "requirements": {"build": ["dummy-b"]},
+            },
+            {"package": {"name": name}, "inherit": f"{name}-staging"},
+        ],
+    }
+    simple_workspace.package_manifest["package"]["build"]["config"] = {"experimental": True}
+    simple_workspace.workspace_manifest["workspace"]["channels"].insert(0, dummy_channel_1)
+    simple_workspace.write_files()
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            "--target-dir",
+            str(simple_workspace.workspace_dir),
+            "--path",
+            simple_workspace.package_dir,
+        ],
+    )
+
+    assert len(list(simple_workspace.workspace_dir.glob("*.conda"))) == 1
+
+
+@pytest.mark.slow
 def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     verify_cli_command(
@@ -281,6 +318,37 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize(
+    ("verbosity_args", "installer_debug_shown"),
+    [([], False), (["-vvv"], True)],
+    ids=["default", "verbose"],
+)
+def test_python_installer_verbosity_follows_pixi(
+    pixi: Path,
+    build_data: Path,
+    tmp_pixi_workspace: Path,
+    verbosity_args: list[str],
+    installer_debug_shown: bool,
+) -> None:
+    """
+    The installer's debug output only shows up when pixi's own verbosity asks for it.
+    """
+    project = "editable-pyproject"
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    copytree_with_local_backend(build_data.joinpath(project), target_dir)
+
+    uv_debug_line = "DEBUG uv "
+    verify_cli_command(
+        [pixi, "install", *verbosity_args, "--manifest-path", target_dir / "pyproject.toml"],
+        stderr_contains=[BUILD_RUNNING_STRING, uv_debug_line]
+        if installer_debug_shown
+        else BUILD_RUNNING_STRING,
+        stderr_excludes=None if installer_debug_shown else uv_debug_line,
+        strip_ansi=True,
+    )
+
+
+@pytest.mark.slow
 @pytest.mark.xdist_group("serial")
 def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     """
@@ -381,6 +449,53 @@ def test_incremental_builds(
     verify_cli_command(
         [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
         stderr_excludes=non_incremental_evidence,
+        strip_ansi=True,
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("verbose", [False, True], ids=["default", "verbose"])
+@pytest.mark.parametrize(
+    ("backend", "tool_verbose_evidence"),
+    [
+        # cargo prints the rustc command lines it runs only in verbose mode.
+        ("pixi-build-rust", "Running `"),
+        # ninja prints the compiler command lines only in verbose mode.
+        # spellchecker:off
+        (
+            "pixi-build-cmake",
+            "/FoCMakeFiles" if CURRENT_PLATFORM.startswith("win") else "-o CMakeFiles/",
+        ),
+        # spellchecker:on
+    ],
+)
+def test_build_tool_verbosity_follows_pixi(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    build_data: Path,
+    backend: str,
+    tool_verbose_evidence: str,
+    verbose: bool,
+) -> None:
+    """
+    The build tool's verbose output only shows up when pixi's own verbosity asks for it.
+    """
+    test_workspace = build_data / "minimal-backend-workspaces" / backend
+    copytree_with_local_backend(test_workspace, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    verify_cli_command(
+        [
+            pixi,
+            "publish",
+            *(["-vvv"] if verbose else []),
+            "--target-dir",
+            str(tmp_pixi_workspace),
+            "--path",
+            manifest_path,
+        ],
+        stderr_contains=tool_verbose_evidence if verbose else None,
+        stderr_excludes=None if verbose else tool_verbose_evidence,
         strip_ansi=True,
     )
 

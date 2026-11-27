@@ -5,7 +5,7 @@ use miette::Diagnostic;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{
     EnvironmentEditError, EnvironmentName, Feature, FeatureName, HasFeaturesIter,
-    LoadManifestsError, PrioritizedChannel, TargetSelector, Task, TaskName,
+    LoadManifestsError, PixiPlatform, PrioritizedChannel, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -105,11 +105,10 @@ pub async fn feature_by_task(
     workspace: &Workspace,
     task: &TaskName,
     environment: &EnvironmentName,
+    platform: Option<&PixiPlatform>,
 ) -> Option<FeatureName> {
     let environment = workspace.environment(environment)?;
-    let feature_tasks = environment.feature_tasks();
-
-    for (feature_name, tasks) in feature_tasks {
+    for (feature_name, tasks) in environment.feature_tasks(platform) {
         if tasks.contains_key(task) {
             return Some(feature_name.clone());
         }
@@ -162,4 +161,96 @@ pub async fn remove_feature<I: Interface>(
         .await;
 
     Ok(modified_envs)
+}
+
+#[cfg(test)]
+mod tests {
+    use pixi_core::workspace::platform_selection::resolve_diagnostic_platform;
+    use rattler_conda_types::Subdir;
+    use rattler_lock::LockFile;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn feature_by_task_uses_lock_fallback_target() {
+        let directory = tempfile::tempdir().unwrap();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
+        let workspace = Workspace::from_str(
+            &directory.path().join("pixi.toml"),
+            &format!(
+                r#"
+                [workspace]
+                name = "feature-task-selection"
+                channels = []
+                platforms = [
+                    {{ name = "fancy", subdir = "{current}", cuda = "99" }},
+                    {{ name = "plain", subdir = "{current}", cuda = "99" }},
+                ]
+
+                [dependencies]
+                foo = "*"
+
+                [feature.accelerated.target.fancy.tasks]
+                check = "echo fancy"
+
+                [feature.portable.target.plain.tasks]
+                check = "echo plain"
+
+                [environments]
+                default = ["accelerated", "portable"]
+                "#
+            ),
+        )
+        .unwrap();
+        let environment = workspace.default_environment();
+        let task = TaskName::from("check");
+        assert!(resolve_diagnostic_platform(&environment, None).is_none());
+        assert!(
+            feature_by_task(&workspace, &task, environment.name(), None)
+                .await
+                .is_none()
+        );
+
+        let lock = LockFile::from_str_with_base_directory(
+            &format!(
+                r#"version: 7
+platforms:
+- name: fancy
+  subdir: {current}
+  virtual-packages:
+  - __cuda=99
+- name: plain
+  subdir: {current}
+  virtual-packages:
+  - __cuda=99
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      fancy:
+      - conda: https://conda.anaconda.org/conda-forge/{current}/foo-2.0-h0.conda
+      plain:
+      - conda: https://conda.anaconda.org/conda-forge/{current}/foo-1.0-h0.conda
+packages:
+- conda: https://conda.anaconda.org/conda-forge/{current}/foo-2.0-h0.conda
+  depends:
+  - __cuda >=9999
+- conda: https://conda.anaconda.org/conda-forge/{current}/foo-1.0-h0.conda
+"#
+            ),
+            None,
+        )
+        .unwrap();
+        let selected = resolve_diagnostic_platform(&environment, Some(&lock)).unwrap();
+        let feature = feature_by_task(
+            &workspace,
+            &task,
+            environment.name(),
+            Some(selected.platform()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(feature.to_string(), "portable");
+    }
 }

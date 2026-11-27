@@ -581,7 +581,7 @@ For persistent behavior, prefer `[cache.netfs-redirect]` or
 
 Channels can register virtual package detectors: small packages whose executable reports [virtual packages](../conda_ecosystem.md#virtual-packages-describing-the-host-system).
 These identify system capabilities that packages depend on.
-One example for this could be a detector reporting which [MPI](https://en.wikipedia.org/wiki/Message_Passing_Interface) implementation and version you have on your system. 
+For example, a detector could report which [MPI](https://en.wikipedia.org/wiki/Message_Passing_Interface) implementation and version the host provides.
 
 That also means, you run external and potentially untrusted code shortly before installing an environment.
 This is why Pixi asks whether to trust detectors coming from a certain channel.

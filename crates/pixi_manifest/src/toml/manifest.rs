@@ -648,6 +648,7 @@ impl TomlManifest {
             environments,
             solve_groups,
             loaded_at: chrono::Utc::now(),
+            extra_constraints: Default::default(),
         };
         workspace_manifest.register_composed_platforms()?;
 
@@ -763,8 +764,8 @@ fn migrate_system_requirements_to_platforms(
     // of a non-subdir platform will commit the migration to pixi.toml.
     workspace.must_migrate = all_simple_subdir && has_any_sysreqs;
 
-    // Subdir-only declarations let environments combine the per-feature rich
-    // platforms by subdir; custom rich platforms are matched by name.
+    // Subdir-only declarations let environments combine the per-feature
+    // platforms by subdir; inline-table platform entries are matched by name.
     workspace.use_platform_composition = all_simple_subdir;
 
     if all_simple_subdir {
@@ -1200,6 +1201,28 @@ mod test {
     }
 
     #[test]
+    fn test_workspace_platform_key_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+                r#"[workspace]
+name = "test"
+channels = []
+platforms = [{ platform = "linux-64", cuda = "12" }]
+"#,
+            ),
+            @r#"
+         ⚠ the `platform` field is deprecated; use `subdir` instead
+          ╭─[pixi.toml:4:16]
+        3 │ channels = []
+        4 │ platforms = [{ platform = "linux-64", cuda = "12" }]
+          ·                ────┬───
+          ·                    ╰── replace this with 'subdir'
+          ╰────
+        "#
+        );
+    }
+
+    #[test]
     fn test_pin_in_workspace_dependencies_is_rejected() {
         // Pins only make sense while building a package; the workspace
         // dependency tables reject them at parse time.
@@ -1440,7 +1463,7 @@ mod test {
     }
 
     #[test]
-    fn test_system_requirements_migration_rejects_rich_workspace_platform() {
+    fn test_system_requirements_migration_rejects_inline_table_workspace_platform() {
         let result = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
             [workspace]
@@ -1448,7 +1471,7 @@ mod test {
             channels = []
             platforms = [
               "linux-64",
-              { name = "gpu", platform = "linux-64", cuda = "12.0" },
+              { name = "gpu", subdir = "linux-64", cuda = "12.0" },
             ]
 
             [system-requirements]
@@ -1456,7 +1479,7 @@ mod test {
             "#,
             Path::new(""),
         );
-        let err = result.expect_err("rich platform + sysreqs must error");
+        let err = result.expect_err("inline-table platform entry + sysreqs must error");
         assert!(
             err.error
                 .to_string()
@@ -1466,22 +1489,22 @@ mod test {
     }
 
     #[test]
-    fn test_system_requirements_migration_rejects_rich_workspace_platform_same_name() {
-        // Regression: rich `name == platform` entries used to be silently
+    fn test_system_requirements_migration_rejects_inline_table_workspace_platform_same_name() {
+        // Regression: inline-table `name == platform` entries used to be silently
         // demoted to bare subdirs and lose their VPs to [system-requirements].
         let result = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
             [workspace]
             name = "test"
             channels = []
-            platforms = [{ name = "osx-arm64", platform = "osx-arm64", macos = "14" }]
+            platforms = [{ name = "osx-arm64", subdir = "osx-arm64", macos = "14" }]
 
             [system-requirements]
             macos = "13.3"
             "#,
             Path::new(""),
         );
-        let err = result.expect_err("rich platform + sysreqs must error");
+        let err = result.expect_err("inline-table platform entry + sysreqs must error");
         let msg = err.error.to_string();
         assert!(
             msg.contains("special subdir platform"),
@@ -3064,7 +3087,7 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", subdir = "linux-64", cuda = "12" }]
         "#
         );
     }
@@ -3131,7 +3154,7 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", subdir = "linux-64", cuda = "12" }]
         "#
         );
     }
@@ -3145,8 +3168,8 @@ mod test {
         name = "test"
         channels = []
         platforms = [
-            { name = "cpu-linux-64", platform = "linux-64" },
-            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+            { name = "cpu-linux-64", subdir = "linux-64" },
+            { name = "cuda-linux-64", subdir = "linux-64", cuda = "12" },
         ]
 
         [feature.gpu]
@@ -3166,7 +3189,7 @@ mod test {
         [workspace]
         name = "test"
         channels = []
-        platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+        platforms = ["linux-64", { subdir = "linux-64", cuda = "12.9" }]
 
         [feature.gpu]
         platforms = ["linux-64-cuda-13-0"]
@@ -3186,7 +3209,7 @@ mod test {
         name = "test"
         channels = []
         platforms = [
-            { name = "cpu-linux-64", platform = "linux-64" },
+            { name = "cpu-linux-64", subdir = "linux-64" },
         ]
 
         [feature.gpu]

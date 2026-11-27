@@ -161,6 +161,7 @@ nav = [
       { "Shebang" = "advanced/shebang.md" },
       { "Shell" = "advanced/pixi_shell.md" },
       { "Virtual Package Detectors" = "advanced/virtual_package_detectors.md" },
+      { "Installation on distributed clusters" = "advanced/distributed_clusters.md" }
     ]
   },
   {
@@ -511,6 +512,11 @@ permalink = "#"
 toc_depth = 3
 
 [project.markdown_extensions.mdx_truly_sane_lists]
+
+[project.plugins.social]
+cards_layout_options.background_color = "#001838"
+cards_layout_options.color = "#F8F6F2"
+cards_layout_dir = "docs/overrides/layouts"
 
 # Read by the mike fork with Zensical support when deploying versioned docs.
 [project.plugins.mike]

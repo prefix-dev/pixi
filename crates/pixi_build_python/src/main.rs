@@ -427,6 +427,7 @@ impl GenerateRecipe for PythonGenerator {
             editable,
             extra_args: config.extra_args.clone(),
             manifest_root: manifest_root.clone(),
+            verbosity_flag: pixi_build_backend::cli::build_tool_verbosity_flag(),
         }
         .render();
 

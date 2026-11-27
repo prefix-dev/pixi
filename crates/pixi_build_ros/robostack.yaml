@@ -630,7 +630,7 @@ libturbojpeg:
   robostack: [libjpeg-turbo]
 libudev-dev:
   robostack:
-    linux: [libusb, libudev]
+    linux: [libudev, libusb]
     osx: [libusb]
     win64: [libusb]
 liburdfdom-dev:
@@ -656,9 +656,9 @@ libusb-dev:
     win64: [libusb]
 libuvc-dev:
   robostack:
-    linux: [libusb, libudev, libuvc]
-    osx: [libusb, libuvc]
-    win64: [libusb, libuvc]
+    linux: [libuvc, libusb, libudev]
+    osx: [libuvc, libusb]
+    win64: [libuvc, libusb]
 libvtk:
   robostack: [vtk]
 libvtk-qt:
@@ -743,6 +743,8 @@ muparser:
   robostack: [muparser]
 nanobind-dev:
   robostack: [nanobind]
+nanoflann:
+  robostack: [nanoflann]
 netpbm:
   robostack:
     linux-aarch64: []
@@ -868,7 +870,7 @@ python-pydot:
 python-pygithub3:
   robostack: [pygithub]
 python-pygraphviz:
-  robostack: [graphviz, pygraphviz]
+  robostack: [pygraphviz, graphviz]
 python-pyusb-pip:
   robostack: [pyusb]
 python-qt5-bindings:
@@ -1071,7 +1073,7 @@ python3-pydot:
 python3-pygnssutils-pip:
   robostack: [pygnssutils]
 python3-pygraphviz:
-  robostack: [graphviz, pygraphviz]
+  robostack: [pygraphviz, graphviz]
 python3-pykdl:
   robostack: [python-orocos-kdl]
 python3-pymongo:

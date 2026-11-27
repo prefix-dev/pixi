@@ -1,8 +1,8 @@
-use fancy_display::FancyDisplay;
 use miette::Diagnostic;
 use pixi_manifest::{
     EnvironmentName, FeatureName, HasWorkspaceManifest, LoadManifestsError, PixiPlatform,
-    PixiPlatformName, PlatformEdit, PlatformEditError, PlatformMove,
+    PixiPlatformName, PlatformAddOutcome, PlatformEdit, PlatformEditError, PlatformMove,
+    format_platform_definition,
 };
 use std::collections::HashMap;
 use thiserror::Error;
@@ -12,11 +12,7 @@ use pixi_manifest::FeaturesExt;
 
 use pixi_core::{
     UpdateLockFileOptions,
-    environment::{
-        InstallFilter, LockFileAndPrefixesError, LockFileUsage, get_update_lock_file_and_prefix,
-    },
-    host::HostProbeError,
-    lock_file::{ReinstallPackages, UpdateMode},
+    environment::{LockFileAndPrefixesError, LockFileUsage, update_lock_file_after_edit},
 };
 
 use crate::Interface;
@@ -31,10 +27,6 @@ pub enum PlatformError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Edit(#[from] PlatformEditError),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    HostProbe(#[from] HostProbeError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -69,38 +61,21 @@ pub async fn get_workspace_platform(
 }
 
 /// Helper to update the lock file and environment prefix for platform commands.
-///
-/// The lock file is solved for every declared platform, but a prefix can only
-/// be materialised for the current system. When none of the environment's
-/// platforms match this machine, skip prefix installation.
 async fn update_platform_lock_file_and_prefix(
     workspace: &Workspace,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     no_install: bool,
     lock_file_usage: LockFileUsage,
 ) -> Result<(), PlatformError> {
-    workspace.refresh_environment_hosts().await?;
-    let default_env = workspace.default_environment();
-    let no_install = no_install || default_env.best_declared_platform().is_none();
-    if no_install && default_env.best_declared_platform().is_none() {
-        tracing::info!(
-            "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
-            default_env.name().fancy_display()
-        );
-    }
-
-    get_update_lock_file_and_prefix(
-        &default_env,
+    update_lock_file_after_edit(
+        workspace,
         progress,
-        UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,
             no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..Default::default()
         },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
     )
     .await?;
     Ok(())
@@ -164,14 +139,14 @@ enum AutoDetectedOutcome {
     Added,
     /// An existing platform with the same definition was reused.
     Adopted,
-    /// The platform's name was already declared; nothing was inserted.
-    AlreadyPresent,
+    /// The detected definition replaced a stale entry with the same name.
+    Replaced { previous: PixiPlatform },
 }
 
 /// Add the auto-detected platform for this machine, placed first so it wins
 /// platform selection. `candidate` is the already-built detected platform
 /// (name synthesised or user-given); `explicit_name` is whether the user
-/// supplied a `name=` form, which decides whether a same-definition entry under
+/// supplied a name, which decides whether a same-definition entry under
 /// a different name is adopted or rejected. Updates the lockfile and saves the
 /// manifest.
 pub async fn add_auto_detected<I: Interface>(
@@ -212,14 +187,19 @@ pub async fn add_auto_detected<I: Interface>(
         // definition -- `add_platforms` rejects the latter with the shared
         // duplicate-definition error.
         _ => {
-            let added = workspace
+            let mut outcomes = workspace
                 .manifest()
                 .add_platforms(std::iter::once(&candidate), &feature_name)?;
             let name = candidate.name().clone();
-            let outcome = if added.iter().any(|p| p.name() == &name) {
-                AutoDetectedOutcome::Added
-            } else {
-                AutoDetectedOutcome::AlreadyPresent
+            let outcome = match outcomes
+                .shift_remove(&candidate)
+                .expect("the requested platform has an outcome")
+            {
+                PlatformAddOutcome::Added => AutoDetectedOutcome::Added,
+                PlatformAddOutcome::Replaced { previous } => {
+                    AutoDetectedOutcome::Replaced { previous }
+                }
+                PlatformAddOutcome::Unchanged => AutoDetectedOutcome::Adopted,
             };
             (name, outcome)
         }
@@ -255,10 +235,11 @@ pub async fn add_auto_detected<I: Interface>(
                 ))
                 .await;
         }
-        AutoDetectedOutcome::AlreadyPresent => {
+        AutoDetectedOutcome::Replaced { previous } => {
             interface
                 .success(&format!(
-                    "Platform {name} is already present; moved it to the front"
+                    "Replaced platform {name} (was: {}); detected from this machine and moved to the front",
+                    format_platform_definition(&previous)
                 ))
                 .await;
         }
@@ -290,13 +271,11 @@ pub async fn add<I: Interface>(
     feature_name: FeatureName,
     lock_file_usage: LockFileUsage,
 ) -> Result<(), PlatformError> {
-    // Add the platforms to the manifest; `added` holds only those that caused
-    // an actual change so already-declared platforms are reported as no-ops.
-    let added = workspace
+    let outcomes = workspace
         .manifest()
         .add_platforms(platforms.iter(), &feature_name)?;
 
-    // Try to update the lock file with the new channels
+    // Update the lock file for the new platform definitions.
     update_platform_lock_file_and_prefix(
         workspace.workspace(),
         workspace.progress().cloned(),
@@ -307,25 +286,29 @@ pub async fn add<I: Interface>(
     save(workspace).await?;
 
     // Report back to the user
-    for platform in &platforms {
-        let message = if added.contains(platform) {
-            format!(
+    for (platform, outcome) in outcomes {
+        let message = match outcome {
+            PlatformAddOutcome::Added => format!(
                 "Added {}",
                 if feature_name.is_default() {
                     platform.to_string()
                 } else {
                     format!("{platform} to {}", feature_name.user_facing())
                 }
-            )
-        } else {
-            format!(
+            ),
+            PlatformAddOutcome::Replaced { previous } => format!(
+                "Replaced platform {} (was: {})",
+                platform.name(),
+                format_platform_definition(&previous)
+            ),
+            PlatformAddOutcome::Unchanged => format!(
                 "Platform {} is already present; nothing to do",
                 if feature_name.is_default() {
                     platform.to_string()
                 } else {
                     format!("{platform} in {}", feature_name.user_facing())
                 }
-            )
+            ),
         };
         interface.success(&message).await;
     }

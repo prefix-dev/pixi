@@ -29,6 +29,7 @@ use pixi_config::{CacheKind, Config, DetectorDecision, consent_origin};
 use pixi_manifest::platform::{
     PixiPlatform, PixiPlatformError, candidate_subdirs,
     host::{detect_host, host_subdir, platform_from_detected},
+    is_builtin_virtual_package,
 };
 use pixi_manifest::{
     Feature, FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, WorkspaceManifest,
@@ -288,23 +289,7 @@ impl HostDetection {
         {
             return true;
         }
-        if matches!(
-            name,
-            "__unix"
-                | "__linux"
-                | "__osx"
-                | "__win"
-                | "__ios"
-                | "__android"
-                | "__glibc"
-                | "__musl"
-                | "__eglibc"
-                | "__cuda"
-                | "__cuda_arch"
-                | "__amdgpu"
-                | "__amdgpu_arch"
-                | "__archspec"
-        ) {
+        if is_builtin_virtual_package(name) {
             return false;
         }
         self.unknown.iter().any(|unknown| unknown == name)
@@ -1096,7 +1081,12 @@ impl HostScope {
         scope.names.extend(
             compute_required_virtual_package_specs(lock_file, environment.name(), &platforms)
                 .into_values()
-                .flatten()
+                .flat_map(|requirements| {
+                    requirements
+                        .depends
+                        .into_iter()
+                        .chain(requirements.constrains)
+                })
                 .filter_map(|spec| spec.name.as_exact().cloned()),
         );
         Ok(scope)
@@ -1415,8 +1405,8 @@ mod tests {
 name = "scoped-demand"
 channels = []
 platforms = [
-    {{ name = "plain", platform = "{subdir}" }},
-    {{ name = "custom", platform = "{subdir}", __test_good = "1" }},
+    {{ name = "plain", subdir = "{subdir}" }},
+    {{ name = "custom", subdir = "{subdir}", __test_good = "1" }},
 ]
 
 [dependencies]
@@ -1466,7 +1456,7 @@ default = {{ features = ["plain"], no-default-feature = true }}
             let (platforms, target) = if explicit_platform {
                 (
                     format!(
-                        "# [tool.pixi.workspace]\n# platforms = [{{ name = \"capable\", platform = \"{subdir}\", __test_good = \"1\" }}, {{ name = \"foreign\", platform = \"{foreign}\", __test_foreign = \"1\" }}]\n"
+                        "# [tool.pixi.workspace]\n# platforms = [{{ name = \"capable\", subdir = \"{subdir}\", __test_good = \"1\" }}, {{ name = \"foreign\", subdir = \"{foreign}\", __test_foreign = \"1\" }}]\n"
                     ),
                     "capable".to_owned(),
                 )

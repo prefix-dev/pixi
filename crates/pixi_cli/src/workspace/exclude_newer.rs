@@ -6,9 +6,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
-    InstallFilter, UpdateLockFileOptions, Workspace, WorkspaceLocator,
-    environment::get_update_lock_file_and_prefix,
-    lock_file::{ReinstallPackages, UpdateMode},
+    UpdateLockFileOptions, Workspace, WorkspaceLocator, environment::update_lock_file_after_edit,
     workspace::WorkspaceMut,
 };
 use pixi_manifest::{
@@ -580,24 +578,19 @@ fn stale_exemptions(workspace: &Workspace) -> miette::Result<Vec<PackageName>> {
 /// Updates the lock file, so a stricter cutoff takes effect right away for
 /// conda packages. Locked PyPI packages carry no upload time, so they are not
 /// re-solved. Like `pixi add`, the default environment is only installed when
-/// it is the only environment of the workspace.
+/// it is the only environment of the workspace. Otherwise, only resolve lock
+/// data; no runnable platform or prefix is needed.
 async fn update_lock_file(workspace: &WorkspaceMut, update: &LockUpdateArgs) -> miette::Result<()> {
     let progress = workspace.progress().cloned();
     let workspace = workspace.workspace();
-    get_update_lock_file_and_prefix(
-        &workspace.default_environment(),
-        progress,
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage: update.lock_file_update_config.lock_file_usage()?,
-            no_install: update.no_install_config.no_install || workspace.environments().len() != 1,
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
-    )
-    .await?;
+    let no_install = update.no_install_config.no_install || workspace.environments().len() != 1;
+    let update_options = UpdateLockFileOptions {
+        lock_file_usage: update.lock_file_update_config.lock_file_usage()?,
+        no_install,
+        max_concurrent_solves: workspace.config().max_concurrent_solves(),
+        ..Default::default()
+    };
+    update_lock_file_after_edit(workspace, progress, update_options).await?;
     Ok(())
 }
 

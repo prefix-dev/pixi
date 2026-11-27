@@ -36,8 +36,8 @@ if [[ -n "$SCRIPTS_DIR" ]]; then
 @[incremental]  "$PYTHON" setup.py install --force --prefix="$INSTALL_PREFIX" --install-lib="$SP_DIR" --install-scripts="$SCRIPTS_DIR" --single-version-externally-managed --record="$RATTLER_BUILD_PACKAGE_FILES"
 @[incremental]  python -c "import glob, shutil; [shutil.rmtree(d) for d in glob.glob('*.egg-info') + glob.glob('build')]"
 else
-@[clean]  "$PYTHON" -m pip install . --no-deps -vvv
+@[clean]  "$PYTHON" -m pip install . --no-deps @(pip_verbosity)
 @[incremental]  # pip uninstalls the previous install before reinstalling, so nothing is left
 @[incremental]  # behind and rattler-build can keep deriving the contents from the prefix.
-@[incremental]  "$PYTHON" -m pip install . --no-deps --force-reinstall -vvv
+@[incremental]  "$PYTHON" -m pip install . --no-deps --force-reinstall @(pip_verbosity)
 fi

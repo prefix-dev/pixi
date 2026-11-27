@@ -452,7 +452,7 @@ impl<I: Interface> WorkspaceContext<I> {
         explicit: bool,
         no_install: bool,
         lock_file_usage: LockFileUsage,
-    ) -> miette::Result<Vec<Package>> {
+    ) -> miette::Result<(Vec<Package>, PixiPlatformName)> {
         crate::workspace::list::list(
             &self.workspace,
             regex,
@@ -516,9 +516,15 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         task: &TaskName,
         environment: &EnvironmentName,
+        platform: Option<&PixiPlatform>,
     ) -> Option<FeatureName> {
-        crate::workspace::workspace::feature::feature_by_task(&self.workspace, task, environment)
-            .await
+        crate::workspace::workspace::feature::feature_by_task(
+            &self.workspace,
+            task,
+            environment,
+            platform,
+        )
+        .await
     }
 
     pub async fn remove_feature(
@@ -610,7 +616,10 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn run(&self, options: RunOptions) -> Result<i32, RunError> {
+    pub async fn run(
+        &self,
+        options: RunOptions,
+    ) -> Result<crate::workspace::run::RunOutcome<'_>, RunError> {
         crate::workspace::run::run(
             &self.interface,
             &self.workspace,
