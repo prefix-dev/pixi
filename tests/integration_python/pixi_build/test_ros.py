@@ -11,13 +11,14 @@ from ..common import CURRENT_PLATFORM
 from .common import ExitCode, copytree_with_local_backend, package_files, verify_cli_command
 
 ROS_WORKSPACE_NAME = "ros-workspace"
-ROS_PACKAGE_DIRS = ["navigator", "navigator_py", "distro_less_package"]
+ROS_PACKAGE_DIRS = ["navigator", "navigator_py", "distro_less_package", "plain_cmake"]
 ROS_IMPLICIT_PACKAGE_DIR = "navigator_implicit"
 ROS_PACKAGE_OUTPUT_NAMES = {
     "navigator": "ros2-navigator",
     "navigator_py": "ros2-navigator-py",
     # The `humble` distro is automatically selected from the channels in the pixi.toml
     "distro_less_package": "ros2-distro-less-package",
+    "plain_cmake": "ros2-plain-cmake",
 }
 
 
@@ -65,6 +66,13 @@ def test_ros_packages_build(
             else "lib/navigator_py/navigator"
         )
         assert entrypoint in package_files(built_packages[0])
+    if package_dir == "plain_cmake":
+        executable = (
+            "Library/lib/plain_cmake/plain_cmake.exe"
+            if CURRENT_PLATFORM == "win-64"
+            else "lib/plain_cmake/plain_cmake"
+        )
+        assert executable in package_files(built_packages[0])
 
 
 @pytest.mark.slow
