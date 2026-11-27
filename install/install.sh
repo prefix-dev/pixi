@@ -130,7 +130,7 @@ __wrap__() {
 
     if $HAVE_CURL; then
         CURL_ERR=0
-        HTTP_CODE="$(curl -SL $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")" || CURL_ERR=$?
+        HTTP_CODE="$(curl -SL --retry 5 --retry-delay 5 $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")" || CURL_ERR=$?
         case "$CURL_ERR" in
         35 | 53 | 54 | 59 | 66 | 77)
             if ! $HAVE_WGET; then
