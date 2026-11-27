@@ -969,6 +969,10 @@ mod tests {
                 url: Url::parse("https://example.com/simple").unwrap(),
                 exclude_newer: Some("7d".parse().unwrap()),
             },
+            pixi_config::ExtraIndexUrl {
+                url: Url::parse("https://internal.example.com/simple").unwrap(),
+                exclude_newer: Some("0d".parse().unwrap()),
+            },
         ];
 
         let rendered = pixi_config::extra_index_urls_to_toml(&extra_index_urls).unwrap();
@@ -987,6 +991,10 @@ mod tests {
                 pixi_manifest::pypi::pypi_options::PypiExtraIndex {
                     url: Url::parse("https://example.com/simple").unwrap(),
                     exclude_newer: Some(pixi_spec::ExcludeNewer::from_str("7d").unwrap()),
+                },
+                pixi_manifest::pypi::pypi_options::PypiExtraIndex {
+                    url: Url::parse("https://internal.example.com/simple").unwrap(),
+                    exclude_newer: Some(pixi_spec::ExcludeNewer::from_str("0d").unwrap()),
                 },
             ]
         );
