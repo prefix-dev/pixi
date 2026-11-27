@@ -822,6 +822,15 @@ pub enum PlatformUnsat {
     },
 
     #[error(
+        "the locked python package '{package}' with version '{locked_version}' does not satisfy the pypi constraint '{constraint}'"
+    )]
+    PypiConstraintViolated {
+        package: String,
+        locked_version: String,
+        constraint: String,
+    },
+
+    #[error(
         "source specifications are not supported in the `[constraints]` table, but a source constraint was found for '{0}'"
     )]
     SourceConstraintNotSupported(String),
@@ -868,6 +877,7 @@ impl PlatformUnsat {
             PlatformUnsat::UnsatisfiableRequirement(_, _)
                 | PlatformUnsat::TooManyPypiPackages(_)
                 | PlatformUnsat::AsPep508Error(_, _)
+                | PlatformUnsat::PypiConstraintViolated { .. }
                 | PlatformUnsat::FailedToDetermineSourceTreeHash(_, _)
                 | PlatformUnsat::PythonVersionMismatch(_, _, _)
                 | PlatformUnsat::SourceTreeHashMismatch(..)

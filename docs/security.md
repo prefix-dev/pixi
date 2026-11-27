@@ -106,6 +106,10 @@ Once that cutoff is older than 14 days, the exemption has no effect anymore and 
 
 When an advisory lands, update to the fixed version first. If the fix is fresh, [exempt](reference/pixi_manifest.md#exemptions) the fixed release from `exclude-newer` after reviewing it, as shown above, so you can adopt it immediately without relaxing the cutoff for anything else. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports [`dependency-overrides`](advanced/override.md) for PyPI packages.
 
+To rule out the vulnerable releases of a transitive dependency without adding it as a dependency, add a lower bound to [`[constraints]`](reference/pixi_manifest.md#constraints) for conda packages or to [`[pypi-constraints]`](reference/pixi_manifest.md#pypi-constraints) for PyPI packages, e.g. `urllib3 = ">=2.2.2"`.
+Unlike overrides, constraints never relax other requirements, so the solve fails instead of silently picking an incompatible version.
+A platform-specific constraint for the same package in the same feature replaces the generic one, so repeat the lower bound there, e.g. `[target.linux-64.pypi-constraints] urllib3 = ">=2.2.2,<3"`.
+
 This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, `exclude-newer` exemptions, and overrides help you respond once a vulnerable version is already known.
 
 !!! note "PyPI-only for now"
@@ -145,6 +149,25 @@ Use `--dry-run` to preview the diff or `--json` for machine-readable output.
     pixi workspace exclude-newer exempt 'python==3.11.18|==3.12.16|==3.13.18|==3.14.10|==3.15.2'
     pixi lock --with-constraint 'python>=3.11.18,<3.12|>=3.12.16,<3.13|>=3.13.18,<3.14|>=3.14.10,<3.15|>=3.15.2'
     ```
+
+### Recommended Workflow For A PyPI Package CVE
+
+The same workflow works for PyPI packages with [`--with-pypi-constraint`](reference/cli/pixi/lock.md#arg---with-pypi-constraint), which takes a [PEP 508](https://peps.python.org/pep-0508/) requirement and acts like a temporary [`[pypi-constraints]`](reference/pixi_manifest.md#pypi-constraints) entry.
+Suppose `urllib3` releases before `2.5.0` are affected:
+
+```shell
+# 1. Check which environments are affected.
+pixi lock --check --with-pypi-constraint 'urllib3>=2.5.0'
+
+# 2. After reviewing the fixed release, let it through the pypi-exclude-newer cutoff.
+pixi workspace exclude-newer exempt --pypi urllib3
+
+# 3. Move the affected environments to a fixed release with the smallest possible lock file change.
+pixi lock --with-pypi-constraint 'urllib3>=2.5.0'
+```
+
+PyPI exemptions only take package names and have no cutoff, so they let every release of the package through, including ones published later.
+Remove the exemption with `pixi workspace exclude-newer unexempt --pypi urllib3` once the fixed release is older than your `pypi-exclude-newer` cutoff.
 
 ## 4. Treat Package Hooks As Code Execution
 

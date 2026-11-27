@@ -75,8 +75,8 @@ Pixi reads those fields and extends them with a focused subset of
 - `tool.pixi.dependencies` lists Conda packages.
 - `tool.pixi.pypi-dependencies` represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.
-- `tool.pixi.constraints` and `tool.pixi.activation` hold constraints and
-  activation settings.
+- `tool.pixi.constraints`, `tool.pixi.pypi-constraints` and
+  `tool.pixi.activation` hold constraints and activation settings.
 - `tool.pixi.target.<platform>` holds platform-specific dependencies,
   constraints, and activation settings.
 

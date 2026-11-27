@@ -3139,3 +3139,374 @@ async fn test_pyproject_pypi_custom_index_satisfies_lock() {
         .await
         .expect("lock file should satisfy manifest without being outdated");
 }
+
+#[tokio::test]
+async fn test_pypi_constraints() {
+    setup_tracing();
+
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("consumer", "1.0.0").with_requires_dist(["foo>=1"]))
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .with(PyPIPackage::new("foo", "2.0.0"))
+        .with(PyPIPackage::new("unused", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let manifest = |pypi_constraints: &str| {
+        format!(
+            r#"
+        [workspace]
+        name = "pypi-constraints"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        consumer = "*"
+
+        [pypi-options]
+        index-url = "{index_url}"
+
+        [pypi-constraints]
+        {pypi_constraints}
+        "#,
+            channel_url = channel.url(),
+            index_url = index.index_url(),
+        )
+    };
+
+    let pixi = PixiControl::from_manifest(&manifest("")).unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("2.0.0".into())
+    );
+
+    pixi.update_manifest(&manifest(
+        r#"foo = { version = "<2", env-markers = "python_version < '3'" }"#,
+    ))
+    .unwrap();
+    pixi.lock().with_check(true).await.unwrap();
+
+    pixi.update_manifest(&manifest(
+        r#"foo = "<2"
+        unused = "*""#,
+    ))
+    .unwrap();
+    let err = pixi.lock().with_check(true).await.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("lock file not up-to-date"),
+        "unexpected error: {err:?}"
+    );
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("1.0.0".into())
+    );
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "unused"),
+        None
+    );
+    pixi.lock().with_check(true).await.unwrap();
+
+    pixi.update_manifest(&manifest(r#"foo = ">=3""#)).unwrap();
+    let err = pixi.update_lock_file().await.unwrap_err();
+    assert!(
+        format!("{err:?}").contains("foo"),
+        "unexpected error: {err:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_lock_with_pypi_constraint() {
+    setup_tracing();
+
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("consumer", "1.0.0").with_requires_dist(["foo>=1"]))
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .with(PyPIPackage::new("foo", "2.0.0"))
+        .with(PyPIPackage::new("bar", "1.0.0"))
+        .with(PyPIPackage::new("bar", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let manifest = |bar: &str| {
+        format!(
+            r#"
+        [workspace]
+        name = "lock-with-pypi-constraint"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        consumer = "*"
+        bar = "{bar}"
+
+        [pypi-options]
+        index-url = "{index_url}"
+        "#,
+            channel_url = channel.url(),
+            index_url = index.index_url(),
+        )
+    };
+
+    // Lock `bar` on an older version, then relax the requirement. The lock
+    // file stays valid, so `bar` keeps its locked version.
+    let pixi = PixiControl::from_manifest(&manifest("==1.0.0")).unwrap();
+    pixi.update_lock_file().await.unwrap();
+    pixi.update_manifest(&manifest("*")).unwrap();
+    pixi.lock().with_check(true).await.unwrap();
+    let manifest_before = pixi.manifest_contents().unwrap();
+
+    let err = pixi
+        .lock()
+        .with_check(true)
+        .with_pypi_constraint("foo<2")
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("lock file not up-to-date"),
+        "unexpected error: {err:?}"
+    );
+    pixi.lock()
+        .with_check(true)
+        .with_pypi_constraint("foo>=2")
+        .await
+        .unwrap();
+    pixi.lock()
+        .with_check(true)
+        .with_pypi_constraint("foo<2; python_version < '3'")
+        .await
+        .unwrap();
+
+    pixi.lock()
+        .with_dry_run(true)
+        .with_pypi_constraint("foo<2")
+        .await
+        .unwrap();
+    let lock_file = pixi.lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("2.0.0".into())
+    );
+
+    // Locking with the constraint moves `foo`, but keeps `bar` on its locked
+    // version although a newer one exists.
+    pixi.lock().with_pypi_constraint("foo<2").await.unwrap();
+    let lock_file = pixi.lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("1.0.0".into())
+    );
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "bar"),
+        Some("1.0.0".into())
+    );
+    assert_eq!(pixi.manifest_contents().unwrap(), manifest_before);
+}
+
+#[tokio::test]
+async fn test_pypi_constraint_conda_provider() {
+    setup_tracing();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+    let mut packages = MockRepoData::default();
+    packages.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    for version in ["1.0.0", "2.0.0"] {
+        packages.add_package(
+            Package::build("foo-provider", version)
+                .with_subdir(platform)
+                .with_dependency("python >=3.12")
+                .with_pypi_purl("foo")
+                .finish(),
+        );
+    }
+    let channel = packages.into_channel().await.unwrap();
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("consumer", "1.0.0").with_requires_dist(["foo>=1"]))
+        .into_simple_index()
+        .unwrap();
+    let manifest = |provider: &str| {
+        format!(
+            r#"
+        [workspace]
+        channels = ["{channel}"]
+        platforms = ["{platform}"]
+        [workspace.conda-pypi-map."{channel}"]
+        mapping = {{ foo-provider = "foo" }}
+        mapping-mode = "replace"
+        same-name-heuristic = false
+        [dependencies]
+        python = "==3.12.0"
+        foo-provider = "{provider}"
+        [pypi-dependencies]
+        consumer = "*"
+        [pypi-options]
+        index-url = "{index}"
+        "#,
+            channel = channel.url(),
+            index = index.index_url(),
+        )
+    };
+    let pixi = PixiControl::from_manifest(&manifest("==1")).unwrap();
+    pixi.lock().await.unwrap();
+    pixi.update_manifest(&manifest("*")).unwrap();
+    pixi.lock()
+        .with_check(true)
+        .with_pypi_constraint("foo<2")
+        .await
+        .unwrap();
+    let before = fs_err::read(pixi.workspace_path().join("pixi.lock")).unwrap();
+    assert!(
+        pixi.lock()
+            .with_check(true)
+            .with_pypi_constraint("foo>=2")
+            .await
+            .is_err()
+    );
+    assert!(pixi.lock().with_pypi_constraint("foo>=2").await.is_err());
+    assert_eq!(
+        fs_err::read(pixi.workspace_path().join("pixi.lock")).unwrap(),
+        before
+    );
+    pixi.lock()
+        .with_constraint("foo-provider>=2")
+        .with_pypi_constraint("foo>=2")
+        .await
+        .unwrap();
+    pixi.lock()
+        .with_check(true)
+        .with_pypi_constraint("foo>=2")
+        .await
+        .unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert_eq!(
+        lock.get_pypi_package_version("default", platform, "foo"),
+        None
+    );
+}
+
+#[tokio::test]
+async fn test_pypi_constraint_local_source_versions() {
+    setup_tracing();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+    let mut packages = MockRepoData::default();
+    packages.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = packages.into_channel().await.unwrap();
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+    for editable in [false, true] {
+        let pixi = PixiControl::from_manifest(&format!(
+            r#"
+            [workspace]
+            channels = ["{channel}"]
+            platforms = ["{platform}"]
+            conda-pypi-map = false
+            [dependencies]
+            python = "==3.12.0"
+            [pypi-dependencies]
+            foo = {{ path = ".", editable = {editable} }}
+            [pypi-options]
+            index-url = "{index}"
+            "#,
+            channel = channel.url(),
+            index = index.index_url(),
+        ))
+        .unwrap();
+        let pyproject = pixi.workspace_path().join("pyproject.toml");
+        fs_err::write(
+            &pyproject,
+            r#"
+            [project]
+            name = "foo"
+            version = "1.0.0"
+            requires-python = ">=3.12"
+            dependencies = []
+            [build-system]
+            requires = []
+            build-backend = "hatchling.build"
+        "#,
+        )
+        .unwrap();
+        pixi.lock().await.unwrap();
+        pixi.lock()
+            .with_check(true)
+            .with_pypi_constraint("foo<2")
+            .await
+            .unwrap();
+        let before = fs_err::read(pixi.workspace_path().join("pixi.lock")).unwrap();
+        assert!(
+            pixi.lock()
+                .with_check(true)
+                .with_pypi_constraint("foo>=2")
+                .await
+                .is_err()
+        );
+        assert!(pixi.lock().with_pypi_constraint("foo>=2").await.is_err());
+        assert_eq!(
+            fs_err::read(pixi.workspace_path().join("pixi.lock")).unwrap(),
+            before
+        );
+
+        fs_err::write(
+            &pyproject,
+            r#"
+            [project]
+            name = "foo"
+            dynamic = ["version"]
+            requires-python = ">=3.12"
+            dependencies = []
+            [build-system]
+            requires = []
+            build-backend = "hatchling.build"
+        "#,
+        )
+        .unwrap();
+        // A dynamic version cannot be re-checked, so the lock is trusted.
+        pixi.lock()
+            .with_check(true)
+            .with_pypi_constraint("foo<2")
+            .await
+            .unwrap();
+        assert_eq!(
+            fs_err::read(pixi.workspace_path().join("pixi.lock")).unwrap(),
+            before
+        );
+    }
+}
