@@ -518,6 +518,7 @@ mod tests {
                 "src/navigator/package.xml".to_string(),
                 "src/navigator_implicit/package.xml".to_string(),
                 "src/navigator_py/package.xml".to_string(),
+                "src/plain_cmake/package.xml".to_string(),
             ]
         );
     }
