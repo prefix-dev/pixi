@@ -7,7 +7,9 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
 use pixi_manifest::toml::TomlDocument;
-use pixi_toml_edit::{insert_array_element, push_array_element, remove_entry, upsert_entry};
+use pixi_toml_edit::{
+    insert_array_element, push_array_element, remove_entry, retain_array_elements, upsert_entry,
+};
 use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl};
 use serde_json::Value as JsonValue;
 use std::{
@@ -550,19 +552,43 @@ async fn alter_config(
                         )?;
                     }
                 }
-                // `extra-index-urls` is concatenated across layers, so only
-                // this file's own share of the list is edited; copying the
-                // lower layers in would list them twice. A prepend therefore
-                // lands ahead of this file's URLs, but after the lower ones.
+                // `extra-index-urls` is combined with the lower layers by URL
+                // rather than replacing them, so only this file's own list is
+                // edited. A prepend therefore lands ahead of this file's URLs,
+                // but after the lower ones, unless a lower layer lists the
+                // same URL, whose position it then takes.
                 "pypi-config.extra-index-urls" => {
-                    let url = url::Url::parse(&input)
+                    let index = url::Url::parse(&input)
+                        .map(pixi_config::ExtraIndexUrl::from_url)
                         .map_err(|e| miette::miette!("Invalid URL: {}", e))?;
-                    if is_prepend {
-                        config.pypi_config.extra_index_urls.insert(0, url);
-                    } else {
-                        config.pypi_config.extra_index_urls.push(url);
+                    let extra_index_urls = &mut config.pypi_config.extra_index_urls;
+                    // Re-adding an entry as it is leaves the file unchanged.
+                    if !extra_index_urls.contains(&index) {
+                        // An entry for the same URL with other settings is
+                        // replaced instead of kept as a duplicate.
+                        if extra_index_urls.iter().any(|e| e.url == index.url) {
+                            extra_index_urls.retain(|e| e.url != index.url);
+                            let array = toml_doc.get_or_insert_toml_array_mut(
+                                &["pypi-config"],
+                                "extra-index-urls",
+                            )?;
+                            retain_array_elements(array, |value| {
+                                extra_index_url_of(value).as_ref() != Some(&index.url)
+                            });
+                        }
+                        if is_prepend {
+                            extra_index_urls.insert(0, index);
+                        } else {
+                            extra_index_urls.push(index);
+                        }
+                        transplant_config_key(
+                            &config,
+                            &mut toml_doc,
+                            key,
+                            &mode,
+                            common_args.shared,
+                        )?;
                     }
-                    transplant_config_key(&config, &mut toml_doc, key, &mode, common_args.shared)?;
                 }
                 _ => {
                     let list_keys = ["default-channels", "pypi-config.extra-index-urls"];
@@ -619,6 +645,17 @@ async fn alter_config(
 
     eprintln!("✅ Updated config at {}", to.display());
     Ok(())
+}
+
+/// Returns the URL of an `extra-index-urls` element, written either as a URL
+/// string or as a table with a `url`.
+fn extra_index_url_of(value: &toml_edit::Value) -> Option<url::Url> {
+    let url = match value {
+        toml_edit::Value::String(url) => url.value().as_str(),
+        toml_edit::Value::InlineTable(table) => table.get("url")?.as_str()?,
+        _ => return None,
+    };
+    url::Url::parse(url).ok()
 }
 
 /// Unset a key from the TOML document, preserving existing formatting and comments.
@@ -2082,6 +2119,53 @@ default-channels = ["conda-forge"]
         default-channels = ["conda-forge", "new-channel"]
         "#
         );
+    }
+
+    #[tokio::test]
+    async fn append_extra_index_url_replaces_same_url() {
+        let test_context = TestContext::setup(Some(
+            r#"[pypi-config]
+extra-index-urls = [
+    "https://a.com/simple",
+    { url = "https://b.com/simple", exclude-newer = "7d" },
+]
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "pypi-config.extra-index-urls".to_owned(),
+            value: "https://b.com/simple".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        [pypi-config]
+        extra-index-urls = [
+            "https://a.com/simple",
+            "https://b.com/simple",
+        ]
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_extra_index_url_already_listed_is_unchanged() {
+        let config = r#"[pypi-config]
+extra-index-urls = ["https://a.com/simple", "https://b.com/simple"]
+"#;
+        let test_context = TestContext::setup(Some(config));
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "pypi-config.extra-index-urls".to_owned(),
+            value: "https://b.com/simple".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        assert_eq!(test_context.read_config(), config);
     }
 
     #[tokio::test]

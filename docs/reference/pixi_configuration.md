@@ -389,7 +389,9 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 
 - `index-url`: The default index URL to use for PyPI packages. This will be added to a manifest file on a `pixi init`.
 - `extra-index-urls`: A list of additional URLs to use for PyPI packages. This will be added to a manifest file on a
-  `pixi init`.
+  `pixi init`. Each entry may be a plain URL string, or an inline table `{ url = "...", exclude-newer = "7d" }` with a
+  cutoff for that index only, see [`extra-index-urls`](./pixi_manifest.md#alternative-registries) in the manifest.
+  Entries for the same URL in a higher priority location replace those from a lower priority one.
 - `keyring-provider`: Allows the use of the [keyring](https://pypi.org/project/keyring/) python package to store and
   retrieve credentials.
 - `allow-insecure-host`: A list of host names (without protocol or port) for which TLS certificate verification should be disabled when accessing PyPI registries. This is useful when working with internal PyPI mirrors that use self-signed certificates. For disabling TLS verification globally for all connections, use [`tls-no-verify`](#tls-no-verify) instead.
