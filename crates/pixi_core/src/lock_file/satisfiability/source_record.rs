@@ -12,13 +12,14 @@ use pixi_record::{PinnedBuildSourceSpec, PixiRecord, SourceRecordData};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    MatchSpec, Matches, NamelessMatchSpec, PackageName, package::RunExportsJson,
+    GenericVirtualPackage, MatchSpec, MatchSpecCondition, Matches, NamelessMatchSpec, PackageName,
+    package::RunExportsJson,
 };
 use std::collections::HashSet;
 
 use super::errors::{BuildOrHostEnv, PlatformUnsat, SourceRunDepKind};
 use super::platform::{
-    VerifySatisfiabilityContext, failed_to_parse_match_spec_unsat,
+    VerifySatisfiabilityContext, evaluate_condition, failed_to_parse_match_spec_unsat,
     spec_conversion_to_match_spec_error,
 };
 
@@ -180,6 +181,7 @@ pub(super) async fn verify_partial_source_record_against_backend(
             build_deps,
             &record.build_packages,
             &[],
+            &platform_setup.virtual_packages,
             &platform_setup.channel_config,
             &source_anchor,
             &pkg_name,
@@ -192,6 +194,7 @@ pub(super) async fn verify_partial_source_record_against_backend(
             host_deps,
             &record.host_packages,
             &record.build_packages,
+            &platform_setup.virtual_packages,
             &platform_setup.channel_config,
             &source_anchor,
             &pkg_name,
@@ -715,6 +718,24 @@ impl<'a> LockedConda<'a> {
         })
     }
 
+    /// Returns `true` if any locked record satisfies `spec`. Unlike
+    /// [`Self::satisfies_binary`], the spec carries its own name matcher,
+    /// so every record is a candidate. Partial source records match by
+    /// name only.
+    fn satisfies_match_spec(&self, spec: &MatchSpec) -> bool {
+        self.by_name
+            .iter()
+            .filter(|(name, _)| spec.name.matches(name))
+            .flat_map(|(_, records)| records)
+            .any(|r| match r {
+                pixi_record::UnresolvedPixiRecord::Binary(b) => spec.matches(b.as_ref()),
+                pixi_record::UnresolvedPixiRecord::Source(s) => match &s.data {
+                    SourceRecordData::Full(full) => spec.matches(&full.package_record),
+                    SourceRecordData::Partial(_) => true,
+                },
+            })
+    }
+
     /// Returns the resolved `PackageRecord` of the first locked record
     /// whose name matches. Returns `None` for partial source records,
     /// which carry no version/build material the satisfiability check
@@ -741,13 +762,19 @@ impl<'a> LockedConda<'a> {
 ///   verifying host deps, empty when verifying build deps), then
 ///   verify the resolved spec against `locked`.
 ///
+/// Dependencies with a `when=` condition that is not met by `locked`
+/// or `virtual_packages` are skipped, mirroring the solver, which does
+/// not install them either.
+///
 /// Returns `Box<PlatformUnsat>` directly so the caller can choose how
 /// to wrap (`CommandDispatcherError::Failed`, or propagated as part of
 /// a larger result).
+#[allow(clippy::too_many_arguments)]
 fn verify_locked_against_backend_specs(
     deps: &pixi_build_types::procedures::conda_outputs::CondaOutputDependencies,
     locked: &[pixi_record::UnresolvedPixiRecord],
     pin_compatible_locked: &[pixi_record::UnresolvedPixiRecord],
+    virtual_packages: &[GenericVirtualPackage],
     channel_config: &rattler_conda_types::ChannelConfig,
     source_anchor: &SourceAnchor,
     package: &PackageName,
@@ -759,6 +786,12 @@ fn verify_locked_against_backend_specs(
 
     let locked_view = LockedConda::new(locked);
     let pin_view = LockedConda::new(pin_compatible_locked);
+    let condition_is_met = |condition: &MatchSpecCondition| {
+        evaluate_condition(condition, &|spec| {
+            locked_view.satisfies_match_spec(spec)
+                || virtual_packages.iter().any(|vpkg| spec.matches(vpkg))
+        })
+    };
     let unsat = |spec: String| -> Box<PlatformUnsat> {
         Box::new(PlatformUnsat::SourceBuildHostUnsat {
             package: package.as_source().to_string(),
@@ -785,13 +818,29 @@ fn verify_locked_against_backend_specs(
                             spec_conversion_to_match_spec_error(e),
                         )
                     })?;
+                if nameless
+                    .condition
+                    .as_ref()
+                    .is_some_and(|condition| !condition_is_met(condition))
+                {
+                    continue;
+                }
                 if !locked_view.satisfies_binary(&dep_name, &nameless) {
                     let match_spec = MatchSpec::from_nameless(nameless, dep_name.clone().into());
                     return Err(unsat(match_spec.to_string()));
                 }
             }
             PackageSpec::Source(source) => {
-                let resolved = from_source_spec_v1(source.clone()).resolve(source_anchor);
+                let source_spec = from_source_spec_v1(source.clone());
+                if source_spec
+                    .matchspec
+                    .condition
+                    .as_ref()
+                    .is_some_and(|condition| !condition_is_met(condition))
+                {
+                    continue;
+                }
+                let resolved = source_spec.resolve(source_anchor);
                 if !locked_view.satisfies_source(&dep_name, &resolved.location) {
                     return Err(Box::new(PlatformUnsat::SourceBuildHostSourceMissing {
                         package: package.as_source().to_string(),
@@ -1183,6 +1232,7 @@ mod tests {
             &deps,
             &locked,
             &[],
+            &[],
             &CHANNEL_CONFIG,
             &anchor,
             &PackageName::from_str("pkg").unwrap(),
@@ -1209,6 +1259,7 @@ mod tests {
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
+            &[],
             &[],
             &CHANNEL_CONFIG,
             &anchor,
@@ -1250,6 +1301,7 @@ mod tests {
             &deps,
             &locked,
             &[],
+            &[],
             &CHANNEL_CONFIG,
             &anchor,
             &PackageName::from_str("pkg").unwrap(),
@@ -1282,12 +1334,141 @@ mod tests {
             &deps,
             &locked,
             &[],
+            &[],
             &CHANNEL_CONFIG,
             &anchor,
             &PackageName::from_str("pkg").unwrap(),
             BuildOrHostEnv::Build,
         )
         .expect_err("missing record must surface as unsat");
+        assert!(
+            matches!(
+                *err,
+                super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+            ),
+            "expected SourceBuildHostUnsat, got: {err}"
+        );
+    }
+
+    /// A binary dep whose spec carries the `when=` condition of `spec_str`
+    /// (e.g. `libunwind *[when="__linux"]`).
+    fn conditional_binary_dep(name: &str, spec_str: &str) -> NamedSpec<PackageSpec> {
+        let condition = rattler_conda_types::MatchSpec::from_str(
+            spec_str,
+            rattler_conda_types::ParseMatchSpecOptions::lenient()
+                .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
+        )
+        .expect("valid spec")
+        .condition
+        .expect("spec has a condition");
+        NamedSpec {
+            name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
+            spec: BinaryPackageSpec {
+                condition: Some(condition),
+                ..Default::default()
+            }
+            .into(),
+        }
+    }
+
+    fn virtual_package(name: &str, version: &str) -> rattler_conda_types::GenericVirtualPackage {
+        rattler_conda_types::GenericVirtualPackage {
+            name: PackageName::from_str(name).unwrap(),
+            version: version.parse().unwrap(),
+            build_string: "0".parse().unwrap(),
+        }
+    }
+
+    #[test]
+    fn conditional_dep_with_unmet_condition_is_skipped() {
+        // Backend declares `libunwind *[when="__linux"]` in the host env
+        // of a non-linux platform. The solver did not install it, so the
+        // empty locked host env must still satisfy the backend specs.
+        let deps = CondaOutputDependencies {
+            depends: vec![conditional_binary_dep(
+                "libunwind",
+                r#"libunwind *[when="__linux"]"#,
+            )],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
+        let result = verify_locked_against_backend_specs(
+            &deps,
+            &[],
+            &[],
+            &[virtual_package("__osx", "15.0")],
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Host,
+        );
+        assert!(result.is_ok(), "verification should pass: {result:?}");
+    }
+
+    #[test]
+    fn conditional_dep_with_met_condition_is_required() {
+        // Same dep, but the platform provides `__linux`: the solver would
+        // have installed `libunwind`, so an empty host env is unsat.
+        let deps = CondaOutputDependencies {
+            depends: vec![conditional_binary_dep(
+                "libunwind",
+                r#"libunwind *[when="__linux"]"#,
+            )],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
+        let err = verify_locked_against_backend_specs(
+            &deps,
+            &[],
+            &[],
+            &[virtual_package("__linux", "6.0")],
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Host,
+        )
+        .expect_err("missing conditional record must surface as unsat");
+        assert!(
+            matches!(
+                *err,
+                super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+            ),
+            "expected SourceBuildHostUnsat, got: {err}"
+        );
+    }
+
+    #[test]
+    fn conditional_dep_with_condition_met_by_locked_package_is_required() {
+        // The condition can also refer to a regular package in the
+        // environment, e.g. `bar *[when="python >=3.10"]`.
+        let locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("python", "3.12"),
+        ))];
+        let deps = CondaOutputDependencies {
+            depends: vec![conditional_binary_dep(
+                "bar",
+                r#"bar *[when="python >=3.10"]"#,
+            )],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
+        let err = verify_locked_against_backend_specs(
+            &deps,
+            &locked,
+            &[],
+            &[],
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Host,
+        )
+        .expect_err("missing conditional record must surface as unsat");
         assert!(
             matches!(
                 *err,
@@ -1347,6 +1528,7 @@ mod tests {
             &host_deps,
             &host_locked,
             &build_locked,
+            &[],
             &CHANNEL_CONFIG,
             &anchor,
             &PackageName::from_str("pkg").unwrap(),
@@ -1389,6 +1571,7 @@ mod tests {
             &host_deps,
             &host_locked,
             &build_locked,
+            &[],
             &CHANNEL_CONFIG,
             &anchor,
             &PackageName::from_str("pkg").unwrap(),
@@ -1433,6 +1616,7 @@ mod tests {
             &host_deps,
             &host_locked,
             &build_locked,
+            &[],
             &CHANNEL_CONFIG,
             &anchor,
             &PackageName::from_str("pkg").unwrap(),
