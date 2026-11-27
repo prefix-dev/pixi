@@ -191,7 +191,17 @@ $TEMP_FILE = [System.IO.Path]::GetTempFileName()
 $webClient = New-Object System.Net.WebClient
 
 try {
-    $webClient.DownloadFile($DOWNLOAD_URL, $TEMP_FILE)
+    $MaxAttempts = 5
+    for ($Attempt = 1; ; $Attempt++) {
+        try {
+            $webClient.DownloadFile($DOWNLOAD_URL, $TEMP_FILE)
+            break
+        } catch {
+            if ($Attempt -ge $MaxAttempts) { throw }
+            Write-Host "Download failed (attempt $Attempt/$MaxAttempts), retrying in 5 seconds..."
+            Start-Sleep -Seconds 5
+        }
+    }
 
     # Create the install dir if it doesn't exist
     if (!(Test-Path -Path $BinDir)) {
