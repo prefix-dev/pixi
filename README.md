@@ -269,11 +269,11 @@ Usage: pixi [OPTIONS] [COMMAND]
 Commands:
   add         Add dependencies to the workspace [alias: a]
   auth        Login to prefix.dev or anaconda.org servers to access private channels
-  clean       Clean up workspaces/environments/caches
+  clean       Remove everything pixi generated in the current workspace
   completion  Generate a shell completion script
   config      Manage configuration
   exec        Run a command in a temporary environment [alias: x]
-  global      Manage globally-installed packages [alias: g]
+  global      Manage globally installed tools and their environments [alias: g]
   info        Get information about the pixi installation and current workspace
   init        Create a new workspace or script
   import      Import a file into an environment in an existing workspace
@@ -287,7 +287,7 @@ Commands:
   search      Search for conda packages
   shell       Start a shell in a pixi environment [alias: s]
   shell-hook  Print a pixi environment activation script
-  task        Interact with tasks in a workspace
+  task        Manage the tasks in the workspace
   tree        Show a tree of workspace dependencies [alias: t]
   update      Update dependencies to newer compatible versions
   upgrade     Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file

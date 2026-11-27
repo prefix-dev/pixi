@@ -9,7 +9,7 @@ use rattler_conda_types::MatchSpec;
 use crate::global::revert_environment_after_error;
 use crate::has_specs::HasSpecs;
 
-/// Removes dependencies from an environment
+/// Remove dependencies from a global environment
 ///
 /// Use `pixi global uninstall` to remove the whole environment
 ///

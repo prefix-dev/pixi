@@ -7,7 +7,7 @@ use pixi_global::project::GlobalSpec;
 use pixi_global::{EnvironmentName, Mapping, Project, StateChanges};
 use pixi_manifest::PrioritizedChannel;
 
-/// Adds dependencies to an environment
+/// Add dependencies to a global environment
 ///
 /// Example:
 ///

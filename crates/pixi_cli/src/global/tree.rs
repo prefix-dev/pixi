@@ -8,7 +8,7 @@ use pixi_api::global::{EnvironmentName, Project};
 use std::collections::HashMap;
 use std::str::FromStr;
 
-/// Show a tree of dependencies for a specific global environment.
+/// Show the dependency tree of a global environment.
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false, long_about = format!(
     "\

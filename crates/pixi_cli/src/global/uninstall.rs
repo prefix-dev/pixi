@@ -5,7 +5,7 @@ use miette::Report;
 use pixi_api::global::{EnvironmentName, Project};
 use pixi_config::{Config, ConfigCli};
 
-/// Uninstalls environments from the global environment.
+/// Uninstall global environments.
 ///
 /// Example: `pixi global uninstall pixi-pack rattler-build`
 #[derive(Parser, Debug, Clone)]

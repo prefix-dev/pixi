@@ -51,7 +51,7 @@ pub enum Command {
     Tree(tree::Args),
 }
 
-/// Manage globally-installed packages.
+/// Manage globally installed tools and their environments.
 ///
 /// Install packages on the user level.
 /// Into to the `$PIXI_HOME` directory, which defaults to `~/.pixi`.

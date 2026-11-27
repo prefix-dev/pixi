@@ -1,0 +1,15 @@
+--8<-- [start:description]
+
+Shortcuts are defined by the package itself, using [menuinst](https://conda.github.io/menuinst/).
+Packages that don't define any can't get a shortcut.
+
+What gets created depends on the platform:
+
+- **Windows**: Start Menu entries and, by default, a Desktop shortcut.
+- **macOS**: An `.app` bundle in `~/Applications`, which shows up in Launchpad and Spotlight.
+- **Linux**: `.desktop` entries in the application menu.
+
+Packages can also register file type associations.
+See [Shortcuts](../../../../../global_tools/manifest.md#shortcuts) for how shortcuts are stored in the global manifest.
+
+--8<-- [end:description]
