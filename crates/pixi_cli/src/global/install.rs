@@ -14,7 +14,10 @@ use crate::global::{
 use pixi_api::global::{EnvironmentName, GlobalSpec, InstallOptions, Mapping, Project};
 use pixi_config::{self, Config, ConfigCli};
 
-/// Installs the defined packages in a globally accessible location and exposes their command line applications.
+/// Install packages globally and expose their executables.
+///
+/// By default, each package is installed into its own global environment named after the package.
+/// Use `--environment` to install several packages into one environment.
 ///
 /// Example:
 ///

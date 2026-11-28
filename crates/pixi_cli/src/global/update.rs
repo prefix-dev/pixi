@@ -15,10 +15,14 @@ use pixi_global::{StateChange, StateChanges};
 use pixi_utils::prefix::Executable;
 use rattler_conda_types::PackageName;
 
-/// Updates environments in the global environment.
+/// Update global environments to the latest compatible package versions.
+///
+/// If no environments are specified, all global environments are updated.
+/// Additionally, installed environments that are no longer listed in the global
+/// manifest are removed.
 #[derive(Parser, Debug, Clone)]
 pub struct Args {
-    /// Specifies the environments that are to be updated.
+    /// The environments to update. Defaults to all environments.
     environments: Option<Vec<EnvironmentName>>,
 
     #[clap(flatten)]

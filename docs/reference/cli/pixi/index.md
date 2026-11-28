@@ -16,11 +16,11 @@ pixi [OPTIONS] [COMMAND]
 |---------|-------------|
 | [`add`](add.md) | Add dependencies to the workspace |
 | [`auth`](auth/index.md) | Login to prefix.dev or anaconda.org servers to access private channels |
-| [`clean`](clean/index.md) | Clean up workspaces/environments/caches |
+| [`clean`](clean/index.md) | Remove everything pixi generated in the current workspace |
 | [`completion`](completion.md) | Generate a shell completion script |
 | [`config`](config/index.md) | Manage configuration |
 | [`exec`](exec.md) | Run a command in a temporary environment |
-| [`global`](global/index.md) | Manage globally-installed packages |
+| [`global`](global/index.md) | Manage globally installed tools and their environments |
 | [`info`](info.md) | Get information about the pixi installation and current workspace |
 | [`init`](init.md) | Create a new workspace or script |
 | [`import`](import.md) | Import a file into an environment in an existing workspace |
@@ -35,7 +35,7 @@ pixi [OPTIONS] [COMMAND]
 | [`self-update`](self-update.md) | Update pixi to the latest version or a specific version |
 | [`shell`](shell.md) | Start a shell in a pixi environment |
 | [`shell-hook`](shell-hook.md) | Print a pixi environment activation script |
-| [`task`](task/index.md) | Interact with tasks in a workspace |
+| [`task`](task/index.md) | Manage the tasks in the workspace |
 | [`tree`](tree.md) | Show a tree of workspace dependencies |
 | [`update`](update.md) | Update dependencies to newer compatible versions |
 | [`upgrade`](upgrade.md) | Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file |

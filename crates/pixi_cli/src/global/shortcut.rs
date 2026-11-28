@@ -8,7 +8,7 @@ use pixi_global::{EnvironmentName, StateChanges};
 use rattler_conda_types::PackageName;
 use std::collections::HashMap;
 
-/// Add a shortcut from an environment to your machine.
+/// Add application shortcuts for packages in a global environment.
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct AddArgs {
@@ -24,7 +24,7 @@ pub struct AddArgs {
     config: ConfigCli,
 }
 
-/// Remove shortcuts from your machine.
+/// Remove application shortcuts.
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The shortcut that should be removed.
@@ -35,7 +35,7 @@ pub struct RemoveArgs {
     config: ConfigCli,
 }
 
-/// Interact with the shortcuts on your machine.
+/// Manage application shortcuts of globally installed packages.
 #[derive(Parser, Debug)]
 #[clap(group(clap::ArgGroup::new("command")))]
 pub enum SubCommand {

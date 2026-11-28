@@ -34,15 +34,15 @@ use crate::{
 
 #[derive(Parser, Debug)]
 pub enum Operation {
-    /// Add a command to the workspace
+    /// Add a task to the workspace
     #[clap(visible_alias = "a")]
     Add(AddArgs),
 
-    /// Remove a command from the workspace
+    /// Remove a task from the workspace
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
 
-    /// Alias another specific command
+    /// Add an alias task that runs one or more other tasks.
     #[clap(alias = "@")]
     Alias(AliasArgs),
 
@@ -264,7 +264,7 @@ impl From<AliasArgs> for Task {
     }
 }
 
-/// Interact with tasks in a workspace
+/// Manage the tasks in the workspace
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {

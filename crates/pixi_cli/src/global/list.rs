@@ -18,16 +18,16 @@ use std::str::FromStr;
 
 use crate::cli_interface::cli_global_context;
 
-/// Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.
+/// List all global environments, or when using `--environment` list all packages in a global environment.
 ///
-/// All environments:
+/// Color coding when listing all environments:
 ///
 /// - Magenta: the name of the environment.
 /// - Green: the packages that are explicit dependencies of the environment.
 /// - Yellow: the binaries that are exposed.
 /// - Dim: the version of the installed package.
 ///
-/// Per environment:
+/// Color coding when listing packages per environment:
 ///
 /// - Green: packages that are explicitly installed.
 #[derive(Parser, Debug)]

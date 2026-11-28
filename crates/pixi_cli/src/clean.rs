@@ -33,10 +33,14 @@ pub enum Command {
     Cache(CacheArgs),
 }
 
-/// Clean up workspaces/environments/caches.
+/// Remove everything pixi generated in the current workspace.
 ///
-/// This command removes the information in the .pixi folder, i.e. the
-/// installed environments and caches. Use options to only remove selected parts.
+/// This command removes the information in the `.pixi` folder, i.e. the
+/// installed environments, task and activation caches, and build artifacts.
+/// Use options to only remove selected parts.
+///
+/// Manifest and lock file are not changed. All removed parts will be
+/// regenerated from them as needed.
 ///
 /// Use the `cache` subcommand to clean the cache.
 #[derive(Parser, Debug)]
@@ -67,7 +71,7 @@ pub struct Args {
     pub workspaces_registry: bool,
 }
 
-/// Clean the cache of your system which are touched by pixi.
+/// Remove pixi's global caches shared across all workspaces.
 ///
 /// Specify the cache type to clean with the flags.
 #[derive(Parser, Debug)]
